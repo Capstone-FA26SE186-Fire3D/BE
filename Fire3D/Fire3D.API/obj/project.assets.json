@@ -1,85 +1,21 @@
 {
   "version": 3,
   "targets": {
-    "net10.0": {
-      "Microsoft.AspNetCore.OpenApi/10.0.8": {
-        "type": "package",
-        "dependencies": {
-          "Microsoft.OpenApi": "2.0.0"
-        },
-        "compile": {
-          "lib/net10.0/Microsoft.AspNetCore.OpenApi.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/net10.0/Microsoft.AspNetCore.OpenApi.dll": {
-            "related": ".xml"
-          }
-        },
-        "frameworkReferences": [
-          "Microsoft.AspNetCore.App"
-        ],
-        "build": {
-          "build/Microsoft.AspNetCore.OpenApi.targets": {}
-        }
-      },
-      "Microsoft.OpenApi/2.0.0": {
-        "type": "package",
-        "compile": {
-          "lib/net8.0/Microsoft.OpenApi.dll": {
-            "related": ".pdb;.xml"
-          }
-        },
-        "runtime": {
-          "lib/net8.0/Microsoft.OpenApi.dll": {
-            "related": ".pdb;.xml"
-          }
-        }
-      }
-    }
+    "net10.0": {}
   },
-  "libraries": {
-    "Microsoft.AspNetCore.OpenApi/10.0.8": {
-      "sha512": "cw24xHE2QaWwyEG9GQwFbjboyabub6Vd80DIItUGENzcQOa/BEnTrXsg2GADqWTmY/3ycqk9ToLGjgvF/VRlGA==",
-      "type": "package",
-      "path": "microsoft.aspnetcore.openapi/10.0.8",
-      "files": [
-        ".nupkg.metadata",
-        ".signature.p7s",
-        "Icon.png",
-        "PACKAGE.md",
-        "THIRD-PARTY-NOTICES.TXT",
-        "analyzers/dotnet/cs/Microsoft.AspNetCore.OpenApi.SourceGenerators.dll",
-        "build/Microsoft.AspNetCore.OpenApi.targets",
-        "lib/net10.0/Microsoft.AspNetCore.OpenApi.dll",
-        "lib/net10.0/Microsoft.AspNetCore.OpenApi.xml",
-        "microsoft.aspnetcore.openapi.10.0.8.nupkg.sha512",
-        "microsoft.aspnetcore.openapi.nuspec"
-      ]
-    },
-    "Microsoft.OpenApi/2.0.0": {
-      "sha512": "GGYLfzV/G/ct80OZ45JxnWP7NvMX1BCugn/lX7TH5o0lcVaviavsLMTxmFV2AybXWjbi3h6FF1vgZiTK6PXndw==",
-      "type": "package",
-      "path": "microsoft.openapi/2.0.0",
-      "files": [
-        ".nupkg.metadata",
-        ".signature.p7s",
-        "README.md",
-        "lib/net8.0/Microsoft.OpenApi.dll",
-        "lib/net8.0/Microsoft.OpenApi.pdb",
-        "lib/net8.0/Microsoft.OpenApi.xml",
-        "lib/netstandard2.0/Microsoft.OpenApi.dll",
-        "lib/netstandard2.0/Microsoft.OpenApi.pdb",
-        "lib/netstandard2.0/Microsoft.OpenApi.xml",
-        "microsoft.openapi.2.0.0.nupkg.sha512",
-        "microsoft.openapi.nuspec"
-      ]
-    }
-  },
+  "libraries": {},
   "projectFileDependencyGroups": {
     "net10.0": [
-      "Microsoft.AspNetCore.OpenApi >= 10.0.8"
+      "Microsoft.AspNetCore.Authentication.JwtBearer",
+      "Microsoft.AspNetCore.OpenApi",
+      "Microsoft.EntityFrameworkCore.Design",
+      "Serilog.AspNetCore",
+      "Serilog.Sinks.Console",
+      "Serilog.Sinks.Debug",
+      "Serilog.Sinks.Grafana.Loki",
+      "Swashbuckle.AspNetCore",
+      "System.IdentityModel.Tokens.Jwt",
+      "prometheus-net.AspNetCore"
     ]
   },
   "packageFolders": {
@@ -113,9 +49,15 @@
       },
       "frameworks": {
         "net10.0": {
-          "framework": "net10.0",
           "targetAlias": "net10.0",
-          "projectReferences": {}
+          "projectReferences": {
+            "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Application\\Fire3D.Application.csproj": {
+              "projectPath": "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Application\\Fire3D.Application.csproj"
+            },
+            "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj": {
+              "projectPath": "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj"
+            }
+          }
         }
       },
       "warningProperties": {
@@ -132,12 +74,47 @@
     },
     "frameworks": {
       "net10.0": {
-        "framework": "net10.0",
         "targetAlias": "net10.0",
         "dependencies": {
+          "Microsoft.AspNetCore.Authentication.JwtBearer": {
+            "target": "Package",
+            "version": "(, )"
+          },
           "Microsoft.AspNetCore.OpenApi": {
             "target": "Package",
-            "version": "[10.0.8, )"
+            "version": "(, )"
+          },
+          "Microsoft.EntityFrameworkCore.Design": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "Serilog.AspNetCore": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "Serilog.Sinks.Console": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "Serilog.Sinks.Debug": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "Serilog.Sinks.Grafana.Loki": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "Swashbuckle.AspNetCore": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "System.IdentityModel.Tokens.Jwt": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "prometheus-net.AspNetCore": {
+            "target": "Package",
+            "version": "(, )"
           }
         },
         "imports": [
@@ -579,14 +556,9 @@
   },
   "logs": [
     {
-      "code": "NU1903",
-      "level": "Warning",
-      "warningLevel": 1,
-      "message": "Package 'Microsoft.OpenApi' 2.0.0 has a known high severity vulnerability, https://github.com/advisories/GHSA-v5pm-xwqc-g5wc",
-      "libraryId": "Microsoft.OpenApi",
-      "targetGraphs": [
-        "net10.0"
-      ]
+      "code": "NU1015",
+      "level": "Error",
+      "message": "The following PackageReference item(s) do not have a version specified: Microsoft.AspNetCore.Authentication.JwtBearer, Microsoft.AspNetCore.OpenApi, Microsoft.EntityFrameworkCore.Design, prometheus-net.AspNetCore, Serilog.AspNetCore, Serilog.Sinks.Console, Serilog.Sinks.Debug, Serilog.Sinks.Grafana.Loki, Swashbuckle.AspNetCore, System.IdentityModel.Tokens.Jwt"
     }
   ]
 }

@@ -5,7 +5,18 @@
   },
   "libraries": {},
   "projectFileDependencyGroups": {
-    "net10.0": []
+    "net10.0": [
+      "AWSSDK.Core",
+      "AWSSDK.Extensions.NETCore.Setup",
+      "AWSSDK.S3",
+      "EFCore.NamingConventions",
+      "Microsoft.AspNetCore.Authentication.JwtBearer",
+      "Microsoft.AspNetCore.Identity.EntityFrameworkCore",
+      "Microsoft.EntityFrameworkCore.Design",
+      "MiniExcel",
+      "Npgsql.EntityFrameworkCore.PostgreSQL",
+      "System.IdentityModel.Tokens.Jwt"
+    ]
   },
   "packageFolders": {
     "C:\\Users\\hoang\\.nuget\\packages\\": {},
@@ -38,9 +49,15 @@
       },
       "frameworks": {
         "net10.0": {
-          "framework": "net10.0",
           "targetAlias": "net10.0",
-          "projectReferences": {}
+          "projectReferences": {
+            "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Application\\Fire3D.Application.csproj": {
+              "projectPath": "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Application\\Fire3D.Application.csproj"
+            },
+            "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Domain\\Fire3D.Domain.csproj": {
+              "projectPath": "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Domain\\Fire3D.Domain.csproj"
+            }
+          }
         }
       },
       "warningProperties": {
@@ -57,8 +74,51 @@
     },
     "frameworks": {
       "net10.0": {
-        "framework": "net10.0",
         "targetAlias": "net10.0",
+        "dependencies": {
+          "AWSSDK.Core": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "AWSSDK.Extensions.NETCore.Setup": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "AWSSDK.S3": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "EFCore.NamingConventions": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "Microsoft.AspNetCore.Authentication.JwtBearer": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "Microsoft.AspNetCore.Identity.EntityFrameworkCore": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "Microsoft.EntityFrameworkCore.Design": {
+            "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+            "suppressParent": "All",
+            "target": "Package",
+            "version": "(, )"
+          },
+          "MiniExcel": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "Npgsql.EntityFrameworkCore.PostgreSQL": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "System.IdentityModel.Tokens.Jwt": {
+            "target": "Package",
+            "version": "(, )"
+          }
+        },
         "imports": [
           "net461",
           "net462",
@@ -352,5 +412,12 @@
         }
       }
     }
-  }
+  },
+  "logs": [
+    {
+      "code": "NU1015",
+      "level": "Error",
+      "message": "The following PackageReference item(s) do not have a version specified: AWSSDK.Core, AWSSDK.Extensions.NETCore.Setup, AWSSDK.S3, EFCore.NamingConventions, Microsoft.AspNetCore.Authentication.JwtBearer, Microsoft.AspNetCore.Identity.EntityFrameworkCore, Microsoft.EntityFrameworkCore.Design, MiniExcel, Npgsql.EntityFrameworkCore.PostgreSQL, System.IdentityModel.Tokens.Jwt"
+    }
+  ]
 }

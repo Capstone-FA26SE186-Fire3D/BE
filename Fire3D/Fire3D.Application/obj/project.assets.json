@@ -5,7 +5,14 @@
   },
   "libraries": {},
   "projectFileDependencyGroups": {
-    "net10.0": []
+    "net10.0": [
+      "FluentValidation",
+      "FluentValidation.DependencyInjectionExtensions",
+      "MediatR",
+      "Microsoft.AspNetCore.Authentication.JwtBearer",
+      "Microsoft.EntityFrameworkCore",
+      "System.IdentityModel.Tokens.Jwt"
+    ]
   },
   "packageFolders": {
     "C:\\Users\\hoang\\.nuget\\packages\\": {},
@@ -38,9 +45,12 @@
       },
       "frameworks": {
         "net10.0": {
-          "framework": "net10.0",
           "targetAlias": "net10.0",
-          "projectReferences": {}
+          "projectReferences": {
+            "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Domain\\Fire3D.Domain.csproj": {
+              "projectPath": "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Domain\\Fire3D.Domain.csproj"
+            }
+          }
         }
       },
       "warningProperties": {
@@ -57,8 +67,33 @@
     },
     "frameworks": {
       "net10.0": {
-        "framework": "net10.0",
         "targetAlias": "net10.0",
+        "dependencies": {
+          "FluentValidation": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "FluentValidation.DependencyInjectionExtensions": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "MediatR": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "Microsoft.AspNetCore.Authentication.JwtBearer": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "Microsoft.EntityFrameworkCore": {
+            "target": "Package",
+            "version": "(, )"
+          },
+          "System.IdentityModel.Tokens.Jwt": {
+            "target": "Package",
+            "version": "(, )"
+          }
+        },
         "imports": [
           "net461",
           "net462",
@@ -352,5 +387,12 @@
         }
       }
     }
-  }
+  },
+  "logs": [
+    {
+      "code": "NU1015",
+      "level": "Error",
+      "message": "The following PackageReference item(s) do not have a version specified: FluentValidation, FluentValidation.DependencyInjectionExtensions, MediatR, Microsoft.AspNetCore.Authentication.JwtBearer, Microsoft.EntityFrameworkCore, System.IdentityModel.Tokens.Jwt"
+    }
+  ]
 }

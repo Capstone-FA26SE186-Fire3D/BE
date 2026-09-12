@@ -1,8 +1,17 @@
 {
   "version": 2,
-  "dgSpecHash": "dORmUXTYRgw=",
-  "success": true,
+  "dgSpecHash": "3ufU14t4v08=",
+  "success": false,
   "projectFilePath": "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj",
   "expectedPackageFiles": [],
-  "logs": []
+  "logs": [
+    {
+      "code": "NU1015",
+      "level": "Error",
+      "message": "The following PackageReference item(s) do not have a version specified: AWSSDK.Core, AWSSDK.Extensions.NETCore.Setup, AWSSDK.S3, EFCore.NamingConventions, Microsoft.AspNetCore.Authentication.JwtBearer, Microsoft.AspNetCore.Identity.EntityFrameworkCore, Microsoft.EntityFrameworkCore.Design, MiniExcel, Npgsql.EntityFrameworkCore.PostgreSQL, System.IdentityModel.Tokens.Jwt",
+      "projectPath": "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj",
+      "filePath": "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj",
+      "targetGraphs": []
+    }
+  ]
 }
