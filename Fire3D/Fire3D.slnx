@@ -1,4 +1,9 @@
 <Solution>
   <Folder Name="/backend/" />
-  <Folder Name="/backend/Src/" />
+  <Folder Name="/backend/Src/">
+    <Project Path="Fire3D.API/Fire3D.API.csproj" Id="d5a6b5ab-ecdc-472e-bc26-115afd7673b1" />
+    <Project Path="Fire3D.Application/Fire3D.Application.csproj" Id="3c680245-f507-4d49-836a-6303ff61e897" />
+    <Project Path="Fire3D.Domain/Fire3D.Domain.csproj" Id="13de27a0-21f1-4d97-9c50-729a7fcda97d" />
+    <Project Path="Fire3D.Infrastructure/Fire3D.Infrastructure.csproj" Id="1dda91fd-6e28-4175-92f8-e4b8b0e04e5c" />
+  </Folder>
 </Solution>
