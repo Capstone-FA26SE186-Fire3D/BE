@@ -1,0 +1,12 @@
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Domain\bin\Debug\net10.0\Fire3D.Domain.deps.json
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Domain\bin\Debug\net10.0\Fire3D.Domain.dll
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Domain\bin\Debug\net10.0\Fire3D.Domain.pdb
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Domain\obj\Debug\net10.0\Fire3D.Domain.GeneratedMSBuildEditorConfig.editorconfig
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Domain\obj\Debug\net10.0\Fire3D.Domain.AssemblyInfoInputs.cache
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Domain\obj\Debug\net10.0\Fire3D.Domain.AssemblyInfo.cs
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Domain\obj\Debug\net10.0\Fire3D.Domain.csproj.CoreCompileInputs.cache
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Domain\obj\Debug\net10.0\Fire3D.Domain.sourcelink.json
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Domain\obj\Debug\net10.0\Fire3D.Domain.dll
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Domain\obj\Debug\net10.0\refint\Fire3D.Domain.dll
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Domain\obj\Debug\net10.0\Fire3D.Domain.pdb
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Domain\obj\Debug\net10.0\ref\Fire3D.Domain.dll

@@ -8,19 +8,15 @@
 
 
 	<ItemGroup>
-		<PackageReference Include="AWSSDK.Core" />
-		<PackageReference Include="AWSSDK.Extensions.NETCore.Setup" />
-		<PackageReference Include="AWSSDK.S3" />
-		<PackageReference Include="EFCore.NamingConventions" />
-		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
-		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Design">
-			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-			<PrivateAssets>all</PrivateAssets>
-		</PackageReference>
-		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-		<PackageReference Include="System.IdentityModel.Tokens.Jwt" />
-		<PackageReference Include="MiniExcel" />
+		<PackageReference Include="AWSSDK.Core" Version="*" />
+		<PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="*" />
+		<PackageReference Include="AWSSDK.S3" Version="*" />
+		<PackageReference Include="EFCore.NamingConventions" Version="10.*" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
+		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.*" />
+		<PackageReference Include="MiniExcel" Version="*" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="*" />
+		
 	</ItemGroup>
 
 

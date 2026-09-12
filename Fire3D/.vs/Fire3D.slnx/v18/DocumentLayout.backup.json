@@ -3,26 +3,50 @@
   "WorkspaceRootPath": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{D5A6B5AB-ECDC-472E-BC26-115AFD7673B1}|Fire3D.API\\Fire3D.API.csproj|d:\\fpt\\\u0111\u1ED3 \u00E1n\\be\\fire3d\\fire3d.api\\properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{D5A6B5AB-ECDC-472E-BC26-115AFD7673B1}|Fire3D.API\\Fire3D.API.csproj|solutionrelative:fire3d.api\\properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D5A6B5AB-ECDC-472E-BC26-115AFD7673B1}|Fire3D.API\\Fire3D.API.csproj|d:\\fpt\\\u0111\u1ED3 \u00E1n\\be\\fire3d\\fire3d.api\\controllers\\weatherforecastcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D5A6B5AB-ECDC-472E-BC26-115AFD7673B1}|Fire3D.API\\Fire3D.API.csproj|solutionrelative:fire3d.api\\controllers\\weatherforecastcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D5A6B5AB-ECDC-472E-BC26-115AFD7673B1}|Fire3D.API\\Fire3D.API.csproj|d:\\fpt\\\u0111\u1ED3 \u00E1n\\be\\fire3d\\fire3d.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D5A6B5AB-ECDC-472E-BC26-115AFD7673B1}|Fire3D.API\\Fire3D.API.csproj|solutionrelative:fire3d.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D5A6B5AB-ECDC-472E-BC26-115AFD7673B1}|Fire3D.API\\Fire3D.API.csproj|d:\\fpt\\\u0111\u1ED3 \u00E1n\\be\\fire3d\\fire3d.api\\fire3d.api.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{D5A6B5AB-ECDC-472E-BC26-115AFD7673B1}|Fire3D.API\\Fire3D.API.csproj|solutionrelative:fire3d.api\\fire3d.api.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{1DDA91FD-6E28-4175-92F8-E4B8B0E04E5C}|Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj|d:\\fpt\\\u0111\u1ED3 \u00E1n\\be\\fire3d\\fire3d.infrastructure\\fire3d.infrastructure.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{1DDA91FD-6E28-4175-92F8-E4B8B0E04E5C}|Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj|solutionrelative:fire3d.infrastructure\\fire3d.infrastructure.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{13DE27A0-21F1-4D97-9C50-729A7FCDA97D}|Fire3D.Domain\\Fire3D.Domain.csproj|d:\\fpt\\\u0111\u1ED3 \u00E1n\\be\\fire3d\\fire3d.domain\\fire3d.domain.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{13DE27A0-21F1-4D97-9C50-729A7FCDA97D}|Fire3D.Domain\\Fire3D.Domain.csproj|solutionrelative:fire3d.domain\\fire3d.domain.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{3C680245-F507-4D49-836A-6303FF61E897}|Fire3D.Application\\Fire3D.Application.csproj|d:\\fpt\\\u0111\u1ED3 \u00E1n\\be\\fire3d\\fire3d.application\\fire3d.application.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{3C680245-F507-4D49-836A-6303FF61E897}|Fire3D.Application\\Fire3D.Application.csproj|solutionrelative:fire3d.application\\fire3d.application.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{1DDA91FD-6E28-4175-92F8-E4B8B0E04E5C}|Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj|d:\\fpt\\\u0111\u1ED3 \u00E1n\\be\\fire3d\\fire3d.infrastructure\\class1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{1DDA91FD-6E28-4175-92F8-E4B8B0E04E5C}|Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj|solutionrelative:fire3d.infrastructure\\class1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{13DE27A0-21F1-4D97-9C50-729A7FCDA97D}|Fire3D.Domain\\Fire3D.Domain.csproj|d:\\fpt\\\u0111\u1ED3 \u00E1n\\be\\fire3d\\fire3d.domain\\class1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{13DE27A0-21F1-4D97-9C50-729A7FCDA97D}|Fire3D.Domain\\Fire3D.Domain.csproj|solutionrelative:fire3d.domain\\class1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{3C680245-F507-4D49-836A-6303FF61E897}|Fire3D.Application\\Fire3D.Application.csproj|d:\\fpt\\\u0111\u1ED3 \u00E1n\\be\\fire3d\\fire3d.application\\class1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{3C680245-F507-4D49-836A-6303FF61E897}|Fire3D.Application\\Fire3D.Application.csproj|solutionrelative:fire3d.application\\class1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
-      "VerticalTabListWidth": 256,
+      "VerticalTabListWidth": 134,
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 9,
+          "SelectedChildIndex": 10,
           "Children": [
             {
               "$type": "Bookmark",
@@ -62,7 +86,98 @@
             },
             {
               "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "WeatherForecastController.cs",
+              "DocumentMoniker": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.API\\Controllers\\WeatherForecastController.cs",
+              "RelativeDocumentMoniker": "Fire3D.API\\Controllers\\WeatherForecastController.cs",
+              "ToolTip": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.API\\Controllers\\WeatherForecastController.cs",
+              "RelativeToolTip": "Fire3D.API\\Controllers\\WeatherForecastController.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-12T07:25:55.081Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
               "DocumentIndex": 0,
+              "Title": "launchSettings.json",
+              "DocumentMoniker": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.API\\Properties\\launchSettings.json",
+              "RelativeDocumentMoniker": "Fire3D.API\\Properties\\launchSettings.json",
+              "ToolTip": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.API\\Properties\\launchSettings.json",
+              "RelativeToolTip": "Fire3D.API\\Properties\\launchSettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAAdAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-09-12T07:25:36.939Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "Program.cs",
+              "DocumentMoniker": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.API\\Program.cs",
+              "RelativeDocumentMoniker": "Fire3D.API\\Program.cs",
+              "ToolTip": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.API\\Program.cs",
+              "RelativeToolTip": "Fire3D.API\\Program.cs",
+              "ViewState": "AgIAAAwAAAAAAAAAAAAAAB0AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-12T07:22:33.947Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "Fire3D.Domain",
+              "DocumentMoniker": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.Domain\\Fire3D.Domain.csproj",
+              "RelativeDocumentMoniker": "Fire3D.Domain\\Fire3D.Domain.csproj",
+              "ToolTip": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.Domain\\Fire3D.Domain.csproj",
+              "RelativeToolTip": "Fire3D.Domain\\Fire3D.Domain.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-09-12T07:13:23.06Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "Fire3D.Application",
+              "DocumentMoniker": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.Application\\Fire3D.Application.csproj",
+              "RelativeDocumentMoniker": "Fire3D.Application\\Fire3D.Application.csproj",
+              "ToolTip": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.Application\\Fire3D.Application.csproj",
+              "RelativeToolTip": "Fire3D.Application\\Fire3D.Application.csproj",
+              "ViewState": "AgIAAAMAAAAAAAAAAAAAABIAAAANAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-09-12T07:12:16.448Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "Fire3D.Infrastructure.csproj",
+              "DocumentMoniker": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj",
+              "RelativeDocumentMoniker": "Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj",
+              "ToolTip": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj",
+              "RelativeToolTip": "Fire3D.Infrastructure\\Fire3D.Infrastructure.csproj",
+              "ViewState": "AgIAAAMAAAAAAAAAAAAAABIAAAACAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-09-12T06:47:56.198Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "Fire3D.API.csproj",
+              "DocumentMoniker": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.API\\Fire3D.API.csproj",
+              "RelativeDocumentMoniker": "Fire3D.API\\Fire3D.API.csproj",
+              "ToolTip": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.API\\Fire3D.API.csproj",
+              "RelativeToolTip": "Fire3D.API\\Fire3D.API.csproj",
+              "ViewState": "AgIAAAMAAAAAAAAAAAAAABcAAAAVAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-09-12T06:47:04.383Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
               "Title": "Class1.cs",
               "DocumentMoniker": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.Infrastructure\\Class1.cs",
               "RelativeDocumentMoniker": "Fire3D.Infrastructure\\Class1.cs",
@@ -70,12 +185,11 @@
               "RelativeToolTip": "Fire3D.Infrastructure\\Class1.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-09-12T06:17:23.483Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-09-12T06:17:23.483Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 8,
               "Title": "Class1.cs",
               "DocumentMoniker": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.Domain\\Class1.cs",
               "RelativeDocumentMoniker": "Fire3D.Domain\\Class1.cs",
@@ -83,21 +197,7 @@
               "RelativeToolTip": "Fire3D.Domain\\Class1.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-09-12T06:17:03.371Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "Class1.cs",
-              "DocumentMoniker": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.Application\\Class1.cs",
-              "RelativeDocumentMoniker": "Fire3D.Application\\Class1.cs",
-              "ToolTip": "D:\\FPT\\\u0110\u1ED3 \u00C1n\\BE\\Fire3D\\Fire3D.Application\\Class1.cs",
-              "RelativeToolTip": "Fire3D.Application\\Class1.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-09-12T06:16:04.933Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-09-12T06:17:03.371Z"
             }
           ]
         },

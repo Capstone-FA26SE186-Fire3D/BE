@@ -31,6 +31,7 @@
         },
         "frameworks": {
           "net10.0": {
+            "framework": "net10.0",
             "targetAlias": "net10.0",
             "projectReferences": {
               "D:\\FPT\\Đồ Án\\BE\\Fire3D\\Fire3D.Domain\\Fire3D.Domain.csproj": {
@@ -53,31 +54,28 @@
       },
       "frameworks": {
         "net10.0": {
+          "framework": "net10.0",
           "targetAlias": "net10.0",
           "dependencies": {
             "FluentValidation": {
               "target": "Package",
-              "version": "(, )"
+              "version": "[*, )"
             },
             "FluentValidation.DependencyInjectionExtensions": {
               "target": "Package",
-              "version": "(, )"
+              "version": "[*, )"
             },
             "MediatR": {
               "target": "Package",
-              "version": "(, )"
+              "version": "[*, )"
             },
             "Microsoft.AspNetCore.Authentication.JwtBearer": {
               "target": "Package",
-              "version": "(, )"
-            },
-            "Microsoft.EntityFrameworkCore": {
-              "target": "Package",
-              "version": "(, )"
+              "version": "[10.*, )"
             },
             "System.IdentityModel.Tokens.Jwt": {
               "target": "Package",
-              "version": "(, )"
+              "version": "[*, )"
             }
           },
           "imports": [
@@ -401,6 +399,7 @@
         },
         "frameworks": {
           "net10.0": {
+            "framework": "net10.0",
             "targetAlias": "net10.0",
             "projectReferences": {}
           }
@@ -419,6 +418,7 @@
       },
       "frameworks": {
         "net10.0": {
+          "framework": "net10.0",
           "targetAlias": "net10.0",
           "imports": [
             "net461",
