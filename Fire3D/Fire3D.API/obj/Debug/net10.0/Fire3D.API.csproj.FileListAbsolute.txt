@@ -173,3 +173,6 @@ D:\FPT\Đồ Án\BE\Fire3D\Fire3D.API\obj\Debug\net10.0\refint\Fire3D.API.dll
 D:\FPT\Đồ Án\BE\Fire3D\Fire3D.API\obj\Debug\net10.0\Fire3D.API.pdb
 D:\FPT\Đồ Án\BE\Fire3D\Fire3D.API\obj\Debug\net10.0\Fire3D.API.genruntimeconfig.cache
 D:\FPT\Đồ Án\BE\Fire3D\Fire3D.API\obj\Debug\net10.0\ref\Fire3D.API.dll
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.API\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.API\bin\Debug\net10.0\Npgsql.dll
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.API\bin\Debug\net10.0\Npgsql.EntityFrameworkCore.PostgreSQL.dll

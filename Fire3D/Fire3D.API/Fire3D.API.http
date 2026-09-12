@@ -1,6 +1,0 @@
-@Fire3D.API_HostAddress = http://localhost:5173
-
-GET {{Fire3D.API_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

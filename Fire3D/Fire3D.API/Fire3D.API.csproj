@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>9e203a94-1785-4d6f-8920-f4664f07d7be</UserSecretsId>
   </PropertyGroup>
 
 	<ItemGroup>
@@ -18,7 +19,7 @@
 
 		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
 
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>

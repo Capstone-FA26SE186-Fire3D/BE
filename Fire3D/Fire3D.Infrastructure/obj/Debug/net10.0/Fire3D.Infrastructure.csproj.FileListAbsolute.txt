@@ -16,3 +16,5 @@ D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Infrastructure\obj\Debug\net10.0\Fire3D.Infras
 D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Infrastructure\obj\Debug\net10.0\refint\Fire3D.Infrastructure.dll
 D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Infrastructure\obj\Debug\net10.0\Fire3D.Infrastructure.pdb
 D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Infrastructure\obj\Debug\net10.0\ref\Fire3D.Infrastructure.dll
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Infrastructure\bin\Debug\net10.0\Fire3D.Infrastructure.runtimeconfig.json
+D:\FPT\Đồ Án\BE\Fire3D\Fire3D.Infrastructure\obj\Debug\net10.0\Fire3D.Infrastructure.genruntimeconfig.cache

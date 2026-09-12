@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Fire3D.Domain")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+247f0bb51a40fda1ed7dccdd60b70e4b104f34b1")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+aa74285ed25d582b1c98971e3205188a2a92596f")]
 [assembly: System.Reflection.AssemblyProductAttribute("Fire3D.Domain")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Fire3D.Domain")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
