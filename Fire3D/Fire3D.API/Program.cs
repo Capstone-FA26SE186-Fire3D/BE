@@ -1,6 +1,11 @@
+using Fire3D.API.Extensions;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+
+builder.Services.AddDatabase(builder.Configuration);
+
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
