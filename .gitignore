@@ -1,0 +1,48 @@
+# .NET build and publish output
+[Bb]in/
+[Oo]bj/
+[Aa]rtifacts/
+[Pp]ublish/
+
+# Visual Studio and Rider local settings
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.sln.iml
+
+# Test results and coverage
+[Tt]est[Rr]esults/
+coverage/
+coverage.xml
+coverage.cobertura.xml
+*.coverage
+*.coveragexml
+
+# Runtime logs
+[Ll]ogs/
+*.log
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+*.pfx
+*.p12
+*.publishsettings
+*.pubxml.user
+
+# OS and temporary files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.tmp
+*.bak
+*~
