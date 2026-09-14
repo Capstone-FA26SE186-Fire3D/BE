@@ -12,7 +12,7 @@ This implementation follows Docs v6 FR-AUTH-01/02 and BR-01/02/07:
 
 The baseline did not define token lifetimes, password policy or refresh storage. This implementation chooses configurable 15-minute access tokens, 7-day absolute refresh sessions, and 12–128 character passwords. Refresh token rotation does not extend the absolute expiry. Refresh-token replay revokes the entire login session; a separate login on another device remains valid. Clients must serialize refresh attempts and sign in again after a lost rotation response/replay rejection.
 
-Organization administration, account-disable endpoints, device-registration endpoints, password reset/change, email verification, SSO and Unity launch grants are separate use cases. Existing database account/organization disable flags are enforced here. A mobile shell may hold refresh credentials in OS secure storage; never give them to Unity. A web frontend should use a server-side/BFF session with secure HttpOnly cookies, not persistent browser localStorage for the returned refresh token.
+Organization administration and account-disable endpoints are implemented in [administration.md](administration.md), with a [Swagger test walkthrough](testing-authorization.md). Device-registration endpoints, password reset/change, email verification, SSO and Unity launch grants remain separate use cases. Existing database account/organization disable flags are enforced here. A mobile shell may hold refresh credentials in OS secure storage; never give them to Unity. A web frontend should use a server-side/BFF session with secure HttpOnly cookies, not persistent browser localStorage for the returned refresh token.
 
 ## Clean Architecture
 

@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using Fire3D.API.Authorization;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Fire3D.Application.Authentication;
@@ -60,11 +61,16 @@ public static class AuthenticationExtensions
                     }
                 };
             });
-        services.AddAuthorization();
+        services.AddApiAuthorization();
         services.AddProblemDetails();
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("administration", context => RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true
+                }));
             options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
                 {

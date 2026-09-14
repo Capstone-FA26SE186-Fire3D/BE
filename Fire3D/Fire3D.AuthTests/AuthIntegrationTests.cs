@@ -39,7 +39,7 @@ public sealed class PostgresFactAttribute : FactAttribute
 }
 
 // Every test gets a disposable database; application databases are never migrated or cleared.
-public sealed class AuthIntegrationTests : IAsyncLifetime
+public sealed partial class AuthIntegrationTests : IAsyncLifetime
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {

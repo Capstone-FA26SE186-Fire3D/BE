@@ -14,6 +14,6 @@ internal sealed class CreateAccountCommandHandler(IAuthStore store, IPasswordSer
         var actor = await store.FindUserAsync(actorId, ct);
         if (actor is null || !await AuthSupport.IsActiveAsync(store, actor, ct) || actor.Role != UserRole.PlatformAdmin)
             return AuthResult<AccountResponse>.Fail("FORBIDDEN", "PlatformAdmin is required.", 403);
-        return await AuthSupport.CreateAsync(store, passwords, clock, request, actor, ct);
+        return await AuthSupport.CreateAsync(store, passwords, clock, request, actor, ct, command.CorrelationId);
     }
 }

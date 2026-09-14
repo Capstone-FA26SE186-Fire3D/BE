@@ -15,6 +15,8 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         var transaction = await db.Database.BeginTransactionAsync(ct);
         try
         {
+            // Shared for normal auth; admin status changes take the exclusive lock before revoking sessions.
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management', 0))", ct);
             // The same user lock serializes login, refresh, replay revocation and logout across API instances.
             var key = "fire3d:auth:" + userId;
             await db.Database.ExecuteSqlInterpolatedAsync(
@@ -69,13 +71,16 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
     public Task<bool> FamilyIsActiveAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct) =>
         db.Set<RefreshToken>().AnyAsync(x => x.UserId == userId && x.FamilyId == familyId
             && x.ConsumedAt == null && x.RevokedAt == null && x.ExpiresAt > now, ct);
-    public async Task WriteAuditAsync(User actor, string action, Guid targetId, DateTime now, CancellationToken ct)
+    public async Task WriteAuditAsync(User actor, string action, Guid targetId, DateTime now, CancellationToken ct, Guid? correlationId = null)
     {
+        var scope = action == "Create"
+            ? await db.Users.Where(x => x.Id == targetId).Select(x => x.OrganizationId).SingleAsync(ct)
+            : actor.OrganizationId;
         db.AuditLogs.Add(new AuditLog
         {
-            Id = Guid.NewGuid(), UserId = actor.Id, OrganizationId = actor.OrganizationId,
+            Id = Guid.NewGuid(), UserId = actor.Id, OrganizationId = scope,
             ActorType = "User", Action = Enum.Parse<AuditAction>(action), TargetEntity = "users",
-            TargetId = targetId, CorrelationId = Guid.NewGuid(), CreatedAt = now
+            TargetId = targetId, CorrelationId = correlationId ?? Guid.NewGuid(), CreatedAt = now
         });
         await db.SaveChangesAsync(ct);
     }

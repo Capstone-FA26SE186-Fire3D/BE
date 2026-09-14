@@ -21,7 +21,7 @@ public interface IAuthStore
     Task ConsumeRefreshTokenAsync(Guid id, DateTime now, CancellationToken ct);
     Task RevokeFamilyAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct);
     Task<bool> FamilyIsActiveAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct);
-    Task WriteAuditAsync(User actor, string action, Guid targetId, DateTime now, CancellationToken ct);
+    Task WriteAuditAsync(User actor, string action, Guid targetId, DateTime now, CancellationToken ct, Guid? correlationId = null);
 }
 
 public interface IPasswordService

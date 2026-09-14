@@ -7,7 +7,7 @@ namespace Fire3D.Application.Authentication.Internal;
 internal static class AuthSupport
 {
     internal static async Task<AuthResult<AccountResponse>> CreateAsync(IAuthStore store,
-        IPasswordService passwords, TimeProvider clock, CreateAccountRequest request, User? actor, CancellationToken ct)
+        IPasswordService passwords, TimeProvider clock, CreateAccountRequest request, User? actor, CancellationToken ct, Guid? correlationId = null)
     {
         var email = AuthSupport.NormalizeEmail(request.Email);
         if (email is null || request.Password is null || request.Password.Length is < 12 or > 128
@@ -16,8 +16,6 @@ internal static class AuthSupport
             return AuthResult<AccountResponse>.Fail("VALIDATION_ERROR", "Use a valid email, a 12–128 character password, and a valid role/name.", 400);
         if ((request.Role == UserRole.OrganizationUser) != request.OrganizationId.HasValue)
             return AuthResult<AccountResponse>.Fail("INVALID_ORGANIZATION", "Only OrganizationUser must have an organization.", 400);
-        if (request.OrganizationId is Guid org && !await store.OrganizationIsActiveAsync(org, ct))
-            return AuthResult<AccountResponse>.Fail("INVALID_ORGANIZATION", "Organization is unavailable.", 400);
         var now = AuthSupport.UtcNow(clock);
         var user = new User
         {
@@ -34,9 +32,12 @@ internal static class AuthSupport
             if (currentActor is null || !await AuthSupport.IsActiveAsync(store, currentActor, ct) || currentActor.Role != UserRole.PlatformAdmin)
                 return AuthResult<AccountResponse>.Fail("FORBIDDEN", "PlatformAdmin is required.", 403);
         }
+        // Recheck inside the transaction, serialized against organization deactivation.
+        if (request.OrganizationId is Guid org && !await store.OrganizationIsActiveAsync(org, ct))
+            return AuthResult<AccountResponse>.Fail("INVALID_ORGANIZATION", "Organization is unavailable.", 400);
         if (!await store.TryCreateUserAsync(user, ct))
             return AuthResult<AccountResponse>.Fail("EMAIL_EXISTS", "Email is already registered.", 409);
-        await store.WriteAuditAsync(actor ?? user, "Create", user.Id, now, ct);
+        await store.WriteAuditAsync(actor ?? user, "Create", user.Id, now, ct, correlationId);
         if (transaction is not null) await transaction.CommitAsync(ct);
         return AuthResult<AccountResponse>.Ok(AuthSupport.ToAccount(user));
     }

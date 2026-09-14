@@ -1,4 +1,6 @@
 using Fire3D.Application.Authentication.Commands.Login;
+using Fire3D.Application.Administration;
+using Fire3D.Infrastructure.Administration;
 
 namespace Fire3D.API.Extensions;
 
@@ -6,6 +8,7 @@ public static class ApplicationExtensions
 {
     public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddScoped<IAdministrationStore, AdministrationStore>();
         services.AddMediatR(options =>
         {
             options.RegisterServicesFromAssemblyContaining<LoginCommand>();
