@@ -9,6 +9,8 @@ namespace Fire3D.API.Extensions;
 
 public static class DependencyInjection
 {
+    private static readonly NpgsqlNullNameTranslator EnumNames = new();
+
     public static IServiceCollection AddDatabase(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -26,7 +28,7 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString, postgres =>
             {
                 // Giữ nguyên chữ hoa/thường của các nhãn enum trong SQL.
-                var names = new NpgsqlNullNameTranslator();
+                var names = EnumNames;
 
                 postgres.MapEnum<UserRole>(
                     "user_role_enum", nameTranslator: names);
