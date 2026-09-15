@@ -1,0 +1,73 @@
+{
+  "reportVersion": 1,
+  "status": "passed",
+  "sourceSha256": "b10b835ee8e1816f2f8674f2b058fe4dda2bd43e292ee7f0752b2c2b23d34b6c",
+  "sourceBytes": 3145,
+  "schema": "IFC4",
+  "lengthUnitToMetres": 0.001,
+  "toolchain": {
+    "ifcopenshell": "0.8.5",
+    "python": "3.13.14"
+  },
+  "counts": {
+    "IfcWall": 2
+  },
+  "storeys": [
+    {
+      "guid": "0aRn5RWjTHlR2Btzge2II_",
+      "name": "Level 0",
+      "elevationMetres": 0.0
+    },
+    {
+      "guid": "23wdMRcZbH6RwZLo1Rz9DH",
+      "name": "Level 1",
+      "elevationMetres": 3.0
+    }
+  ],
+  "meshes": [
+    {
+      "guid": "38uA5e6VTRluSqiO8ViEPF",
+      "type": "IfcWall",
+      "storeyGuid": "0aRn5RWjTHlR2Btzge2II_",
+      "vertices": 8,
+      "triangles": 12,
+      "boundsMetres": {
+        "min": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max": [
+          4.0,
+          0.2,
+          3.0
+        ]
+      }
+    },
+    {
+      "guid": "1pkDNZn7jRSQutjnz2pa7e",
+      "type": "IfcWall",
+      "storeyGuid": "23wdMRcZbH6RwZLo1Rz9DH",
+      "vertices": 8,
+      "triangles": 12,
+      "boundsMetres": {
+        "min": [
+          0.0,
+          0.0,
+          3.0
+        ],
+        "max": [
+          4.0,
+          0.2,
+          6.0
+        ]
+      }
+    }
+  ],
+  "issues": [],
+  "elapsedSeconds": 0.0057,
+  "limitations": [
+    "Synthetic/local capability check, not fire-safety or IFC-schema certification",
+    "No GLB, navigation graph, durable job, storage, API or Unity integration"
+  ]
+}
