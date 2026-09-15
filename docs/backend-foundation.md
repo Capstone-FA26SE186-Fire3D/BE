@@ -20,7 +20,7 @@ Solution: Fire3D/Fire3D.slnx. Các thư mục backend/Src và backend/Tests tron
 |---|---|---|
 | Authentication | Application/Authentication; đăng nhập, refresh, logout, tài khoản hiện tại, cấp tài khoản, bootstrap admin | Đã có code |
 | Administration | Application/Administration; quản trị tổ chức và tài khoản | Đã có code |
-| Building / IFC | Tòa nhà, revision, upload/xử lý IFC và artifact | Có entity/mapping; chưa có use case/API |
+| Building / IFC | Tòa nhà, revision, upload/xử lý IFC và artifact | Có entity/mapping và spike parse/geometry riêng; chưa có use case/API |
 | Scenario / Release | Kịch bản, phiên bản, kiểm tra, phát hành | Có entity/mapping; chưa có use case/API |
 | Training | Huấn luyện, session, sự kiện, kết quả | Có entity/mapping; chưa có use case/API |
 
@@ -41,3 +41,5 @@ dotnet run --project Fire3D/Fire3D.API/Fire3D.API.csproj --no-build --launch-pro
 Cần .NET 10 SDK, connection string và JWT local hợp lệ theo authentication.md. Kiểm tra /swagger/index.html và /openapi/v1.json. Không đưa secret vào log/ảnh/PR. Build/run không yêu cầu tự chạy migration hoặc ghi dữ liệu vào database ứng dụng.
 
 Quyền PlatformAdmin: xem [platform-admin-policy.md](platform-admin-policy.md). Phần auth/admin hiện có: [authentication.md](authentication.md), [administration.md](administration.md), [testing-authorization.md](testing-authorization.md).
+
+Week 2: [nghiệm thu và checklist review](week2-review.md); [IFC capability spike](../tools/ifc-spike/README.md).
