@@ -2,10 +2,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy toàn bộ source vào container
+# Context đang là thư mục root của repo (BE/)
 COPY . .
 
-# Restore + Publish
+# Di chuyển vào thư mục code và build
+WORKDIR /src/Fire3D
 RUN dotnet restore Fire3D.API/Fire3D.API.csproj
 RUN dotnet publish Fire3D.API/Fire3D.API.csproj \
     -c Release \
@@ -15,6 +16,10 @@ RUN dotnet publish Fire3D.API/Fire3D.API.csproj \
 # Stage 2: Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
+
+# Non-root user
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+USER appuser
 
 COPY --from=build /app/publish .
 
