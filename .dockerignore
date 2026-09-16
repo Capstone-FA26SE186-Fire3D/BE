@@ -1,0 +1,13 @@
+**
+!Dockerfile
+!Fire3D/
+!Fire3D/**
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+**/appsettings.Local.json
+**/appsettings.*.Local.json
+**/secrets.json
+**/.env*
+**/gha-creds-*.json

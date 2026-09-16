@@ -1,0 +1,249 @@
+/* ULTRA SYNTHWAVE SWAGGER UI — user-provided theme. */
+
+:root {
+    --bg: #0b0613;
+    --card: rgba(22, 12, 34, 0.75);
+    --pink: #ff2bd6;
+    --cyan: #00f7ff;
+    --purple: #8b5dff;
+    --text: #f7f1ff;
+    --muted: #bcaed6;
+}
+
+/* GLOBAL */
+body {
+    background: var(--bg);
+    margin: 0;
+}
+
+.swagger-ui {
+    background: radial-gradient(circle at top left, rgba(255,43,214,0.18), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(0,247,255,0.16), transparent 30%),
+        linear-gradient(135deg, #07030d, #12091c, #090611);
+    color: var(--text);
+    font-family: "Segoe UI", sans-serif;
+    min-height: 100vh;
+    position: relative;
+}
+
+.swagger-ui .scheme-container {
+    background: transparent !important;
+    box-shadow: none !important;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.swagger-ui::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    mask-image: linear-gradient(to bottom, transparent, black);
+    z-index: 0;
+}
+
+/* TOPBAR */
+.swagger-ui .topbar {
+    background: linear-gradient(90deg, rgba(255,43,214,0.18), rgba(0,247,255,0.18));
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 0 25px rgba(255,43,214,0.22);
+}
+
+/* TITLE */
+.swagger-ui .info .title {
+    color: white;
+    font-size: 42px !important;
+    text-shadow: 0 0 10px var(--pink), 0 0 20px var(--pink), 0 0 40px var(--cyan);
+}
+
+.swagger-ui .info p,
+.swagger-ui .info li {
+    color: var(--muted);
+}
+
+/* TAGS */
+.swagger-ui .opblock-tag {
+    color: white;
+    font-size: 22px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding: 16px 10px;
+    transition: 0.25s;
+}
+
+.swagger-ui .opblock-tag:hover {
+    color: var(--pink);
+    text-shadow: 0 0 12px var(--pink);
+}
+
+/* OPBLOCK */
+.swagger-ui .opblock {
+    background: var(--card) !important;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.35);
+    transition: 0.25s ease;
+}
+
+.swagger-ui .opblock:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 0 20px rgba(255,43,214,0.25), 0 0 40px rgba(0,247,255,0.12);
+}
+
+/* PATH */
+.swagger-ui .opblock-summary-path,
+.swagger-ui .opblock-summary-path * {
+    color: white !important;
+    font-weight: 700 !important;
+    font-size: 15px;
+    letter-spacing: 0.6px;
+}
+
+.swagger-ui .opblock-summary-description {
+    color: #d0c6e0;
+}
+
+/* METHOD BUTTONS */
+.swagger-ui .opblock-summary-method {
+    border-radius: 10px !important;
+    min-width: 85px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.swagger-ui .opblock-get {
+    border-left: 4px solid var(--cyan);
+}
+
+.swagger-ui .opblock-get .opblock-summary-method {
+    background: var(--cyan);
+    color: black;
+    box-shadow: 0 0 12px var(--cyan);
+}
+
+.swagger-ui .opblock-post {
+    border-left: 4px solid var(--pink);
+}
+
+.swagger-ui .opblock-post .opblock-summary-method {
+    background: var(--pink);
+    color: white;
+    box-shadow: 0 0 12px var(--pink);
+}
+
+.swagger-ui .opblock-put {
+    border-left: 4px solid var(--purple);
+}
+
+.swagger-ui .opblock-put .opblock-summary-method {
+    background: var(--purple);
+    color: white;
+}
+
+.swagger-ui .opblock-delete {
+    border-left: 4px solid #ff5e7e;
+}
+
+.swagger-ui .opblock-delete .opblock-summary-method {
+    background: #ff5e7e;
+    color: white;
+}
+
+/* SECTION HEADERS */
+.swagger-ui .opblock-section-header {
+    background: linear-gradient(90deg, rgba(255,43,214,0.08), rgba(0,247,255,0.04)) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.swagger-ui .opblock-section-header h4 {
+    color: white !important;
+}
+
+/* CODE BLOCK */
+.swagger-ui .highlight-code {
+    background: rgba(0,0,0,0.35) !important;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+}
+
+.swagger-ui .microlight {
+    color: #ffffff !important;
+}
+
+/* BUTTONS */
+.swagger-ui .btn {
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: linear-gradient(90deg, rgba(255,43,214,0.08), rgba(0,247,255,0.08));
+    color: white;
+    transition: 0.25s;
+}
+
+.swagger-ui .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 16px rgba(255,43,214,0.2);
+}
+
+.swagger-ui .btn.execute {
+    background: linear-gradient(90deg, var(--pink), var(--cyan));
+    border: none;
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(255,255,255,0.5);
+}
+
+.swagger-ui .btn.execute:hover {
+    box-shadow: 0 0 18px var(--pink), 0 0 30px var(--cyan);
+}
+
+/* INPUTS */
+.swagger-ui input,
+.swagger-ui textarea,
+.swagger-ui select {
+    background: rgba(0,0,0,0.25) !important;
+    border: 1px solid rgba(255,255,255,0.08);
+    color: white !important;
+    border-radius: 12px;
+}
+
+.swagger-ui input:focus,
+.swagger-ui textarea:focus,
+.swagger-ui select:focus {
+    border-color: var(--pink);
+    box-shadow: 0 0 12px rgba(255,43,214,0.25);
+    outline: none;
+}
+
+/* TABLES */
+.swagger-ui table thead tr th {
+    color: white !important;
+}
+
+.swagger-ui table tbody tr td {
+    color: #d5cde4;
+}
+
+/* MODAL */
+.swagger-ui .dialog-ux .modal-ux {
+    background: linear-gradient(145deg, rgba(25,15,35,0.95), rgba(14,8,22,0.96)) !important;
+    border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 0 30px rgba(255,43,214,0.22);
+}
+
+.swagger-ui .dialog-ux .modal-ux-header h3 {
+    color: white !important;
+    text-shadow: 0 0 10px var(--cyan);
+}
+
+/* MODELS */
+.swagger-ui section.models {
+    background: rgba(20,10,30,0.8);
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.08);
+}

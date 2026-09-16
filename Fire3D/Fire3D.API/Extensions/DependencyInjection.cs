@@ -1,4 +1,4 @@
-﻿using Fire3D.Domain.Enums;
+using Fire3D.Domain.Enums;
 using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -9,24 +9,26 @@ namespace Fire3D.API.Extensions;
 
 public static class DependencyInjection
 {
+    private static readonly NpgsqlNullNameTranslator EnumNames = new();
+
     public static IServiceCollection AddDatabase(
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString =
-            configuration.GetConnectionString("DefaultConnection");
+        var connectionName = configuration["Database:ConnectionName"] ?? "DefaultConnection";
+        var connectionString = configuration.GetConnectionString(connectionName);
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new InvalidOperationException(
-                "Missing connection string: DefaultConnection");
+                $"Missing connection string: {connectionName}");
         }
 
         services.AddDbContext<Fire3DDbContext>(options =>
             options.UseNpgsql(connectionString, postgres =>
             {
                 // Giữ nguyên chữ hoa/thường của các nhãn enum trong SQL.
-                var names = new NpgsqlNullNameTranslator();
+                var names = EnumNames;
 
                 postgres.MapEnum<UserRole>(
                     "user_role_enum", nameTranslator: names);
