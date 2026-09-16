@@ -159,12 +159,13 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
     public async Task Rotation_replay_revokes_family_but_not_another_login()
     {
         var first = await LoginAsync();
+        var firstRefreshExpiry = (DateTime)(await ScalarAsync("SELECT expires_at FROM auth_refresh_tokens LIMIT 1"))!;
         var other = await LoginAsync();
         var response = await client.PostAsJsonAsync("/api/auth/refresh", new RefreshRequest(first.RefreshToken));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var rotated = (await response.Content.ReadFromJsonAsync<TokenResponse>(Json))!;
         Assert.NotEqual(first.RefreshToken, rotated.RefreshToken);
-        Assert.Equal(first.RefreshTokenExpiresAt, rotated.RefreshTokenExpiresAt);
+        Assert.Equal(firstRefreshExpiry, rotated.RefreshTokenExpiresAt);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/refresh", new RefreshRequest(first.RefreshToken))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/refresh", new RefreshRequest(rotated.RefreshToken))).StatusCode);
         client.DefaultRequestHeaders.Authorization = new("Bearer", rotated.AccessToken);
@@ -314,11 +315,14 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.TooManyRequests, (await client.PostAsJsonAsync("/api/auth/refresh", new RefreshRequest("invalid"))).StatusCode);
     }
 
-    private async Task<TokenResponse> LoginAsync(string email = "admin@example.test")
+    private async Task<LoginResponse> LoginAsync(string email = "admin@example.test")
     {
         var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<TokenResponse>(Json))!;
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(payload.TryGetProperty("accessTokenExpiresAt", out _));
+        Assert.False(payload.TryGetProperty("refreshTokenExpiresAt", out _));
+        return payload.Deserialize<LoginResponse>(Json)!;
     }
     private async Task ExecuteAsync(string sql)
     {

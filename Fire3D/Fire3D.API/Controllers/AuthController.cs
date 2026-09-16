@@ -19,8 +19,14 @@ public sealed class AuthController(ISender sender) : ControllerBase
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
-    public async Task<ActionResult<TokenResponse>> Login(LoginRequest request, CancellationToken ct) =>
-        Respond(await sender.Send(new LoginCommand(request), ct));
+    public async Task<ActionResult<LoginResponse>> Login(LoginRequest request, CancellationToken ct)
+    {
+        var result = await sender.Send(new LoginCommand(request), ct);
+        return result.IsSuccess
+            ? Ok(new LoginResponse(result.Value!.AccessToken, result.Value.RefreshToken, result.Value.User))
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
 
     [HttpPost("refresh")]
     [AllowAnonymous]

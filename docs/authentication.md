@@ -135,3 +135,5 @@ Remove-Item Env:FIRE3D_TEST_USE_LOCAL_SECRETS
 Alternatively supply `FIRE3D_TEST_ADMIN_CONNECTION` through the environment for a local test PostgreSQL server. `FIRE3D_TEST_DOCS` can point to an alternate local Docs directory. Without explicit test configuration, PostgreSQL tests are reported as skipped, not passed. Test Data Protection keys are ephemeral and do not use the Windows user's key ring.
 
 References: [ASP.NET JWT validation](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication?view=aspnetcore-10.0), [OWASP password storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html), [RFC 9700 refresh-token replay protection](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14).
+
+Login success returns only accessToken, refreshToken and user. Expiry remains enforced by JWT claims and refresh-session storage. The refresh endpoint retains its existing expiry fields.

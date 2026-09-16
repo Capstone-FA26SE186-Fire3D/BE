@@ -185,7 +185,7 @@ public sealed partial class AuthIntegrationTests
         Assert.Empty((await client.GetFromJsonAsync<PageResponse<ManagedAccountResponse>>($"/api/accounts?organizationId={organization.Id}", Json))!.Items);
     }
 
-    private async Task<TokenResponse> AuthorizeAdminAsync()
+    private async Task<LoginResponse> AuthorizeAdminAsync()
     {
         var token = await LoginAsync();
         client.DefaultRequestHeaders.Authorization = new("Bearer", token.AccessToken);
