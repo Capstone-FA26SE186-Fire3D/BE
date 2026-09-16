@@ -22,6 +22,12 @@ public interface IAuthStore
     Task RevokeFamilyAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct);
     Task<bool> FamilyIsActiveAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct);
     Task WriteAuditAsync(User actor, string action, Guid targetId, DateTime now, CancellationToken ct, Guid? correlationId = null);
+
+    // --- Password Reset ---
+    Task SavePasswordResetTokenAsync(PasswordResetToken token, CancellationToken ct);
+    Task<PasswordResetToken?> FindValidResetTokenAsync(Guid tokenId, CancellationToken ct);
+    Task MarkResetTokenUsedAsync(Guid tokenId, DateTime now, CancellationToken ct);
+    Task InvalidateUserResetTokensAsync(Guid userId, CancellationToken ct);
 }
 
 public interface IPasswordService

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -10,6 +10,7 @@
 		<PackageReference Include="FluentValidation" Version="*" />
 		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="*" />
 		<PackageReference Include="MediatR" Version="*" />
+		<PackageReference Include="Microsoft.Extensions.Options" Version="*" />
 	</ItemGroup>
 
 	<ItemGroup>

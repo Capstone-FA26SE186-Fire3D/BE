@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Fire3D.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -81,6 +81,8 @@ public partial class Fire3DDbContext : DbContext
     public virtual DbSet<User> Users { get; set; }
 
     public virtual DbSet<UserDevice> UserDevices { get; set; }
+
+    public virtual DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
     public virtual DbSet<ValidationRun> ValidationRuns { get; set; }
 
@@ -1818,6 +1820,31 @@ public partial class Fire3DDbContext : DbContext
                 .HasForeignKey(d => new { d.JobId, d.RevisionId })
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("validation_runs_job_id_revision_id_fkey");
+        });
+
+        modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("password_reset_tokens_pkey");
+
+            entity.ToTable("password_reset_tokens");
+
+            entity.HasIndex(e => e.UserId).HasDatabaseName("ix_password_reset_tokens_user_id");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(e => e.UsedAt).HasColumnName("used_at");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.User)
+                .WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("password_reset_tokens_user_id_fkey");
         });
 
         OnModelCreatingPartial(modelBuilder);

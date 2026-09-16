@@ -1,6 +1,9 @@
+using Fire3D.Application.Authentication;
 using Fire3D.Application.Authentication.Commands.Login;
 using Fire3D.Application.Administration;
+using Fire3D.Application.Email;
 using Fire3D.Infrastructure.Administration;
+using Fire3D.Infrastructure.Email;
 
 namespace Fire3D.API.Extensions;
 
@@ -15,6 +18,18 @@ public static class ApplicationExtensions
             var licenseKey = configuration["MediatR:LicenseKey"];
             if (!string.IsNullOrWhiteSpace(licenseKey)) options.LicenseKey = licenseKey;
         });
+
+        // Email – Mailgun
+        services.AddOptions<MailgunOptions>()
+            .Bind(configuration.GetSection(MailgunOptions.SectionName))
+            .Validate(o => o.IsValid(), "Mailgun: ApiKey, Domain và From là bắt buộc.")
+            .ValidateOnStart();
+        services.AddHttpClient<IEmailService, MailgunEmailService>();
+
+        // Auth email options (FrontendUrl cho link reset password)
+        services.AddOptions<AuthEmailOptions>()
+            .Bind(configuration.GetSection(AuthEmailOptions.SectionName));
+
         return services;
     }
 }

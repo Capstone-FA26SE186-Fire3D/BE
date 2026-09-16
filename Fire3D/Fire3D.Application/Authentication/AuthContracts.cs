@@ -11,6 +11,8 @@ public sealed record AccountResponse(Guid Id, string Email, string? FullName,
 public sealed record LoginResponse(string AccessToken, string RefreshToken, AccountResponse User);
 public sealed record TokenResponse(string AccessToken, DateTime AccessTokenExpiresAt,
     string RefreshToken, DateTime RefreshTokenExpiresAt, AccountResponse User);
+public sealed record ForgotPasswordRequest(string Email);
+public sealed record ResetPasswordRequest(Guid Token, string NewPassword);
 public sealed record AuthError(string Code, string Message, int Status);
 public sealed record AuthResult<T>(T? Value, AuthError? Error)
 {
