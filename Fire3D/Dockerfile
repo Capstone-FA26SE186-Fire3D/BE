@@ -17,9 +17,8 @@ RUN dotnet publish Fire3D.API/Fire3D.API.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Non-root user
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
-USER appuser
+# Sử dụng non-root user mặc định ('app') có sẵn từ .NET 8 trở lên
+USER $APP_UID
 
 COPY --from=build /app/publish .
 
