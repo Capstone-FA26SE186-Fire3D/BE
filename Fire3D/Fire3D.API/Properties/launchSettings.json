@@ -1,25 +1,36 @@
-﻿{
-  "$schema": "https://json.schemastore.org/launchsettings.json",
-  "profiles": {
-    "http": {
-      "commandName": "Project",
-      "dotnetRunMessages": true,
-      "launchBrowser": true,
-      "launchUrl": "swagger",
-      "applicationUrl": "http://localhost:5173",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
-    },
-    "https": {
-      "commandName": "Project",
-      "dotnetRunMessages": true,
-      "launchBrowser": true,
-      "launchUrl": "swagger",
-      "applicationUrl": "https://localhost:7028;http://localhost:5173",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
-    }
-  }
+{
+    "$schema":  "https://json.schemastore.org/launchsettings.json",
+    "profiles":  {
+                     "http":  {
+                                  "commandName":  "Project",
+                                  "dotnetRunMessages":  true,
+                                  "launchBrowser":  true,
+                                  "launchUrl":  "swagger",
+                                  "applicationUrl":  "http://localhost:5173",
+                                  "environmentVariables":  {
+                                                               "ASPNETCORE_ENVIRONMENT":  "Development"
+                                                           }
+                              },
+                     "https":  {
+                                   "commandName":  "Project",
+                                   "dotnetRunMessages":  true,
+                                   "launchBrowser":  true,
+                                   "launchUrl":  "swagger",
+                                   "applicationUrl":  "https://localhost:7028;http://localhost:5173",
+                                   "environmentVariables":  {
+                                                                "ASPNETCORE_ENVIRONMENT":  "Development"
+                                                            }
+                               },
+                     "supabase":  {
+                                      "commandName":  "Project",
+                                      "dotnetRunMessages":  true,
+                                      "launchBrowser":  true,
+                                      "launchUrl":  "swagger",
+                                      "applicationUrl":  "http://localhost:5183",
+                                      "environmentVariables":  {
+                                                                   "ASPNETCORE_ENVIRONMENT":  "Development",
+                                                                   "Database__ConnectionName":  "Supabase"
+                                                               }
+                                  }
+                 }
 }

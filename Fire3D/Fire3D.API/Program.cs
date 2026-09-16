@@ -5,6 +5,12 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+if (args.Contains("--check-database", StringComparer.Ordinal))
+{
+    Environment.ExitCode = await DatabaseConnectivityCheck.RunAsync(builder.Configuration, CancellationToken.None);
+    return;
+}
+
 // Add services to the container.
 
 builder.Services.AddDatabase(builder.Configuration);
