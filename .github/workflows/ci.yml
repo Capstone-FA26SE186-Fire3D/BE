@@ -21,6 +21,9 @@ jobs:
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
+      # Startup configuration is evaluated before WebApplicationFactory replaces the DbContext.
+      # Every test asserts the replacement targets its generated disposable database.
+      ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=postgres;Username=postgres;Password=disposable-ci-only
       FIRE3D_TEST_ADMIN_CONNECTION: Host=localhost;Port=5432;Database=postgres;Username=postgres;Password=disposable-ci-only
     steps:
       - uses: actions/checkout@v4
