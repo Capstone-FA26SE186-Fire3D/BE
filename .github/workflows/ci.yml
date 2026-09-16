@@ -1,0 +1,64 @@
+name: BE CI
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main, 'feature/**', 'fix/**', 'chore/**']
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: disposable-ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      FIRE3D_TEST_ADMIN_CONNECTION: Host=localhost;Port=5432;Database=postgres;Username=postgres;Password=disposable-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore Fire3D/Fire3D.slnx
+      - run: dotnet build Fire3D/Fire3D.slnx -c Release --no-restore
+      - run: dotnet test Fire3D/Fire3D.slnx -c Release --no-build --logger trx --results-directory TestResults
+      - name: Require tests to execute without skips
+        run: python3 tools/ci/check_test_results.py TestResults
+      - name: Verify fresh database migration and SQL invariants
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: disposable-ci-only
+          PGPORT: '5432'
+        run: bash tools/ci/test-migration.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults/
+  ifc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: tools/ifc-spike/requirements.lock.txt
+      - run: pip install -r tools/ifc-spike/requirements.lock.txt
+      - run: python -m unittest discover -s tools/ifc-spike -v
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag fire3d-api:ci .

@@ -53,13 +53,15 @@ if (app.Environment.IsDevelopment())
 
 }
 
-app.UseHttpsRedirection();
+// Cloud Run terminates TLS before forwarding HTTP to the container.
+if (!builder.Configuration.GetValue<bool>("Hosting:BehindTlsProxy")) app.UseHttpsRedirection();
 
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapGet("/health/live", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 
 app.Run();
 

@@ -49,3 +49,6 @@ Desktop.ini
 
 # Codex session notes are machine-local; shared guidance stays trackable.
 /.codex/local/
+
+# Ephemeral Google GitHub Actions credentials
+gha-creds-*.json

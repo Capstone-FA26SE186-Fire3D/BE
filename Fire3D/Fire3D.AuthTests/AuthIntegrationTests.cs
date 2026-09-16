@@ -77,10 +77,11 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
         builder.Database = databaseName;
         testConnection = builder.ConnectionString;
         var repo = FindRepoRoot();
-        var docs = Environment.GetEnvironmentVariable("FIRE3D_TEST_DOCS") ?? Path.Combine(repo, "..", "Docs");
+        var docs = Environment.GetEnvironmentVariable("FIRE3D_TEST_DOCS");
+        var schemaDirectory = docs is null ? Path.Combine(AppContext.BaseDirectory, "Sql") : Path.Combine(docs, "database");
         // Use actual v6 core SQL and triggers. Phase 2 role provisioning is deliberately outside this auth fixture.
         foreach (var file in new[] { "00_types.sql", "10_core.sql", "20_functions.sql" })
-            await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(docs, "database", file)));
+            await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(schemaDirectory, file)));
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(repo, "database", "001_auth_refresh_tokens.sql")));
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(web =>
         {

@@ -1,0 +1,2 @@
+These schema fixtures are snapshots of Docs/database/{00_types,10_core,20_functions}.sql used by auth integration tests. Source hashes are recorded in supabase/source-manifest.json. They allow CI to run without a separate private Docs checkout. Update deliberately with schema changes; do not edit an already-applied migration. FIRE3D_TEST_DOCS can override this directory for explicit local cross-repository verification.
+Trailing blank lines may be normalized in test snapshots; hashes identify original source inputs.
