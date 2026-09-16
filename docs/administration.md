@@ -83,3 +83,5 @@ This module implements account access control. Future Training resolve/start han
 API controllers dispatch MediatR commands/queries in Application/Administration. IAdministrationStore is implemented by Infrastructure/Administration/AdministrationStore; DI remains in API/Extensions/ApplicationExtensions.cs.
 
 The existing opt-in PostgreSQL test fixture creates dedicated random localhost databases. Administration tests cover role denial, safe DTOs/filtering, invalid/duplicate slug, deleted resources, session revocation across deactivate/reactivate, self-deactivation, concurrent administrators and rollback on audit failure. Run with the commands in authentication.md.
+
+Broader PlatformAdmin scope and implementation status: [platform-admin-policy.md](platform-admin-policy.md). Architecture and Week 2 evidence: [backend-foundation.md](backend-foundation.md).

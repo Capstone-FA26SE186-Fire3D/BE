@@ -90,4 +90,28 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         public Task CommitAsync(CancellationToken ct) => transaction.CommitAsync(ct);
         public ValueTask DisposeAsync() => transaction.DisposeAsync();
     }
+
+    // ── Password Reset ────────────────────────────────────────────────────────
+    public async Task SavePasswordResetTokenAsync(PasswordResetToken token, CancellationToken ct)
+    {
+        db.Set<PasswordResetToken>().Add(token);
+        await db.SaveChangesAsync(ct);
+    }
+
+    public Task<PasswordResetToken?> FindValidResetTokenAsync(Guid tokenId, CancellationToken ct) =>
+        db.Set<PasswordResetToken>()
+          .AsNoTracking()
+          .SingleOrDefaultAsync(
+              x => x.Id == tokenId && x.UsedAt == null && x.ExpiresAt > DateTime.UtcNow, ct);
+
+    public async Task MarkResetTokenUsedAsync(Guid tokenId, DateTime now, CancellationToken ct) =>
+        await db.Set<PasswordResetToken>()
+                .Where(x => x.Id == tokenId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.UsedAt, now), ct);
+
+    public async Task InvalidateUserResetTokensAsync(Guid userId, CancellationToken ct) =>
+        await db.Set<PasswordResetToken>()
+                .Where(x => x.UserId == userId && x.UsedAt == null)
+                .ExecuteDeleteAsync(ct);
 }
+

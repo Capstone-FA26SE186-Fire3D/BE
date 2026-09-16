@@ -15,6 +15,7 @@ builder.Services.AddAccountAuthentication(builder.Configuration);
 builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
 builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
@@ -35,12 +36,14 @@ app.UseExceptionHandler();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+    app.UseStaticFiles();
     app.MapOpenApi();
 
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/openapi/v1.json", "Fire3D API v1");
         options.RoutePrefix = "swagger";
+        options.InjectStylesheet("../css/swagger-synthwave.css");
     });
 
 }
@@ -51,6 +54,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.Run();

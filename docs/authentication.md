@@ -10,7 +10,7 @@ This implementation follows Docs v6 FR-AUTH-01/02 and BR-01/02/07:
 - User creation and successful login/logout produce audit records without passwords or tokens.
 - Existing SQL protects role/organization immutability. This module does not replace those triggers.
 
-The baseline did not define token lifetimes, password policy or refresh storage. This implementation chooses configurable 15-minute access tokens, 7-day absolute refresh sessions, and 12–128 character passwords. Refresh token rotation does not extend the absolute expiry. Refresh-token replay revokes the entire login session; a separate login on another device remains valid. Clients must serialize refresh attempts and sign in again after a lost rotation response/replay rejection.
+The baseline did not define token lifetimes, password policy or refresh storage. This implementation chooses configurable 60-minute access tokens, 7-day absolute refresh sessions, and 12–128 character passwords. Refresh token rotation does not extend the absolute expiry. Refresh-token replay revokes the entire login session; a separate login on another device remains valid. Clients must serialize refresh attempts and sign in again after a lost rotation response/replay rejection.
 
 Organization administration and account-disable endpoints are implemented in [administration.md](administration.md), with a [Swagger test walkthrough](testing-authorization.md). Device-registration endpoints, password reset/change, email verification, SSO and Unity launch grants remain separate use cases. Existing database account/organization disable flags are enforced here. A mobile shell may hold refresh credentials in OS secure storage; never give them to Unity. A web frontend should use a server-side/BFF session with secure HttpOnly cookies, not persistent browser localStorage for the returned refresh token.
 
@@ -135,3 +135,5 @@ Remove-Item Env:FIRE3D_TEST_USE_LOCAL_SECRETS
 Alternatively supply `FIRE3D_TEST_ADMIN_CONNECTION` through the environment for a local test PostgreSQL server. `FIRE3D_TEST_DOCS` can point to an alternate local Docs directory. Without explicit test configuration, PostgreSQL tests are reported as skipped, not passed. Test Data Protection keys are ephemeral and do not use the Windows user's key ring.
 
 References: [ASP.NET JWT validation](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication?view=aspnetcore-10.0), [OWASP password storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html), [RFC 9700 refresh-token replay protection](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14).
+
+Login success returns only accessToken, refreshToken and user. Expiry remains enforced by JWT claims and refresh-session storage. The refresh endpoint retains its existing expiry fields.
