@@ -34,19 +34,15 @@ if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
 app.UseExceptionHandler();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+app.UseStaticFiles();
+app.MapOpenApi();
+
+app.UseSwaggerUI(options =>
 {
-    app.UseStaticFiles();
-    app.MapOpenApi();
+    options.SwaggerEndpoint("/openapi/v1.json", "Fire3D API v1");
+    options.RoutePrefix = "swagger";
+});
 
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/openapi/v1.json", "Fire3D API v1");
-        options.RoutePrefix = "swagger";
-        options.InjectStylesheet("../css/swagger-synthwave.css");
-    });
-
-}
 
 app.UseHttpsRedirection();
 
