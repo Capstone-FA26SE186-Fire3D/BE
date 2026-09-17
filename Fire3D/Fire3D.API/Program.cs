@@ -44,7 +44,8 @@ app.UseSwaggerUI(options =>
 });
 
 
-app.UseHttpsRedirection();
+// Azure App Service handles SSL termination - no need for HTTPS redirect
+// app.UseHttpsRedirection();
 
 app.UseRateLimiter();
 app.UseAuthentication();
