@@ -30,7 +30,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./Fire3D
+          context: .
           file: ./Fire3D/Dockerfile
           push: true
           tags: ghcr.io/ericn2907/fire3d-api:latest
