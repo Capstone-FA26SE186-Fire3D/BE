@@ -1,34 +1,59 @@
 using Fire3D.API.Extensions;
+using Fire3D.Application.Authentication.Commands.BootstrapAdmin;
+using MediatR;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
 builder.Services.AddDatabase(builder.Configuration);
+builder.Services.AddApplication(builder.Configuration);
+builder.Services.AddAccountAuthentication(builder.Configuration);
 
 
-builder.Services.AddControllers();
-builder.Services.AddOpenApi();
+builder.Services.AddControllers().AddJsonOptions(options =>
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
 {
-    app.MapOpenApi();
-
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/openapi/v1.json", "Fire3D API v1");
-        options.RoutePrefix = "swagger";
-    });
-
+    // Credentials come from User Secrets / environment, never from command-line arguments.
+    using var scope = app.Services.CreateScope();
+    var result = await scope.ServiceProvider.GetRequiredService<ISender>().Send(new BootstrapAdminCommand(
+        builder.Configuration["BootstrapAdmin:Email"] ?? "",
+        builder.Configuration["BootstrapAdmin:Password"] ?? ""), CancellationToken.None);
+    Console.WriteLine(result.IsSuccess ? "Initial administrator created." : result.Error!.Message);
+    Environment.ExitCode = result.IsSuccess ? 0 : 1;
+    return;
 }
 
-app.UseHttpsRedirection();
+app.UseExceptionHandler();
 
+// Configure the HTTP request pipeline.
+app.UseStaticFiles();
+app.MapOpenApi();
+
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/openapi/v1.json", "Fire3D API v1");
+    options.RoutePrefix = "swagger";
+});
+
+
+// Azure App Service handles SSL termination - no need for HTTPS redirect
+// app.UseHttpsRedirection();
+
+app.UseRateLimiter();
+app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.Run();
+
+public partial class Program;

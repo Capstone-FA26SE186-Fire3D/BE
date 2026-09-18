@@ -1,0 +1,46 @@
+services:
+  - type: web
+    name: fire3d-api
+    runtime: docker
+    # Dockerfile nằm trong thư mục Fire3D/, context cũng là Fire3D/
+    dockerfilePath: ./Fire3D/Dockerfile
+    dockerContext: ./Fire3D
+    # Render gọi endpoint này để kiểm tra service đã sẵn sàng chưa
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+
+      # ── Database ────────────────────────────────────────────
+      - key: ConnectionStrings__DefaultConnection
+        sync: false   # Điền thủ công trên Render Dashboard
+
+      # ── JWT ─────────────────────────────────────────────────
+      - key: Jwt__Key
+        sync: false
+      - key: Jwt__Issuer
+        value: Fire3D.API
+      - key: Jwt__Audience
+        value: Fire3D.Clients
+      - key: Jwt__AccessTokenMinutes
+        value: "60"
+      - key: Jwt__RefreshTokenDays
+        value: "7"
+
+      # ── Mailgun ─────────────────────────────────────────────
+      - key: Mailgun__ApiKey
+        sync: false   # Set on Render Dashboard (never commit API keys!)
+      - key: Mailgun__Domain
+        sync: false   # Set on Render Dashboard
+      - key: Mailgun__From
+        sync: false   # Set on Render Dashboard
+
+      # ── Frontend URL (dùng trong link reset password) ───────
+      - key: Auth__FrontendUrl
+        sync: false   # Điền thủ công: https://your-frontend.com
+
+      # ── AWS S3 ──────────────────────────────────────────────
+      - key: AWS__AccessKey
+        sync: false
+      - key: AWS__SecretKey
+        sync: false
