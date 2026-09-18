@@ -38,7 +38,7 @@ secrets.json
 *.p12
 *.publishsettings
 *.pubxml.user
-
+appsettings.json
 # OS and temporary files
 .DS_Store
 Thumbs.db
