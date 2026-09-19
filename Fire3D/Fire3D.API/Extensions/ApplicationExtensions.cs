@@ -14,6 +14,7 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Buildings.IBuildingStore, Fire3D.Infrastructure.Buildings.BuildingStore>();
         services.AddMediatR(options =>
         {
+            options.RegisterServicesFromAssembly(typeof(Fire3D.Application.Authentication.Commands.FirebaseLogin.ExchangeFirebaseTokenCommand).Assembly);
             var licenseKey = configuration["MediatR:LicenseKey"];
             if (!string.IsNullOrWhiteSpace(licenseKey)) options.LicenseKey = licenseKey;
         });
