@@ -18,6 +18,9 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AuthController(ISender sender) : ControllerBase
 {
+    /// <summary>
+    /// Đăng nhập bằng Email và Password, trả về Access Token và Refresh Token.
+    /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
@@ -30,6 +33,9 @@ public sealed class AuthController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
+    /// <summary>
+    /// Đăng ký tài khoản tự động (Self-service). Hệ thống sẽ tự tạo Organization và User tương ứng.
+    /// </summary>
     [HttpPost("register")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
@@ -42,12 +48,18 @@ public sealed class AuthController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
+    /// <summary>
+    /// Cấp lại Access Token mới dựa vào Refresh Token hợp lệ.
+    /// </summary>
     [HttpPost("refresh")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
     public async Task<ActionResult<TokenResponse>> Refresh(RefreshRequest request, CancellationToken ct) =>
         Respond(await sender.Send(new RefreshTokenCommand(request.RefreshToken), ct));
 
+    /// <summary>
+    /// Đăng xuất khỏi hệ thống, thu hồi Refresh Token hiện tại.
+    /// </summary>
     [HttpPost("logout")]
     [Authorize]
     public async Task<IActionResult> Logout(CancellationToken ct)
@@ -57,6 +69,9 @@ public sealed class AuthController(ISender sender) : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Lấy thông tin tài khoản của phiên đăng nhập hiện tại.
+    /// </summary>
     [HttpGet("me")]
     [Authorize]
     public async Task<ActionResult<AccountResponse>> Me(CancellationToken ct)

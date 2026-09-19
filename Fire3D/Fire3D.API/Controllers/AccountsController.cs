@@ -13,6 +13,9 @@ namespace Fire3D.API.Controllers;
 [Route("api/accounts")]
 public sealed class AccountsController(ISender sender) : AdministrationControllerBase
 {
+    /// <summary>
+    /// Tạo mới một tài khoản (chỉ dành cho PlatformAdmin).
+    /// </summary>
     [HttpPost]
     [EnableRateLimiting("auth")]
     public async Task<ActionResult<AccountResponse>> Create(CreateAccountRequest request, CancellationToken ct)
@@ -23,14 +26,23 @@ public sealed class AccountsController(ISender sender) : AdministrationControlle
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
+    /// <summary>
+    /// Lấy danh sách tài khoản (có phân trang và tìm kiếm).
+    /// </summary>
     [HttpGet]
     public async Task<ActionResult<PageResponse<ManagedAccountResponse>>> List([FromQuery] AccountFilter filter, CancellationToken ct) =>
         Respond(await sender.Send(new ListAccountsQuery(ActorId, filter), ct));
 
+    /// <summary>
+    /// Lấy chi tiết thông tin một tài khoản.
+    /// </summary>
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ManagedAccountResponse>> Get(Guid id, CancellationToken ct) =>
         Respond(await sender.Send(new GetAccountQuery(ActorId, id), ct));
 
+    /// <summary>
+    /// Kích hoạt hoặc vô hiệu hóa một tài khoản.
+    /// </summary>
     [HttpPatch("{id:guid}/status")]
     public async Task<ActionResult<ManagedAccountResponse>> SetActive(Guid id, SetActiveRequest request, CancellationToken ct) =>
         Respond(await sender.Send(new SetAccountActiveCommand(ActorId, id, request.IsActive, NewCorrelationId()), ct));
