@@ -18,6 +18,7 @@ public interface IAuthStore
     Task<bool> TryCreateUserAsync(User user, CancellationToken ct);
     Task UpdateUserAsync(User user, CancellationToken ct);
     Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct);
+    Task<bool> UpsertDeviceAsync(Guid userId, string deviceUuid, string? fcmToken, string? deviceModel, string? osVersion, CancellationToken ct);
     Task<RefreshToken?> FindRefreshTokenAsync(string hash, CancellationToken ct);
     Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct);
     Task ConsumeRefreshTokenAsync(Guid id, DateTime now, CancellationToken ct);

@@ -1755,6 +1755,9 @@ public partial class Fire3DDbContext : DbContext
                 .HasColumnName("created_at");
             entity.Property(e => e.DeviceModel).HasColumnName("device_model");
             entity.Property(e => e.DeviceUuid).HasColumnName("device_uuid");
+            entity.Property(e => e.FcmToken)
+                .HasMaxLength(255)
+                .HasColumnName("fcm_token");
             entity.Property(e => e.LastSeenAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("last_seen_at");

@@ -58,6 +58,37 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         await db.Users.Where(x => x.Id == id).ExecuteUpdateAsync(update => update
             .SetProperty(x => x.LastLoginAt, now).SetProperty(x => x.UpdatedAt, now)
             , ct);
+
+    public async Task<bool> UpsertDeviceAsync(Guid userId, string deviceUuid, string? fcmToken, string? deviceModel, string? osVersion, CancellationToken ct)
+    {
+        var device = await db.UserDevices.FirstOrDefaultAsync(x => x.UserId == userId && x.DeviceUuid == deviceUuid, ct);
+        if (device == null)
+        {
+            device = new UserDevice
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                DeviceUuid = deviceUuid,
+                FcmToken = fcmToken,
+                DeviceModel = deviceModel,
+                OsVersion = osVersion,
+                LastSeenAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow
+            };
+            db.UserDevices.Add(device);
+        }
+        else
+        {
+            device.FcmToken = fcmToken ?? device.FcmToken;
+            device.DeviceModel = deviceModel ?? device.DeviceModel;
+            device.OsVersion = osVersion ?? device.OsVersion;
+            device.LastSeenAt = DateTime.UtcNow;
+            db.UserDevices.Update(device);
+        }
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public Task<RefreshToken?> FindRefreshTokenAsync(string hash, CancellationToken ct) =>
         db.Set<RefreshToken>().AsNoTracking().SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
     public async Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct)

@@ -29,6 +29,9 @@ public static class ApplicationExtensions
         services.AddOptions<AuthEmailOptions>()
             .Bind(configuration.GetSection(AuthEmailOptions.SectionName));
 
+        // FCM Notifications
+        services.AddScoped<Fire3D.Application.Notifications.INotificationService, Fire3D.Infrastructure.Notifications.FcmNotificationService>();
+
         return services;
     }
 }

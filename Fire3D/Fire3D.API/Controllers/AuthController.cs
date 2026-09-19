@@ -63,6 +63,18 @@ public sealed class AuthController(ISender sender) : ControllerBase
         return account is null ? Unauthorized() : Ok(account);
     }
 
+    /// <summary>
+    /// Đăng ký thiết bị và FCM Token để nhận Push Notification.
+    /// </summary>
+    [HttpPut("devices")]
+    [Authorize]
+    public async Task<IActionResult> RegisterDevice([FromBody] Fire3D.Application.Users.Commands.RegisterDevice.RegisterDeviceCommand request, CancellationToken ct)
+    {
+        var userId = Guid.Parse(User.FindFirstValue("sub")!);
+        await sender.Send(request with { UserId = userId }, ct);
+        return Ok();
+    }
+
     private ActionResult<TokenResponse> Respond(AuthResult<TokenResponse> result) =>
         result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
