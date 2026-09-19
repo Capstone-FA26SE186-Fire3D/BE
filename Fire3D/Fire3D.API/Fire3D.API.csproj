@@ -10,6 +10,7 @@
   </PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="FirebaseAdmin" Version="3.6.0" />
 		<PackageReference Include="prometheus-net.AspNetCore" Version="*" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />
 		<PackageReference Include="Serilog.AspNetCore" Version="*" />

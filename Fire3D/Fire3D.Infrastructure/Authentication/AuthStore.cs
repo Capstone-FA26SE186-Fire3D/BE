@@ -34,21 +34,24 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<User?> FindUserByEmailAsync(string email, CancellationToken ct) =>
         db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Email == email, ct);
+    public Task<User?> FindUserByFirebaseUidAsync(string uid, CancellationToken ct) =>
+        db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.FirebaseUid == uid, ct);
     public Task<bool> HasAdminAsync(CancellationToken ct) =>
         db.Users.AnyAsync(x => x.Role == UserRole.PlatformAdmin, ct);
     public Task<bool> OrganizationIsActiveAsync(Guid id, CancellationToken ct) =>
-        db.Organizations.AnyAsync(x => x.Id == id && x.IsActive && x.DeletedAt == null, ct);
+        db.Organizations.AnyAsync(x => x.Id == id && x.IsActive && !x.DeletedAt.HasValue, ct);
 
     public async Task<bool> TryCreateUserAsync(User user, CancellationToken ct)
     {
         db.Users.Add(user);
         try { await db.SaveChangesAsync(ct); return true; }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "users_email_key" })
-        {
-            db.Entry(user).State = EntityState.Detached;
-            return false;
-        }
+        catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" }) { return false; }
+    }
+
+    public async Task UpdateUserAsync(User user, CancellationToken ct)
+    {
+        db.Users.Update(user);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct) =>

@@ -23,9 +23,12 @@ public sealed class AuthController(ISender sender) : ControllerBase
     [EnableRateLimiting("auth")]
     public async Task<ActionResult> LoginFirebase([FromBody] string firebaseIdToken, CancellationToken ct)
     {
-        // TODO: Implement Firebase token verification using FirebaseAdmin
-        // var result = await sender.Send(new ExchangeFirebaseTokenCommand(firebaseIdToken), ct);
-        return StatusCode(501, "Firebase Auth integration is pending implementation.");
+        var result = await sender.Send(new Fire3D.Application.Authentication.Commands.FirebaseLogin.ExchangeFirebaseTokenCommand(firebaseIdToken), ct);
+        if (!result.IsSuccess) 
+        {
+            return Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+        }
+        return Ok(result.Value);
     }
 
     /// <summary>
