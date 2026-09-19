@@ -96,7 +96,6 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     public async Task<ActionResult<RevisionResponse>> UploadIfc(Guid id, [FromForm] string versionLabel, IFormFile file, CancellationToken ct)
     {
         if (file == null || file.Length == 0) return BadRequest("File is empty.");
-        if (string.IsNullOrWhiteSpace(versionLabel)) return BadRequest("Version label is required.");
 
         var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "IFC");
         if (!Directory.Exists(uploadsPath)) Directory.CreateDirectory(uploadsPath);
