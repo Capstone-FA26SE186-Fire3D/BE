@@ -1723,7 +1723,9 @@ public partial class Fire3DDbContext : DbContext
                 .HasColumnName("is_active");
             entity.Property(e => e.LastLoginAt).HasColumnName("last_login_at");
             entity.Property(e => e.OrganizationId).HasColumnName("organization_id");
-            entity.Property(e => e.PasswordHash).HasColumnName("password_hash");
+            entity.Property(e => e.FirebaseUid)
+                .HasMaxLength(128)
+                .HasColumnName("firebase_uid");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("updated_at");
