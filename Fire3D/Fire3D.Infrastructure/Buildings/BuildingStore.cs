@@ -49,44 +49,50 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
 
     public async Task UpdateBuildingAsync(Building building, BuildingLocation? location, BuildingContact? contact, CancellationToken ct)
     {
-        db.Buildings.Update(building);
+        var existing = await db.Buildings
+            .Include(x => x.BuildingLocation)
+            .Include(x => x.BuildingContact)
+            .FirstOrDefaultAsync(x => x.Id == building.Id, ct);
+            
+        if (existing == null) return;
+
+        existing.Name = building.Name;
+        existing.BuildingType = building.BuildingType;
+        existing.TotalFloors = building.TotalFloors;
+        existing.UpdatedAt = building.UpdatedAt;
         
         if (location != null) 
         {
-            var existingLocation = await db.Set<BuildingLocation>().FirstOrDefaultAsync(x => x.BuildingId == building.Id, ct);
-            if (existingLocation != null)
+            if (existing.BuildingLocation != null)
             {
-                existingLocation.Address = location.Address;
-                existingLocation.City = location.City;
-                existingLocation.District = location.District;
-                existingLocation.Latitude = location.Latitude;
-                existingLocation.Longitude = location.Longitude;
-                existingLocation.Geojson = location.Geojson;
-                existingLocation.UpdatedAt = location.UpdatedAt;
-                db.Set<BuildingLocation>().Update(existingLocation);
+                existing.BuildingLocation.Address = location.Address;
+                existing.BuildingLocation.City = location.City;
+                existing.BuildingLocation.District = location.District;
+                existing.BuildingLocation.Latitude = location.Latitude;
+                existing.BuildingLocation.Longitude = location.Longitude;
+                existing.BuildingLocation.Geojson = location.Geojson;
+                existing.BuildingLocation.UpdatedAt = location.UpdatedAt;
             }
             else
             {
-                db.Set<BuildingLocation>().Add(location);
+                existing.BuildingLocation = location;
             }
         }
         
         if (contact != null)
         {
-            var existingContact = await db.Set<BuildingContact>().FirstOrDefaultAsync(x => x.BuildingId == building.Id, ct);
-            if (existingContact != null)
+            if (existing.BuildingContact != null)
             {
-                existingContact.ContactName = contact.ContactName;
-                existingContact.ContactRole = contact.ContactRole;
-                existingContact.Phone = contact.Phone;
-                existingContact.Email = contact.Email;
-                existingContact.IsPrimary = contact.IsPrimary;
-                existingContact.UpdatedAt = contact.UpdatedAt;
-                db.Set<BuildingContact>().Update(existingContact);
+                existing.BuildingContact.ContactName = contact.ContactName;
+                existing.BuildingContact.ContactRole = contact.ContactRole;
+                existing.BuildingContact.Phone = contact.Phone;
+                existing.BuildingContact.Email = contact.Email;
+                existing.BuildingContact.IsPrimary = contact.IsPrimary;
+                existing.BuildingContact.UpdatedAt = contact.UpdatedAt;
             }
             else
             {
-                db.Set<BuildingContact>().Add(contact);
+                existing.BuildingContact = contact;
             }
         }
 
