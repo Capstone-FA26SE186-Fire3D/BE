@@ -4,6 +4,7 @@ using Fire3D.Application.Buildings;
 using Fire3D.Application.Buildings.Commands.CreateBuilding;
 using Fire3D.Application.Buildings.Commands.SetBuildingActive;
 using Fire3D.Application.Buildings.Commands.UpdateBuilding;
+using Fire3D.Application.Buildings.Commands.UploadIfc;
 using Fire3D.Application.Buildings.Queries.GetBuilding;
 using Fire3D.Application.Buildings.Queries.ListBuildings;
 using MediatR;
@@ -65,8 +66,57 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<ActionResult<BuildingSummaryResponse>> DeleteBuilding(Guid id, CancellationToken ct)
     {
-        // Phân tích: Delete thực chất là vô hiệu hóa (soft delete / deactivate)
         var result = await sender.Send(new SetBuildingActiveCommand(ActorId, OrganizationId, id, false), ct);
+        return result.IsSuccess
+            ? Ok(result.Value)
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
+    [HttpPost("{id:guid}/revisions")]
+    [RequestSizeLimit(500 * 1024 * 1024)] // 500MB Limit
+    public async Task<ActionResult<RevisionResponse>> UploadIfc(Guid id, [FromForm] string versionLabel, IFormFile file, CancellationToken ct)
+    {
+        if (file == null || file.Length == 0) return BadRequest("File is empty.");
+        if (string.IsNullOrWhiteSpace(versionLabel)) return BadRequest("Version label is required.");
+
+        var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "IFC");
+        if (!Directory.Exists(uploadsPath)) Directory.CreateDirectory(uploadsPath);
+
+        var extension = Path.GetExtension(file.FileName);
+        var uniqueFileName = $"{Guid.NewGuid():N}{extension}";
+        var filePath = Path.Combine(uploadsPath, uniqueFileName);
+
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        await using var fileStream = new FileStream(filePath, FileMode.Create);
+        await using var cryptoStream = new System.Security.Cryptography.CryptoStream(fileStream, sha256, System.Security.Cryptography.CryptoStreamMode.Write);
+        
+        await file.CopyToAsync(cryptoStream, ct);
+        await cryptoStream.FlushFinalBlockAsync(ct);
+        
+        var hash = Convert.ToHexStringLower(sha256.Hash!);
+
+        var command = new UploadIfcCommand(
+            ActorId, 
+            OrganizationId, 
+            id, 
+            versionLabel, 
+            file.FileName, 
+            file.Length, 
+            filePath, 
+            hash);
+            
+        var result = await sender.Send(command, ct);
+        return result.IsSuccess
+            ? Created($"/api/revisions/{result.Value!.Id}", result.Value)
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
+    [HttpGet("{id:guid}/revisions")]
+    public async Task<ActionResult<IReadOnlyList<RevisionResponse>>> ListRevisions(Guid id, CancellationToken ct)
+    {
+        var result = await sender.Send(new Fire3D.Application.Buildings.Queries.ListRevisions.ListRevisionsQuery(ActorId, OrganizationId, id), ct);
         return result.IsSuccess
             ? Ok(result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,

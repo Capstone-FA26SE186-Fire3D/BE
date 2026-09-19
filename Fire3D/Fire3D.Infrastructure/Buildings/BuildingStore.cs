@@ -102,6 +102,49 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
                 .SetProperty(x => x.UpdatedAt, now), ct);
     }
 
+    public async Task<bool> TryCreateRevisionAsync(Revision revision, SourceDocument document, ProcessingJob job, CancellationToken ct)
+    {
+        db.Revisions.Add(revision);
+        db.SourceDocuments.Add(document);
+        db.ProcessingJobs.Add(job);
+        
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<IReadOnlyList<RevisionResponse>> ListRevisionsAsync(Guid buildingId, Guid organizationId, CancellationToken ct)
+    {
+        return await db.Revisions.AsNoTracking()
+            .Include(x => x.SourceDocument)
+            .Where(x => x.BuildingId == buildingId && x.OrganizationId == organizationId)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new RevisionResponse(
+                x.Id,
+                x.BuildingId,
+                x.VersionLabel,
+                x.Status.ToString(),
+                x.CreatedAt,
+                x.SourceDocument != null ? new SourceDocumentResponse(x.SourceDocument.Id, x.SourceDocument.OriginalFilename, x.SourceDocument.FileSizeBytes, x.SourceDocument.QuarantineStatus.ToString(), x.SourceDocument.CreatedAt) : null
+            ))
+            .ToListAsync(ct);
+    }
+
+    public async Task<RevisionResponse?> FindRevisionAsync(Guid revisionId, Guid organizationId, CancellationToken ct)
+    {
+        return await db.Revisions.AsNoTracking()
+            .Include(x => x.SourceDocument)
+            .Where(x => x.Id == revisionId && x.OrganizationId == organizationId)
+            .Select(x => new RevisionResponse(
+                x.Id,
+                x.BuildingId,
+                x.VersionLabel,
+                x.Status.ToString(),
+                x.CreatedAt,
+                x.SourceDocument != null ? new SourceDocumentResponse(x.SourceDocument.Id, x.SourceDocument.OriginalFilename, x.SourceDocument.FileSizeBytes, x.SourceDocument.QuarantineStatus.ToString(), x.SourceDocument.CreatedAt) : null
+            ))
+            .SingleOrDefaultAsync(ct);
+    }
+
     public async Task WriteAuditAsync(Guid actorId, Guid organizationId, string targetEntity, Guid targetId, string action, DateTime now, CancellationToken ct)
     {
         db.AuditLogs.Add(new AuditLog

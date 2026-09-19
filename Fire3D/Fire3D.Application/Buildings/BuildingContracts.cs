@@ -43,3 +43,20 @@ public sealed record BuildingSummaryResponse(
     DateTime CreatedAt);
 
 public sealed record BuildingFilter(int Page, int PageSize, string? Search, bool? IsActive);
+
+public sealed record RevisionResponse(
+    Guid Id,
+    Guid BuildingId,
+    string VersionLabel,
+    string Status,
+    DateTime CreatedAt,
+    SourceDocumentResponse? SourceDocument
+);
+
+public sealed record SourceDocumentResponse(
+    Guid Id,
+    string OriginalFilename,
+    long FileSizeBytes,
+    string QuarantineStatus,
+    DateTime CreatedAt
+);
