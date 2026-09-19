@@ -49,3 +49,8 @@ Desktop.ini
 
 # Codex session notes are machine-local; shared guidance stays trackable.
 /.codex/local/
+
+# Ignore appsettings and render.env as requested
+appsettings.json
+appsettings.*.json
+render.env
