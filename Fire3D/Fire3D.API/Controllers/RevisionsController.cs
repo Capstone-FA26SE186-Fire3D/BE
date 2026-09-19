@@ -16,6 +16,9 @@ public sealed class RevisionsController(ISender sender) : ControllerBase
     private Guid ActorId => Guid.Parse(User.FindFirstValue("sub")!);
     private Guid OrganizationId => Guid.Parse(User.FindFirstValue("organization_id")!);
 
+    /// <summary>
+    /// Lấy chi tiết thông tin một Revision (bản vẽ) cụ thể
+    /// </summary>
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<RevisionResponse>> GetRevision(Guid id, CancellationToken ct)
     {

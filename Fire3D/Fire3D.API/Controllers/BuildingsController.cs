@@ -22,6 +22,9 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     private Guid ActorId => Guid.Parse(User.FindFirstValue("sub")!);
     private Guid OrganizationId => Guid.Parse(User.FindFirstValue("organization_id")!);
 
+    /// <summary>
+    /// Tạo mới một tòa nhà (có thể kèm Location và Contact)
+    /// </summary>
     [HttpPost]
     public async Task<ActionResult<BuildingResponse>> CreateBuilding(CreateBuildingRequest request, CancellationToken ct)
     {
@@ -32,6 +35,9 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
+    /// <summary>
+    /// Lấy danh sách tòa nhà của tổ chức (có phân trang và tìm kiếm)
+    /// </summary>
     [HttpGet]
     public async Task<ActionResult<PageResponse<BuildingSummaryResponse>>> ListBuildings([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] bool? isActive = null, CancellationToken ct = default)
     {
@@ -43,6 +49,9 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
+    /// <summary>
+    /// Lấy chi tiết thông tin một tòa nhà (bao gồm thông tin vị trí và liên hệ)
+    /// </summary>
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<BuildingResponse>> GetBuilding(Guid id, CancellationToken ct)
     {
@@ -53,6 +62,9 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
+    /// <summary>
+    /// Cập nhật thông tin tòa nhà
+    /// </summary>
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<BuildingResponse>> UpdateBuilding(Guid id, UpdateBuildingRequest request, CancellationToken ct)
     {
@@ -63,6 +75,9 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
+    /// <summary>
+    /// Vô hiệu hóa (xóa mềm) tòa nhà
+    /// </summary>
     [HttpDelete("{id:guid}")]
     public async Task<ActionResult<BuildingSummaryResponse>> DeleteBuilding(Guid id, CancellationToken ct)
     {
@@ -73,6 +88,9 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
+    /// <summary>
+    /// Upload file IFC để tạo bản vẽ mới (Revision) cho tòa nhà (Max 500MB)
+    /// </summary>
     [HttpPost("{id:guid}/revisions")]
     [RequestSizeLimit(500 * 1024 * 1024)] // 500MB Limit
     public async Task<ActionResult<RevisionResponse>> UploadIfc(Guid id, [FromForm] string versionLabel, IFormFile file, CancellationToken ct)
@@ -113,6 +131,9 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
+    /// <summary>
+    /// Lấy danh sách các Revision (lịch sử upload bản vẽ) của một tòa nhà
+    /// </summary>
     [HttpGet("{id:guid}/revisions")]
     public async Task<ActionResult<IReadOnlyList<RevisionResponse>>> ListRevisions(Guid id, CancellationToken ct)
     {
