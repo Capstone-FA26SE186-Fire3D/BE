@@ -21,9 +21,12 @@ builder.Services.AddHealthChecks();
 var firebaseConfigPath = Path.Combine(builder.Environment.ContentRootPath, "firebase-admin.json");
 if (File.Exists(firebaseConfigPath))
 {
+    var json = File.ReadAllText(firebaseConfigPath);
     FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions
     {
-        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromFile(firebaseConfigPath)
+#pragma warning disable CS0618
+        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromJson(json)
+#pragma warning restore CS0618
     });
 }
 else

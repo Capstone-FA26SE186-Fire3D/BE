@@ -13,9 +13,11 @@ public sealed class FcmNotificationService(Fire3DDbContext db, ILogger<FcmNotifi
     {
         try
         {
+#pragma warning disable CS0618 // Type or member is obsolete
             var message = new Message
             {
                 Token = fcmToken,
+#pragma warning restore CS0618 // Type or member is obsolete
                 Notification = new Notification
                 {
                     Title = title,

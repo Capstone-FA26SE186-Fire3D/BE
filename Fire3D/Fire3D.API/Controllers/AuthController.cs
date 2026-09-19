@@ -79,7 +79,3 @@ public sealed class AuthController(ISender sender) : ControllerBase
         result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
 }
-
-    /// <summary>
-    /// Gửi email đặt lại mật khẩu. Luôn trả 204 để tránh email enumeration.
-    /// </summary>
