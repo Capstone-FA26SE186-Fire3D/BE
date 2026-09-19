@@ -30,6 +30,18 @@ public sealed class AuthController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
+    [HttpPost("register")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult<LoginResponse>> Register(RegisterRequest request, CancellationToken ct)
+    {
+        var result = await sender.Send(new Fire3D.Application.Authentication.Commands.Register.RegisterCommand(request), ct);
+        return result.IsSuccess
+            ? Ok(new LoginResponse(result.Value!.AccessToken, result.Value.RefreshToken, result.Value.User))
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
     [HttpPost("refresh")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]

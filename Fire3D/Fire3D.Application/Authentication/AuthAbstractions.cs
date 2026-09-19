@@ -28,7 +28,12 @@ public interface IAuthStore
     Task<PasswordResetToken?> FindValidResetTokenAsync(Guid tokenId, CancellationToken ct);
     Task MarkResetTokenUsedAsync(Guid tokenId, DateTime now, CancellationToken ct);
     Task InvalidateUserResetTokensAsync(Guid userId, CancellationToken ct);
+
+    // --- Registration ---
+    Task<RegisterConflict> TryCreateOrganizationWithUserAsync(Organization organization, User user, CancellationToken ct);
 }
+
+public enum RegisterConflict { None, SlugTaken, EmailTaken }
 
 public interface IPasswordService
 {

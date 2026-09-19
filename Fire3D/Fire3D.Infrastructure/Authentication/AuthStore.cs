@@ -113,5 +113,25 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         await db.Set<PasswordResetToken>()
                 .Where(x => x.UserId == userId && x.UsedAt == null)
                 .ExecuteDeleteAsync(ct);
-}
 
+    // ── Registration ──────────────────────────────────────────────────────────
+    public async Task<RegisterConflict> TryCreateOrganizationWithUserAsync(Organization organization, User user, CancellationToken ct)
+    {
+        db.Organizations.Add(organization);
+        db.Users.Add(user);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return RegisterConflict.None;
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg
+            && pg.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            db.Entry(organization).State = EntityState.Detached;
+            db.Entry(user).State = EntityState.Detached;
+            return pg.ConstraintName == "organizations_slug_key"
+                ? RegisterConflict.SlugTaken
+                : RegisterConflict.EmailTaken;
+        }
+    }
+}
