@@ -135,11 +135,11 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
             .ToListAsync(ct);
     }
 
-    public async Task<RevisionResponse?> FindRevisionAsync(Guid revisionId, Guid organizationId, CancellationToken ct)
+    public async Task<RevisionResponse?> FindRevisionAsync(Guid revisionId, Guid? organizationId, CancellationToken ct)
     {
         return await db.Revisions.AsNoTracking()
             .Include(x => x.SourceDocument)
-            .Where(x => x.Id == revisionId && x.OrganizationId == organizationId)
+            .Where(x => x.Id == revisionId && x.Building.DeletedAt == null && x.Building.IsActive && x.Building.Organization.IsActive && x.Building.Organization.DeletedAt == null && (organizationId == null || x.Building.OrganizationId == organizationId))
             .Select(x => new RevisionResponse(
                 x.Id,
                 x.BuildingId,

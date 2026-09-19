@@ -12,6 +12,6 @@ public interface IBuildingStore
     Task SetBuildingActiveAsync(Guid id, Guid organizationId, bool active, DateTime now, CancellationToken ct);
     Task<bool> TryCreateRevisionAsync(Revision revision, SourceDocument document, ProcessingJob job, CancellationToken ct);
     Task<IReadOnlyList<RevisionResponse>> ListRevisionsAsync(Guid buildingId, Guid organizationId, CancellationToken ct);
-    Task<RevisionResponse?> FindRevisionAsync(Guid revisionId, Guid organizationId, CancellationToken ct);
+    Task<RevisionResponse?> FindRevisionAsync(Guid revisionId, Guid? organizationId, CancellationToken ct);
     Task WriteAuditAsync(Guid actorId, Guid organizationId, string targetEntity, Guid targetId, string action, DateTime now, CancellationToken ct);
 }

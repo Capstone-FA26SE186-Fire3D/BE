@@ -6,4 +6,5 @@
     <Project Path="Fire3D.Domain/Fire3D.Domain.csproj" Id="13de27a0-21f1-4d97-9c50-729a7fcda97d" />
     <Project Path="Fire3D.Infrastructure/Fire3D.Infrastructure.csproj" Id="1dda91fd-6e28-4175-92f8-e4b8b0e04e5c" />
   </Folder>
+  <Project Path="Fire3D.IfcTests/Fire3D.IfcTests.csproj" />
 </Solution>
