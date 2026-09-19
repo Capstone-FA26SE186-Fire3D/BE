@@ -23,7 +23,6 @@ internal static class AuthSupport
             Role = request.Role.Value, OrganizationId = request.OrganizationId,
             IsActive = true, CreatedAt = now, UpdatedAt = now
         };
-        user.PasswordHash = passwords.Hash(user, request.Password);
         // Bootstrap already owns a transaction. Normal provisioning has its own transaction.
         await using var transaction = actor is null ? null : await store.BeginUserTransactionAsync(actor.Id, ct);
         if (actor is not null)

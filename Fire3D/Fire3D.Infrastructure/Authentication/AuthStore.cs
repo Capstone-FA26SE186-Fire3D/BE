@@ -51,10 +51,10 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         }
     }
 
-    public async Task UpdateLoginAsync(Guid id, DateTime now, string passwordHash, CancellationToken ct) =>
+    public async Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct) =>
         await db.Users.Where(x => x.Id == id).ExecuteUpdateAsync(update => update
             .SetProperty(x => x.LastLoginAt, now).SetProperty(x => x.UpdatedAt, now)
-            .SetProperty(x => x.PasswordHash, passwordHash), ct);
+            , ct);
     public Task<RefreshToken?> FindRefreshTokenAsync(string hash, CancellationToken ct) =>
         db.Set<RefreshToken>().AsNoTracking().SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
     public async Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct)

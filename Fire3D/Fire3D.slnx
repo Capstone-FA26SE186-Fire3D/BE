@@ -1,8 +1,5 @@
 <Solution>
   <Folder Name="/backend/" />
-  <Folder Name="/backend/Tests/">
-    <Project Path="Fire3D.AuthTests/Fire3D.AuthTests.csproj" />
-  </Folder>
   <Folder Name="/backend/Src/">
     <Project Path="Fire3D.API/Fire3D.API.csproj" Id="d5a6b5ab-ecdc-472e-bc26-115afd7673b1" />
     <Project Path="Fire3D.Application/Fire3D.Application.csproj" Id="3c680245-f507-4d49-836a-6303ff61e897" />

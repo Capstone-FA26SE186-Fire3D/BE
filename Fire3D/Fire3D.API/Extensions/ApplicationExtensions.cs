@@ -1,5 +1,4 @@
 using Fire3D.Application.Authentication;
-using Fire3D.Application.Authentication.Commands.Login;
 using Fire3D.Application.Administration;
 using Fire3D.Application.Email;
 using Fire3D.Infrastructure.Administration;
@@ -15,7 +14,6 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Buildings.IBuildingStore, Fire3D.Infrastructure.Buildings.BuildingStore>();
         services.AddMediatR(options =>
         {
-            options.RegisterServicesFromAssemblyContaining<LoginCommand>();
             var licenseKey = configuration["MediatR:LicenseKey"];
             if (!string.IsNullOrWhiteSpace(licenseKey)) options.LicenseKey = licenseKey;
         });

@@ -15,7 +15,7 @@ public interface IAuthStore
     Task<bool> HasAdminAsync(CancellationToken ct);
     Task<bool> OrganizationIsActiveAsync(Guid id, CancellationToken ct);
     Task<bool> TryCreateUserAsync(User user, CancellationToken ct);
-    Task UpdateLoginAsync(Guid id, DateTime now, string passwordHash, CancellationToken ct);
+    Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct);
     Task<RefreshToken?> FindRefreshTokenAsync(string hash, CancellationToken ct);
     Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct);
     Task ConsumeRefreshTokenAsync(Guid id, DateTime now, CancellationToken ct);
