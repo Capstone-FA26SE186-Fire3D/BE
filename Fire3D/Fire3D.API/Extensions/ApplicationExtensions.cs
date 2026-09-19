@@ -12,6 +12,7 @@ public static class ApplicationExtensions
     public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<IAdministrationStore, AdministrationStore>();
+        services.AddScoped<Fire3D.Application.Buildings.IBuildingStore, Fire3D.Infrastructure.Buildings.BuildingStore>();
         services.AddMediatR(options =>
         {
             options.RegisterServicesFromAssemblyContaining<LoginCommand>();
