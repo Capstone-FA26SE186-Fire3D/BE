@@ -12,8 +12,9 @@
 ## Kiến trúc đích đã thống nhất — 2026-09-17
 
 - Backend dùng C# + ASP.NET Core trên .NET; EF Core/Npgsql kết nối Supabase Database (managed PostgreSQL). Supabase Auth không được dùng.
-- Web/Mobile xác thực bằng Firebase Authentication, gồm Google Sign-In. API xác minh Firebase ID token rồi lấy role, trạng thái và `organizationId` từ PostgreSQL; không tin role/tenant do client gửi hoặc custom claim đơn lẻ.
-- Firebase/Google quản lý login credential. Schema đích lưu `firebase_uid`, không lưu password hash hay Google refresh token. Backend vẫn sở hữu launch grant, signed URL và authorization nghiệp vụ.
+- Web/Mobile dùng email/password do BE quản lý hoặc Google Sign-In qua Firebase. API xác minh password/Fire3D session hoặc Firebase ID token rồi lấy role, trạng thái và `organizationId` từ PostgreSQL; không tin role/tenant do client gửi hoặc custom claim đơn lẻ.
+- Schema đích lưu password/refresh/reset token hash và `firebase_uid` nullable khi liên kết Google; không lưu plaintext password, Google refresh token hoặc FCM credential. Backend vẫn sở hữu launch grant, signed URL và authorization nghiệp vụ.
+- BE target chịu trách nhiệm register trainee/organization, username global unique, profile ETag, organization name/address/phone, password change/reset/link Google và avatar S3 intent/complete/delete. Các endpoint này còn là implementation work, không coi context/SQL là migration đã chạy.
 - FCM dùng cho push notification. Registration token là metadata installation có thể rotate/revoke, không phải token đăng nhập.
 - Raw IFC, manifest và content package nằm trong AWS S3 private; backend cấp signed URL TTL ngắn. Không đưa AWS, Firebase Admin hoặc Supabase service-role secret vào client.
 - Azure đã được chọn cho AI/RAG FastAPI service; compute cho BE, IFC/Blender worker và Unity Editor worker, cùng SKU/region/cost, vẫn phải spike và chốt riêng. Không suy ra toàn bộ hệ thống chạy Azure.
@@ -31,7 +32,7 @@
 - Quota reserve/chốt/hoàn phải là transaction PostgreSQL ngắn với row lock hoặc conditional update; không giữ transaction khi chờ AI/PayOS/S3/worker. Transactional outbox, worker lease/attempt và reconcile xử lý eventual consistency giữa service.
 - Runtime start dùng actor-bound backend function, server-owned compatibility catalog và semver `major.minor.patch`; `SECURITY DEFINER` start functions không được execute bởi `PUBLIC`. Người khác không thể launch bằng session ID hoặc update trực tiếp trạng thái chuẩn bị.
 - Transaction boundary là transaction PostgreSQL ngắn cho reserve/provision/idempotency; LLM, PayOS, S3 và worker nằm ngoài transaction. Timeout AI chuyển `NeedsReconcile`; outbox/lease/attempt fencing và reconcile xử lý retry, không ghi đè kết quả stale. Heartbeat lưu server-received time, event dùng stable ID + sequence/schema để deduplicate.
-- `origin/main` đã từng có triển khai password/JWT/password reset. Hướng này xung đột với quyết định Firebase mới và chưa được migrate bởi task tài liệu này; không xóa migration hoặc sửa auth code ngầm. Task triển khai sau phải lập migration/rollback và kiểm thử token verification, account mapping, revoke/disable và dữ liệu hiện có.
+- `origin/main` đã từng có triển khai password/JWT/password reset. Đây là hiện trạng cần đối chiếu, không phải hướng bị thay bằng Firebase: local password/session vẫn giữ; Firebase chỉ bổ sung Google identity verification. Task triển khai sau phải lập migration/rollback và kiểm thử token verification, account mapping, revoke/disable và dữ liệu hiện có.
 
 ## Chạy và kiểm tra
 
@@ -67,3 +68,34 @@ Khi có Docs bên cạnh, đối chiếu `fire_evacuation_schema.sql`, `fire_eva
 - Outbox event key/hash/schema/scope bất biến; replay và duplicate delivery phải idempotent. Redis mất hoặc mất ACK thì replay từ PostgreSQL. Worker vẫn claim processing attempt/lease qua contract hiện hành, không nhận lease worker từ stream message.
 - Cache-aside chỉ cho catalog, package metadata, danh sách bài và dashboard, có tenant/version key, TTL và invalidation sau commit. FE/Mobile không nhận credential Redis và không kết nối trực tiếp.
 - Backend enqueue event trong transaction nghiệp vụ bằng aggregate-derived tenant. `enqueue_integration_outbox_event` chỉ nhận allowlist `ProcessingJobRequested` + schema `1`; `enqueue_system_outbox_event` có allowlist hệ thống và executor riêng; `requeue_processing_job` là gate duy nhất tạo `ProcessingJobRequeue` và dùng owner requeue riêng. Dispatcher chỉ claim/renew/mark/fail; worker không có enqueue/helper DML. Consumer kiểm tra envelope/receipt trước tác động, commit business effect + receipt rồi mới ACK; cùng requeue key replay sau mọi trạng thái trả no-op, message sai metadata được giữ để chẩn đoán/replay. Owner requeue chỉ đọc tenant lineage và khóa outbox/job theo quyền tối thiểu; backend executor không nhận DML trực tiếp vào bảng bảo vệ.
+
+## Learn blog boundary — 2026-09-19
+
+- `.NET` là authority cho Learn CMS/public API: `PlatformAdmin` tạo Draft, có thể publish ngay hoặc lưu nháp, rồi hide/show/delete/restore qua gate; Learn không có endpoint approve riêng. Trainee chỉ bookmark và hỏi AI. `OrganizationUser` không quản trị Learn.
+- PostgreSQL giữ `learn_posts`, immutable `learn_post_versions`, `learn_situations`, source links và `learn_bookmarks`. Public response/cache chỉ được lấy version Published của post Published; Hidden không public nhưng vẫn có thể RAG, còn Deleted phải bị loại dù Redis/index chưa invalidated.
+- Backend validate content schema, ETag/revision, source Common/Approved và provider allowlist YouTube/Facebook/TikTok; iframe/script tùy ý bị chặn. Publish/hide/show audit trong transaction rồi phát `PlatformCacheInvalidation` qua outbox hiện có.
+- API/EF/migration CMS, provider metadata check và RAG indexing còn là implementation work; không coi Learn prototype hoặc SQL thiết kế là đã triển khai.
+
+## FET3D account and commercial billing boundary — 2026-09-19
+
+- Trainee local phải gửi username ngay khi đăng ký; OrganizationUser gửi hồ sơ organization (tên, địa chỉ, điện thoại), username cá nhân tùy chọn. Google mới sau Firebase verification chọn Trainee hoặc OrganizationUser qua onboarding token ngắn hạn; account đã link không chọn lại role/tenant và không tự gia nhập organization có sẵn.
+- Backend là authority cho username lowercase unique, profile ETag, password/session revoke, Google link, S3 avatar và organization profile. Game start không còn ProfileIncomplete username gate.
+- Organization có nhiều Building. `quotation_building_items` là nguồn dòng dịch vụ theo Building; giá/discount/terms snapshot ở quotation/item, payment một lần có thể provision nhiều entitlement bằng key từng item. `enterprise_quote_requests` không tạo charge/entitlement trước quotation/payment.
+- Background task tạo notification web/email trước 5 ngày theo entitlement/kỳ/kênh; Mailgun là kênh email, PostgreSQL/outbox giữ idempotency/retry. Discount không cộng dồn và không sửa lịch sử quotation.
+
+## Regression corrections — 2026-09-19
+
+- Target quotation header no longer contains `building_id`, `service_package_id` or `service_duration_months`; `quotation_building_items` is the only BuildingService line source. Any current EF/entity references are migration work, not a reason to reintroduce duplicate fields.
+- Learn editorial orchestration uses a durable application-command receipt keyed by actor/operation/idempotency key and canonical input hash. The .NET service locks post → version → links, then writes state, audit and outbox atomically; SQL re-reads version status after acquiring locks.
+- Password reset/change must run under the existing user advisory/database transaction, consume the reset token, revoke every refresh-token family and rely on `OnTokenValidated` family checks to reject old access JWTs. Current reset handler has not yet completed that target transaction/revocation behavior.
+- Google onboarding completion must persist the created `user_id` and canonical input hash on the short-lived onboarding record so a retried completion returns the committed result instead of creating a second user or organization; it never stores a password or bearer token.
+- Current SQL/Docs updates are design-only. Do not claim database execution, permission, concurrency, S3 or email recovery tests passed.
+- Quotation target lifecycle records `accepted_at` once on `Issued → Accepted`; quotation lines cannot move between quotations after creation. The design grants the PayOS ledger owner only the row-lock privilege it needs, gives the processing owner attempt INSERT, and gives the backend executor the minimum auth/profile/Building write path; these privileges still require database execution tests.
+
+## Recovery gate corrections — 2026-09-19
+
+- Session preparation uses the dedicated executor with read access to its referenced identity, Building, training, package and validation rows. Session result/event writes go through `record_session_event` and `complete_training_session`; playtest completion goes through `complete_playtest_session`. Replay is keyed by event ID/sequence or result/completion key/hash and does not re-check entitlement or current user activity after start.
+- Playtest creator activity is checked at preparation/start. A playtest already started may complete or sync after the creator is disabled or the entitlement expires.
+- Processing workers register artifact/validation/issues through lease-bound `register_processing_output`; they do not receive direct provenance-table DML. Accounting uses `invoice_ai_billing_period` and `pay_ai_billing_period` for replay-safe settlement transitions.
+- These are target SQL/contract changes only; permission, concurrency, recovery and runtime execution tests remain unrun.
+- Quotation target lifecycle records `accepted_at` once on `Issued → Accepted`; quotation lines cannot move between quotations after creation. The design grants the PayOS ledger owner only the row-lock privilege it needs, gives the processing owner attempt INSERT, and gives the backend executor the minimum auth/profile/Building write path; these privileges still require database execution tests.
