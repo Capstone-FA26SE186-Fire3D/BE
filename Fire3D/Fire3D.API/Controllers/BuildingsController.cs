@@ -97,7 +97,12 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     {
         if (file == null || file.Length == 0) return BadRequest("File is empty.");
 
-        var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "IFC");
+        // Dùng /home/data trên Azure (persistent) hoặc Uploads/IFC trên local
+        var isAzure = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEBSITE_INSTANCE_ID"));
+        var uploadsPath = isAzure 
+            ? "/home/data/ifc-uploads" 
+            : Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "IFC");
+            
         if (!Directory.Exists(uploadsPath)) Directory.CreateDirectory(uploadsPath);
 
         var extension = Path.GetExtension(file.FileName);

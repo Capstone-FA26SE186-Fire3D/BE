@@ -17,6 +17,18 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
 builder.Services.AddHealthChecks();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        var frontendUrl = builder.Configuration["Auth:FrontendUrl"] ?? "http://localhost:3000";
+        policy.WithOrigins(frontendUrl)
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
+});
+
 var app = builder.Build();
 
 if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
@@ -48,6 +60,7 @@ app.UseSwaggerUI(options =>
 // app.UseHttpsRedirection();
 
 app.UseRateLimiter();
+app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
