@@ -36,4 +36,48 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
             : Problem(statusCode:result.Error!.Status,title:result.Error.Message,
                 extensions:new Dictionary<string,object?> {["code"]=result.Error.Code});
     }
+
+    [HttpPost("buildings/{buildingId:guid}/ifc")]
+    [ProducesResponseType<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<ActionResult<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>> InitiateUpload(Guid buildingId,
+        Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadRequest request, CancellationToken ct)
+    {
+        if(!Guid.TryParse(User.FindFirstValue("sub"),out var actor)) return Unauthorized();
+        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadCommand(actor, buildingId, request), ct);
+        return result.IsSuccess ? Ok(result.Value)
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
+    [HttpPost("revisions/{revisionId:guid}/upload-complete")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(422)]
+    public async Task<IActionResult> FinalizeUpload(Guid revisionId,
+        Fire3D.Application.Ifc.Commands.FinalizeUpload.FinalizeIfcUploadRequest request, CancellationToken ct)
+    {
+        if(!Guid.TryParse(User.FindFirstValue("sub"),out var actor)) return Unauthorized();
+        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.FinalizeUpload.FinalizeIfcUploadCommand(actor, revisionId, request), ct);
+        return result.IsSuccess ? NoContent()
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
+    [HttpPost("revisions/{revisionId:guid}/process")]
+    [ProducesResponseType(202)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    public async Task<IActionResult> ProcessRevision(Guid revisionId, CancellationToken ct)
+    {
+        if(!Guid.TryParse(User.FindFirstValue("sub"),out var actor)) return Unauthorized();
+        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ProcessRevision.ProcessRevisionCommand(actor, revisionId), ct);
+        return result.IsSuccess ? Accepted($"/api/processing-jobs/{result.Value}", new { JobId = result.Value })
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
 }

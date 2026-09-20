@@ -63,4 +63,100 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         await transaction.CommitAsync(ct);
         return AuthResult<RetryProcessingJobResponse>.Ok(new(jobId,outcome));
     }
+
+    public async Task<AuthResult<bool>> InitiateUploadAsync(Guid actorId, Guid buildingId, Guid revisionId, string versionLabel, Guid? actorTenantId, CancellationToken ct)
+    {
+        var building = await db.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId && b.IsActive && b.DeletedAt == null, ct);
+        if (building == null || (actorTenantId.HasValue && building.OrganizationId != actorTenantId.Value))
+            return AuthResult<bool>.Fail("NOT_FOUND", "Building not found or access denied.", 404);
+
+        var revision = new Fire3D.Domain.Entities.Revision
+        {
+            Id = revisionId,
+            BuildingId = buildingId,
+            OrganizationId = building.OrganizationId,
+            UploadedBy = actorId,
+            VersionLabel = versionLabel,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        db.Revisions.Add(revision);
+        await db.SaveChangesAsync(ct);
+        return AuthResult<bool>.Ok(true);
+    }
+
+    public async Task<AuthResult<bool>> FinalizeUploadAsync(Guid actorId, Guid revisionId, Fire3D.Application.Ifc.Commands.FinalizeUpload.FinalizeIfcUploadRequest request, Guid? actorTenantId, CancellationToken ct)
+    {
+        var revision = await db.Revisions.FirstOrDefaultAsync(r => r.Id == revisionId, ct);
+        if (revision == null || (actorTenantId.HasValue && revision.OrganizationId != actorTenantId.Value))
+            return AuthResult<bool>.Fail("NOT_FOUND", "Revision not found or access denied.", 404);
+
+        // Check if SourceDocument already exists
+        var existingSource = await db.SourceDocuments.FirstOrDefaultAsync(s => s.RevisionId == revisionId, ct);
+        if (existingSource != null)
+            return AuthResult<bool>.Fail("CONFLICT", "Upload already finalized for this revision.", 409);
+
+        var sourceDoc = new Fire3D.Domain.Entities.SourceDocument
+        {
+            Id = Guid.NewGuid(),
+            RevisionId = revisionId,
+            UploadedBy = actorId,
+            OriginalFilename = request.OriginalFilename,
+            FileSizeBytes = request.FileSizeBytes,
+            StorageUrl = request.ObjectKey,
+            MimeType = request.MimeType,
+            Sha256Hash = request.Sha256Hash,
+            UsageRights = "Private", // Standard default
+            CreatedAt = DateTime.UtcNow
+        };
+        db.SourceDocuments.Add(sourceDoc);
+        
+        await db.SaveChangesAsync(ct);
+        return AuthResult<bool>.Ok(true);
+    }
+
+    public async Task<AuthResult<Guid>> ProcessRevisionAsync(Guid actorId, Guid revisionId, Guid? actorTenantId, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        var revision = await db.Revisions.Include(r => r.SourceDocument)
+            .FirstOrDefaultAsync(r => r.Id == revisionId, ct);
+            
+        if (revision == null || (actorTenantId.HasValue && revision.OrganizationId != actorTenantId.Value))
+            return AuthResult<Guid>.Fail("NOT_FOUND", "Revision not found or access denied.", 404);
+
+        if (revision.SourceDocument == null)
+            return AuthResult<Guid>.Fail("VALIDATION_ERROR", "Revision does not have a source document to process.", 400);
+
+        // Check if there is an existing job
+        var existingJob = await db.ProcessingJobs.FirstOrDefaultAsync(j => j.RevisionId == revisionId, ct);
+        if (existingJob != null)
+            return AuthResult<Guid>.Fail("CONFLICT", "Processing job already exists for this revision.", 409);
+
+        var jobId = Guid.NewGuid();
+        var job = new Fire3D.Domain.Entities.ProcessingJob
+        {
+            Id = jobId,
+            RevisionId = revisionId,
+            SourceDocumentId = revision.SourceDocument.Id,
+            Kind = "ProcessIfc",
+            JobKey = Guid.NewGuid(),
+            Status = "Queued",
+            AttemptNumber = 0,
+            ToolchainVersion = "v1", // Default toolchain
+            CreatedAt = DateTime.UtcNow
+        };
+        db.ProcessingJobs.Add(job);
+        await db.SaveChangesAsync(ct);
+
+        // Enqueue outbox event for Worker to pick up
+        var payload = $$"""{"job_id": "{{jobId}}", "revision_id": "{{revisionId}}", "source_url": "{{revision.SourceDocument.StorageUrl}}"}""";
+        await ScalarAsync("""
+            INSERT INTO public.integration_outbox_events(id, aggregate_type, aggregate_id, event_type, payload, created_at)
+            VALUES (@id, 'ProcessingJob', @job, 'ProcessingJobRequested', @payload::jsonb, now())
+            """, ct, ("id", Guid.NewGuid()), ("job", jobId), ("payload", payload));
+
+        await transaction.CommitAsync(ct);
+        return AuthResult<Guid>.Ok(jobId);
+    }
 }

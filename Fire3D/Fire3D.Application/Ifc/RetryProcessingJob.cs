@@ -6,6 +6,9 @@ public sealed record RetryProcessingJobResponse(Guid JobId, string Outcome);
 public interface IIfcWriteStore
 {
     Task<AuthResult<RetryProcessingJobResponse>> RetryJobAsync(Guid actorId, Guid jobId, Guid requestId, string reason, CancellationToken ct);
+    Task<AuthResult<bool>> InitiateUploadAsync(Guid actorId, Guid buildingId, Guid revisionId, string versionLabel, Guid? actorTenantId, CancellationToken ct);
+    Task<AuthResult<bool>> FinalizeUploadAsync(Guid actorId, Guid revisionId, Fire3D.Application.Ifc.Commands.FinalizeUpload.FinalizeIfcUploadRequest request, Guid? actorTenantId, CancellationToken ct);
+    Task<AuthResult<Guid>> ProcessRevisionAsync(Guid actorId, Guid revisionId, Guid? actorTenantId, CancellationToken ct);
 }
 public sealed record RetryProcessingJobCommand(Guid ActorId, Guid JobId, RetryProcessingJobRequest Request)
     : IRequest<AuthResult<RetryProcessingJobResponse>>;
