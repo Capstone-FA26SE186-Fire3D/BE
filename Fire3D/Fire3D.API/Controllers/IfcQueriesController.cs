@@ -137,4 +137,25 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
+    /// <summary>Đọc BIM facts của revision theo phạm vi tổ chức.</summary>
+    /// <remarks>
+    /// OrganizationUser đúng tenant hoặc PlatformAdmin. Trainee trả 403.
+    /// page mặc định 1; pageSize 20, tối đa 100. Response items,totalCount,page,pageSize.
+    /// Revision hợp lệ chưa có dữ liệu trả items rỗng; revision không tồn tại/ngoài scope trả 404.
+    /// Trả ifcGlobalId,entityType,propertyPath,value,sourceHash,qualityFlags để editor/AI truy vết nguồn. Không suy diễn facts thiếu; value có thể null.
+    /// </remarks>
+    [HttpGet("revisions/{revisionId:guid}/bim-facts")]
+    [ProducesResponseType<PageResponse<BimFactResponse>>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<ActionResult<PageResponse<BimFactResponse>>> ListBimFacts(Guid revisionId,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var result = await sender.Send(new ListBimFactsQuery(actor, revisionId, page, pageSize), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
+            title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
 }
