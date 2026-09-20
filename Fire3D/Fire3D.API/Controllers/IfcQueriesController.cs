@@ -54,4 +54,24 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
+    /// <summary>Đọc một validation run cùng provenance job/attempt.</summary>
+    /// <remarks>
+    /// OrganizationUser đúng tenant hoặc PlatformAdmin; Trainee bị từ chối.
+    /// Trả scope,validatorVersion,status,summary,artifactId,scenarioVersionId,processingJobId,
+    /// processingAttemptId và timestamps. Có thể đọc run lịch sử; không xem run lịch sử là QA hiện hành.
+    /// Run không tồn tại/khác tenant trả 404. Summary giữ kết quả worker, không tự suy ra Passed khi chưa hoàn tất.
+    /// </remarks>
+    [HttpGet("validation-runs/{validationRunId:guid}")]
+    [ProducesResponseType<ValidationRunResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<ActionResult<ValidationRunResponse>> GetValidation(Guid validationRunId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var result = await sender.Send(new GetValidationRunQuery(actor, validationRunId), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
+            title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
 }

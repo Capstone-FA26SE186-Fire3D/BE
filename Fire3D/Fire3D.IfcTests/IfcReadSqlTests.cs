@@ -23,7 +23,7 @@ public sealed class IfcReadDatabase : IAsyncLifetime
     private string? connection;
     private bool created;
     public readonly Guid Tenant = Guid.NewGuid(), OtherTenant = Guid.NewGuid(),
-        Building = Guid.NewGuid(), Revision = Guid.NewGuid(), Job = Guid.NewGuid(), Attempt = Guid.NewGuid();
+        Validation = Guid.NewGuid(), PreviousValidation = Guid.NewGuid(), PreviousAttempt = Guid.NewGuid(), Building = Guid.NewGuid(), Revision = Guid.NewGuid(), Job = Guid.NewGuid(), Attempt = Guid.NewGuid();
     public async Task InitializeAsync()
     {
         var configured = Environment.GetEnvironmentVariable("FIRE3D_IFC_TEST_CONNECTION");
@@ -51,6 +51,7 @@ public sealed class IfcReadDatabase : IAsyncLifetime
             CREATE TABLE buildings(id uuid primary key,organization_id uuid,is_active boolean,deleted_at timestamptz);
             CREATE TABLE revisions(id uuid primary key,building_id uuid,version_label text,status revision_status_enum,created_at timestamptz);
             CREATE TABLE source_documents(id uuid primary key,revision_id uuid,original_filename text,file_size_bytes bigint,quarantine_status quarantine_status_enum,created_at timestamptz);
+            CREATE TABLE validation_runs(id uuid primary key,revision_id uuid,processing_job_id uuid,processing_attempt_id uuid,artifact_id uuid,scenario_version_id uuid,scope text,validator_version text,status text,summary jsonb,started_at timestamptz,finished_at timestamptz,created_at timestamptz);
             CREATE TABLE processing_jobs(id uuid primary key,revision_id uuid,source_document_id uuid,scenario_version_id uuid,kind text,status text,created_at timestamptz,input_hash text,current_attempt_id uuid);
             CREATE TABLE processing_job_attempts(id uuid primary key,processing_job_id uuid,input_hash text,attempt_number int,status text,toolchain_version text,started_at timestamptz,finished_at timestamptz,output_hash text);
             """;
@@ -60,6 +61,8 @@ public sealed class IfcReadDatabase : IAsyncLifetime
             INSERT INTO buildings VALUES ('{Building}','{Tenant}',true,null);
             INSERT INTO revisions VALUES ('{Revision}','{Building}','v1','Processing',now());
             INSERT INTO processing_jobs VALUES ('{Job}','{Revision}','{Guid.NewGuid()}',null,'Geometry','Running',now(),'{new string('a',64)}','{Attempt}');
+            INSERT INTO validation_runs VALUES ('{Validation}','{Revision}','{Job}','{Attempt}',null,null,'Geometry','v1','Passed',jsonb_build_object(),now(),now(),now()),('{PreviousValidation}','{Revision}','{Job}','{PreviousAttempt}',null,null,'Geometry','v1','Failed',jsonb_build_object(),now(),now(),now());
+            INSERT INTO processing_job_attempts VALUES ('{PreviousAttempt}','{Job}','{new string('a',64)}',0,'Failed','test-0',now(),now(),null);
             INSERT INTO processing_job_attempts VALUES ('{Attempt}','{Job}','{new string('a',64)}',1,'Running','test-1',now(),null,null);
             """,db).ExecuteNonQueryAsync();
     }
@@ -84,7 +87,7 @@ public sealed class IfcReadDatabase : IAsyncLifetime
     }
 }
 
-public sealed class IfcReadSqlTests(IfcReadDatabase database) : IClassFixture<IfcReadDatabase>
+public sealed partial class IfcReadSqlTests(IfcReadDatabase database) : IClassFixture<IfcReadDatabase>
 {
     [IfcPostgresFact]
     public async Task Job_detail_joins_current_attempt_and_hides_other_tenant()

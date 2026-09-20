@@ -18,3 +18,4 @@ No migration or production data changes were made. Existing Firebase onboarding/
 - GET /api/revisions/{revisionId}/processing-jobs: implemented scoped paginated logical-job list; 22 handler tests passed and Release build succeeded. No lease tokens or storage credentials in DTO.
 
 - GET /api/processing-jobs/{jobId}: current attempt with job/input-hash provenance, tenant scope, no lease credential. Restored excluded EF enum mappings and replaced legacy revision composite navigation joins after SQL tests caught missing columns. 29 tests passed (26 unit, 3 isolated-local-PostgreSQL read-contract tests), 0 skipped; Release build passed. Read fixture is not full production schema/permission validation.
+`n- GET /api/validation-runs/{validationRunId}: scoped historical run with job/attempt provenance; 32 tests passed (including 4 PostgreSQL tests), Release build passed.
