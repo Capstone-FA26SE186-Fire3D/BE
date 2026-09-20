@@ -14,3 +14,5 @@ No migration or production data changes were made. Existing Firebase onboarding/
 | GET /api/buildings/{id}/revisions | Database actor/tenant checks; bounded pagination; active Building and organization; explicit 400/401/403/404 | IFC suite 17 passed; Release build 0 warnings/errors; DB integration pending |
 
 2026-09-20: merged current .codex guidance (local password/session plus optional Firebase Google, OneShield edge). Latest design reference: Docs addd4df. Saved DefaultConnection/SupabaseMigration metadata still shows the legacy processing_jobs layout; no application schema was changed.
+
+- GET /api/revisions/{revisionId}/processing-jobs: implemented scoped paginated logical-job list; 22 handler tests passed and Release build succeeded. No lease tokens or storage credentials in DTO.
