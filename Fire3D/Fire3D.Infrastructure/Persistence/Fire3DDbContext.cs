@@ -1858,6 +1858,26 @@ public partial class Fire3DDbContext : DbContext
                 .HasConstraintName("password_reset_tokens_user_id_fkey");
         });
 
+        modelBuilder.Entity<ScenarioDraft>(entity =>
+        {
+            entity.ToTable("scenario_drafts");
+            entity.Property(e => e.State).HasColumnType("jsonb");
+            entity.Property(e => e.Version).HasColumnName("xmin").HasColumnType("xid").IsRowVersion();
+            entity.HasOne(d => d.CreatedByNavigation).WithMany().HasForeignKey(d => d.CreatedBy);
+        });
+
+        modelBuilder.Entity<PlaytestSession>(entity =>
+        {
+            entity.ToTable("playtest_sessions");
+            entity.HasOne(d => d.CreatedByNavigation).WithMany().HasForeignKey(d => d.CreatedBy);
+        });
+
+        modelBuilder.Entity<RuntimeCompatibilityCatalog>(entity =>
+        {
+            entity.ToTable("runtime_compatibility_catalog");
+            entity.Property(e => e.Capabilities).HasColumnType("jsonb");
+        });
+
         OnModelCreatingPartial(modelBuilder);
     }
 

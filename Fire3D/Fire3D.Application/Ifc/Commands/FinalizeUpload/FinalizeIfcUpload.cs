@@ -33,6 +33,6 @@ public sealed class FinalizeIfcUploadHandler(IAuthStore accounts, IIfcWriteStore
         }
 
         // Save SourceDocument
-        return await store.FinalizeUploadAsync(command.ActorId, command.RevisionId, request, scope.Value.OrganizationId, ct);
+        return await store.FinalizeUploadAsync(command.ActorId, command.RevisionId, request, scope.Value!.OrganizationId, ct);
     }
 }

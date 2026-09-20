@@ -37,7 +37,7 @@ public sealed class InitiateIfcUploadHandler(IAuthStore accounts, IIfcWriteStore
         var objectKey = $"buildings/{command.BuildingId:N}/revisions/{revisionId:N}/{Guid.NewGuid():N}.ifc";
 
         // Write to DB (Assuming store handles transaction, we just insert the revision)
-        var result = await store.InitiateUploadAsync(command.ActorId, command.BuildingId, revisionId, request.VersionLabel, scope.Value.OrganizationId, ct);
+        var result = await store.InitiateUploadAsync(command.ActorId, command.BuildingId, revisionId, request.VersionLabel, scope.Value!.OrganizationId, ct);
         if (!result.IsSuccess) return new(default, result.Error);
 
         var url = await storage.GeneratePresignedUploadUrlAsync(objectKey, "application/octet-stream", TimeSpan.FromMinutes(60), ct);

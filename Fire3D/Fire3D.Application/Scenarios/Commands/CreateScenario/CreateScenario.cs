@@ -19,6 +19,6 @@ public sealed class CreateScenarioHandler(IAuthStore accounts, IScenarioWriteSto
         if (command.Request == null || command.Request.BuildingId == Guid.Empty || string.IsNullOrWhiteSpace(command.Request.Name))
             return AuthResult<Guid>.Fail("VALIDATION_ERROR", "BuildingId and Name are required.", 400);
 
-        return await store.CreateScenarioAsync(command.ActorId, command.Request.BuildingId, scope.Value.OrganizationId ?? Guid.Empty, command.Request, ct);
+        return await store.CreateScenarioAsync(command.ActorId, command.Request.BuildingId, scope.Value!.OrganizationId ?? Guid.Empty, command.Request, ct);
     }
 }

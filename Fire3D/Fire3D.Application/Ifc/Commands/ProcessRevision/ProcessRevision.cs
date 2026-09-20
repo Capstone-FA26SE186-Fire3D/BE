@@ -15,6 +15,6 @@ public sealed class ProcessRevisionHandler(IAuthStore accounts, IIfcWriteStore s
         var scope = await IfcAccess.ResolveAsync(accounts, command.ActorId, ct);
         if (!scope.IsSuccess) return new(default, scope.Error);
 
-        return await store.ProcessRevisionAsync(command.ActorId, command.RevisionId, scope.Value.OrganizationId, ct);
+        return await store.ProcessRevisionAsync(command.ActorId, command.RevisionId, scope.Value!.OrganizationId, ct);
     }
 }
