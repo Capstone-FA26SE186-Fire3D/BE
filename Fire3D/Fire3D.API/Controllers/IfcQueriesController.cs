@@ -74,4 +74,25 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
+    /// <summary>Đọc QA của attempt hiện hành, không trộn kết quả lịch sử.</summary>
+    /// <remarks>
+    /// Cần OrganizationUser đúng tenant hoặc PlatformAdmin. page mặc định 1; pageSize 20, tối đa 100.
+    /// Trả jobId,currentAttemptId,validationRuns {items,totalCount,page,pageSize}.
+    /// Chưa có attempt/run trả danh sách rỗng, không tự đánh dấu Passed. Đọc run cũ qua GET validation-runs/{id}.
+    /// Job không tồn tại/ngoài scope trả 404; Trainee trả 403.
+    /// </remarks>
+    [HttpGet("processing-jobs/{jobId:guid}/qa")]
+    [ProducesResponseType<JobQaResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<ActionResult<JobQaResponse>> GetJobQa(Guid jobId, [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var result = await sender.Send(new GetJobQaQuery(actor, jobId, page, pageSize), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
+            title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
 }
