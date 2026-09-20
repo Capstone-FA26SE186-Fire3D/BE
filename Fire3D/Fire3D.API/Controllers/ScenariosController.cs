@@ -49,4 +49,53 @@ public class ScenariosController(ISender sender) : ControllerBase
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
+
+    /// <summary>
+    /// Updates the state of a scenario draft (D11). Requires If-Match header for concurrency control.
+    /// </summary>
+    [HttpPut("/api/scenario-drafts/{draftId:guid}")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(412)]
+    public async Task<IActionResult> UpdateScenarioDraft(Guid draftId, [FromBody] Fire3D.Application.Scenarios.Dto.ScenarioDraftStateDto state, [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(ifMatch) || !uint.TryParse(ifMatch.Trim('"'), out var expectedVersion))
+        {
+            return Problem(statusCode: 412, title: "Precondition Failed", detail: "If-Match header with expected version is required.");
+        }
+
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.UpdateScenarioDraft.UpdateScenarioDraftCommand(actor, draftId, expectedVersion, state), ct);
+
+        if (!result.IsSuccess)
+        {
+            return Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+        }
+
+        Response.Headers["ETag"] = $"\"{result.Value}\"";
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Creates an immutable snapshot (ScenarioVersion) from a draft (D12).
+    /// </summary>
+    [HttpPost("/api/scenario-drafts/{draftId:guid}/snapshot")]
+    [ProducesResponseType(201)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> SnapshotScenarioDraft(Guid draftId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.SnapshotScenarioDraft.SnapshotScenarioDraftCommand(actor, draftId), ct);
+
+        return result.IsSuccess 
+            ? Created($"/api/scenario-versions/{result.Value}", new { Id = result.Value })
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
 }
