@@ -20,6 +20,7 @@ public sealed record PreparePlaytestSessionCommand(Guid ActorId, Guid BuildingId
 public interface IPlaytestWriteStore
 {
     Task<AuthResult<Guid>> PreparePlaytestAsync(Guid actorId, Guid buildingId, Guid organizationId, PreparePlaytestRequest request, CancellationToken ct);
+    Task<AuthResult<bool>> StartPlaytestAsync(Guid actorId, Guid playtestId, Guid organizationId, CancellationToken ct);
 }
 
 public sealed class PreparePlaytestSessionHandler(IAuthStore accounts, IPlaytestWriteStore store)

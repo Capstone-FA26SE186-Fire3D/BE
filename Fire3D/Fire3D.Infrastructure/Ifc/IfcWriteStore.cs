@@ -175,4 +175,40 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         await transaction.CommitAsync(ct);
         return AuthResult<Guid>.Ok(jobId);
     }
+
+    public async Task<AuthResult<bool>> ConfirmForTrainingAsync(Guid actorId, Guid revisionId, Guid? actorTenantId, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        var revision = await db.Revisions.FirstOrDefaultAsync(r => r.Id == revisionId, ct);
+        if (revision == null || (actorTenantId.HasValue && revision.OrganizationId != actorTenantId.Value))
+            return AuthResult<bool>.Fail("NOT_FOUND", "Revision not found or access denied.", 404);
+
+        if (revision.Status != Fire3D.Domain.Enums.RevisionStatus.ReadyForScenario)
+            return AuthResult<bool>.Fail("INVALID_STATE", "Revision must be ReadyForScenario to be confirmed.", 400);
+
+        revision.Status = Fire3D.Domain.Enums.RevisionStatus.ConfirmedForTraining;
+        revision.UpdatedAt = DateTime.UtcNow;
+
+        var audit = new Fire3D.Domain.Entities.AuditLog
+        {
+            Id = Guid.NewGuid(),
+            UserId = actorId,
+            OrganizationId = revision.OrganizationId,
+            ActorType = "User",
+            Action = Fire3D.Domain.Enums.AuditAction.ConfirmForTraining,
+            TargetEntity = "Revision",
+            TargetId = revisionId,
+            CorrelationId = Guid.NewGuid(),
+            NewValues = $$"""{"status": "ConfirmedForTraining"}""",
+            OldValues = $$"""{"status": "ReadyForScenario"}""",
+            CreatedAt = DateTime.UtcNow
+        };
+        db.AuditLogs.Add(audit);
+
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        
+        return AuthResult<bool>.Ok(true);
+    }
 }

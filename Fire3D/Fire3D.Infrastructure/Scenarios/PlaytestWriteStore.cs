@@ -49,4 +49,21 @@ public sealed class PlaytestWriteStore(Fire3DDbContext db) : IPlaytestWriteStore
         await db.SaveChangesAsync(ct);
         return AuthResult<Guid>.Ok(sessionId);
     }
+
+    public async Task<AuthResult<bool>> StartPlaytestAsync(Guid actorId, Guid playtestId, Guid organizationId, CancellationToken ct)
+    {
+        var session = await db.PlaytestSessions.FirstOrDefaultAsync(s => s.Id == playtestId, ct);
+        
+        if (session == null || (organizationId != Guid.Empty && session.OrganizationId != organizationId))
+            return AuthResult<bool>.Fail("NOT_FOUND", "Playtest session not found or access denied.", 404);
+
+        if (session.Status != "Created")
+            return AuthResult<bool>.Fail("INVALID_STATE", "Playtest session must be in Created state to start.", 400);
+
+        session.Status = "Running";
+        session.StartedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        return AuthResult<bool>.Ok(true);
+    }
 }
