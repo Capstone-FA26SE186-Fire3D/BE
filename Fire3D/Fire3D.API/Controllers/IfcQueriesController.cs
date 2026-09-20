@@ -95,4 +95,25 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
+    /// <summary>Liệt kê lỗi/cảnh báo validation của revision.</summary>
+    /// <remarks>
+    /// OrganizationUser đúng tenant hoặc PlatformAdmin. Trainee trả 403.
+    /// page mặc định 1; pageSize 20, tối đa 100. Response items,totalCount,page,pageSize.
+    /// Revision hợp lệ chưa có dữ liệu trả items rỗng; revision không tồn tại/ngoài scope trả 404.
+    /// Mỗi issue có validationRunId,processingAttemptId,artifactId,severity,status,evidence và isCurrentAttempt. Kết quả lịch sử được gắn isCurrentAttempt=false.
+    /// </remarks>
+    [HttpGet("revisions/{revisionId:guid}/issues")]
+    [ProducesResponseType<PageResponse<RevisionIssueResponse>>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<ActionResult<PageResponse<RevisionIssueResponse>>> ListRevisionIssues(Guid revisionId,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var result = await sender.Send(new ListRevisionIssuesQuery(actor, revisionId, page, pageSize), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
+            title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
 }
