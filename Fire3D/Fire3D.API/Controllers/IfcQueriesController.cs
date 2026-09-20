@@ -33,4 +33,25 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
+    /// <summary>Đọc logical job và attempt hiện hành của pipeline IFC.</summary>
+    /// <remarks>
+    /// Cần OrganizationUser đúng tenant hoặc PlatformAdmin; Trainee không có quyền.
+    /// Response gồm job, inputHash, currentAttemptId và currentAttempt (null khi chưa claim).
+    /// Attempt gồm số lần chạy, trạng thái, toolchain, startedAt/finishedAt và outputHash.
+    /// Không trả lease token, worker credential hoặc raw error log. Job sai tenant/không tồn tại trả 404.
+    /// Yêu cầu schema processing_job_attempts/current_attempt_id theo thiết kế v6.7.
+    /// </remarks>
+    [HttpGet("processing-jobs/{jobId:guid}")]
+    [ProducesResponseType<ProcessingJobDetailResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<ActionResult<ProcessingJobDetailResponse>> GetJob(Guid jobId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var result = await sender.Send(new GetProcessingJobQuery(actor, jobId), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
+            title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
 }

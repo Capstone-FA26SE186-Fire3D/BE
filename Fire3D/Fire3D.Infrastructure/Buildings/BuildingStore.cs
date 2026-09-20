@@ -127,9 +127,9 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
         Guid buildingId, Guid? organizationId, int page, int pageSize, CancellationToken ct)
     {
         var query = db.Revisions.AsNoTracking().Where(x => x.BuildingId == buildingId
-            && x.Building.DeletedAt == null && x.Building.IsActive
-            && x.Building.Organization.IsActive && x.Building.Organization.DeletedAt == null
-            && (organizationId == null || x.Building.OrganizationId == organizationId));
+            && db.Buildings.Any(b => b.Id == x.BuildingId && b.DeletedAt == null && b.IsActive
+            && b.Organization.IsActive && b.Organization.DeletedAt == null
+            && (organizationId == null || b.OrganizationId == organizationId)));
         var count = await query.CountAsync(ct);
         var items = await query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
@@ -144,7 +144,7 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
     {
         return await db.Revisions.AsNoTracking()
             .Include(x => x.SourceDocument)
-            .Where(x => x.Id == revisionId && x.Building.DeletedAt == null && x.Building.IsActive && x.Building.Organization.IsActive && x.Building.Organization.DeletedAt == null && (organizationId == null || x.Building.OrganizationId == organizationId))
+            .Where(x => x.Id == revisionId && db.Buildings.Any(b => b.Id == x.BuildingId && b.DeletedAt == null && b.IsActive && b.Organization.IsActive && b.Organization.DeletedAt == null && (organizationId == null || b.OrganizationId == organizationId)))
             .Select(x => new RevisionResponse(
                 x.Id,
                 x.BuildingId,

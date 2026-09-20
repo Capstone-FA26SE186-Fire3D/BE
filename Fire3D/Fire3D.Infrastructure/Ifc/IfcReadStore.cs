@@ -6,9 +6,9 @@ namespace Fire3D.Infrastructure.Ifc;
 public sealed partial class IfcReadStore(Fire3DDbContext db) : IIfcReadStore
 {
     private IQueryable<Fire3D.Domain.Entities.Revision> Revisions(Guid? tenant) =>
-        db.Revisions.AsNoTracking().Where(r => r.Building.DeletedAt == null && r.Building.IsActive
-            && r.Building.Organization.DeletedAt == null && r.Building.Organization.IsActive
-            && (tenant == null || r.Building.OrganizationId == tenant));
+        db.Revisions.AsNoTracking().Where(r => db.Buildings.Any(b => b.Id == r.BuildingId
+            && b.DeletedAt == null && b.IsActive && b.Organization.DeletedAt == null && b.Organization.IsActive
+            && (tenant == null || b.OrganizationId == tenant)));
 
     public async Task<PageResponse<ProcessingJobResponse>?> ListJobsAsync(
         Guid revisionId, Guid? organizationId, int page, int pageSize, CancellationToken ct)
