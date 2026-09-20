@@ -116,4 +116,25 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
+    /// <summary>Liệt kê metadata artifact IFC có provenance.</summary>
+    /// <remarks>
+    /// OrganizationUser đúng tenant hoặc PlatformAdmin. Trainee trả 403.
+    /// page mặc định 1; pageSize 20, tối đa 100. Response items,totalCount,page,pageSize.
+    /// Revision hợp lệ chưa có dữ liệu trả items rỗng; revision không tồn tại/ngoài scope trả 404.
+    /// Trả artifactType,sha256Hash,metadata,isRuntimeReady,jobId,attemptId,isCurrentAttempt. Không trả storage key hoặc signed URL; cờ runtime-ready không thay QA/publish gate.
+    /// </remarks>
+    [HttpGet("revisions/{revisionId:guid}/artifacts")]
+    [ProducesResponseType<PageResponse<RevisionArtifactResponse>>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<ActionResult<PageResponse<RevisionArtifactResponse>>> ListRevisionArtifacts(Guid revisionId,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var result = await sender.Send(new ListRevisionArtifactsQuery(actor, revisionId, page, pageSize), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
+            title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
 }

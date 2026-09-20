@@ -22,7 +22,7 @@ public sealed class IfcReadDatabase : IAsyncLifetime
     private string? adminConnection;
     private string? connection;
     private bool created;
-    public readonly Guid Issue = Guid.NewGuid(), Tenant = Guid.NewGuid(), OtherTenant = Guid.NewGuid(),
+    public readonly Guid Artifact = Guid.NewGuid(), Issue = Guid.NewGuid(), Tenant = Guid.NewGuid(), OtherTenant = Guid.NewGuid(),
         Validation = Guid.NewGuid(), PreviousValidation = Guid.NewGuid(), PreviousAttempt = Guid.NewGuid(), Building = Guid.NewGuid(), Revision = Guid.NewGuid(), Job = Guid.NewGuid(), Attempt = Guid.NewGuid();
     public async Task InitializeAsync()
     {
@@ -53,6 +53,7 @@ public sealed class IfcReadDatabase : IAsyncLifetime
             CREATE TABLE source_documents(id uuid primary key,revision_id uuid,original_filename text,file_size_bytes bigint,quarantine_status quarantine_status_enum,created_at timestamptz);
             CREATE TABLE validation_runs(id uuid primary key,revision_id uuid,processing_job_id uuid,processing_attempt_id uuid,artifact_id uuid,scenario_version_id uuid,scope text,validator_version text,status text,summary jsonb,started_at timestamptz,finished_at timestamptz,created_at timestamptz);
             CREATE TABLE validation_issues(id uuid primary key,revision_id uuid,validation_run_id uuid,artifact_id uuid,issue_code text,severity text,status text,message text,evidence jsonb,created_at timestamptz);
+            CREATE TABLE revision_artifacts(id uuid primary key,revision_id uuid,job_id uuid,attempt_id uuid,artifact_type text,sha256_hash text,metadata jsonb,is_runtime_ready boolean,created_at timestamptz);
             CREATE TABLE processing_jobs(id uuid primary key,revision_id uuid,source_document_id uuid,scenario_version_id uuid,kind text,status text,created_at timestamptz,input_hash text,current_attempt_id uuid);
             CREATE TABLE processing_job_attempts(id uuid primary key,processing_job_id uuid,input_hash text,attempt_number int,status text,toolchain_version text,started_at timestamptz,finished_at timestamptz,output_hash text);
             """;
@@ -62,6 +63,7 @@ public sealed class IfcReadDatabase : IAsyncLifetime
             INSERT INTO buildings VALUES ('{Building}','{Tenant}',true,null);
             INSERT INTO revisions VALUES ('{Revision}','{Building}','v1','Processing',now());
             INSERT INTO validation_issues VALUES ('{Issue}','{Revision}','{Validation}',null,'MISSING_EXIT','Warning','Open','Review IFC exit',jsonb_build_object(),now());
+            INSERT INTO revision_artifacts VALUES ('{Artifact}','{Revision}','{Job}','{Attempt}','preview_glb','{new string('b',64)}',jsonb_build_object(),false,now());
             INSERT INTO processing_jobs VALUES ('{Job}','{Revision}','{Guid.NewGuid()}',null,'Geometry','Running',now(),'{new string('a',64)}','{Attempt}');
             INSERT INTO validation_runs VALUES ('{Validation}','{Revision}','{Job}','{Attempt}',null,null,'Geometry','v1','Passed',jsonb_build_object(),now(),now(),now()),('{PreviousValidation}','{Revision}','{Job}','{PreviousAttempt}',null,null,'Geometry','v1','Failed',jsonb_build_object(),now(),now(),now());
             INSERT INTO processing_job_attempts VALUES ('{PreviousAttempt}','{Job}','{new string('a',64)}',0,'Failed','test-0',now(),now(),null);

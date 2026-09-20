@@ -21,3 +21,4 @@ No migration or production data changes were made. Existing Firebase onboarding/
 `n- GET /api/validation-runs/{validationRunId}: scoped historical run with job/attempt provenance; 32 tests passed (including 4 PostgreSQL tests), Release build passed.
 - GET /api/processing-jobs/{jobId}/qa: current-attempt-only validation pagination; 36 tests passed, including 5 SQL tests; Release build passed.
 - GET /api/revisions/{revisionId}/issues: paged issues with validation/attempt provenance and historical flag; 41 tests passed, 6 PostgreSQL tests; Release build passed.
+- GET /api/revisions/{revisionId}/artifacts: metadata-only with job/attempt provenance; 46 tests passed, 7 PostgreSQL tests; Release build passed.
