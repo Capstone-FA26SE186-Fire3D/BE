@@ -84,4 +84,22 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
+
+    /// <summary>
+    /// Gets a list of Published trainings for a given building (D18).
+    /// </summary>
+    [HttpGet("{id:guid}/trainings")]
+    [ProducesResponseType<List<Fire3D.Application.Buildings.Queries.GetTrainings.TrainingDto>>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> GetTrainings(Guid id, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+
+        var result = await sender.Send(new Fire3D.Application.Buildings.Queries.GetTrainings.GetTrainingsQuery(actor, id), ct);
+
+        return result.IsSuccess 
+            ? Ok(result.Value)
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
+    }
 }
