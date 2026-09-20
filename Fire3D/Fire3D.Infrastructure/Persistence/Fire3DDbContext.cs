@@ -62,6 +62,12 @@ public partial class Fire3DDbContext : DbContext
 
     public virtual DbSet<ScenarioVersion> ScenarioVersions { get; set; }
 
+    public virtual DbSet<ScenarioDraft> ScenarioDrafts { get; set; }
+
+    public virtual DbSet<PlaytestSession> PlaytestSessions { get; set; }
+
+    public virtual DbSet<RuntimeCompatibilityCatalog> RuntimeCompatibilityCatalogs { get; set; }
+
     public virtual DbSet<ServicePackage> ServicePackages { get; set; }
 
     public virtual DbSet<Session> Sessions { get; set; }
