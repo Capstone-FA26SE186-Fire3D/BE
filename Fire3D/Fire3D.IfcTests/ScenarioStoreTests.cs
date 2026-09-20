@@ -1,0 +1,100 @@
+using System;
+using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
+using Fire3D.Application.Scenarios.Commands.CreateScenario;
+using Fire3D.Application.Scenarios.Commands.CreateScenarioDraft;
+using Fire3D.Application.Scenarios.Dto;
+using Fire3D.Domain.Entities;
+using Fire3D.Infrastructure.Persistence;
+using Fire3D.Infrastructure.Scenarios;
+using Microsoft.EntityFrameworkCore;
+using Xunit;
+
+namespace Fire3D.IfcTests;
+
+public class ScenarioStoreTests
+{
+    private Fire3DDbContext GetDbContext()
+    {
+        var options = new DbContextOptionsBuilder<Fire3DDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        
+        var db = new Fire3DDbContext(options);
+        // Seed prerequisites
+        var orgId = Guid.NewGuid();
+        var buildingId = Guid.NewGuid();
+        var revisionId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        db.Organizations.Add(new Organization { Id = orgId, IsActive = true, Name = "Org" });
+        db.Buildings.Add(new Building { Id = buildingId, OrganizationId = orgId, Name = "Building", IsActive = true, CreatedBy = userId });
+        db.Revisions.Add(new Revision { Id = revisionId, BuildingId = buildingId, OrganizationId = orgId, UploadedBy = userId, VersionLabel = "v1" });
+        db.SaveChanges();
+
+        return db;
+    }
+
+    [Fact]
+    public async Task ScenarioFlow_Create_Draft_Update_Snapshot_ShouldSucceed()
+    {
+        // Arrange
+        using var db = GetDbContext();
+        var store = new ScenarioWriteStore(db);
+        
+        var org = await db.Organizations.FirstAsync();
+        var building = await db.Buildings.FirstAsync();
+        var revision = await db.Revisions.FirstAsync();
+        var actorId = Guid.NewGuid();
+
+        // 1. Create Scenario (D09)
+        var createReq = new CreateScenarioRequest(building.Id, "Fire Evacuation Scenario");
+        var scenarioResult = await store.CreateScenarioAsync(actorId, building.Id, org.Id, createReq, CancellationToken.None);
+        
+        Assert.True(scenarioResult.IsSuccess);
+        var scenarioId = scenarioResult.Value;
+        Assert.NotEqual(Guid.Empty, scenarioId);
+
+        // 2. Create Draft (D10)
+        var draftReq = new CreateScenarioDraftRequest(revision.Id);
+        var draftResult = await store.CreateScenarioDraftAsync(actorId, scenarioId, org.Id, draftReq, CancellationToken.None);
+        
+        Assert.True(draftResult.IsSuccess);
+        var draftId = draftResult.Value;
+
+        // Verify Draft creation
+        var draft = await db.ScenarioDrafts.FindAsync(draftId);
+        Assert.NotNull(draft);
+        Assert.Equal(1, draft.DraftNumber);
+        Assert.Equal(1u, draft.Version);
+        Assert.NotNull(draft.State);
+
+        // 3. Update Draft (D11)
+        var updateReq = new ScenarioDraftStateDto(
+            SpawnPoints: new System.Collections.Generic.List<SpawnPoint> { new SpawnPoint(1, 2, 3, 90) },
+            Hazards: new System.Collections.Generic.List<Hazard>(),
+            ScoringConfig: new ScoringConfig(100, 300, 10),
+            RoutingConfig: new RoutingConfig(new System.Collections.Generic.List<string>())
+        );
+
+        var updateResult = await store.UpdateScenarioDraftAsync(actorId, draftId, 1u, updateReq, org.Id, CancellationToken.None);
+        Assert.True(updateResult.IsSuccess);
+
+        // 4. Update Concurrency Conflict
+        var conflictResult = await store.UpdateScenarioDraftAsync(actorId, draftId, 1u /* Wrong expected version */, updateReq, org.Id, CancellationToken.None);
+        Assert.False(conflictResult.IsSuccess);
+        Assert.Equal(409, conflictResult.Error!.Status);
+
+        // 5. Snapshot Draft (D12)
+        var snapshotResult = await store.SnapshotScenarioDraftAsync(actorId, draftId, org.Id, CancellationToken.None);
+        Assert.True(snapshotResult.IsSuccess);
+        var snapshotId = snapshotResult.Value;
+
+        var snapshot = await db.ScenarioVersions.FindAsync(snapshotId);
+        Assert.NotNull(snapshot);
+        Assert.Equal(1, snapshot.VersionNumber);
+        Assert.Equal("Snapshot 1", snapshot.Name);
+        Assert.Equal(300, snapshot.TimeLimitSeconds); // Extracted from JSON config!
+    }
+}

@@ -98,4 +98,23 @@ public class ScenariosController(ISender sender) : ControllerBase
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
+
+    /// <summary>
+    /// Prepares a new VR Playtest Session (D14).
+    /// </summary>
+    [HttpPost("{scenarioId:guid}/playtests")]
+    [ProducesResponseType(201)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> PreparePlaytestSession(Guid scenarioId, [FromQuery] Guid buildingId, [FromBody] Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestRequest request, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestSessionCommand(actor, buildingId, request), ct);
+
+        return result.IsSuccess 
+            ? Created($"/api/playtests/{result.Value}", new { Id = result.Value })
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
 }
