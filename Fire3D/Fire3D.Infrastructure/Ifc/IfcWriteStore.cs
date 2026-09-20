@@ -147,6 +147,22 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
             CreatedAt = DateTime.UtcNow
         };
         db.ProcessingJobs.Add(job);
+        
+        var audit = new Fire3D.Domain.Entities.AuditLog
+        {
+            Id = Guid.NewGuid(),
+            UserId = actorId,
+            OrganizationId = revision.OrganizationId,
+            ActorType = "User",
+            Action = Fire3D.Domain.Enums.AuditAction.Create,
+            TargetEntity = "ProcessingJob",
+            TargetId = jobId,
+            CorrelationId = Guid.NewGuid(),
+            NewValues = $$"""{"status": "Queued", "revision_id": "{{revisionId}}"}""",
+            CreatedAt = DateTime.UtcNow
+        };
+        db.AuditLogs.Add(audit);
+        
         await db.SaveChangesAsync(ct);
 
         // Enqueue outbox event for Worker to pick up
