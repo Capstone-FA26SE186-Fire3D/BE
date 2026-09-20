@@ -34,27 +34,61 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<User?> FindUserByEmailAsync(string email, CancellationToken ct) =>
         db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Email == email, ct);
+    public Task<User?> FindUserByFirebaseUidAsync(string uid, CancellationToken ct) =>
+        db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.FirebaseUid == uid, ct);
     public Task<bool> HasAdminAsync(CancellationToken ct) =>
         db.Users.AnyAsync(x => x.Role == UserRole.PlatformAdmin, ct);
     public Task<bool> OrganizationIsActiveAsync(Guid id, CancellationToken ct) =>
-        db.Organizations.AnyAsync(x => x.Id == id && x.IsActive && x.DeletedAt == null, ct);
+        db.Organizations.AnyAsync(x => x.Id == id && x.IsActive && !x.DeletedAt.HasValue, ct);
 
     public async Task<bool> TryCreateUserAsync(User user, CancellationToken ct)
     {
         db.Users.Add(user);
         try { await db.SaveChangesAsync(ct); return true; }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "users_email_key" })
-        {
-            db.Entry(user).State = EntityState.Detached;
-            return false;
-        }
+        catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" }) { return false; }
     }
 
-    public async Task UpdateLoginAsync(Guid id, DateTime now, string passwordHash, CancellationToken ct) =>
+    public async Task UpdateUserAsync(User user, CancellationToken ct)
+    {
+        db.Users.Update(user);
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct) =>
         await db.Users.Where(x => x.Id == id).ExecuteUpdateAsync(update => update
             .SetProperty(x => x.LastLoginAt, now).SetProperty(x => x.UpdatedAt, now)
-            .SetProperty(x => x.PasswordHash, passwordHash), ct);
+            , ct);
+
+    public async Task<bool> UpsertDeviceAsync(Guid userId, string deviceUuid, string? fcmToken, string? deviceModel, string? osVersion, CancellationToken ct)
+    {
+        var device = await db.UserDevices.FirstOrDefaultAsync(x => x.UserId == userId && x.DeviceUuid == deviceUuid, ct);
+        if (device == null)
+        {
+            device = new UserDevice
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                DeviceUuid = deviceUuid,
+                FcmToken = fcmToken,
+                DeviceModel = deviceModel,
+                OsVersion = osVersion,
+                LastSeenAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow
+            };
+            db.UserDevices.Add(device);
+        }
+        else
+        {
+            device.FcmToken = fcmToken ?? device.FcmToken;
+            device.DeviceModel = deviceModel ?? device.DeviceModel;
+            device.OsVersion = osVersion ?? device.OsVersion;
+            device.LastSeenAt = DateTime.UtcNow;
+            db.UserDevices.Update(device);
+        }
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public Task<RefreshToken?> FindRefreshTokenAsync(string hash, CancellationToken ct) =>
         db.Set<RefreshToken>().AsNoTracking().SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
     public async Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct)
@@ -113,5 +147,25 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         await db.Set<PasswordResetToken>()
                 .Where(x => x.UserId == userId && x.UsedAt == null)
                 .ExecuteDeleteAsync(ct);
-}
 
+    // ── Registration ──────────────────────────────────────────────────────────
+    public async Task<RegisterConflict> TryCreateOrganizationWithUserAsync(Organization organization, User user, CancellationToken ct)
+    {
+        db.Organizations.Add(organization);
+        db.Users.Add(user);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return RegisterConflict.None;
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg
+            && pg.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            db.Entry(organization).State = EntityState.Detached;
+            db.Entry(user).State = EntityState.Detached;
+            return pg.ConstraintName == "organizations_slug_key"
+                ? RegisterConflict.SlugTaken
+                : RegisterConflict.EmailTaken;
+        }
+    }
+}

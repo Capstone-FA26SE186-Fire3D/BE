@@ -1,0 +1,139 @@
+using System.Security.Claims;
+using Fire3D.Application.Scenarios.Commands.CreateScenario;
+using Fire3D.Application.Scenarios.Commands.CreateScenarioDraft;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Fire3D.API.Controllers;
+
+[ApiController]
+[Route("api/scenarios")]
+[Authorize]
+public class ScenariosController(ISender sender) : ControllerBase
+{
+    /// <summary>
+    /// Creates a logical scenario associated with a building (D09).
+    /// </summary>
+    [HttpPost]
+    [ProducesResponseType(201)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> CreateScenario([FromBody] CreateScenarioRequest request, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+
+        var result = await sender.Send(new CreateScenarioCommand(actor, request), ct);
+        
+        return result.IsSuccess 
+            ? Created($"/api/scenarios/{result.Value}", new { Id = result.Value })
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
+    /// <summary>
+    /// Creates a new draft from an existing scenario (D10).
+    /// </summary>
+    [HttpPost("{scenarioId:guid}/draft")]
+    [ProducesResponseType(201)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> CreateScenarioDraft(Guid scenarioId, [FromBody] CreateScenarioDraftRequest request, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+
+        var result = await sender.Send(new CreateScenarioDraftCommand(actor, scenarioId, request), ct);
+
+        return result.IsSuccess 
+            ? Created($"/api/scenario-drafts/{result.Value}", new { Id = result.Value })
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
+    /// <summary>
+    /// Updates the state of a scenario draft (D11). Requires If-Match header for concurrency control.
+    /// </summary>
+    [HttpPut("/api/scenario-drafts/{draftId:guid}")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(412)]
+    public async Task<IActionResult> UpdateScenarioDraft(Guid draftId, [FromBody] Fire3D.Application.Scenarios.Dto.ScenarioDraftStateDto state, [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(ifMatch) || !uint.TryParse(ifMatch.Trim('"'), out var expectedVersion))
+        {
+            return Problem(statusCode: 412, title: "Precondition Failed", detail: "If-Match header with expected version is required.");
+        }
+
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.UpdateScenarioDraft.UpdateScenarioDraftCommand(actor, draftId, expectedVersion, state), ct);
+
+        if (!result.IsSuccess)
+        {
+            return Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+        }
+
+        Response.Headers["ETag"] = $"\"{result.Value}\"";
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Creates an immutable snapshot (ScenarioVersion) from a draft (D12).
+    /// </summary>
+    [HttpPost("/api/scenario-drafts/{draftId:guid}/snapshot")]
+    [ProducesResponseType(201)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> SnapshotScenarioDraft(Guid draftId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.SnapshotScenarioDraft.SnapshotScenarioDraftCommand(actor, draftId), ct);
+
+        return result.IsSuccess 
+            ? Created($"/api/scenario-versions/{result.Value}", new { Id = result.Value })
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
+    /// <summary>
+    /// Prepares a new VR Playtest Session (D14).
+    /// </summary>
+    [HttpPost("{scenarioId:guid}/playtests")]
+    [ProducesResponseType(201)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> PreparePlaytestSession(Guid scenarioId, [FromQuery] Guid buildingId, [FromBody] Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestRequest request, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestSessionCommand(actor, buildingId, request), ct);
+
+        return result.IsSuccess 
+            ? Created($"/api/playtests/{result.Value}", new { Id = result.Value })
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
+    /// <summary>
+    /// Starts a prepared VR Playtest Session (D15).
+    /// </summary>
+    [HttpPost("/api/playtests/{playtestId:guid}/start")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> StartPlaytestSession(Guid playtestId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.StartPlaytestSession.StartPlaytestSessionCommand(actor, playtestId), ct);
+
+        return result.IsSuccess 
+            ? Ok()
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+}

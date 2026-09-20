@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Fire3D.Domain.Entities;
@@ -16,6 +16,8 @@ public partial class UserDevice
     public string? OsVersion { get; set; }
 
     public string? AppVersion { get; set; }
+
+    public string? FcmToken { get; set; }
 
     public DateTime LastSeenAt { get; set; }
 

@@ -62,6 +62,12 @@ public partial class Fire3DDbContext : DbContext
 
     public virtual DbSet<ScenarioVersion> ScenarioVersions { get; set; }
 
+    public virtual DbSet<ScenarioDraft> ScenarioDrafts { get; set; }
+
+    public virtual DbSet<PlaytestSession> PlaytestSessions { get; set; }
+
+    public virtual DbSet<RuntimeCompatibilityCatalog> RuntimeCompatibilityCatalogs { get; set; }
+
     public virtual DbSet<ServicePackage> ServicePackages { get; set; }
 
     public virtual DbSet<Session> Sessions { get; set; }
@@ -1723,7 +1729,9 @@ public partial class Fire3DDbContext : DbContext
                 .HasColumnName("is_active");
             entity.Property(e => e.LastLoginAt).HasColumnName("last_login_at");
             entity.Property(e => e.OrganizationId).HasColumnName("organization_id");
-            entity.Property(e => e.PasswordHash).HasColumnName("password_hash");
+            entity.Property(e => e.FirebaseUid)
+                .HasMaxLength(128)
+                .HasColumnName("firebase_uid");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("updated_at");
@@ -1753,6 +1761,9 @@ public partial class Fire3DDbContext : DbContext
                 .HasColumnName("created_at");
             entity.Property(e => e.DeviceModel).HasColumnName("device_model");
             entity.Property(e => e.DeviceUuid).HasColumnName("device_uuid");
+            entity.Property(e => e.FcmToken)
+                .HasMaxLength(255)
+                .HasColumnName("fcm_token");
             entity.Property(e => e.LastSeenAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("last_seen_at");
@@ -1845,6 +1856,26 @@ public partial class Fire3DDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("password_reset_tokens_user_id_fkey");
+        });
+
+        modelBuilder.Entity<ScenarioDraft>(entity =>
+        {
+            entity.ToTable("scenario_drafts");
+            entity.Property(e => e.State).HasColumnType("jsonb");
+            entity.Property(e => e.Version).HasColumnName("xmin").HasColumnType("xid").IsRowVersion();
+            entity.HasOne(d => d.CreatedByNavigation).WithMany().HasForeignKey(d => d.CreatedBy);
+        });
+
+        modelBuilder.Entity<PlaytestSession>(entity =>
+        {
+            entity.ToTable("playtest_sessions");
+            entity.HasOne(d => d.CreatedByNavigation).WithMany().HasForeignKey(d => d.CreatedBy);
+        });
+
+        modelBuilder.Entity<RuntimeCompatibilityCatalog>(entity =>
+        {
+            entity.ToTable("runtime_compatibility_catalog");
+            entity.Property(e => e.Capabilities).HasColumnType("jsonb");
         });
 
         OnModelCreatingPartial(modelBuilder);

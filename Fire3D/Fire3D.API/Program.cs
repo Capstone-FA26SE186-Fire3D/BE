@@ -17,6 +17,36 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
 builder.Services.AddHealthChecks();
 
+// Cấu hình Firebase Admin SDK
+var firebaseConfigPath = Path.Combine(builder.Environment.ContentRootPath, "firebase-admin.json");
+if (File.Exists(firebaseConfigPath))
+{
+    var json = File.ReadAllText(firebaseConfigPath);
+    FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions
+    {
+#pragma warning disable CS0618
+        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromJson(json)
+#pragma warning restore CS0618
+    });
+}
+else
+{
+    // Log a warning or throw, depending on preference. We'll ignore for now to allow compiling without the file in some envs.
+    Console.WriteLine("Warning: firebase-admin.json not found.");
+}
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        var frontendUrl = builder.Configuration["Auth:FrontendUrl"] ?? "http://localhost:3000";
+        policy.WithOrigins(frontendUrl)
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
+});
+
 var app = builder.Build();
 
 if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
@@ -41,6 +71,7 @@ app.UseSwaggerUI(options =>
 {
     options.SwaggerEndpoint("/openapi/v1.json", "Fire3D API v1");
     options.RoutePrefix = "swagger";
+    options.InjectStylesheet("/css/swagger-synthwave.css");
 });
 
 
@@ -48,6 +79,7 @@ app.UseSwaggerUI(options =>
 // app.UseHttpsRedirection();
 
 app.UseRateLimiter();
+app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 

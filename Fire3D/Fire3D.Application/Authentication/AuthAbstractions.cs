@@ -12,10 +12,13 @@ public interface IAuthStore
     Task<IAuthTransaction> BeginUserTransactionAsync(Guid userId, CancellationToken ct);
     Task<User?> FindUserAsync(Guid id, CancellationToken ct);
     Task<User?> FindUserByEmailAsync(string email, CancellationToken ct);
+    Task<User?> FindUserByFirebaseUidAsync(string uid, CancellationToken ct);
     Task<bool> HasAdminAsync(CancellationToken ct);
     Task<bool> OrganizationIsActiveAsync(Guid id, CancellationToken ct);
     Task<bool> TryCreateUserAsync(User user, CancellationToken ct);
-    Task UpdateLoginAsync(Guid id, DateTime now, string passwordHash, CancellationToken ct);
+    Task UpdateUserAsync(User user, CancellationToken ct);
+    Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct);
+    Task<bool> UpsertDeviceAsync(Guid userId, string deviceUuid, string? fcmToken, string? deviceModel, string? osVersion, CancellationToken ct);
     Task<RefreshToken?> FindRefreshTokenAsync(string hash, CancellationToken ct);
     Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct);
     Task ConsumeRefreshTokenAsync(Guid id, DateTime now, CancellationToken ct);
@@ -28,7 +31,12 @@ public interface IAuthStore
     Task<PasswordResetToken?> FindValidResetTokenAsync(Guid tokenId, CancellationToken ct);
     Task MarkResetTokenUsedAsync(Guid tokenId, DateTime now, CancellationToken ct);
     Task InvalidateUserResetTokensAsync(Guid userId, CancellationToken ct);
+
+    // --- Registration ---
+    Task<RegisterConflict> TryCreateOrganizationWithUserAsync(Organization organization, User user, CancellationToken ct);
 }
+
+public enum RegisterConflict { None, SlugTaken, EmailTaken }
 
 public interface IPasswordService
 {
