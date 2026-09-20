@@ -62,10 +62,26 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
         return StatusCode(501, "S3 Pre-signed URL generation is pending implementation.");
     }
 
+    /// <summary>Danh sách revision IFC của Building, có phân trang.</summary>
+    /// <remarks>
+    /// OrganizationUser chỉ xem tổ chức của mình; PlatformAdmin được xem Building đích.
+    /// Role/tenant lấy từ DB; Trainee bị từ chối. page mặc định 1; pageSize mặc định 20, tối đa 100.
+    /// Response gồm items,totalCount,page,pageSize. Building hợp lệ chưa có revision trả items rỗng.
+    /// Building không tồn tại, bị archive hoặc khác tenant trả 404. Không trả raw IFC/storage key.
+    /// </remarks>
     [HttpGet("{id:guid}/revisions")]
-    public async Task<ActionResult<IReadOnlyList<RevisionResponse>>> ListRevisions(Guid id, CancellationToken ct)
+    [ProducesResponseType<PageResponse<RevisionResponse>>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<ActionResult<PageResponse<RevisionResponse>>> ListRevisions(
+        Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        var result = await sender.Send(new Fire3D.Application.Buildings.Queries.ListRevisions.ListRevisionsQuery(ActorId, OrganizationId, id), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem();
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actorId)) return Unauthorized();
+        var result = await sender.Send(new Fire3D.Application.Buildings.Queries.ListRevisions.ListRevisionsQuery(
+            actorId, id, page, pageSize), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
+            title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 }

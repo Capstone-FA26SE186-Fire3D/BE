@@ -118,23 +118,28 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
         return true;
     }
 
-    public async Task<IReadOnlyList<RevisionResponse>> ListRevisionsAsync(Guid buildingId, Guid organizationId, CancellationToken ct)
-    {
-        return await db.Revisions.AsNoTracking()
-            .Include(x => x.SourceDocument)
-            .Where(x => x.BuildingId == buildingId && x.OrganizationId == organizationId)
-            .OrderByDescending(x => x.CreatedAt)
-            .Select(x => new RevisionResponse(
-                x.Id,
-                x.BuildingId,
-                x.VersionLabel,
-                x.Status.ToString(),
-                x.CreatedAt,
-                x.SourceDocument != null ? new SourceDocumentResponse(x.SourceDocument.Id, x.SourceDocument.OriginalFilename, x.SourceDocument.FileSizeBytes, x.SourceDocument.QuarantineStatus.ToString(), x.SourceDocument.CreatedAt) : null
-            ))
-            .ToListAsync(ct);
-    }
+    public Task<bool> RevisionBuildingExistsAsync(Guid buildingId, Guid? organizationId, CancellationToken ct) =>
+        db.Buildings.AnyAsync(x => x.Id == buildingId && x.DeletedAt == null && x.IsActive
+            && x.Organization.IsActive && x.Organization.DeletedAt == null
+            && (organizationId == null || x.OrganizationId == organizationId), ct);
 
+    public async Task<PageResponse<RevisionResponse>> ListRevisionsAsync(
+        Guid buildingId, Guid? organizationId, int page, int pageSize, CancellationToken ct)
+    {
+        var query = db.Revisions.AsNoTracking().Where(x => x.BuildingId == buildingId
+            && x.Building.DeletedAt == null && x.Building.IsActive
+            && x.Building.Organization.IsActive && x.Building.Organization.DeletedAt == null
+            && (organizationId == null || x.Building.OrganizationId == organizationId));
+        var count = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(x => new RevisionResponse(x.Id, x.BuildingId, x.VersionLabel, x.Status.ToString(), x.CreatedAt,
+                x.SourceDocument == null ? null : new SourceDocumentResponse(
+                    x.SourceDocument.Id, x.SourceDocument.OriginalFilename, x.SourceDocument.FileSizeBytes,
+                    x.SourceDocument.QuarantineStatus.ToString(), x.SourceDocument.CreatedAt)))
+            .ToListAsync(ct);
+        return new PageResponse<RevisionResponse>(items, count, page, pageSize);
+    }
     public async Task<RevisionResponse?> FindRevisionAsync(Guid revisionId, Guid? organizationId, CancellationToken ct)
     {
         return await db.Revisions.AsNoTracking()

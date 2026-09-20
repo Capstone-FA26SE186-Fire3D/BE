@@ -10,3 +10,7 @@ Documentation schema reference: Docs origin/develop v6.7; actual deployment sche
 
 Read-only metadata check of the locally saved Supabase connection did not show the target IFC tables.
 No migration or production data changes were made. Existing Firebase onboarding/linking security findings are outside this endpoint change and remain a deployment blocker; these handler tests do not certify the authentication pipeline.
+
+| GET /api/buildings/{id}/revisions | Database actor/tenant checks; bounded pagination; active Building and organization; explicit 400/401/403/404 | IFC suite 17 passed; Release build 0 warnings/errors; DB integration pending |
+
+2026-09-20: merged current .codex guidance (local password/session plus optional Firebase Google, OneShield edge). Latest design reference: Docs addd4df. Saved DefaultConnection/SupabaseMigration metadata still shows the legacy processing_jobs layout; no application schema was changed.
