@@ -9,19 +9,28 @@ using Fire3D.Domain.Entities;
 using Fire3D.Infrastructure.Persistence;
 using Fire3D.Infrastructure.Scenarios;
 using Microsoft.EntityFrameworkCore;
+using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace Fire3D.IfcTests;
 
-public class ScenarioStoreTests
+public class ScenarioStoreTests : IAsyncLifetime
 {
+        private PostgreSqlContainer _dbContainer;
+    public ScenarioStoreTests()
+    {
+        _dbContainer = new PostgreSqlBuilder().WithImage("postgres:15-alpine").Build();
+    }
+    public async Task InitializeAsync() => await _dbContainer.StartAsync();
+    public async Task DisposeAsync() => await _dbContainer.DisposeAsync();
+
     private Fire3DDbContext GetDbContext()
     {
         var options = new DbContextOptionsBuilder<Fire3DDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .UseNpgsql(_dbContainer.GetConnectionString())
             .Options;
-        
         var db = new Fire3DDbContext(options);
+        db.Database.EnsureCreated();
         // Seed prerequisites
         var orgId = Guid.NewGuid();
         var buildingId = Guid.NewGuid();
@@ -98,3 +107,5 @@ public class ScenarioStoreTests
         Assert.Equal(300, snapshot.TimeLimitSeconds); // Extracted from JSON config!
     }
 }
+
+
