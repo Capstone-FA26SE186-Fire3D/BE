@@ -3,6 +3,7 @@ using Fire3D.Domain.Enums;
 namespace Fire3D.Application.Authentication;
 
 public sealed record LoginRequest(string Email, string Password);
+public sealed record RegisterRequest(string Email, string Password, string? FullName, string OrganizationName);
 public sealed record RefreshRequest(string RefreshToken);
 public sealed record CreateAccountRequest(string Email, string Password, string? FullName,
     UserRole? Role, Guid? OrganizationId);

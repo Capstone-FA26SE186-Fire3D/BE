@@ -78,10 +78,13 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
         testConnection = builder.ConnectionString;
         var repo = FindRepoRoot();
         var docs = Environment.GetEnvironmentVariable("FIRE3D_TEST_DOCS") ?? Path.Combine(repo, "..", "Docs");
-        // Use actual v6 core SQL and triggers. Phase 2 role provisioning is deliberately outside this auth fixture.
-        foreach (var file in new[] { "00_types.sql", "10_core.sql", "20_functions.sql" })
-            await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(docs, "database", file)));
-        await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(repo, "database", "001_auth_refresh_tokens.sql")));
+                var options = new DbContextOptionsBuilder<Fire3DDbContext>()
+            .UseNpgsql(testConnection)
+            .Options;
+        using (var db = new Fire3DDbContext(options))
+        {
+            await db.Database.EnsureCreatedAsync();
+        }
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(web =>
         {
             web.UseEnvironment("Development");
@@ -354,3 +357,4 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
         await new NpgsqlCommand($"DROP DATABASE \"{databaseName}\"", admin).ExecuteNonQueryAsync();
     }
 }
+
