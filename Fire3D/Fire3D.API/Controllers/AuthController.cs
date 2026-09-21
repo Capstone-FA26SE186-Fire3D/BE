@@ -32,6 +32,22 @@ public sealed class AuthController(ISender sender) : ControllerBase
     }
 
     /// <summary>
+    /// Đăng ký tài khoản (Tạo trên Firebase + DB)
+    /// </summary>
+    [HttpPost("register")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult> Register([FromBody] Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommand command, CancellationToken ct)
+    {
+        var result = await sender.Send(command, ct);
+        if (!result.IsSuccess)
+        {
+            return Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+        }
+        return Ok(result.Value);
+    }
+
+    /// <summary>
     /// Cấp lại Access Token mới dựa vào Refresh Token hợp lệ.
     /// </summary>
     [HttpPost("refresh")]
