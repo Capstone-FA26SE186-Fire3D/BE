@@ -32,7 +32,7 @@ internal sealed class RegisterUserCommandHandler(IAuthStore store, IPasswordServ
         }
 
         // 2. Tạo tài khoản tương ứng dưới DB PostgreSQL của hệ thống
-        var request = new CreateAccountRequest(command.Email, command.Password, command.FullName, UserRole.PlatformAdmin, null);
+        var request = new CreateAccountRequest(command.Email, command.Password, command.FullName, UserRole.Trainee, null);
         
         // Gọi AuthSupport với actor = null để bỏ qua bước check quyền Admin (Cho phép đăng ký tự do)
         return await AuthSupport.CreateAsync(store, passwords, clock, request, null, ct);

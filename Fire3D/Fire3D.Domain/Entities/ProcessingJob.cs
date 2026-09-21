@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Fire3D.Domain.Entities;
@@ -19,9 +19,9 @@ public partial class ProcessingJob
 
     public string Status { get; set; } = null!;
 
-    public int AttemptNumber { get; set; }
+    
 
-    public string ToolchainVersion { get; set; } = null!;
+    public string InputHash { get; set; } = null!;
 
     public string? LeaseOwner { get; set; }
 
@@ -47,3 +47,4 @@ public partial class ProcessingJob
 
     public virtual ICollection<ValidationRun> ValidationRuns { get; set; } = new List<ValidationRun>();
 }
+

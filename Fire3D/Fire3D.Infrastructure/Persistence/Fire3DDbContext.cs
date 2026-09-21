@@ -669,9 +669,7 @@ public partial class Fire3DDbContext : DbContext
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
-            entity.Property(e => e.AttemptNumber)
-                .HasDefaultValue(1)
-                .HasColumnName("attempt_number");
+            
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
@@ -690,7 +688,7 @@ public partial class Fire3DDbContext : DbContext
             entity.Property(e => e.Status)
                 .HasDefaultValueSql("'Queued'::text")
                 .HasColumnName("status");
-            entity.Property(e => e.ToolchainVersion).HasColumnName("toolchain_version");
+            entity.Property(e => e.InputHash).HasColumnName("input_hash");
 
             entity.HasOne(d => d.Revision).WithOne(p => p.ProcessingJob)
                 .HasForeignKey<ProcessingJob>(d => d.RevisionId)
@@ -1108,9 +1106,7 @@ public partial class Fire3DDbContext : DbContext
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
-            entity.Property(e => e.AttemptNumber)
-                .HasDefaultValue(1)
-                .HasColumnName("attempt_number");
+            
             entity.Property(e => e.DurationMs).HasColumnName("duration_ms");
             entity.Property(e => e.JobId).HasColumnName("job_id");
             entity.Property(e => e.LoggedAt)
@@ -1858,24 +1854,71 @@ public partial class Fire3DDbContext : DbContext
                 .HasConstraintName("password_reset_tokens_user_id_fkey");
         });
 
-        modelBuilder.Entity<ScenarioDraft>(entity =>
+                modelBuilder.Entity<ScenarioDraft>(entity =>
         {
             entity.ToTable("scenario_drafts");
-            entity.Property(e => e.State).HasColumnType("jsonb");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ScenarioId).HasColumnName("scenario_id");
+            entity.Property(e => e.RevisionId).HasColumnName("revision_id");
+            entity.Property(e => e.OrganizationId).HasColumnName("organization_id");
+            entity.Property(e => e.BuildingId).HasColumnName("building_id");
+            entity.Property(e => e.DraftNumber).HasColumnName("draft_number");
+            entity.Property(e => e.State).HasColumnName("state").HasColumnType("jsonb");
+            entity.Property(e => e.Source).HasColumnName("source");
+            entity.Property(e => e.LastAiRequestId).HasColumnName("last_ai_request_id");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");
             entity.Property(e => e.Version).HasColumnName("xmin").HasColumnType("xid").IsRowVersion();
+            
+            entity.HasOne(d => d.Scenario).WithMany().HasForeignKey(d => d.ScenarioId);
+            entity.HasOne(d => d.Revision).WithMany().HasForeignKey(d => d.RevisionId);
+            entity.HasOne(d => d.Organization).WithMany().HasForeignKey(d => d.OrganizationId);
+            entity.HasOne(d => d.Building).WithMany().HasForeignKey(d => d.BuildingId);
             entity.HasOne(d => d.CreatedByNavigation).WithMany().HasForeignKey(d => d.CreatedBy);
         });
 
         modelBuilder.Entity<PlaytestSession>(entity =>
         {
             entity.ToTable("playtest_sessions");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.OrganizationId).HasColumnName("organization_id");
+            entity.Property(e => e.BuildingId).HasColumnName("building_id");
+            entity.Property(e => e.RevisionId).HasColumnName("revision_id");
+            entity.Property(e => e.ScenarioDraftId).HasColumnName("scenario_draft_id");
+            entity.Property(e => e.ScenarioVersionId).HasColumnName("scenario_version_id");
+            entity.Property(e => e.ServiceEntitlementId).HasColumnName("service_entitlement_id");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+            entity.Property(e => e.PackageHash).HasColumnName("package_hash");
+            entity.Property(e => e.ProtocolVersion).HasColumnName("protocol_version");
+            entity.Property(e => e.ManifestSchemaVersion).HasColumnName("manifest_schema_version");
+            entity.Property(e => e.PrepareIdempotencyKey).HasColumnName("prepare_idempotency_key");
+            entity.Property(e => e.RuntimeVersion).HasColumnName("runtime_version");
+            entity.Property(e => e.StartIdempotencyKey).HasColumnName("start_idempotency_key");
+            entity.Property(e => e.Status).HasColumnName("status");
+            entity.Property(e => e.CompletionIdempotencyKey).HasColumnName("completion_idempotency_key");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+            entity.Property(e => e.StartedAt).HasColumnName("started_at");
+            entity.Property(e => e.EndedAt).HasColumnName("ended_at");
+
+            entity.HasOne(d => d.Organization).WithMany().HasForeignKey(d => d.OrganizationId);
+            entity.HasOne(d => d.Building).WithMany().HasForeignKey(d => d.BuildingId);
+            entity.HasOne(d => d.Revision).WithMany().HasForeignKey(d => d.RevisionId);
+            entity.HasOne(d => d.ScenarioDraft).WithMany().HasForeignKey(d => d.ScenarioDraftId);
+            entity.HasOne(d => d.ScenarioVersion).WithMany().HasForeignKey(d => d.ScenarioVersionId);
             entity.HasOne(d => d.CreatedByNavigation).WithMany().HasForeignKey(d => d.CreatedBy);
         });
 
         modelBuilder.Entity<RuntimeCompatibilityCatalog>(entity =>
         {
             entity.ToTable("runtime_compatibility_catalog");
-            entity.Property(e => e.Capabilities).HasColumnType("jsonb");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.RuntimeVersion).HasColumnName("runtime_version");
+            entity.Property(e => e.ProtocolVersion).HasColumnName("protocol_version");
+            entity.Property(e => e.ManifestSchemaVersion).HasColumnName("manifest_schema_version");
+            entity.Property(e => e.Capabilities).HasColumnName("capabilities").HasColumnType("jsonb");
+            entity.Property(e => e.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
         });
 
         OnModelCreatingPartial(modelBuilder);
@@ -1883,3 +1926,7 @@ public partial class Fire3DDbContext : DbContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }
+
+
+
+
