@@ -15,11 +15,11 @@ public sealed record PreparePlaytestRequest(
     string? RuntimeVersion
 );
 
-public sealed record PreparePlaytestSessionCommand(Guid ActorId, Guid BuildingId, PreparePlaytestRequest Request) : IRequest<AuthResult<Guid>>;
+public sealed record PreparePlaytestSessionCommand(Guid ActorId, Guid BuildingId, Guid ScenarioId, PreparePlaytestRequest Request) : IRequest<AuthResult<Guid>>;
 
 public interface IPlaytestWriteStore
 {
-    Task<AuthResult<Guid>> PreparePlaytestAsync(Guid actorId, Guid buildingId, Guid organizationId, PreparePlaytestRequest request, CancellationToken ct);
+    Task<AuthResult<Guid>> PreparePlaytestAsync(Guid actorId, Guid buildingId, Guid scenarioId, Guid organizationId, PreparePlaytestRequest request, CancellationToken ct);
     Task<AuthResult<bool>> StartPlaytestAsync(Guid actorId, Guid playtestId, Guid organizationId, CancellationToken ct);
 }
 
@@ -34,6 +34,7 @@ public sealed class PreparePlaytestSessionHandler(IAuthStore accounts, IPlaytest
         if (command.Request.ScenarioDraftId == null && command.Request.ScenarioVersionId == null)
             return AuthResult<Guid>.Fail("VALIDATION_ERROR", "Either ScenarioDraftId or ScenarioVersionId must be provided.", 400);
 
-        return await store.PreparePlaytestAsync(command.ActorId, command.BuildingId, scope.Value!.OrganizationId ?? Guid.Empty, command.Request, ct);
+        return await store.PreparePlaytestAsync(command.ActorId, command.BuildingId, command.ScenarioId, scope.Value!.OrganizationId ?? Guid.Empty, command.Request, ct);
     }
 }
+

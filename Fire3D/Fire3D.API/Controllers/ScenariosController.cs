@@ -110,7 +110,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     {
         if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
 
-        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestSessionCommand(actor, buildingId, request), ct);
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestSessionCommand(actor, buildingId, scenarioId, request), ct);
 
         return result.IsSuccess 
             ? Created($"/api/playtests/{result.Value}", new { Id = result.Value })
@@ -137,3 +137,4 @@ public class ScenariosController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 }
+

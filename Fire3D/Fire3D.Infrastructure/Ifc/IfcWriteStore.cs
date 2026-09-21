@@ -142,8 +142,7 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
             Kind = "ProcessIfc",
             JobKey = Guid.NewGuid(),
             Status = "Queued",
-            AttemptNumber = 0,
-            ToolchainVersion = "v1", // Default toolchain
+            InputHash = revision.SourceDocument.Sha256Hash ?? "unknown_hash",
             CreatedAt = DateTime.UtcNow
         };
         db.ProcessingJobs.Add(job);
@@ -152,7 +151,7 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         {
             Id = Guid.NewGuid(),
             UserId = actorId,
-            OrganizationId = revision.OrganizationId,
+            OrganizationId = revision.Building.OrganizationId,
             ActorType = "User",
             Action = Fire3D.Domain.Enums.AuditAction.Create,
             TargetEntity = "ProcessingJob",
@@ -168,8 +167,8 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         // Enqueue outbox event for Worker to pick up
         var payload = $$"""{"job_id": "{{jobId}}", "revision_id": "{{revisionId}}", "source_url": "{{revision.SourceDocument.StorageUrl}}"}""";
         await ScalarAsync("""
-            INSERT INTO public.integration_outbox_events(id, aggregate_type, aggregate_id, event_type, payload, created_at)
-            VALUES (@id, 'ProcessingJob', @job, 'ProcessingJobRequested', @payload::jsonb, now())
+            INSERT INTO public.integration_outbox_events(idempotency_key, aggregate_type, aggregate_id, event_type, payload, status, schema_version, payload_hash, created_at)
+            VALUES (@id, 'ProcessingJob', @job, 'ProcessingJobRequested', @payload::jsonb, 'Pending', '1.0', 'hash', now())
             """, ct, ("id", Guid.NewGuid()), ("job", jobId), ("payload", payload));
 
         await transaction.CommitAsync(ct);
@@ -194,7 +193,7 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         {
             Id = Guid.NewGuid(),
             UserId = actorId,
-            OrganizationId = revision.OrganizationId,
+            OrganizationId = revision.Building.OrganizationId,
             ActorType = "User",
             Action = Fire3D.Domain.Enums.AuditAction.ConfirmForTraining,
             TargetEntity = "Revision",
@@ -212,3 +211,6 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         return AuthResult<bool>.Ok(true);
     }
 }
+
+
+

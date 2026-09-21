@@ -18,42 +18,42 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class BuildingsController(ISender sender) : ControllerBase
 {
-    private Guid ActorId => Guid.Parse(User.FindFirstValue("sub")!);
-    private Guid OrganizationId => Guid.Parse(User.FindFirstValue("organization_id")!);
+    private Guid ActorId => Guid.TryParse(User.FindFirstValue("sub"), out var sub) ? sub : Guid.Empty;
+    private Guid? OrganizationId => Guid.TryParse(User.FindFirstValue("organization_id"), out var orgId) ? orgId : null;
 
     [HttpPost]
     public async Task<ActionResult<BuildingResponse>> CreateBuilding(CreateBuildingRequest request, CancellationToken ct)
     {
-        var result = await sender.Send(new CreateBuildingCommand(ActorId, OrganizationId, request), ct);
-        return result.IsSuccess ? Created($"/api/buildings/{result.Value!.Id}", result.Value) : Problem();
+        var result = await sender.Send(new CreateBuildingCommand(ActorId, (OrganizationId ?? Guid.Empty), request), ct);
+        return result.IsSuccess ? Created($"/api/buildings/{result.Value!.Id}", result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
     }
 
     [HttpGet]
     public async Task<ActionResult<PageResponse<BuildingSummaryResponse>>> ListBuildings([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] bool? isActive = null, CancellationToken ct = default)
     {
-        var result = await sender.Send(new ListBuildingsQuery(ActorId, OrganizationId, new BuildingFilter(page, pageSize, search, isActive)), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem();
+        var result = await sender.Send(new ListBuildingsQuery(ActorId, (OrganizationId ?? Guid.Empty), new BuildingFilter(page, pageSize, search, isActive)), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
     }
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<BuildingResponse>> GetBuilding(Guid id, CancellationToken ct)
     {
-        var result = await sender.Send(new GetBuildingQuery(ActorId, OrganizationId, id), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem();
+        var result = await sender.Send(new GetBuildingQuery(ActorId, (OrganizationId ?? Guid.Empty), id), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
     }
 
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<BuildingResponse>> UpdateBuilding(Guid id, UpdateBuildingRequest request, CancellationToken ct)
     {
-        var result = await sender.Send(new UpdateBuildingCommand(ActorId, OrganizationId, id, request), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem();
+        var result = await sender.Send(new UpdateBuildingCommand(ActorId, (OrganizationId ?? Guid.Empty), id, request), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
     }
 
     [HttpDelete("{id:guid}")]
     public async Task<ActionResult<BuildingSummaryResponse>> DeleteBuilding(Guid id, CancellationToken ct)
     {
-        var result = await sender.Send(new SetBuildingActiveCommand(ActorId, OrganizationId, id, false), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem();
+        var result = await sender.Send(new SetBuildingActiveCommand(ActorId, (OrganizationId ?? Guid.Empty), id, false), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
     }
 
     [HttpPost("{id:guid}/revisions/upload-url")]
@@ -83,5 +83,23 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
             actorId, id, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
+    /// <summary>
+    /// Gets a list of Published trainings for a given building (D18).
+    /// </summary>
+    [HttpGet("{id:guid}/trainings")]
+    [ProducesResponseType<List<Fire3D.Application.Buildings.Queries.GetTrainings.TrainingDto>>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> GetTrainings(Guid id, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+
+        var result = await sender.Send(new Fire3D.Application.Buildings.Queries.GetTrainings.GetTrainingsQuery(actor, id), ct);
+
+        return result.IsSuccess 
+            ? Ok(result.Value)
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
     }
 }

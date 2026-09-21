@@ -10,6 +10,7 @@
   </PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.101.4" />
 		<PackageReference Include="FirebaseAdmin" Version="3.6.0" />
 		<PackageReference Include="prometheus-net.AspNetCore" Version="*" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />
