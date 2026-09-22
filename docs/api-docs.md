@@ -399,19 +399,26 @@ Job mới có thể chưa có currentAttempt. QA chỉ lấy validation của at
 
 Issues/artifacts có dữ liệu lịch sử: đọc isCurrentAttempt. isRuntimeReady không phải URL tải file. Các DTO đọc không có raw object key, signed download URL, worker lease/credential. Không hardcode schema bên trong summary/metadata/evidence/qualityFlags khi DTO chỉ cam kết kiểu JSON.
 
-## 7. Scenario, catalog, playtest — 7 endpoint
+## 7. Scenario, catalog, playtest and review — 14 endpoints
 
 Tất cả cần Editor. Đây là luồng tác giả thiết kế/thử kịch bản, không phải phiên học và thống kê Trainee.
 
 | Method | Path | Input | Thành công |
 | --- | --- | --- | --- |
 | POST | `/api/scenarios` | buildingId, name | 201 {id} |
+| GET | `/api/buildings/{buildingId}/scenarios` | page, pageSize | 200 Page<ScenarioSummaryResponse> |
+| GET | `/api/scenarios/{scenarioId}` | Không body | 200 ScenarioDetailResponse |
 | POST | `/api/scenarios/{scenarioId}/draft` | revisionId | 201 {id} |
+| GET | `/api/scenario-drafts/{draftId}` | Không body | 200 ScenarioDraftResponse + ETag |
 | PUT | `/api/scenario-drafts/{draftId}` | State + If-Match | 204 + ETag |
+| POST | `/api/scenario-drafts/{draftId}/validate` | Không body | 200 ScenarioDraftValidationResponse |
 | POST | `/api/scenario-drafts/{draftId}/snapshot` | Không body | 201 {id} |
+| GET | `/api/scenarios/{scenarioId}/versions` | page, pageSize | 200 Page<ScenarioVersionSummaryResponse> |
+| GET | `/api/scenario-versions/{versionId}` | Không body | 200 ScenarioVersionDetailResponse |
 | GET | `/api/scenario-interactions/catalog` | Không body | 200 RuntimeCatalogDto[] |
 | POST | `/api/scenarios/{scenarioId}/playtests` | Query buildingId + body | 201 {id} |
 | POST | `/api/playtests/{playtestId}/start` | Không body | 200 rỗng |
+| POST | `/api/revisions/{revisionId}/reviews` | scenarioVersionId, validationRunId, reviewMessage, annotationSetId nullable | 201 {id} |
 
 ### 7.1 Scenario/draft
 
@@ -427,7 +434,9 @@ Tạo draft từ scenario:
 { "revisionId": "33333333-3333-4333-8333-333333333333" }
 ```
 
-Revision phải cùng building với scenario; sai 400 VALIDATION_ERROR; scenario không thấy/ngoài phạm vi 404. Cả hai POST trả id và Location. **Chưa có GET scenario/draft/version tương ứng**; Location không bảo đảm gọi GET được.
+Revision phải cùng building với scenario; sai 400 VALIDATION_ERROR; scenario không thấy/ngoài phạm vi 404. Cả hai POST trả id và Location.
+
+Editor dùng GET building scenarios để mở danh sách, GET scenario để xem metadata, GET draft để lấy state đã lưu và ETag, và GET versions/version detail để xem lịch sử snapshot bất biến. OrganizationUser chỉ thấy tenant của mình; PlatformAdmin có scope toàn hệ thống; resource không thấy hoặc ngoài scope trả 404. List dùng `page` (mặc định 1) và `pageSize` (mặc định 20, tối đa 100).
 
 ### 7.2 Lưu draft và snapshot
 
@@ -454,9 +463,13 @@ Type Fire, các số và route chỉ minh họa DTO; chưa có validation đầy
 - Version cũ/concurrent update: 409 CONFLICT.
 - Thành công: 204 với `ETag: "<newVersion>"`; giữ version mới cho lần lưu tiếp.
 
-Version dựa trên PostgreSQL xmin, **không mặc định là 1**. Create draft chỉ trả id và chưa có GET state/version: frontend chưa hoàn tất create → edit chỉ qua API hiện có. Cần bổ sung contract lấy version ban đầu.
+Version dựa trên PostgreSQL xmin, **không mặc định là 1**. GET draft trả state và `ETag: "<version>"`; dùng ETag đó cho lần PUT tiếp theo.
 
 Snapshot không body, trả 201 id ScenarioVersion. Đây là snapshot state, không publish hoặc tự tạo runtime package.
+
+`POST /api/scenario-drafts/{draftId}/validate` trả `{draftId, version, isValid, issues}`. Mỗi issue có `code`, đường dẫn JSON `path`, và `message`. Hiện endpoint đồng bộ kiểm tra cấu trúc draft: spawn point, hazard/position, scoring và evacuation route. Nó **không** xác nhận geometry IFC hoặc runtime capability vì hai kiểm tra này cần worker pipeline/catalog thực tế; response hợp lệ không phải confirmation-for-training.
+
+`POST /api/revisions/{revisionId}/reviews` chỉ tạo review `Rejected` cho một cặp revision–scenario version. Body phải đưa validation run cùng cặp đó và lý do 1–4000 ký tự; annotation set là tùy chọn nhưng nếu có phải thuộc revision. Server ghi review và audit trong một transaction, không chuyển trạng thái chung của revision sang Rejected. Version đã có review trả 409 `CONFLICT`.
 
 ### 7.3 Catalog/playtest
 
