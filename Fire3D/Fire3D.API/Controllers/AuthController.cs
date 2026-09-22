@@ -99,6 +99,20 @@ public sealed class AuthController(ISender sender) : ControllerBase
         return account is null ? Unauthorized() : Ok(account);
     }
 
+    /// <summary>Updates the current account profile. Role, organization, identity provider and password are not mutable here.</summary>
+    [HttpPatch("me")]
+    [Authorize]
+    [ProducesResponseType<AccountResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    public async Task<ActionResult<AccountResponse>> UpdateMe(
+        Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileRequest request, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileCommand(User.GetActorId(), request), ct);
+        return result.IsSuccess ? Ok(result.Value) : ResetProblem(result.Error!);
+    }
+
     /// <summary>
     /// Đăng ký thiết bị và FCM Token để nhận Push Notification.
     /// </summary>
