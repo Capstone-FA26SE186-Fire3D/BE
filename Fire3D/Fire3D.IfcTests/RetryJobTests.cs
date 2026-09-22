@@ -43,7 +43,7 @@ public class IfcWriteSqlTests : IAsyncLifetime
 
     public IfcWriteSqlTests()
     {
-        _dbContainer = new Testcontainers.PostgreSql.PostgreSqlBuilder().WithImage("postgres:15-alpine").Build();
+        _dbContainer = new Testcontainers.PostgreSql.PostgreSqlBuilder("postgres:15-alpine").Build();
     }
 
     public async Task InitializeAsync()

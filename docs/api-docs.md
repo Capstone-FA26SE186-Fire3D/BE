@@ -1,17 +1,33 @@
 # Fire3D — Hướng dẫn tích hợp API hiện tại
 
-Cập nhật **22/09/2026**, đối chiếu controller, DTO, handler và store tại source commit `d18c3c3`, nhánh `fix/auth-registration`.
+Cập nhật **22/09/2026**, đối chiếu controller, DTO, handler và store tại source commit `7819a99`, nhánh `fix/auth-registration`.
 
-Tài liệu bao gồm **46 endpoint controller**, trong đó một endpoint trả `501`. Đây là danh mục code hiện có, không phải xác nhận 46 luồng đã chạy end-to-end hay toàn bộ API trong proposal. Các phần thiếu được ghi rõ ở mục 9.
+Tài liệu bao gồm **57 endpoint controller**, trong đó một endpoint trả `501`. Đây là danh mục code hiện có, không phải xác nhận 57 luồng đã chạy end-to-end hay toàn bộ API trong proposal. Các phần thiếu được ghi rõ ở mục 9.
 
 ## 1. Quy ước tích hợp
 
 - Dùng origin BE đang chạy làm `BASE_URL`; đường dẫn bên dưới đã có `/api`.
-- Swagger `/swagger`, OpenAPI `/openapi/v1.json`, health `/health` không tính vào 46 endpoint. Health không chứng minh DB/Mailgun/Firebase/storage đã kết nối thành công.
+- Swagger `/swagger`, OpenAPI `/openapi/v1.json`, health `/health` không tính vào 57 endpoint. Health không chứng minh DB/Mailgun/Firebase/storage đã kết nối thành công.
 - Body: `Content-Type: application/json`, tên thuộc tính `camelCase`, GUID là chuỗi UUID, ngày giờ ISO 8601.
 - Enum JSON dùng tên như `"OrganizationUser"`; không gửi số cho role.
 - Không có envelope chung `{success,data}`. Đọc trực tiếp DTO. `204` và một số `200` không có body; không luôn gọi `response.json()`.
+- POST tạo resource đồng bộ trả `201 Created` cùng header `Location`. POST yêu cầu xử lý nền bền vững trả `202 Accepted`; POST action trên resource đã có có thể trả `200` hoặc `204`.
 - Các ID, token, hash, password minh họa phải thay bằng dữ liệu test thực tế.
+
+### POST status và Location
+
+| Path | Thành công | Header `Location` |
+| --- | --- | --- |
+| `POST /api/auth/register` | 201 AccountResponse | `/api/accounts/{id}` |
+| `POST /api/accounts` | 201 AccountResponse | `/api/accounts/{id}` |
+| `POST /api/organizations` | 201 OrganizationResponse | `/api/organizations/{id}` |
+| `POST /api/buildings` | 201 BuildingResponse | `/api/buildings/{id}` |
+| `POST /api/buildings/{buildingId}/ifc` | 201 InitiateIfcUploadResponse | `/api/revisions/{revisionId}` |
+| `POST /api/revisions/{revisionId}/process` | 202 | `/api/processing-jobs/{jobId}` |
+| `POST /api/processing-jobs/{jobId}/retry` | 202 | `/api/processing-jobs/{jobId}` |
+| `POST /api/auth/forgot-password` | 202 | Không có |
+
+`login`, `login-firebase`, `refresh`, validate draft, publish, confirm-for-training và start playtest trả 200 vì không tạo API resource mới. `logout`, `reset-password` và `upload-complete` trả 204 vì không có body thành công.
 
 ### Bearer, role và phạm vi tổ chức
 

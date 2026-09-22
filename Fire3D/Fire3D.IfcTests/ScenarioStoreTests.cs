@@ -19,7 +19,7 @@ public class ScenarioStoreTests : IAsyncLifetime
         private PostgreSqlContainer _dbContainer;
     public ScenarioStoreTests()
     {
-        _dbContainer = new PostgreSqlBuilder().WithImage("postgres:15-alpine").Build();
+        _dbContainer = new PostgreSqlBuilder("postgres:15-alpine").Build();
     }
     public async Task InitializeAsync() => await _dbContainer.StartAsync();
     public async Task DisposeAsync() => await _dbContainer.DisposeAsync();
