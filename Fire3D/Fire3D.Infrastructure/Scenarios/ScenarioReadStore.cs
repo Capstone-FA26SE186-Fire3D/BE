@@ -7,6 +7,16 @@ namespace Fire3D.Infrastructure.Scenarios;
 
 public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
 {
+    public Task<ScenarioDetailResponse?> GetScenarioAsync(Guid scenarioId, Guid? organizationId, CancellationToken ct)
+    {
+        var query = db.Scenarios.AsNoTracking().Where(s => s.Id == scenarioId);
+        if (organizationId.HasValue) query = query.Where(s => s.OrganizationId == organizationId.Value);
+
+        return query.Where(s => s.Building.IsActive && s.Building.DeletedAt == null)
+            .Select(s => new ScenarioDetailResponse(s.Id, s.BuildingId, s.OrganizationId, s.Name, s.CreatedAt))
+            .SingleOrDefaultAsync(ct);
+    }
+
     public async Task<PageResponse<ScenarioSummaryResponse>?> ListBuildingScenariosAsync(
         Guid buildingId, Guid? organizationId, int page, int pageSize, CancellationToken ct)
     {
