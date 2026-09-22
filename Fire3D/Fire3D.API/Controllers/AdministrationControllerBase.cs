@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Fire3D.API.Authorization;
 using Fire3D.Application.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -13,7 +12,7 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public abstract class AdministrationControllerBase : ControllerBase
 {
-    protected Guid ActorId => Guid.Parse(User.FindFirstValue("sub")!);
+    protected Guid ActorId => User.GetActorId();
     protected Guid NewCorrelationId()
     {
         var id = Guid.NewGuid();

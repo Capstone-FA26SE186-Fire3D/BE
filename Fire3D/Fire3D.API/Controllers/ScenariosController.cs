@@ -1,4 +1,4 @@
-using System.Security.Claims;
+using Fire3D.API.Authorization;
 using Fire3D.Application.Scenarios.Commands.CreateScenario;
 using Fire3D.Application.Scenarios.Commands.CreateScenarioDraft;
 using Fire3D.Application.Scenarios.Queries.ListBuildingScenarios;
@@ -25,7 +25,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> ValidateScenarioDraft(Guid draftId, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(
             new Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ValidateScenarioDraftCommand(actor, draftId), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
@@ -40,7 +40,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> GetScenarioVersion(Guid versionId, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new GetScenarioVersionQuery(actor, versionId), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
@@ -55,7 +55,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     public async Task<IActionResult> ListScenarioVersions(Guid scenarioId, [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new ListScenarioVersionsQuery(actor, scenarioId, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
@@ -65,7 +65,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [HttpGet("/api/scenario-drafts/{draftId:guid}")]
     public async Task<IActionResult> GetScenarioDraft(Guid draftId, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new GetScenarioDraftQuery(actor, draftId), ct);
         if (!result.IsSuccess) return Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
@@ -81,7 +81,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> GetScenario(Guid scenarioId, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new GetScenarioQuery(actor, scenarioId), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
@@ -96,7 +96,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     public async Task<IActionResult> ListBuildingScenarios(Guid buildingId, [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new ListBuildingScenariosQuery(actor, buildingId, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
@@ -111,7 +111,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> CreateScenario([FromBody] CreateScenarioRequest request, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
 
         var result = await sender.Send(new CreateScenarioCommand(actor, request), ct);
         
@@ -130,7 +130,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> CreateScenarioDraft(Guid scenarioId, [FromBody] CreateScenarioDraftRequest request, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
 
         var result = await sender.Send(new CreateScenarioDraftCommand(actor, scenarioId, request), ct);
 
@@ -151,7 +151,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(412)]
     public async Task<IActionResult> UpdateScenarioDraft(Guid draftId, [FromBody] Fire3D.Application.Scenarios.Dto.ScenarioDraftStateDto state, [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
 
         if (string.IsNullOrWhiteSpace(ifMatch) || !uint.TryParse(ifMatch.Trim('"'), out var expectedVersion))
         {
@@ -179,7 +179,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> SnapshotScenarioDraft(Guid draftId, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
 
         var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.SnapshotScenarioDraft.SnapshotScenarioDraftCommand(actor, draftId), ct);
 
@@ -198,7 +198,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> PreparePlaytestSession(Guid scenarioId, [FromQuery] Guid buildingId, [FromBody] Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestRequest request, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
 
         var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestSessionCommand(actor, buildingId, scenarioId, request), ct);
 
@@ -217,7 +217,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> StartPlaytestSession(Guid playtestId, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
 
         var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.StartPlaytestSession.StartPlaytestSessionCommand(actor, playtestId), ct);
 

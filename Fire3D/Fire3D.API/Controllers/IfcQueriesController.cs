@@ -1,4 +1,4 @@
-using System.Security.Claims;
+using Fire3D.API.Authorization;
 using Fire3D.Application.Administration;
 using Fire3D.Application.Ifc;
 using MediatR;
@@ -28,7 +28,7 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
     public async Task<ActionResult<PageResponse<ProcessingJobResponse>>> ListJobs(Guid revisionId,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new ListProcessingJobsQuery(actor, revisionId, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
@@ -49,7 +49,7 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<ActionResult<ProcessingJobDetailResponse>> GetJob(Guid jobId, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new GetProcessingJobQuery(actor, jobId), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
@@ -69,7 +69,7 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<ActionResult<ValidationRunResponse>> GetValidation(Guid validationRunId, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new GetValidationRunQuery(actor, validationRunId), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
@@ -90,7 +90,7 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
     public async Task<ActionResult<JobQaResponse>> GetJobQa(Guid jobId, [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new GetJobQaQuery(actor, jobId, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
@@ -111,7 +111,7 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
     public async Task<ActionResult<PageResponse<RevisionIssueResponse>>> ListRevisionIssues(Guid revisionId,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new ListRevisionIssuesQuery(actor, revisionId, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
@@ -132,7 +132,7 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
     public async Task<ActionResult<PageResponse<RevisionArtifactResponse>>> ListRevisionArtifacts(Guid revisionId,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new ListRevisionArtifactsQuery(actor, revisionId, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
@@ -153,7 +153,7 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
     public async Task<ActionResult<PageResponse<BimFactResponse>>> ListBimFacts(Guid revisionId,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new ListBimFactsQuery(actor, revisionId, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });

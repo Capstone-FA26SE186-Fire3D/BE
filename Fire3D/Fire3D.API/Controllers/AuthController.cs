@@ -1,4 +1,4 @@
-using System.Security.Claims;
+using Fire3D.API.Authorization;
 using Fire3D.Application.Authentication;
 using Fire3D.Application.Authentication.Commands.RefreshToken;
 using Fire3D.Application.Authentication.Commands.Logout;
@@ -84,8 +84,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     [Authorize]
     public async Task<IActionResult> Logout(CancellationToken ct)
     {
-        await sender.Send(new LogoutCommand(Guid.Parse(User.FindFirstValue("sub")!),
-            Guid.Parse(User.FindFirstValue("sid")!)), ct);
+        await sender.Send(new LogoutCommand(User.GetActorId(), User.GetSessionFamilyId()), ct);
         return NoContent();
     }
 
@@ -96,7 +95,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     [Authorize]
     public async Task<ActionResult<AccountResponse>> Me(CancellationToken ct)
     {
-        var account = await sender.Send(new GetCurrentAccountQuery(Guid.Parse(User.FindFirstValue("sub")!)), ct);
+        var account = await sender.Send(new GetCurrentAccountQuery(User.GetActorId()), ct);
         return account is null ? Unauthorized() : Ok(account);
     }
 
@@ -107,7 +106,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     [Authorize]
     public async Task<IActionResult> RegisterDevice([FromBody] Fire3D.Application.Users.Commands.RegisterDevice.RegisterDeviceCommand request, CancellationToken ct)
     {
-        var userId = Guid.Parse(User.FindFirstValue("sub")!);
+        var userId = User.GetActorId();
         await sender.Send(request with { UserId = userId }, ct);
         return Ok();
     }
