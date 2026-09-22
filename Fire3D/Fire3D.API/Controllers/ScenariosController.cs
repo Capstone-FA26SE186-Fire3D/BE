@@ -3,6 +3,7 @@ using Fire3D.Application.Scenarios.Commands.CreateScenario;
 using Fire3D.Application.Scenarios.Commands.CreateScenarioDraft;
 using Fire3D.Application.Scenarios.Queries.ListBuildingScenarios;
 using Fire3D.Application.Scenarios.Queries.GetScenario;
+using Fire3D.Application.Scenarios.Queries.GetScenarioDraft;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +15,18 @@ namespace Fire3D.API.Controllers;
 [Authorize]
 public class ScenariosController(ISender sender) : ControllerBase
 {
+    /// <summary>Loads a draft state and returns its version as an ETag for the next update.</summary>
+    [HttpGet("/api/scenario-drafts/{draftId:guid}")]
+    public async Task<IActionResult> GetScenarioDraft(Guid draftId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var result = await sender.Send(new GetScenarioDraftQuery(actor, draftId), ct);
+        if (!result.IsSuccess) return Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+        Response.Headers.ETag = $"\"{result.Value!.Version}\"";
+        return Ok(result.Value);
+    }
+
     /// <summary>Returns authoring metadata for one scenario in the caller's organization scope.</summary>
     [HttpGet("{scenarioId:guid}")]
     [ProducesResponseType(200)]
