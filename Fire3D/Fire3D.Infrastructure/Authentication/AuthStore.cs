@@ -38,6 +38,8 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.FirebaseUid == uid, ct);
     public Task<bool> HasAdminAsync(CancellationToken ct) =>
         db.Users.AnyAsync(x => x.Role == UserRole.PlatformAdmin, ct);
+    public Task<int> CountActiveAdminsAsync(CancellationToken ct) =>
+        db.Users.CountAsync(x => x.Role == UserRole.PlatformAdmin && x.IsActive && x.DeletedAt == null, ct);
     public Task<bool> OrganizationIsActiveAsync(Guid id, CancellationToken ct) =>
         db.Organizations.AnyAsync(x => x.Id == id && x.IsActive && !x.DeletedAt.HasValue, ct);
 

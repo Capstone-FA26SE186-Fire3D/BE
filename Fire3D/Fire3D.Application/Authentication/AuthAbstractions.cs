@@ -14,6 +14,7 @@ public interface IAuthStore
     Task<User?> FindUserByEmailAsync(string email, CancellationToken ct);
     Task<User?> FindUserByFirebaseUidAsync(string uid, CancellationToken ct);
     Task<bool> HasAdminAsync(CancellationToken ct);
+    Task<int> CountActiveAdminsAsync(CancellationToken ct);
     Task<bool> OrganizationIsActiveAsync(Guid id, CancellationToken ct);
     Task<bool> TryCreateUserAsync(User user, CancellationToken ct);
     Task UpdateUserAsync(User user, CancellationToken ct);
