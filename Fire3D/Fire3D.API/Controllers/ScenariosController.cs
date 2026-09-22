@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Fire3D.Application.Scenarios.Commands.CreateScenario;
 using Fire3D.Application.Scenarios.Commands.CreateScenarioDraft;
+using Fire3D.Application.Scenarios.Queries.ListBuildingScenarios;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,21 @@ namespace Fire3D.API.Controllers;
 [Authorize]
 public class ScenariosController(ISender sender) : ControllerBase
 {
+    /// <summary>Lists scenarios that belong to a building in the caller's organization scope.</summary>
+    [HttpGet("/api/buildings/{buildingId:guid}/scenarios")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> ListBuildingScenarios(Guid buildingId, [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var result = await sender.Send(new ListBuildingScenariosQuery(actor, buildingId, page, pageSize), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
     /// <summary>
     /// Creates a logical scenario associated with a building (D09).
     /// </summary>
