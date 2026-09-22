@@ -58,14 +58,14 @@ public sealed class AuthController(ISender sender) : ControllerBase
     [ProducesResponseType<AccountResponse>(201)]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
-    public async Task<ActionResult> Register([FromBody] Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommand command, CancellationToken ct)
+    public async Task<ActionResult<AccountResponse>> Register([FromBody] Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommand command, CancellationToken ct)
     {
         var result = await sender.Send(command, ct);
         if (!result.IsSuccess)
         {
             return Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
         }
-        return StatusCode(StatusCodes.Status201Created, result.Value);
+        return Created($"/api/accounts/{result.Value!.Id}", result.Value);
     }
 
     /// <summary>
