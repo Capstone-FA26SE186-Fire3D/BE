@@ -1,42 +1,55 @@
 using Fire3D.Application.Authentication;
 using MediatR;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Fire3D.Application.Authentication.Commands.ResetPassword;
 
-public sealed record ResetPasswordCommand(string OobCode, string NewPassword) : IRequest;
+public sealed record ResetPasswordCommand(string OobCode, string NewPassword) : IRequest<AuthResult<bool>>;
 
-public sealed class ResetPasswordCommandHandler(IPasswordResetProvider provider, IAuthStore authStore) : IRequestHandler<ResetPasswordCommand>
+public sealed class ResetPasswordCommandHandler(IPasswordResetProvider provider, IAuthStore authStore) : IRequestHandler<ResetPasswordCommand, AuthResult<bool>>
 {
-    public async Task Handle(ResetPasswordCommand request, CancellationToken ct)
+    public async Task<AuthResult<bool>> Handle(ResetPasswordCommand request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.OobCode))
-            throw new Exception("INVALID_RESET_CODE");
+            return AuthResult<bool>.Fail("INVALID_RESET_CODE", "Invalid reset code.", 400);
             
-        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 6)
-            throw new Exception("INVALID_CREDENTIALS");
+        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 12)
+            return AuthResult<bool>.Fail("INVALID_PASSWORD", "Password must be at least 12 characters long.", 400);
 
-        // Verify with Firebase
-        var identity = await provider.VerifyResetCodeAsync(request.OobCode, ct);
+        VerifiedResetIdentity identity;
+        try {
+            identity = await provider.VerifyResetCodeAsync(request.OobCode, ct);
+        } catch (Exception) {
+            return AuthResult<bool>.Fail("INVALID_RESET_CODE", "Invalid reset code.", 400);
+        }
         
-        // Ensure user exists
         var user = await authStore.FindUserAsync(identity.UserId, ct);
         if (user == null || user.FirebaseUid != identity.FirebaseUid)
-            throw new Exception("INVALID_RESET_CODE");
+            return AuthResult<bool>.Fail("INVALID_RESET_CODE", "Invalid reset code.", 400);
 
-        // Confirm reset with Firebase
-        await provider.ConfirmResetAsync(request.OobCode, request.NewPassword, ct);
+        await using var transaction = await authStore.BeginUserTransactionAsync(user.Id, ct);
+        
+        await authStore.RevokeAllUserSessionsAsync(user.Id, DateTime.UtcNow, ct);
 
-        // Revoke Fire3D sessions
-        await authStore.RevokeAllUserSessionsAsync(identity.UserId, DateTime.UtcNow, ct);
-
-        // Write Audit
         await authStore.WriteAuditAsync(
             user, 
-            ""PasswordReset"", 
-            identity.UserId, 
+            "Update", 
+            user.Id, 
             DateTime.UtcNow, 
             ct);
+            
+        try {
+            await provider.ConfirmResetAsync(request.OobCode, request.NewPassword, ct);
+        } catch (Exception) {
+            return AuthResult<bool>.Fail("PROVIDER_ERROR", "Failed to reset password.", 500);
+        }
+
+        await transaction.CommitAsync(ct);
+
+        return AuthResult<bool>.Ok(true);
     }
 }

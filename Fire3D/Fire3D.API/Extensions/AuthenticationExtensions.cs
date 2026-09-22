@@ -24,7 +24,7 @@ public static class AuthenticationExtensions
         services.AddSingleton<IPasswordService, PasswordService>();
         services.AddSingleton<ITokenService, TokenService>();
                 services.AddScoped<IAuthStore, AuthStore>();
-        services.AddOptions<AuthEmailOptions>().Bind(configuration.GetSection(""AuthEmail"")).ValidateDataAnnotations();
+        services.AddOptions<AuthEmailOptions>().Bind(configuration.GetSection("AuthEmail")).ValidateDataAnnotations();
         services.AddHttpClient<IPasswordResetProvider, FirebasePasswordResetProvider>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.PasswordResetWorker>();
 
@@ -83,4 +83,5 @@ public static class AuthenticationExtensions
         return services;
     }
 }
+
 

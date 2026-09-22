@@ -99,6 +99,10 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
     public async Task ConsumeRefreshTokenAsync(Guid id, DateTime now, CancellationToken ct) =>
         await db.Set<RefreshToken>().Where(x => x.Id == id)
             .ExecuteUpdateAsync(update => update.SetProperty(x => x.ConsumedAt, now), ct);
+        public async Task RevokeAllUserSessionsAsync(Guid userId, DateTime revokedAt, CancellationToken ct) =>
+        await db.Set<RefreshToken>().Where(x => x.UserId == userId && x.RevokedAt == null)
+            .ExecuteUpdateAsync(update => update.SetProperty(x => x.RevokedAt, revokedAt), ct);
+
     public async Task RevokeFamilyAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct) =>
         await db.Set<RefreshToken>().Where(x => x.UserId == userId && x.FamilyId == familyId && x.RevokedAt == null)
             .ExecuteUpdateAsync(update => update.SetProperty(x => x.RevokedAt, now), ct);
@@ -170,14 +174,18 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
     }
     public async Task EnqueuePasswordResetAsync(string email, CancellationToken ct)
     {
-        var payload = "{\"email\": \"" + email + "\"}";
+        var payload = System.Text.Json.JsonSerializer.Serialize(new { email });
+        var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payload));
+        var hashStr = Convert.ToHexString(hashBytes).ToLowerInvariant();
+        
         var sql = @"
             INSERT INTO public.integration_outbox_events(idempotency_key, aggregate_type, aggregate_id, event_type, payload, status, schema_version, payload_hash, created_at)
-            VALUES (@id, 'PasswordReset', @id, 'PasswordResetRequested', CAST(@payload AS jsonb), 'Pending', '1.0', 'hash', now())
+            VALUES (@id, 'PasswordReset', @id, 'PasswordResetRequested', CAST(@payload AS jsonb), 'Pending', '1.0', @hash, now())
             ";
         await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRawAsync(
-            db.Database, sql, 
+            db.Database, sql.Replace('"', '"'), 
             new Npgsql.NpgsqlParameter("@id", Guid.NewGuid()), 
-            new Npgsql.NpgsqlParameter("@payload", payload));
+            new Npgsql.NpgsqlParameter("@payload", payload),
+            new Npgsql.NpgsqlParameter("@hash", hashStr));
     }
 }

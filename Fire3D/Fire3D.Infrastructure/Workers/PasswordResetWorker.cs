@@ -1,4 +1,9 @@
+using Fire3D.Infrastructure.Persistence;
+using Fire3D.Infrastructure;
+using System;
 using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
 using Fire3D.Application.Authentication;
 using Fire3D.Application.Email;
 using Microsoft.EntityFrameworkCore;
@@ -19,37 +24,78 @@ public class PasswordResetWorker(IServiceProvider serviceProvider, ILogger<Passw
                 using var scope = serviceProvider.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<Fire3DDbContext>();
                 
-                var @event = await db.IntegrationOutboxEvents
-                    .Where(e => e.AggregateType == ""PasswordReset"" && e.Status == ""Pending"")
-                    .OrderBy(e => e.CreatedAt)
-                    .FirstOrDefaultAsync(stoppingToken);
-
-                if (@event != null)
+                var claimSql = @"
+                    UPDATE public.integration_outbox_events
+                    SET status = 'Leased', error_message = NULL
+                    WHERE event_id = (
+                        SELECT event_id FROM public.integration_outbox_events
+                        WHERE aggregate_type = 'PasswordReset' 
+                          AND (status = 'Pending' OR (status = 'Failed' AND (error_message IS NULL OR error_message NOT LIKE '%Permanent%')))
+                        ORDER BY created_at
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                    )
+                    RETURNING event_id, payload;
+                ";
+                
+                Guid? eventId = null;
+                string payload = null;
+                
+                using (var command = db.Database.GetDbConnection().CreateCommand())
                 {
-                    @event.Status = ""Processing"";
-                    await db.SaveChangesAsync(stoppingToken);
-
-                    var email = JsonNode.Parse(@event.Payload)?[""email""]?.GetValue<string>();
-                    
-                    if (!string.IsNullOrEmpty(email))
+                    command.CommandText = claimSql.Replace('"', '"');
+                    await db.Database.OpenConnectionAsync(stoppingToken);
+                    using var reader = await command.ExecuteReaderAsync(stoppingToken);
+                    if (await reader.ReadAsync(stoppingToken))
                     {
-                        var authStore = scope.ServiceProvider.GetRequiredService<IAuthStore>();
-                        var user = await authStore.FindUserByEmailAsync(email, stoppingToken);
-
-                        if (user != null && !string.IsNullOrEmpty(user.FirebaseUid))
-                        {
-                            var provider = scope.ServiceProvider.GetRequiredService<IPasswordResetProvider>();
-                            var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
-
-                            var link = await provider.GenerateResetLinkAsync(email, stoppingToken);
-                            var htmlBody = $""<p>Vui lòng nh?n vào nút du?i dây d? d?t l?i m?t kh?u:</p><a href='{link}'>Ð?t l?i m?t kh?u</a><p>B? qua n?u b?n không yêu c?u.</p>"";
-                            
-                            await emailService.SendAsync(email, ""Ð?t l?i m?t kh?u - Fire3D"", htmlBody, stoppingToken);
-                        }
+                        eventId = reader.GetGuid(0);
+                        payload = reader.GetString(1);
                     }
+                }
 
-                    @event.Status = ""Completed"";
-                    await db.SaveChangesAsync(stoppingToken);
+                if (eventId != null && !string.IsNullOrEmpty(payload))
+                {
+                    try 
+                    {
+                        var email = JsonNode.Parse(payload)?["email"]?.GetValue<string>();
+                        
+                        if (!string.IsNullOrEmpty(email))
+                        {
+                            var authStore = scope.ServiceProvider.GetRequiredService<IAuthStore>();
+                            var user = await authStore.FindUserByEmailAsync(email, stoppingToken);
+
+                            if (user != null && !string.IsNullOrEmpty(user.FirebaseUid))
+                            {
+                                var provider = scope.ServiceProvider.GetRequiredService<IPasswordResetProvider>();
+                                var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+
+                                var link = await provider.GenerateResetLinkAsync(email, stoppingToken);
+                                var htmlBody = "<p>Please click the button below to reset your password:</p><a href='" + link + "'>Reset Password</a><p>Ignore if you did not request this.</p>";
+                                
+                                await emailService.SendAsync(email, "Reset Password - Fire3D", htmlBody, stoppingToken);
+                            }
+                        }
+
+                        var completeSql = "UPDATE public.integration_outbox_events SET status = 'Published' WHERE event_id = @id";
+                        using var completeCmd = db.Database.GetDbConnection().CreateCommand();
+                        completeCmd.CommandText = completeSql;
+                        var p1 = completeCmd.CreateParameter();
+                        p1.ParameterName = "@id";
+                        p1.Value = eventId;
+                        completeCmd.Parameters.Add(p1);
+                        await completeCmd.ExecuteNonQueryAsync(stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        var failSql = "UPDATE public.integration_outbox_events SET status = 'Failed', error_message = @err WHERE event_id = @id";
+                        using var failCmd = db.Database.GetDbConnection().CreateCommand();
+                        failCmd.CommandText = failSql;
+                        var p1 = failCmd.CreateParameter(); p1.ParameterName = "@id"; p1.Value = eventId;
+                        var p2 = failCmd.CreateParameter(); p2.ParameterName = "@err"; p2.Value = ex.Message;
+                        failCmd.Parameters.Add(p1); failCmd.Parameters.Add(p2);
+                        await failCmd.ExecuteNonQueryAsync(stoppingToken);
+                        logger.LogError(ex, "Error processing password reset outbox event {EventId}", eventId);
+                    }
                 }
                 else
                 {
@@ -58,9 +104,11 @@ public class PasswordResetWorker(IServiceProvider serviceProvider, ILogger<Passw
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, ""Error processing password reset outbox events."");
+                logger.LogError(ex, "Error polling password reset outbox events.");
                 await Task.Delay(5000, stoppingToken);
             }
         }
     }
 }
+
+

@@ -1,32 +1,38 @@
-using System.Text.Json;
+using System;
+using System.Net.Http;
+using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
 using Fire3D.Application.Authentication;
 using FirebaseAdmin.Auth;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Fire3D.Infrastructure.Authentication;
 
 public class FirebasePasswordResetProvider(
     HttpClient httpClient,
     IAuthStore authStore,
-    AuthEmailOptions options,
+    IOptions<AuthEmailOptions> options,
     ILogger<FirebasePasswordResetProvider> logger) : IPasswordResetProvider
 {
+    private readonly AuthEmailOptions _options = options.Value;
+
     public async Task<string> GenerateResetLinkAsync(string email, CancellationToken ct)
     {
         var actionCodeSettings = new ActionCodeSettings
         {
-            Url = options.FrontendUrl + "/reset-password",
+            Url = _options.FrontendUrl + "/reset-password",
             HandleCodeInApp = true
         };
-        // Use FirebaseAdmin to generate password reset link
         return await FirebaseAuth.DefaultInstance.GeneratePasswordResetLinkAsync(email, actionCodeSettings, ct);
     }
 
     public async Task<VerifiedResetIdentity> VerifyResetCodeAsync(string oobCode, CancellationToken ct)
     {
         var request = new { oobCode };
-        var response = await httpClient.PostAsJsonAsync($"https://identitytoolkit.googleapis.com/v1/accounts:resetPassword?key={options.FirebaseApiKey}", request, ct);
+        var response = await httpClient.PostAsJsonAsync($"https://identitytoolkit.googleapis.com/v1/accounts:resetPassword?key={_options.FirebaseApiKey}", request, ct);
         if (!response.IsSuccessStatusCode)
         {
             var content = await response.Content.ReadAsStringAsync(ct);
@@ -38,17 +44,20 @@ public class FirebasePasswordResetProvider(
         var email = data?["email"]?.GetValue<string>();
         if (string.IsNullOrEmpty(email)) throw new Exception("INVALID_RESET_CODE");
 
+        // L?y FirebaseUid th?c t? t? Firebase
+        var firebaseUser = await FirebaseAuth.DefaultInstance.GetUserByEmailAsync(email, ct);
+        
         var dbUser = await authStore.FindUserByEmailAsync(email, ct);
-        if (dbUser == null || string.IsNullOrEmpty(dbUser.FirebaseUid))
+        if (dbUser == null)
             throw new Exception("INVALID_RESET_CODE");
 
-        return new VerifiedResetIdentity(dbUser.Id, dbUser.FirebaseUid);
+        return new VerifiedResetIdentity(dbUser.Id, firebaseUser.Uid);
     }
 
     public async Task ConfirmResetAsync(string oobCode, string newPassword, CancellationToken ct)
     {
         var request = new { oobCode, newPassword };
-        var response = await httpClient.PostAsJsonAsync($"https://identitytoolkit.googleapis.com/v1/accounts:resetPassword?key={options.FirebaseApiKey}", request, ct);
+        var response = await httpClient.PostAsJsonAsync($"https://identitytoolkit.googleapis.com/v1/accounts:resetPassword?key={_options.FirebaseApiKey}", request, ct);
         
         if (!response.IsSuccessStatusCode)
         {
@@ -58,4 +67,3 @@ public class FirebasePasswordResetProvider(
         }
     }
 }
-
