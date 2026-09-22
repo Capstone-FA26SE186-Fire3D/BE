@@ -22,6 +22,7 @@ public sealed class PasswordResetPostgresTests
 {
     private sealed class Database : IAsyncDisposable
     {
+        private static readonly NpgsqlNullNameTranslator Names = new();
         private readonly string admin;
         private readonly string name = "fire3d_reset_test_" + Guid.NewGuid().ToString("N");
         public string Connection = "";
@@ -58,10 +59,11 @@ public sealed class PasswordResetPostgresTests
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"002_password_reset_recovery.sql")));
             return db;
         }
-        public Fire3DDbContext Context() => new(new DbContextOptionsBuilder<Fire3DDbContext>()
+        private DbContextOptions<Fire3DDbContext>? contextOptions;
+        public Fire3DDbContext Context() => new(contextOptions ??= new DbContextOptionsBuilder<Fire3DDbContext>()
             .UseNpgsql(Connection, p => {
-                p.MapEnum<UserRole>("user_role_enum",nameTranslator:new NpgsqlNullNameTranslator());
-                p.MapEnum<AuditAction>("audit_action_enum",nameTranslator:new NpgsqlNullNameTranslator());
+                p.MapEnum<UserRole>("user_role_enum",nameTranslator:Names);
+                p.MapEnum<AuditAction>("audit_action_enum",nameTranslator:Names);
             }).Options);
         public async Task<object?> Sql(string sql)
         {

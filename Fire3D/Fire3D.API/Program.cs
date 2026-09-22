@@ -1,4 +1,5 @@
 using Fire3D.API.Extensions;
+using Fire3D.API.Configuration;
 using Fire3D.Application.Authentication.Commands.BootstrapAdmin;
 using MediatR;
 using System.Text.Json.Serialization;
@@ -18,42 +19,30 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
 builder.Services.AddHealthChecks();
 
 // Cáº¥u hÃ¬nh Firebase Admin SDK
-// C?u hình Firebase Admin SDK t? appsettings.json
-var firebaseConfig = builder.Configuration.GetSection("FirebaseAdmin").Get<Dictionary<string, string>>();
-if (firebaseConfig != null && firebaseConfig.Any())
+var firebaseCredentialJson = FirebaseAdminConfiguration.GetCredentialJson(
+    builder.Configuration,
+    builder.Environment.ContentRootPath);
+if (!string.IsNullOrWhiteSpace(firebaseCredentialJson))
 {
-    // Ð?m b?o private_key d?c t? appsettings s? x? lý dúng các ký t? xu?ng dòng
-    if (firebaseConfig.ContainsKey("private_key") && firebaseConfig["private_key"] != null)
-    {
-        firebaseConfig["private_key"] = firebaseConfig["private_key"].Replace("\\n", "\n");
-    }
-
-    var json = System.Text.Json.JsonSerializer.Serialize(firebaseConfig);
     FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions
     {
 #pragma warning disable CS0618
-        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromJson(json)
+        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromJson(firebaseCredentialJson)
 #pragma warning restore CS0618
     });
-    Console.WriteLine("Firebase Admin SDK initialized from appsettings.");
-}
-else
-{
-    Console.WriteLine("Warning: FirebaseAdmin section not found in appsettings.json.");
-});
 }
 else
 {
     // Log a warning or throw, depending on preference. We'll ignore for now to allow compiling without the file in some envs.
-    Console.WriteLine("Warning: firebase-admin.json not found.");
+    Console.WriteLine("Warning: Firebase Admin credential is not configured.");
 }
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        var frontendUrl = builder.Configuration["Auth:FrontendUrl"] ?? "http://localhost:3000";
-        policy.WithOrigins(frontendUrl)
+        var frontendUrls = CorsOriginConfiguration.GetAllowedOrigins(builder.Configuration);
+        policy.WithOrigins(frontendUrls)
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();

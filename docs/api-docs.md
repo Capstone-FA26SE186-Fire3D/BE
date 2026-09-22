@@ -1,5 +1,11 @@
 # Tài Liệu API Fire3D (Detailed API Specification)
 
+> Đối chiếu source ngày 2026-09-22: tài liệu này còn một số contract chưa được
+> triển khai hoặc khác controller, đặc biệt `/api/auth/login`, request Firebase
+> login và response register. Xem [báo cáo rà soát](project-review-2026-09-22.md)
+> trước khi tích hợp. Luồng forgot/reset hiện tại được mô tả tại
+> [password-reset.md](password-reset.md).
+
 Tài liệu này cung cấp chi tiết về chức năng, cách sử dụng, ý nghĩa nghiệp vụ cũng như cấu trúc dữ liệu (Request/Response) của toàn bộ các API trong hệ thống Fire3D.
 
 ## Cấu trúc chung
