@@ -16,6 +16,7 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Ifc.IIfcWriteStore, Fire3D.Infrastructure.Ifc.IfcWriteStore>();
         services.AddScoped<Fire3D.Application.Scenarios.IScenarioWriteStore, Fire3D.Infrastructure.Scenarios.ScenarioWriteStore>();
         services.AddScoped<Fire3D.Application.Scenarios.IScenarioReadStore, Fire3D.Infrastructure.Scenarios.ScenarioReadStore>();
+        services.AddScoped<Fire3D.Application.Scenarios.Commands.RejectScenarioVersion.IScenarioReviewStore, Fire3D.Infrastructure.Scenarios.ScenarioReviewStore>();
         services.AddScoped<Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog.IRuntimeCatalogReadStore, Fire3D.Infrastructure.Scenarios.RuntimeCatalogReadStore>();
         services.AddScoped<Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.IPlaytestWriteStore, Fire3D.Infrastructure.Scenarios.PlaytestWriteStore>();
         services.AddScoped<Fire3D.Application.Releases.Commands.PublishRelease.IReleaseWriteStore, Fire3D.Infrastructure.Releases.ReleaseWriteStore>();
