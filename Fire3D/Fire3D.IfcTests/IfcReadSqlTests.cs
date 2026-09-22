@@ -23,7 +23,7 @@ public sealed class IfcReadDatabase : IAsyncLifetime
     private string? connection;
     private bool created;
     public readonly Guid Fact = Guid.NewGuid(), Artifact = Guid.NewGuid(), Issue = Guid.NewGuid(), Tenant = Guid.NewGuid(), OtherTenant = Guid.NewGuid(),
-        Validation = Guid.NewGuid(), PreviousValidation = Guid.NewGuid(), PreviousAttempt = Guid.NewGuid(), Building = Guid.NewGuid(), Revision = Guid.NewGuid(), Job = Guid.NewGuid(), Attempt = Guid.NewGuid();
+        Validation = Guid.NewGuid(), PreviousValidation = Guid.NewGuid(), PreviousAttempt = Guid.NewGuid(), Building = Guid.NewGuid(), Revision = Guid.NewGuid(), Job = Guid.NewGuid(), Attempt = Guid.NewGuid(), Log = Guid.NewGuid();
     public async Task InitializeAsync()
     {
         var configured = Environment.GetEnvironmentVariable("FIRE3D_IFC_TEST_CONNECTION");
@@ -47,6 +47,8 @@ public sealed class IfcReadDatabase : IAsyncLifetime
         var ddl = """
             CREATE TYPE revision_status_enum AS ENUM ('Draft','Uploaded','Processing','NeedsFix','ReadyForScenario','ConfirmedForTraining','Rejected','Failed','Superseded');
             CREATE TYPE quarantine_status_enum AS ENUM ('Pending','Accepted','Rejected');
+            CREATE TYPE processing_step_enum AS ENUM ('Quarantine','Parse','CleanGeometry','Decimate','GenNavMesh','GenHazardGrid','ExportGLB','PackageBundle');
+            CREATE TYPE processing_step_status_enum AS ENUM ('Started','Success','Failed');
             CREATE TABLE organizations(id uuid primary key,is_active boolean not null,deleted_at timestamptz);
             CREATE TABLE buildings(id uuid primary key,organization_id uuid,is_active boolean,deleted_at timestamptz);
             CREATE TABLE revisions(id uuid primary key,building_id uuid,version_label text,status revision_status_enum,created_at timestamptz);
@@ -57,6 +59,7 @@ public sealed class IfcReadDatabase : IAsyncLifetime
             CREATE TABLE bim_facts(id uuid primary key,revision_id uuid,ifc_global_id text,entity_type text,property_path text,value jsonb,source_hash text,quality_flags jsonb,created_at timestamptz);
             CREATE TABLE processing_jobs(id uuid primary key,revision_id uuid,source_document_id uuid,scenario_version_id uuid,kind text,status text,created_at timestamptz,input_hash text,current_attempt_id uuid);
             CREATE TABLE processing_job_attempts(id uuid primary key,processing_job_id uuid,input_hash text,attempt_number int,status text,toolchain_version text,started_at timestamptz,finished_at timestamptz,output_hash text);
+            CREATE TABLE revision_processing_logs(id uuid primary key,revision_id uuid,job_id uuid,step processing_step_enum,status processing_step_status_enum,message text,duration_ms int,attempt_number int,logged_at timestamptz);
             """;
         await new NpgsqlCommand(ddl,db).ExecuteNonQueryAsync();
         await new NpgsqlCommand($"""
@@ -70,6 +73,7 @@ public sealed class IfcReadDatabase : IAsyncLifetime
             INSERT INTO validation_runs VALUES ('{Validation}','{Revision}','{Job}','{Attempt}',null,null,'Geometry','v1','Passed',jsonb_build_object(),now(),now(),now()),('{PreviousValidation}','{Revision}','{Job}','{PreviousAttempt}',null,null,'Geometry','v1','Failed',jsonb_build_object(),now(),now(),now());
             INSERT INTO processing_job_attempts VALUES ('{PreviousAttempt}','{Job}','{new string('a',64)}',0,'Failed','test-0',now(),now(),null);
             INSERT INTO processing_job_attempts VALUES ('{Attempt}','{Job}','{new string('a',64)}',1,'Running','test-1',now(),null,null);
+            INSERT INTO revision_processing_logs VALUES ('{Log}','{Revision}','{Job}','Parse','Success','IFC parsed.',42,1,now());
             """,db).ExecuteNonQueryAsync();
     }
     public Fire3DDbContext Context()

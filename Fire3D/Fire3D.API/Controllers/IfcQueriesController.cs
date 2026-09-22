@@ -11,6 +11,29 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class IfcQueriesController(ISender sender) : ControllerBase
 {
+    /// <summary>Lists sanitized processing logs for an IFC revision.</summary>
+    /// <remarks>
+    /// Requires an OrganizationUser in the revision tenant or a PlatformAdmin. Trainee is forbidden.
+    /// Results are ordered by loggedAt descending, then ID; page defaults to 1 and pageSize to 20 (maximum 100).
+    /// The response includes durable pipeline step/status/timing and a sanitized message only. It never exposes
+    /// filesystem paths, object-storage keys, signed URLs, credentials, or logs from another organization.
+    /// A revision without logs returns an empty page. A missing or out-of-scope revision returns 404.
+    /// </remarks>
+    [HttpGet("revisions/{revisionId:guid}/processing-logs")]
+    [ProducesResponseType<PageResponse<RevisionProcessingLogResponse>>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<ActionResult<PageResponse<RevisionProcessingLogResponse>>> ListProcessingLogs(
+        Guid revisionId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        var actor = User.GetActorId();
+        var result = await sender.Send(new ListRevisionProcessingLogsQuery(actor, revisionId, page, pageSize), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
+            title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
     /// <summary>Liệt kê logical processing jobs của revision IFC.</summary>
     /// <remarks>
     /// Bearer token của OrganizationUser đúng tenant hoặc PlatformAdmin. Trainee bị từ chối.
