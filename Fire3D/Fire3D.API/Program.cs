@@ -19,21 +19,22 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
 builder.Services.AddHealthChecks();
 
 // Cấu hình Firebase Admin SDK
-var firebaseConfigPath = Path.Combine(builder.Environment.ContentRootPath, "firebase-admin.json");
-if (File.Exists(firebaseConfigPath))
+var firebaseCredentialJson = FirebaseAdminConfiguration.GetCredentialJson(
+    builder.Configuration,
+    builder.Environment.ContentRootPath);
+if (!string.IsNullOrWhiteSpace(firebaseCredentialJson))
 {
-    var json = File.ReadAllText(firebaseConfigPath);
     FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions
     {
 #pragma warning disable CS0618
-        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromJson(json)
+        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromJson(firebaseCredentialJson)
 #pragma warning restore CS0618
     });
 }
 else
 {
     // Log a warning or throw, depending on preference. We'll ignore for now to allow compiling without the file in some envs.
-    Console.WriteLine("Warning: firebase-admin.json not found.");
+    Console.WriteLine("Warning: Firebase Admin credential is not configured.");
 }
 
 builder.Services.AddCors(options =>
