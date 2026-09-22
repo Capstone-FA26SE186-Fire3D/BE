@@ -11,6 +11,13 @@ public sealed record ScenarioDraftResponse(Guid Id, Guid ScenarioId, Guid Revisi
 public sealed record ScenarioVersionSummaryResponse(Guid Id, Guid ScenarioId, Guid RevisionId, Guid BuildingId,
     Guid OrganizationId, int VersionNumber, string Name, string SchemaVersion, string AlgorithmVersion,
     int TimeLimitSeconds, string ScenarioHash, DateTime CreatedAt);
+public sealed record ScenarioVersionConfigurationResponse(JsonNode Spawn, JsonNode Goal, JsonNode FireSource,
+    JsonNode Npc, JsonNode BlockedElements, JsonNode Routing, JsonNode Scoring, JsonNode ModePolicy,
+    JsonNode SafetyThresholds);
+public sealed record ScenarioVersionDetailResponse(Guid Id, Guid ScenarioId, Guid RevisionId, Guid BuildingId,
+    Guid OrganizationId, int VersionNumber, string Name, string SchemaVersion, string AlgorithmVersion,
+    long RandomSeed, int TimeLimitSeconds, int ReplanIntervalSeconds, string ScenarioHash,
+    ScenarioVersionConfigurationResponse Configuration, DateTime CreatedAt);
 
 public interface IScenarioReadStore
 {
@@ -20,4 +27,6 @@ public interface IScenarioReadStore
     Task<ScenarioDraftResponse?> GetScenarioDraftAsync(Guid draftId, Guid? organizationId, CancellationToken ct);
     Task<PageResponse<ScenarioVersionSummaryResponse>?> ListScenarioVersionsAsync(
         Guid scenarioId, Guid? organizationId, int page, int pageSize, CancellationToken ct);
+    Task<ScenarioVersionDetailResponse?> GetScenarioVersionAsync(
+        Guid versionId, Guid? organizationId, CancellationToken ct);
 }

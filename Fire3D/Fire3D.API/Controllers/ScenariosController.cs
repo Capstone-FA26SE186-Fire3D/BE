@@ -5,6 +5,7 @@ using Fire3D.Application.Scenarios.Queries.ListBuildingScenarios;
 using Fire3D.Application.Scenarios.Queries.GetScenario;
 using Fire3D.Application.Scenarios.Queries.GetScenarioDraft;
 using Fire3D.Application.Scenarios.Queries.ListScenarioVersions;
+using Fire3D.Application.Scenarios.Queries.GetScenarioVersion;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +17,20 @@ namespace Fire3D.API.Controllers;
 [Authorize]
 public class ScenariosController(ISender sender) : ControllerBase
 {
+    /// <summary>Loads one immutable scenario snapshot with its complete configuration.</summary>
+    [HttpGet("/api/scenario-versions/{versionId:guid}")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> GetScenarioVersion(Guid versionId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var result = await sender.Send(new GetScenarioVersionQuery(actor, versionId), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
     /// <summary>Lists immutable snapshots for a scenario, newest version first.</summary>
     [HttpGet("{scenarioId:guid}/versions")]
     [ProducesResponseType(200)]

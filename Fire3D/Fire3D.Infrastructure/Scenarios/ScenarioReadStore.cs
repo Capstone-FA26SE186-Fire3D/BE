@@ -7,6 +7,32 @@ namespace Fire3D.Infrastructure.Scenarios;
 
 public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
 {
+    public async Task<ScenarioVersionDetailResponse?> GetScenarioVersionAsync(
+        Guid versionId, Guid? organizationId, CancellationToken ct)
+    {
+        var query = db.ScenarioVersions.AsNoTracking().Where(v => v.Id == versionId);
+        if (organizationId.HasValue) query = query.Where(v => v.OrganizationId == organizationId.Value);
+
+        var version = await query.Where(v => v.Scenario.Building.IsActive && v.Scenario.Building.DeletedAt == null)
+            .SingleOrDefaultAsync(ct);
+        if (version is null) return null;
+
+        return new ScenarioVersionDetailResponse(version.Id, version.ScenarioId, version.RevisionId, version.BuildingId,
+            version.OrganizationId, version.VersionNumber, version.Name, version.SchemaVersion, version.AlgorithmVersion,
+            version.RandomSeed, version.TimeLimitSeconds, version.ReplanIntervalSeconds, version.ScenarioHash,
+            new ScenarioVersionConfigurationResponse(
+                System.Text.Json.Nodes.JsonNode.Parse(version.SpawnConfig)!,
+                System.Text.Json.Nodes.JsonNode.Parse(version.GoalConfig)!,
+                System.Text.Json.Nodes.JsonNode.Parse(version.FireSourceConfig)!,
+                System.Text.Json.Nodes.JsonNode.Parse(version.NpcConfig)!,
+                System.Text.Json.Nodes.JsonNode.Parse(version.BlockedElements)!,
+                System.Text.Json.Nodes.JsonNode.Parse(version.RoutingConfig)!,
+                System.Text.Json.Nodes.JsonNode.Parse(version.ScoringConfig)!,
+                System.Text.Json.Nodes.JsonNode.Parse(version.ModePolicy)!,
+                System.Text.Json.Nodes.JsonNode.Parse(version.SafetyThresholds)!),
+            version.CreatedAt);
+    }
+
     public async Task<PageResponse<ScenarioVersionSummaryResponse>?> ListScenarioVersionsAsync(
         Guid scenarioId, Guid? organizationId, int page, int pageSize, CancellationToken ct)
     {
