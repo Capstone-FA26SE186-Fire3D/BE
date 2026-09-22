@@ -182,6 +182,26 @@ public sealed class AuthController(ISender sender) : ControllerBase
         var result = await sender.Send(command, ct);
         return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
     }
+
+    /// <summary>Changes the signed-in user's local password and revokes every Fire3D refresh session.</summary>
+    /// <remarks>
+    /// Requires Bearer authentication. Body requires currentPassword and newPassword (12–128 characters).
+    /// The update, invalidation of unused reset tokens, refresh-session revocation, and audit record commit together.
+    /// Successful callers must sign in again. This endpoint does not send email and does not accept a Firebase oobCode.
+    /// </remarks>
+    [HttpPost("change-password")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    public async Task<IActionResult> ChangePassword(
+        [FromBody] Fire3D.Application.Authentication.Commands.ChangePassword.ChangePasswordRequest request,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new Fire3D.Application.Authentication.Commands.ChangePassword.ChangePasswordCommand(
+            User.GetActorId(), request.CurrentPassword, request.NewPassword), ct);
+        return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
+    }
     private ObjectResult ResetProblem(AuthError error) => Problem(statusCode:error.Status,title:error.Message,
         extensions:new Dictionary<string,object?> { ["code"] = error.Code });
 }

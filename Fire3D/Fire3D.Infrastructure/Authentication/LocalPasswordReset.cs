@@ -61,4 +61,34 @@ public sealed class LocalPasswordReset(Fire3DDbContext db, IAuthStore accounts,
         await tx.CommitAsync(ct);
         return true;
     }
+
+    public async Task<AuthResult<bool>> ChangeAsync(Guid userId, string currentPassword, string newPassword,
+        CancellationToken ct)
+    {
+        await using var tx = await accounts.BeginUserTransactionAsync(userId, ct);
+        var user = await accounts.FindUserAsync(userId, ct);
+        if (user is null || !user.IsActive || user.DeletedAt.HasValue
+            || user.OrganizationId is Guid organizationId && !await accounts.OrganizationIsActiveAsync(organizationId, ct))
+            return AuthResult<bool>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
+
+        if (!passwords.Verify(user, currentPassword, out _))
+            return AuthResult<bool>.Fail("INVALID_CURRENT_PASSWORD", "Current password is incorrect.", 400);
+        if (passwords.Verify(user, newPassword, out _))
+            return AuthResult<bool>.Fail("PASSWORD_UNCHANGED", "New password must differ from the current password.", 400);
+
+        var now = DateTime.UtcNow;
+        var passwordHash = passwords.Hash(user, newPassword);
+        await db.Users.Where(x => x.Id == userId).ExecuteUpdateAsync(update => update
+            .SetProperty(x => x.PasswordHash, passwordHash)
+            .SetProperty(x => x.UpdatedAt, now), ct);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE public.local_password_reset_tokens SET used_at=clock_timestamp()
+             WHERE user_id={userId} AND used_at IS NULL
+            """, ct);
+        await accounts.InvalidateUserResetTokensAsync(userId, ct);
+        await accounts.RevokeAllUserSessionsAsync(userId, now, ct);
+        await accounts.WriteAuditAsync(user, "Update", userId, now, ct);
+        await tx.CommitAsync(ct);
+        return AuthResult<bool>.Ok(true);
+    }
 }
