@@ -17,6 +17,21 @@ namespace Fire3D.API.Controllers;
 [Authorize]
 public class ScenariosController(ISender sender) : ControllerBase
 {
+    /// <summary>Validates draft structure. IFC geometry and runtime capability checks require the worker pipeline and are not run by this synchronous endpoint.</summary>
+    [HttpPost("/api/scenario-drafts/{draftId:guid}/validate")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> ValidateScenarioDraft(Guid draftId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var result = await sender.Send(
+            new Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ValidateScenarioDraftCommand(actor, draftId), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
     /// <summary>Loads one immutable scenario snapshot with its complete configuration.</summary>
     [HttpGet("/api/scenario-versions/{versionId:guid}")]
     [ProducesResponseType(200)]
