@@ -168,4 +168,16 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
                 : RegisterConflict.EmailTaken;
         }
     }
+    public async Task EnqueuePasswordResetAsync(string email, CancellationToken ct)
+    {
+        var payload = "{\"email\": \"" + email + "\"}";
+        var sql = @"
+            INSERT INTO public.integration_outbox_events(idempotency_key, aggregate_type, aggregate_id, event_type, payload, status, schema_version, payload_hash, created_at)
+            VALUES (@id, 'PasswordReset', @id, 'PasswordResetRequested', CAST(@payload AS jsonb), 'Pending', '1.0', 'hash', now())
+            ";
+        await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRawAsync(
+            db.Database, sql, 
+            new Npgsql.NpgsqlParameter("@id", Guid.NewGuid()), 
+            new Npgsql.NpgsqlParameter("@payload", payload));
+    }
 }

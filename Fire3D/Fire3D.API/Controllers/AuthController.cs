@@ -94,4 +94,35 @@ public sealed class AuthController(ISender sender) : ControllerBase
     private ActionResult<TokenResponse> Respond(AuthResult<TokenResponse> result) =>
         result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+
+    /// <summary>
+    /// G?i email d?t l?i m?t kh?u.
+    /// </summary>
+    [HttpPost(""forgot-password"")]
+    [AllowAnonymous]
+    [EnableRateLimiting(""auth"")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> ForgotPassword(
+        [FromBody] Fire3D.Application.Authentication.Commands.ForgotPassword.ForgotPasswordCommand command, 
+        CancellationToken ct)
+    {
+        await sender.Send(command, ct);
+        return Accepted(new { message = ""N?u tài kho?n d? di?u ki?n, hu?ng d?n d?t l?i m?t kh?u s? du?c g?i d?n email c?a b?n."" });
+    }
+
+    /// <summary>
+    /// Ð?t l?i m?t kh?u b?ng mã t? email.
+    /// </summary>
+    [HttpPost(""reset-password"")]
+    [AllowAnonymous]
+    [EnableRateLimiting(""auth"")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResetPassword(
+        [FromBody] Fire3D.Application.Authentication.Commands.ResetPassword.ResetPasswordCommand command, 
+        CancellationToken ct)
+    {
+        await sender.Send(command, ct);
+        return NoContent();
+    }
 }

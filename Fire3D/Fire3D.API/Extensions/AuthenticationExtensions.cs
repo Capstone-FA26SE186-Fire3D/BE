@@ -23,7 +23,10 @@ public static class AuthenticationExtensions
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IPasswordService, PasswordService>();
         services.AddSingleton<ITokenService, TokenService>();
-        services.AddScoped<IAuthStore, AuthStore>();
+                services.AddScoped<IAuthStore, AuthStore>();
+        services.AddOptions<AuthEmailOptions>().Bind(configuration.GetSection(""AuthEmail"")).ValidateDataAnnotations();
+        services.AddHttpClient<IPasswordResetProvider, FirebasePasswordResetProvider>();
+        services.AddHostedService<Fire3D.Infrastructure.Workers.PasswordResetWorker>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
@@ -80,3 +83,4 @@ public static class AuthenticationExtensions
         return services;
     }
 }
+
