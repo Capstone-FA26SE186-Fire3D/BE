@@ -4,6 +4,7 @@ using Fire3D.Application.Scenarios.Commands.CreateScenarioDraft;
 using Fire3D.Application.Scenarios.Queries.ListBuildingScenarios;
 using Fire3D.Application.Scenarios.Queries.GetScenario;
 using Fire3D.Application.Scenarios.Queries.GetScenarioDraft;
+using Fire3D.Application.Scenarios.Queries.ListScenarioVersions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,6 +16,21 @@ namespace Fire3D.API.Controllers;
 [Authorize]
 public class ScenariosController(ISender sender) : ControllerBase
 {
+    /// <summary>Lists immutable snapshots for a scenario, newest version first.</summary>
+    [HttpGet("{scenarioId:guid}/versions")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> ListScenarioVersions(Guid scenarioId, [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var result = await sender.Send(new ListScenarioVersionsQuery(actor, scenarioId, page, pageSize), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
     /// <summary>Loads a draft state and returns its version as an ETag for the next update.</summary>
     [HttpGet("/api/scenario-drafts/{draftId:guid}")]
     public async Task<IActionResult> GetScenarioDraft(Guid draftId, CancellationToken ct)

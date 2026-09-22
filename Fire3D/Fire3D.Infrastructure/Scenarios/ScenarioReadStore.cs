@@ -7,6 +7,27 @@ namespace Fire3D.Infrastructure.Scenarios;
 
 public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
 {
+    public async Task<PageResponse<ScenarioVersionSummaryResponse>?> ListScenarioVersionsAsync(
+        Guid scenarioId, Guid? organizationId, int page, int pageSize, CancellationToken ct)
+    {
+        var scenarioExists = await db.Scenarios.AsNoTracking().AnyAsync(s =>
+            s.Id == scenarioId && s.Building.IsActive && s.Building.DeletedAt == null
+            && (!organizationId.HasValue || s.OrganizationId == organizationId.Value), ct);
+        if (!scenarioExists) return null;
+
+        var query = db.ScenarioVersions.AsNoTracking().Where(v => v.ScenarioId == scenarioId);
+        if (organizationId.HasValue) query = query.Where(v => v.OrganizationId == organizationId.Value);
+
+        var totalCount = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(v => v.VersionNumber).ThenByDescending(v => v.CreatedAt).ThenBy(v => v.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(v => new ScenarioVersionSummaryResponse(v.Id, v.ScenarioId, v.RevisionId, v.BuildingId,
+                v.OrganizationId, v.VersionNumber, v.Name, v.SchemaVersion, v.AlgorithmVersion,
+                v.TimeLimitSeconds, v.ScenarioHash, v.CreatedAt))
+            .ToListAsync(ct);
+        return new PageResponse<ScenarioVersionSummaryResponse>(items, totalCount, page, pageSize);
+    }
+
     public Task<ScenarioDraftResponse?> GetScenarioDraftAsync(Guid draftId, Guid? organizationId, CancellationToken ct)
     {
         var query = db.ScenarioDrafts.AsNoTracking().Where(d => d.Id == draftId);
