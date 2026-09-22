@@ -27,10 +27,11 @@ public sealed class PasswordResetWorker(IServiceScopeFactory scopes, IOptions<Au
                 {
                     var accounts = scope.ServiceProvider.GetRequiredService<IAuthStore>();
                     var user = await accounts.FindUserByEmailAsync(job.Email,timeout.Token);
-                    if (user is { IsActive:true, DeletedAt:null } && !string.IsNullOrEmpty(user.FirebaseUid))
+                    if (user is { IsActive:true, DeletedAt:null })
                     {
-                        var provider = scope.ServiceProvider.GetRequiredService<IPasswordResetProvider>();
-                        var link = await provider.GenerateResetLinkAsync(job.Email,timeout.Token);
+                        var provider = scope.ServiceProvider.GetRequiredService<ILocalPasswordReset>();
+                        var link = await provider.CreateLinkAsync(job.Email,timeout.Token);
+                        if (link is null) { await queue.CompleteAsync(job,stoppingToken); continue; }
                         var html = "<p>A password reset was requested for your Fire3D account.</p><p><a href=\"" +
                             WebUtility.HtmlEncode(link) + "\">Reset password</a></p><p>Ignore this email if you did not request it.</p>";
                         await scope.ServiceProvider.GetRequiredService<IEmailService>()

@@ -81,6 +81,12 @@ public class FirebaseIdentityProvider(
         {
             var decodedToken = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken, true, ct);
             var uid = decodedToken.Uid;
+            if (!decodedToken.Claims.TryGetValue("email_verified", out var verified) || verified is not true)
+                throw new InvalidOperationException("Verified Google email is required.");
+            using var claims = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(decodedToken.Claims));
+            if (!claims.RootElement.TryGetProperty("firebase", out var firebase) ||
+                !firebase.TryGetProperty("sign_in_provider", out var provider) || provider.GetString() != "google.com")
+                throw new InvalidOperationException("Google sign-in is required.");
             var email = decodedToken.Claims.TryGetValue("email", out var emailObj) ? emailObj?.ToString() : null;
 
             if (string.IsNullOrEmpty(email))

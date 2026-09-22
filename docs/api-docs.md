@@ -1,10 +1,8 @@
 # Tài Liệu API Fire3D (Detailed API Specification)
 
-> Đối chiếu source ngày 2026-09-22: tài liệu này còn một số contract chưa được
-> triển khai hoặc khác controller, đặc biệt `/api/auth/login`, request Firebase
-> login và response register. Xem [báo cáo rà soát](project-review-2026-09-22.md)
-> trước khi tích hợp. Luồng forgot/reset hiện tại được mô tả tại
-> [password-reset.md](password-reset.md).
+> Auth đã chuyển sang BE quản lý password. Contract auth hiện hành, migration và
+> cách chuyển tài khoản Firebase cũ được mô tả tại [password-reset.md](password-reset.md).
+> Các ví dụ auth cũ bên dưới chưa đồng bộ hoàn toàn: ưu tiên tài liệu trên và OpenAPI.
 
 Tài liệu này cung cấp chi tiết về chức năng, cách sử dụng, ý nghĩa nghiệp vụ cũng như cấu trúc dữ liệu (Request/Response) của toàn bộ các API trong hệ thống Fire3D.
 
@@ -18,84 +16,77 @@ Tài liệu này cung cấp chi tiết về chức năng, cách sử dụng, ý 
 ---
 
 ## 1. Authentication (Xác thực người dùng)
-Base URL: `/api/auth`
 
-### 1.1 Đăng nhập bằng Email/Password
-**`POST /api/auth/login`**
-- **Mô tả**: API dùng để đăng nhập hệ thống dành cho người dùng đã có tài khoản (được tạo bởi Admin) bằng Email và Mật khẩu cơ bản.
-- **Phân quyền**: Anonymous (Không yêu cầu token)
-- **Schema**:
+Email/password do BE quản lý với hash trong PostgreSQL; Google được xác minh qua Firebase.
+Các API login/register/forgot/reset/refresh không yêu cầu Bearer. Chi tiết cấu hình,
+chuyển tài khoản cũ và migration: [password-reset.md](password-reset.md).
+
+### 1.1 Đăng ký email/password
+
+`POST /api/auth/register`
+
 ```json
-// Request
-{
-  "email": "user@example.com",
-  "password": "mySecurePassword123!"
-}
-
-// Response: 200 OK
-{
-  "accessToken": "eyJhb...",
-  "accessTokenExpiresAt": "2026-09-22T10:00:00Z",
-  "refreshToken": "def56...",
-  "refreshTokenExpiresAt": "2026-10-22T10:00:00Z",
-  "user": {
-    "id": "3fa85f64-...",
-    "email": "user@example.com",
-    "fullName": "John Doe",
-    "role": "OrganizationUser",
-    "organizationId": "5fa85f64-..."
-  }
-}
+{ "email": "user@example.com", "password": "StrongPassword12!", "fullName": "Test User" }
 ```
 
-### 1.2 Đăng nhập bằng Google / Firebase SSO
-**`POST /api/auth/login-firebase`**
-- **Mô tả**: API dùng để đăng nhập thông qua Google. FE sẽ gọi Google/Firebase để lấy `idToken`, sau đó gửi token này xuống BE. BE sẽ tự động xác thực token này với Firebase. Nếu email chưa từng tồn tại, hệ thống sẽ **tự động tạo mới tài khoản với Role là Trainee**.
-- **Schema**:
+Thành công: **201**, body `{ id, email, fullName, role, organizationId }`.
+Role cố định Trainee; organizationId null. Email trùng: 409; dữ liệu sai: 400.
+Password 12–128 ký tự, fullName 1–200 ký tự. Không có organizationName trong contract này.
+
+### 1.2 Đăng nhập email/password
+
+`POST /api/auth/login`
+
 ```json
-// Request
-{
-  "idToken": "eyJhbGciOiJSUz..." // Token lấy từ Firebase SDK ở Frontend
-}
-// Response: 200 OK (Cấu trúc TokenResponse giống hệt API Login)
+{ "email": "user@example.com", "password": "StrongPassword12!" }
 ```
 
-### 1.3 Đăng ký tài khoản (Public Signup)
-**`POST /api/auth/register`**
-- **Mô tả**: Cho phép người dùng công cộng tự tạo tài khoản. Mặc định các tài khoản tự đăng ký qua API này sẽ được gán role thấp nhất là `Trainee`. Phù hợp cho tính năng cho phép học viên tự tham gia.
-- **Schema**:
+Thành công: **200**, body `{ accessToken, refreshToken, user }`.
+Không có accessTokenExpiresAt/refreshTokenExpiresAt trong response login thường.
+Sai credential: 401; tài khoản/organization bị khóa: 403; sai định dạng: 400.
+BE kiểm tra hash, không gửi password lên Firebase.
+
+### 1.3 Google qua Firebase
+
+`POST /api/auth/login-firebase`, body là **JSON string**:
+
 ```json
-// Request
-{
-  "email": "newuser@example.com",
-  "password": "mySecurePassword123!",
-  "fullName": "Jane Doe",
-  "organizationName": "Tên tổ chức (tuỳ chọn)" 
-}
-// Response: 201 Created (Empty Body)
+"<Firebase ID token lấy sau Google Sign-In>"
 ```
 
-### 1.4 Quên mật khẩu & Đặt lại mật khẩu
-**`POST /api/auth/forgot-password`**
-- **Mô tả**: Gửi yêu cầu xin cấp lại mật khẩu. Hệ thống sẽ sinh ra một Outbox event để worker chạy ngầm gửi email chứa link đặt lại mật khẩu cho người dùng.
-- **Schema**:
+Thành công: **200**, TokenResponse gồm accessToken, accessTokenExpiresAt,
+refreshToken, refreshTokenExpiresAt, user. Token phải có verified email và provider
+Google. UID đã liên kết giữ role/tenant hiện có; user mới là Trainee. Email trùng
+hồ sơ chưa liên kết trả 409 ACCOUNT_LINK_REQUIRED; không tự ghép theo email.
+
+### 1.4 Forgot/reset password
+
+`POST /api/auth/forgot-password`
+
 ```json
-// Request
 { "email": "user@example.com" }
-// Response: 202 Accepted (Empty Body)
 ```
 
-**`POST /api/auth/reset-password`**
-- **Mô tả**: Sau khi bấm vào link trong email, người dùng sẽ nhận được mã `oobCode` của Firebase. Dùng mã này kèm mật khẩu mới để đổi mật khẩu. Đổi thành công sẽ tự động **đăng xuất (thu hồi session)** trên tất cả các thiết bị để đảm bảo an toàn.
-- **Schema**:
+**202** với message chung, kể cả email không tồn tại. Worker gửi email qua Mailgun.
+Link dẫn tới `/reset-password?token=...`; 202 không bảo đảm đã giao email.
+
+`POST /api/auth/reset-password`
+
 ```json
-// Request
-{
-  "oobCode": "firebase_oob_code_from_email_link",
-  "newPassword": "newSecurePassword123!"
-}
-// Response: 200 OK (Empty Body)
+{ "token": "<64 ký tự hex từ email>", "newPassword": "ReplacementPassword12!" }
 ```
+
+**204** khi thành công. Token hết hạn sau 30 phút và chỉ dùng một lần; sai/hết hạn/
+đã dùng trả 400. Consume token, cập nhật hash, revoke mọi phiên và audit là một
+transaction. Frontend không dùng oobCode hoặc Firebase confirm cho reset local.
+Chủ email của tài khoản Firebase cũ dùng luồng này để đặt mật khẩu local mới.
+
+### 1.5 Phiên đăng nhập
+
+- `POST /api/auth/refresh`: body `{ "refreshToken": "..." }`, không cần Bearer,
+  trả TokenResponse; xoay token và từ chối replay.
+- `POST /api/auth/logout`: yêu cầu Bearer; trả 204.
+- `GET /api/auth/me`: yêu cầu Bearer; trả AccountResponse.
 
 ---
 

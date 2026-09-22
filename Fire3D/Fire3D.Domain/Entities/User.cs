@@ -13,6 +13,9 @@ public partial class User
 
     public string? FirebaseUid { get; set; }
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? PasswordHash { get; set; }
+
     public string? FullName { get; set; }
 
     public bool IsActive { get; set; }

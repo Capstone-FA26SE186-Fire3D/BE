@@ -24,6 +24,7 @@ public static class AuthenticationExtensions
         services.AddSingleton<IPasswordService, PasswordService>();
         services.AddSingleton<ITokenService, TokenService>();
         services.AddScoped<IAuthStore, AuthStore>();
+        services.AddScoped<ILocalPasswordReset, LocalPasswordReset>();
         services.AddScoped<Fire3D.Application.Authentication.Services.Fire3DSessionIssuer>();
         services.AddHttpClient<Fire3D.Application.Authentication.Abstractions.IIdentityProvider, FirebaseIdentityProvider>(
             client => client.Timeout = TimeSpan.FromSeconds(15)).RemoveAllLoggers();

@@ -1,38 +1,43 @@
-using Fire3D.Application.Authentication.Abstractions;
-using Fire3D.Application.Authentication.Services;
+using Fire3D.Application.Authentication.Internal;
 using MediatR;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Fire3D.Application.Authentication.Commands.LoginWithPassword;
 
 public sealed record LoginWithPasswordCommand(string Email, string Password) : IRequest<AuthResult<LoginResponse>>;
 
-public sealed class LoginWithPasswordCommandHandler(
-    IIdentityProvider identityProvider,
-    IAuthStore authStore,
-    Fire3DSessionIssuer sessionIssuer, TimeProvider clock) : IRequestHandler<LoginWithPasswordCommand, AuthResult<LoginResponse>>
+public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordService passwords,
+    ITokenService tokens, TimeProvider clock) : IRequestHandler<LoginWithPasswordCommand, AuthResult<LoginResponse>>
 {
-    public async Task<AuthResult<LoginResponse>> Handle(LoginWithPasswordCommand request, CancellationToken ct)
+    public async Task<AuthResult<LoginResponse>> Handle(LoginWithPasswordCommand command, CancellationToken ct)
     {
-        var authenticatedAt = clock.GetUtcNow().UtcDateTime;
-        VerifiedIdentity identity;
-        try {
-            identity = await identityProvider.SignInWithPasswordAsync(request.Email, request.Password, ct);
-        } catch (Exception ex) {
-            return AuthResult<LoginResponse>.Fail("INVALID_CREDENTIALS", ex.Message, 401);
-        }
-
-        var user = await authStore.FindUserByFirebaseUidAsync(identity.Uid, ct);
-        if (user == null)
+        var email = PasswordResetValidation.NormalizeEmail(command.Email);
+        if (email is null || string.IsNullOrEmpty(command.Password) || command.Password.Length > 128)
+            return AuthResult<LoginResponse>.Fail("VALIDATION_ERROR", "Email and password are required (password maximum 128 characters).", 400);
+        var user = await store.FindUserByEmailAsync(email, ct);
+        if (user is null)
         {
-            return AuthResult<LoginResponse>.Fail("USER_NOT_FOUND", "User not found in local database.", 404);
+            passwords.VerifyDummy(command.Password);
+            return InvalidCredentials();
         }
-
-        return AuthResult<LoginResponse>.Ok(await sessionIssuer.IssueSessionAsync(user, authenticatedAt, ct));
+        // Re-read and verify under the same lock as password reset, refresh and disable.
+        await using var tx = await store.BeginUserTransactionAsync(user.Id, ct);
+        user = await store.FindUserAsync(user.Id, ct);
+        if (user is null) { passwords.VerifyDummy(command.Password); return InvalidCredentials(); }
+        if (!passwords.Verify(user, command.Password, out var rehash)) return InvalidCredentials();
+        if (!await AuthSupport.IsActiveAsync(store, user, ct))
+            return AuthResult<LoginResponse>.Fail("ACCOUNT_DISABLED", "Account or organization is unavailable.", 403);
+        if (rehash)
+        {
+            user.PasswordHash = passwords.Hash(user, command.Password);
+            await store.UpdateUserAsync(user, ct);
+        }
+        var now = AuthSupport.UtcNow(clock);
+        await store.UpdateLoginAsync(user.Id, now, ct);
+        var response = await AuthSupport.IssueAsync(store, tokens, user, Guid.NewGuid(), now, now.Add(tokens.RefreshTokenLifetime), ct);
+        await store.WriteAuditAsync(user, "Login", user.Id, now, ct);
+        await tx.CommitAsync(ct);
+        return AuthResult<LoginResponse>.Ok(new(response.AccessToken, response.RefreshToken, response.User));
     }
+    private static AuthResult<LoginResponse> InvalidCredentials() =>
+        AuthResult<LoginResponse>.Fail("INVALID_CREDENTIALS", "Invalid email or password.", 401);
 }
-
-
-

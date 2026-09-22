@@ -39,46 +39,6 @@ public class PasswordResetTests
             Assert.Equal("EnqueuePasswordResetAsync",method);Assert.Equal("a@example.test",args[0]);return Task.CompletedTask;});
         Assert.True((await new ForgotPasswordCommandHandler(store).Handle(new(" A@EXAMPLE.TEST "),default)).IsSuccess);
     }
-    [Theory] [InlineData(11)] [InlineData(129)]
-    public async Task Invalid_password_never_reaches_provider(int length)
-    {
-        var result=await new ResetPasswordCommandHandler(Unexpected<IPasswordResetProvider>(),Unexpected<IAuthStore>(),Unexpected<IPasswordResetStore>())
-            .Handle(new("code",new string('a',length)),default);
-        Assert.Equal("INVALID_PASSWORD",result.Error?.Code);
-    }
-    [Fact]
-    public async Task Verification_outage_stays_503()
-    {
-        var provider=ResetProxy.For<IPasswordResetProvider>((_,_)=>Task.FromException<VerifiedResetIdentity>(PasswordResetException.Unavailable()));
-        var r=await new ResetPasswordCommandHandler(provider,Unexpected<IAuthStore>(),Unexpected<IPasswordResetStore>()).Handle(new("code","LongPassword12!"),default);
-        Assert.Equal(503,r.Error?.Status);
-    }
-    [Theory] [InlineData("Success","Completed",null)] [InlineData("Invalid","Rejected",400)] [InlineData("Unknown",null,503)]
-    public async Task Reset_state_is_durable_before_mutation_and_unknown_outcome_stays_fenced(string mode,string? finish,int? status)
-    {
-        var user=new User{Id=Guid.NewGuid(),FirebaseUid="uid",IsActive=true};var operation=Guid.NewGuid();var calls=new List<string>();
-        var provider=ResetProxy.For<IPasswordResetProvider>((method,_)=>{
-            calls.Add(method);
-            if(method=="VerifyResetCodeAsync")return Task.FromResult(new VerifiedResetIdentity(user.Id,"uid"));
-            Assert.Contains("BeginAsync",calls);
-            return mode switch {"Invalid"=>Task.FromException(PasswordResetException.InvalidCode()),"Unknown"=>Task.FromException(PasswordResetException.Unavailable()),_=>Task.CompletedTask};});
-        var accounts=ResetProxy.For<IAuthStore>((_,_)=>Task.FromResult<User?>(user));
-        var resets=ResetProxy.For<IPasswordResetStore>((method,args)=>{
-            calls.Add(method);
-            if(method=="BeginAsync"){Assert.Equal(64,((string)args[2]!).Length);Assert.DoesNotContain("code",(string)args[2]!);return Task.FromResult<Guid?>(operation);}
-            Assert.Equal(finish,args[2]);return Task.CompletedTask;});
-        var result=await new ResetPasswordCommandHandler(provider,accounts,resets).Handle(new("code","LongPassword12!"),default);
-        Assert.Equal(status,result.Error?.Status);
-        Assert.Equal(finish is not null,calls.Contains("FinishAsync"));
-    }
-    [Fact]
-    public async Task Identity_mismatch_does_not_mutate_password()
-    {
-        var user=new User{Id=Guid.NewGuid(),FirebaseUid="other",IsActive=true};
-        var provider=ResetProxy.For<IPasswordResetProvider>((method,_)=>method=="VerifyResetCodeAsync"?Task.FromResult(new VerifiedResetIdentity(user.Id,"uid")):throw new Exception("Unexpected mutation"));
-        var accounts=ResetProxy.For<IAuthStore>((_,_)=>Task.FromResult<User?>(user));
-        Assert.Equal(400,(await new ResetPasswordCommandHandler(provider,accounts,Unexpected<IPasswordResetStore>()).Handle(new("code","LongPassword12!"),default)).Error?.Status);
-    }
     [Theory] [InlineData(false,400)] [InlineData(true,503)]
     public async Task Controllers_preserve_error_status(bool reset,int status)
     {

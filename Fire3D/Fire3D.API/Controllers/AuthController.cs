@@ -15,6 +15,26 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AuthController(ISender sender) : ControllerBase
 {
+    /// <summary>Đăng nhập email/password do BE quản lý. Không cần Bearer.</summary>
+    /// <remarks>Body: email, password. BE kiểm tra hash trong PostgreSQL; không gọi Firebase.
+    /// 200: accessToken, refreshToken, user; 400: dữ liệu sai; 401: sai email/mật khẩu;
+    /// 403: tài khoản/tổ chức bị vô hiệu hóa; 429: vượt giới hạn yêu cầu.</remarks>
+    [HttpPost("login")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType<LoginResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(429)]
+    public async Task<IActionResult> Login(
+        [FromBody] Fire3D.Application.Authentication.Commands.LoginWithPassword.LoginWithPasswordCommand command,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(command, ct);
+        return result.IsSuccess ? Ok(result.Value) : ResetProblem(result.Error!);
+    }
+
     /// <summary>
     /// Đăng nhập bằng Firebase ID Token.
     /// </summary>
@@ -32,9 +52,10 @@ public sealed class AuthController(ISender sender) : ControllerBase
     }
 
     /// <summary>
-    /// Đăng ký tài khoản (Tạo trên Firebase + DB)
+    /// Đăng ký tài khoản thường. BE hash mật khẩu và tạo hồ sơ Trainee trong PostgreSQL.
     /// </summary>
     [HttpPost("register")]
+    [ProducesResponseType<AccountResponse>(201)]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
     public async Task<ActionResult> Register([FromBody] Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommand command, CancellationToken ct)
@@ -44,7 +65,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
         {
             return Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
         }
-        return Ok(result.Value);
+        return StatusCode(StatusCodes.Status201Created, result.Value);
     }
 
     /// <summary>
@@ -99,8 +120,8 @@ public sealed class AuthController(ISender sender) : ControllerBase
     /// Gửi hướng dẫn đặt lại mật khẩu qua email. Không cần Bearer.
     /// </summary>
     /// <remarks>Body: email hợp lệ, tối đa 254 ký tự. Trả 202 cho cả email có và không có tài khoản;
-    /// 202 chỉ xác nhận đã nhận yêu cầu, không đảm bảo email đã được gửi. Tài khoản chỉ dùng Google
-    /// không được cấp mật khẩu mới qua luồng này. Email được xử lý nền và giới hạn tần suất.</remarks>
+    /// 202 chỉ xác nhận đã nhận yêu cầu, không đảm bảo email đã được gửi. Chủ email đã xác minh
+    /// qua link có thể đặt mật khẩu local, kể cả tài khoản trước đây chỉ dùng Firebase.</remarks>
     [HttpPost("forgot-password")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
@@ -117,10 +138,10 @@ public sealed class AuthController(ISender sender) : ControllerBase
         return Accepted(new { message = "Nếu tài khoản đủ điều kiện, hướng dẫn đặt lại mật khẩu sẽ được gửi đến email của bạn." });
     }
 
-    /// <summary>Đổi mật khẩu bằng mã Firebase trong email và thu hồi các phiên Fire3D.</summary>
-    /// <remarks>Không cần Bearer. Body: oobCode, newPassword (12–128 ký tự). 400: mã/mật khẩu sai;
-    /// 409: reset đang chờ xử lý; 503: provider chưa khả dụng. Khi kết quả provider không rõ, tài khoản
-    /// bị chặn cấp phiên mới đến khi recovery hoàn tất. Không gửi mật khẩu/mã reset vào log.</remarks>
+    /// <summary>Đổi mật khẩu local bằng token email và thu hồi tất cả phiên Fire3D.</summary>
+    /// <remarks>Không cần Bearer. Body: token (64 ký tự hex), newPassword (12–128 ký tự).
+    /// Token hết hạn sau 30 phút, chỉ dùng một lần. 400: token/mật khẩu sai; 204: thành công.
+    /// Không gửi mật khẩu/token vào log. Token Firebase oobCode cũ không dùng được.</remarks>
     [HttpPost("reset-password")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]

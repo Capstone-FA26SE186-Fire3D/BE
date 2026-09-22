@@ -44,7 +44,7 @@ public sealed class PasswordResetPostgresTests
                 CREATE TYPE audit_action_enum AS ENUM ('Update','Login');
                 CREATE TABLE users (
                   id uuid PRIMARY KEY, organization_id uuid, email text NOT NULL, firebase_uid text,
-                  full_name text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
+                  full_name text, password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
                   last_login_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
                   updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz);
                 CREATE TABLE auth_refresh_tokens (
@@ -57,6 +57,7 @@ public sealed class PasswordResetPostgresTests
                   ip_address inet,user_agent text,created_at timestamptz NOT NULL DEFAULT now());
                 """);
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"002_password_reset_recovery.sql")));
+            await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"003_local_password.sql")));
             return db;
         }
         private DbContextOptions<Fire3DDbContext>? contextOptions;
@@ -82,6 +83,48 @@ public sealed class PasswordResetPostgresTests
     private static RefreshToken Token(Guid user, DateTime? created = null) => new() {
         Id=Guid.NewGuid(),UserId=user,FamilyId=Guid.NewGuid(),TokenHash=Guid.NewGuid().ToString("N"),
         CreatedAt=created??DateTime.UtcNow,ExpiresAt=DateTime.UtcNow.AddDays(7) };
+
+    [ResetPostgresFact]
+    public async Task Local_register_login_reset_is_atomic_single_use_and_revokes_sessions()
+    {
+        await using var database=await Database.Create();
+        await using var db=database.Context();
+        var accounts=new AuthStore(db);var passwords=new PasswordService();
+        // Minimal test enum only needs the extra label for registration audit.
+        await database.Sql("ALTER TYPE audit_action_enum ADD VALUE IF NOT EXISTS 'Create'");
+        var register=new Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommandHandler(accounts,passwords,TimeProvider.System);
+        var created=await register.Handle(new(" USER@EXAMPLE.TEST ","OriginalPassword12!","Test User"),default);
+        Assert.True(created.IsSuccess,created.Error?.Message);
+        var user=await accounts.FindUserByEmailAsync("user@example.test",default);
+        Assert.NotNull(user);Assert.Null(user.FirebaseUid);Assert.NotEqual("OriginalPassword12!",user.PasswordHash);
+        Assert.True(passwords.Verify(user,"OriginalPassword12!",out _));
+        var tokens=new TokenService(Microsoft.Extensions.Options.Options.Create(new JwtOptions {
+            Issuer="test",Audience="test",SigningKey=Convert.ToBase64String(new byte[64]) }));
+        var login=new Fire3D.Application.Authentication.Commands.LoginWithPassword.LoginWithPasswordCommandHandler(accounts,passwords,tokens,TimeProvider.System);
+        Assert.True((await login.Handle(new("USER@example.test","OriginalPassword12!"),default)).IsSuccess);
+        Assert.True((await login.Handle(new("user@example.test","OriginalPassword12!"),default)).IsSuccess);
+        Assert.Equal(401,(await login.Handle(new("user@example.test","wrong"),default)).Error?.Status);
+        var reset=new LocalPasswordReset(db,accounts,passwords,Microsoft.Extensions.Options.Options.Create(new AuthEmailOptions { FrontendUrl="https://app.example.test" }));
+        var link=await reset.CreateLinkAsync(user.Email,default);
+        var raw=System.Web.HttpUtility.ParseQueryString(new Uri(link!).Query)["token"]!;
+        Assert.Equal(64,raw.Length);
+        Assert.NotEqual(raw,await database.Sql("SELECT token_hash FROM local_password_reset_tokens LIMIT 1"));
+        Assert.True(await reset.ResetAsync(raw,"ReplacementPassword12!",default));
+        Assert.False(await reset.ResetAsync(raw,"AnotherPassword12!",default));
+        Assert.Equal(0L,await database.Sql("SELECT count(*) FROM auth_refresh_tokens WHERE revoked_at IS NULL"));
+        Assert.Equal(401,(await login.Handle(new(user.Email,"OriginalPassword12!"),default)).Error?.Status);
+        Assert.True((await login.Handle(new(user.Email,"ReplacementPassword12!"),default)).IsSuccess);
+
+        link=await reset.CreateLinkAsync(user.Email,default);
+        raw=System.Web.HttpUtility.ParseQueryString(new Uri(link!).Query)["token"]!;
+        await database.Sql("ALTER TABLE audit_logs ADD CONSTRAINT fail_new_audit CHECK (actor_type='Impossible') NOT VALID");
+        await Assert.ThrowsAsync<DbUpdateException>(()=>reset.ResetAsync(raw,"MustNotPersist12!",default));
+        await using var fresh=database.Context();
+        var current=await new AuthStore(fresh).FindUserAsync(user.Id,default);
+        Assert.True(passwords.Verify(current!,"ReplacementPassword12!",out _));
+        Assert.Equal(1L,await database.Sql("SELECT count(*) FROM local_password_reset_tokens WHERE used_at IS NULL"));
+        Assert.Equal(1L,await database.Sql("SELECT count(*) FROM auth_refresh_tokens WHERE revoked_at IS NULL"));
+    }
 
     [ResetPostgresFact]
     public async Task Queue_deduplicates_parallel_requests_and_only_one_worker_claims()
