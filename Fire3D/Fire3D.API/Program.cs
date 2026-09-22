@@ -1,4 +1,5 @@
 using Fire3D.API.Extensions;
+using Fire3D.API.Configuration;
 using Fire3D.Application.Authentication.Commands.BootstrapAdmin;
 using MediatR;
 using System.Text.Json.Serialization;
@@ -39,8 +40,8 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        var frontendUrl = builder.Configuration["Auth:FrontendUrl"] ?? "http://localhost:3000";
-        policy.WithOrigins(frontendUrl)
+        var frontendUrls = CorsOriginConfiguration.GetAllowedOrigins(builder.Configuration);
+        policy.WithOrigins(frontendUrls)
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
