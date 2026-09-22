@@ -53,7 +53,7 @@ public class IfcWriteSqlTests : IAsyncLifetime
         await db.Database.EnsureCreatedAsync();
 
         // Seed data
-        db.Organizations.Add(new Fire3D.Domain.Entities.Organization { Id = OrgId, Name = "Org", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+        db.Organizations.Add(new Fire3D.Domain.Entities.Organization { Id = OrgId, Name = "Org", Slug = "retry-job-org", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         db.Users.Add(new Fire3D.Domain.Entities.User { Id = ActorId, Email = "actor@org", FullName = "A", Role = UserRole.OrganizationUser, OrganizationId = OrgId, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         db.Users.Add(new Fire3D.Domain.Entities.User { Id = OtherActorId, Email = "other@org", FullName = "O", Role = UserRole.OrganizationUser, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         

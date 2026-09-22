@@ -37,7 +37,7 @@ public class ScenarioStoreTests : IAsyncLifetime
         var revisionId = Guid.NewGuid();
         var userId = Guid.NewGuid();
 
-        db.Organizations.Add(new Organization { Id = orgId, IsActive = true, Name = "Org" });
+        db.Organizations.Add(new Organization { Id = orgId, IsActive = true, Name = "Org", Slug = "scenario-store-org" });
         db.Buildings.Add(new Building { Id = buildingId, OrganizationId = orgId, Name = "Building", IsActive = true, CreatedBy = userId });
         db.Revisions.Add(new Revision { Id = revisionId, BuildingId = buildingId, OrganizationId = orgId, UploadedBy = userId, VersionLabel = "v1" });
         db.SaveChanges();
