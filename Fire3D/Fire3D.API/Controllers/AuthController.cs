@@ -111,6 +111,19 @@ public sealed class AuthController(ISender sender) : ControllerBase
         return Ok();
     }
 
+    /// <summary>Revokes push delivery for one installation owned by the current account.</summary>
+    /// <remarks>Idempotent: an unknown or already revoked device still returns 204. It does not revoke Fire3D sessions.</remarks>
+    [HttpDelete("devices/{deviceUuid}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> RevokeDevice(string deviceUuid, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new Fire3D.Application.Users.Commands.RegisterDevice.RevokeDeviceCommand(User.GetActorId(), deviceUuid), ct);
+        return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
+    }
+
     private ActionResult<TokenResponse> Respond(AuthResult<TokenResponse> result) =>
         result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });

@@ -89,6 +89,12 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         return true;
     }
 
+    public async Task RevokeDeviceAsync(Guid userId, string deviceUuid, DateTime now, CancellationToken ct) =>
+        await db.UserDevices.Where(x => x.UserId == userId && x.DeviceUuid == deviceUuid)
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(x => x.FcmToken, (string?)null)
+                .SetProperty(x => x.LastSeenAt, now), ct);
+
     public Task<RefreshToken?> FindRefreshTokenAsync(string hash, CancellationToken ct) =>
         db.Set<RefreshToken>().AsNoTracking().SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
     public async Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct)
