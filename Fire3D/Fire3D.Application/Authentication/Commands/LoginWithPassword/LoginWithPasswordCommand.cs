@@ -12,11 +12,12 @@ public sealed record LoginWithPasswordCommand(string Email, string Password) : I
 public sealed class LoginWithPasswordCommandHandler(
     IIdentityProvider identityProvider,
     IAuthStore authStore,
-    Fire3DSessionIssuer sessionIssuer) : IRequestHandler<LoginWithPasswordCommand, AuthResult<LoginResponse>>
+    Fire3DSessionIssuer sessionIssuer, TimeProvider clock) : IRequestHandler<LoginWithPasswordCommand, AuthResult<LoginResponse>>
 {
     public async Task<AuthResult<LoginResponse>> Handle(LoginWithPasswordCommand request, CancellationToken ct)
     {
-                VerifiedIdentity identity;
+        var authenticatedAt = clock.GetUtcNow().UtcDateTime;
+        VerifiedIdentity identity;
         try {
             identity = await identityProvider.SignInWithPasswordAsync(request.Email, request.Password, ct);
         } catch (Exception ex) {
@@ -29,7 +30,7 @@ public sealed class LoginWithPasswordCommandHandler(
             return AuthResult<LoginResponse>.Fail("USER_NOT_FOUND", "User not found in local database.", 404);
         }
 
-        return AuthResult<LoginResponse>.Ok(await sessionIssuer.IssueSessionAsync(user, ct));
+        return AuthResult<LoginResponse>.Ok(await sessionIssuer.IssueSessionAsync(user, authenticatedAt, ct));
     }
 }
 

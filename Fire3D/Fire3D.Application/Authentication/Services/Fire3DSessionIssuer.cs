@@ -9,7 +9,7 @@ namespace Fire3D.Application.Authentication.Services;
 
 public class Fire3DSessionIssuer(IAuthStore authStore, ITokenService tokens, TimeProvider clock)
 {
-    public async Task<LoginResponse> IssueSessionAsync(User user, CancellationToken ct)
+    public async Task<LoginResponse> IssueSessionAsync(User user, DateTime authenticatedAt, CancellationToken ct)
     {
         if (user.IsActive == false)
             throw new Exception("AccountDisabled");
@@ -17,6 +17,10 @@ public class Fire3DSessionIssuer(IAuthStore authStore, ITokenService tokens, Tim
         var now = clock.GetUtcNow().UtcDateTime;
 
         await using var transaction = await authStore.BeginUserTransactionAsync(user.Id, ct);
+
+        user = await authStore.FindUserAsync(user.Id, ct) ?? throw new InvalidOperationException("AccountUnavailable");
+        if (!await Internal.AuthSupport.IsActiveAsync(authStore, user, ct))
+            throw new InvalidOperationException("AccountDisabled");
 
         // Update last login
         await authStore.UpdateLoginAsync(user.Id, now, ct);
@@ -33,7 +37,7 @@ public class Fire3DSessionIssuer(IAuthStore authStore, ITokenService tokens, Tim
             UserId = user.Id,
             TokenHash = refreshTokenHash,
             FamilyId = familyId,
-            CreatedAt = now,
+            CreatedAt = authenticatedAt,
             ExpiresAt = now.Add(tokens.RefreshTokenLifetime),
             
         };

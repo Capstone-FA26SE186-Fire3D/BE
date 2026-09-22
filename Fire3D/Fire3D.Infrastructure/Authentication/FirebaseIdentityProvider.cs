@@ -79,7 +79,7 @@ public class FirebaseIdentityProvider(
     {
         try
         {
-            var decodedToken = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken, ct);
+            var decodedToken = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken, true, ct);
             var uid = decodedToken.Uid;
             var email = decodedToken.Claims.TryGetValue("email", out var emailObj) ? emailObj?.ToString() : null;
 

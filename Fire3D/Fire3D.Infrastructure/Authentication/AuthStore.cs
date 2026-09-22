@@ -93,8 +93,19 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         db.Set<RefreshToken>().AsNoTracking().SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
     public async Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct)
     {
+        // All session issuance is serialized against reset, even legacy callers without a transaction.
+        await using var owned = db.Database.CurrentTransaction is null
+            ? await BeginUserTransactionAsync(token.UserId, ct) : null;
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:auth:" + token.UserId},0))",ct);
+        var fenced = await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM public.password_reset_operations WHERE user_id={token.UserId}
+              AND (status='Pending' OR finished_at >= {token.CreatedAt})) AS "Value"
+            """).SingleAsync(ct);
+        if (fenced) throw new PasswordResetException("RESET_PENDING", "Sign in again after password recovery completes.", 503);
         db.Set<RefreshToken>().Add(token);
         await db.SaveChangesAsync(ct);
+        if (owned is not null) await owned.CommitAsync(ct);
     }
     public async Task ConsumeRefreshTokenAsync(Guid id, DateTime now, CancellationToken ct) =>
         await db.Set<RefreshToken>().Where(x => x.Id == id)
@@ -129,7 +140,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         public ValueTask DisposeAsync() => transaction.DisposeAsync();
     }
 
-    // ── Password Reset ────────────────────────────────────────────────────────
+    // Password reset
     public async Task SavePasswordResetTokenAsync(PasswordResetToken token, CancellationToken ct)
     {
         db.Set<PasswordResetToken>().Add(token);
@@ -152,7 +163,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
                 .Where(x => x.UserId == userId && x.UsedAt == null)
                 .ExecuteDeleteAsync(ct);
 
-    // ── Registration ──────────────────────────────────────────────────────────
+    // Registration
     public async Task<RegisterConflict> TryCreateOrganizationWithUserAsync(Organization organization, User user, CancellationToken ct)
     {
         db.Organizations.Add(organization);
@@ -172,20 +183,6 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
                 : RegisterConflict.EmailTaken;
         }
     }
-    public async Task EnqueuePasswordResetAsync(string email, CancellationToken ct)
-    {
-        var payload = System.Text.Json.JsonSerializer.Serialize(new { email });
-        var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payload));
-        var hashStr = Convert.ToHexString(hashBytes).ToLowerInvariant();
-        
-        var sql = @"
-            INSERT INTO public.integration_outbox_events(idempotency_key, aggregate_type, aggregate_id, event_type, payload, status, schema_version, payload_hash, created_at)
-            VALUES (@id, 'PasswordReset', @id, 'PasswordResetRequested', CAST(@payload AS jsonb), 'Pending', '1.0', @hash, now())
-            ";
-        await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRawAsync(
-            db.Database, sql.Replace('"', '"'), 
-            new Npgsql.NpgsqlParameter("@id", Guid.NewGuid()), 
-            new Npgsql.NpgsqlParameter("@payload", payload),
-            new Npgsql.NpgsqlParameter("@hash", hashStr));
-    }
+    public Task EnqueuePasswordResetAsync(string email, CancellationToken ct) =>
+        new PasswordResetQueue(db).EnqueueAsync(email, ct);
 }

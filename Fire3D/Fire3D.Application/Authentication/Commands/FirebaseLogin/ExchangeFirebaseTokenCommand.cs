@@ -14,10 +14,11 @@ public sealed class ExchangeFirebaseTokenCommandHandler(IAuthStore store, IToken
 {
     public async Task<AuthResult<TokenResponse>> Handle(ExchangeFirebaseTokenCommand request, CancellationToken ct)
     {
+        var authenticatedAt = AuthSupport.UtcNow(clock);
         FirebaseToken decodedToken;
         try
         {
-            decodedToken = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(request.IdToken, ct);
+            decodedToken = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(request.IdToken, true, ct);
         }
         catch (Exception)
         {
@@ -35,7 +36,7 @@ public sealed class ExchangeFirebaseTokenCommandHandler(IAuthStore store, IToken
         // Lấy hoặc tạo user
         var user = await store.FindUserByFirebaseUidAsync(uid, ct) ?? await store.FindUserByEmailAsync(email, ct);
         
-        var now = AuthSupport.UtcNow(clock);
+        var now = authenticatedAt;
         
         if (user == null)
         {
@@ -76,5 +77,4 @@ public sealed class ExchangeFirebaseTokenCommandHandler(IAuthStore store, IToken
         return AuthResult<TokenResponse>.Ok(await AuthSupport.IssueAsync(store, tokens, user, familyId, now, refreshExpiresAt, ct));
     }
 }
-
 

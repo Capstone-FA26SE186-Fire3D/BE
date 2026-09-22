@@ -18,16 +18,29 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
 builder.Services.AddHealthChecks();
 
 // Cáº¥u hÃ¬nh Firebase Admin SDK
-var firebaseConfigPath = Path.Combine(builder.Environment.ContentRootPath, "firebase-admin.json");
-if (File.Exists(firebaseConfigPath))
+// C?u hình Firebase Admin SDK t? appsettings.json
+var firebaseConfig = builder.Configuration.GetSection("FirebaseAdmin").Get<Dictionary<string, string>>();
+if (firebaseConfig != null && firebaseConfig.Any())
 {
-    var json = File.ReadAllText(firebaseConfigPath);
+    // Ð?m b?o private_key d?c t? appsettings s? x? lý dúng các ký t? xu?ng dòng
+    if (firebaseConfig.ContainsKey("private_key") && firebaseConfig["private_key"] != null)
+    {
+        firebaseConfig["private_key"] = firebaseConfig["private_key"].Replace("\\n", "\n");
+    }
+
+    var json = System.Text.Json.JsonSerializer.Serialize(firebaseConfig);
     FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions
     {
 #pragma warning disable CS0618
         Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromJson(json)
 #pragma warning restore CS0618
     });
+    Console.WriteLine("Firebase Admin SDK initialized from appsettings.");
+}
+else
+{
+    Console.WriteLine("Warning: FirebaseAdmin section not found in appsettings.json.");
+});
 }
 else
 {
@@ -89,3 +102,5 @@ app.MapControllers();
 app.Run();
 
 public partial class Program;
+
+

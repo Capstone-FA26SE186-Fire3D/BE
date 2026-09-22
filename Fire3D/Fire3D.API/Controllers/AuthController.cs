@@ -96,36 +96,45 @@ public sealed class AuthController(ISender sender) : ControllerBase
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
 
     /// <summary>
-    /// G?i email d?t l?i m?t kh?u.
+    /// Gửi hướng dẫn đặt lại mật khẩu qua email. Không cần Bearer.
     /// </summary>
+    /// <remarks>Body: email hợp lệ, tối đa 254 ký tự. Trả 202 cho cả email có và không có tài khoản;
+    /// 202 chỉ xác nhận đã nhận yêu cầu, không đảm bảo email đã được gửi. Tài khoản chỉ dùng Google
+    /// không được cấp mật khẩu mới qua luồng này. Email được xử lý nền và giới hạn tần suất.</remarks>
     [HttpPost("forgot-password")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(429)]
+    [ProducesResponseType<ProblemDetails>(503)]
     public async Task<IActionResult> ForgotPassword(
-        [FromBody] Fire3D.Application.Authentication.Commands.ForgotPassword.ForgotPasswordCommand command, 
+        [FromBody] Fire3D.Application.Authentication.Commands.ForgotPassword.ForgotPasswordCommand command,
         CancellationToken ct)
     {
-        await sender.Send(command, ct);
-        return Accepted(new { message = "N?u t�i kho?n d? di?u ki?n, hu?ng d?n d?t l?i m?t kh?u s? du?c g?i d?n email c?a b?n." });
+        var result = await sender.Send(command, ct);
+        if (!result.IsSuccess) return ResetProblem(result.Error!);
+        return Accepted(new { message = "Nếu tài khoản đủ điều kiện, hướng dẫn đặt lại mật khẩu sẽ được gửi đến email của bạn." });
     }
 
-    /// <summary>
-    /// �?t l?i m?t kh?u b?ng m� t? email.
-    /// </summary>
+    /// <summary>Đổi mật khẩu bằng mã Firebase trong email và thu hồi các phiên Fire3D.</summary>
+    /// <remarks>Không cần Bearer. Body: oobCode, newPassword (12–128 ký tự). 400: mã/mật khẩu sai;
+    /// 409: reset đang chờ xử lý; 503: provider chưa khả dụng. Khi kết quả provider không rõ, tài khoản
+    /// bị chặn cấp phiên mới đến khi recovery hoàn tất. Không gửi mật khẩu/mã reset vào log.</remarks>
     [HttpPost("reset-password")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(503)]
     public async Task<IActionResult> ResetPassword(
-        [FromBody] Fire3D.Application.Authentication.Commands.ResetPassword.ResetPasswordCommand command, 
+        [FromBody] Fire3D.Application.Authentication.Commands.ResetPassword.ResetPasswordCommand command,
         CancellationToken ct)
     {
-                var result = await sender.Send(command, ct);
-        if (!result.IsSuccess) return BadRequest(result.Error);
-        return NoContent();
+        var result = await sender.Send(command, ct);
+        return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
     }
+    private ObjectResult ResetProblem(AuthError error) => Problem(statusCode:error.Status,title:error.Message,
+        extensions:new Dictionary<string,object?> { ["code"] = error.Code });
 }
-
-

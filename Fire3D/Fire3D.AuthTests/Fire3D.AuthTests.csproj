@@ -13,4 +13,5 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <ProjectReference Include="../Fire3D.API/Fire3D.API.csproj" />
   </ItemGroup>
+  <ItemGroup><None Include="../../database/002_password_reset_recovery.sql" Link="002_password_reset_recovery.sql" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>
