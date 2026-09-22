@@ -1,4 +1,4 @@
-using System.Security.Claims;
+using Fire3D.API.Authorization;
 using Fire3D.Application.Buildings;
 using Fire3D.Application.Buildings.Queries.GetRevision;
 using MediatR;
@@ -26,8 +26,7 @@ public sealed class RevisionsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<ActionResult<RevisionResponse>> GetRevision(Guid id, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actorId))
-            return Unauthorized();
+        var actorId = User.GetActorId();
         var result = await sender.Send(new GetRevisionQuery(actorId, id), ct);
         return result.IsSuccess ? Ok(result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,

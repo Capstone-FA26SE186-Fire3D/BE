@@ -1,4 +1,4 @@
-using System.Security.Claims;
+using Fire3D.API.Authorization;
 using Fire3D.Application.Administration;
 using Fire3D.Application.Buildings;
 using Fire3D.Application.Buildings.Commands.CreateBuilding;
@@ -18,8 +18,8 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class BuildingsController(ISender sender) : ControllerBase
 {
-    private Guid ActorId => Guid.TryParse(User.FindFirstValue("sub"), out var sub) ? sub : Guid.Empty;
-    private Guid? OrganizationId => Guid.TryParse(User.FindFirstValue("organization_id"), out var orgId) ? orgId : null;
+    private Guid ActorId => User.GetActorId();
+    private Guid? OrganizationId => User.GetOrganizationId();
 
     [HttpPost]
     public async Task<ActionResult<BuildingResponse>> CreateBuilding(CreateBuildingRequest request, CancellationToken ct)
@@ -78,7 +78,7 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     public async Task<ActionResult<PageResponse<RevisionResponse>>> ListRevisions(
         Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actorId)) return Unauthorized();
+        var actorId = User.GetActorId();
         var result = await sender.Send(new Fire3D.Application.Buildings.Queries.ListRevisions.ListRevisionsQuery(
             actorId, id, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
@@ -94,7 +94,7 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> GetTrainings(Guid id, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
 
         var result = await sender.Send(new Fire3D.Application.Buildings.Queries.GetTrainings.GetTrainingsQuery(actor, id), ct);
 

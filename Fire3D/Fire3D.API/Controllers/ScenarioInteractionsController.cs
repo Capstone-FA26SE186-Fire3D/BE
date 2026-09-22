@@ -1,4 +1,4 @@
-using System.Security.Claims;
+using Fire3D.API.Authorization;
 using Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -18,7 +18,7 @@ public class ScenarioInteractionsController(ISender sender) : ControllerBase
     [ProducesResponseType(typeof(List<RuntimeCatalogDto>), 200)]
     public async Task<IActionResult> GetCatalog(CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
 
         var result = await sender.Send(new GetRuntimeCatalogQuery(actor), ct);
 

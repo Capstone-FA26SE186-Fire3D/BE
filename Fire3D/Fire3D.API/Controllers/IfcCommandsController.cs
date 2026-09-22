@@ -1,4 +1,4 @@
-using System.Security.Claims;
+using Fire3D.API.Authorization;
 using Fire3D.Application.Ifc;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -12,6 +12,24 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore=true,Location=ResponseCacheLocation.None)]
 public sealed class IfcCommandsController(ISender sender) : ControllerBase
 {
+    /// <summary>Records a rejection for one revision–scenario version pair without changing the shared revision status.</summary>
+    [HttpPost("revisions/{revisionId:guid}/reviews")]
+    [ProducesResponseType(201)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    public async Task<IActionResult> RejectScenarioVersion(Guid revisionId,
+        Fire3D.Application.Scenarios.Commands.RejectScenarioVersion.RejectScenarioVersionRequest request, CancellationToken ct)
+    {
+        var actor = User.GetActorId();
+        var result = await sender.Send(
+            new Fire3D.Application.Scenarios.Commands.RejectScenarioVersion.RejectScenarioVersionCommand(actor, revisionId, request), ct);
+        return result.IsSuccess ? Created($"/api/revisions/{revisionId}/reviews/{result.Value}", new { Id = result.Value })
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
     /// <summary>Requeue một processing job Failed qua gate database và transactional outbox.</summary>
     /// <remarks>
     /// OrganizationUser đúng tenant hoặc PlatformAdmin. Body: requestId (UUID mới cho một ý định retry),
@@ -30,7 +48,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     public async Task<ActionResult<RetryProcessingJobResponse>> RetryJob(Guid jobId,
         RetryProcessingJobRequest request,CancellationToken ct)
     {
-        if(!Guid.TryParse(User.FindFirstValue("sub"),out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result=await sender.Send(new RetryProcessingJobCommand(actor,jobId,request),ct);
         return result.IsSuccess ? Accepted($"/api/processing-jobs/{jobId}",result.Value)
             : Problem(statusCode:result.Error!.Status,title:result.Error.Message,
@@ -44,7 +62,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     public async Task<ActionResult<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>> InitiateUpload(Guid buildingId,
         Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadRequest request, CancellationToken ct)
     {
-        if(!Guid.TryParse(User.FindFirstValue("sub"),out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadCommand(actor, buildingId, request), ct);
         return result.IsSuccess ? Ok(result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
@@ -60,7 +78,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     public async Task<IActionResult> FinalizeUpload(Guid revisionId,
         Fire3D.Application.Ifc.Commands.FinalizeUpload.FinalizeIfcUploadRequest request, CancellationToken ct)
     {
-        if(!Guid.TryParse(User.FindFirstValue("sub"),out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.FinalizeUpload.FinalizeIfcUploadCommand(actor, revisionId, request), ct);
         return result.IsSuccess ? NoContent()
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
@@ -74,7 +92,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> ProcessRevision(Guid revisionId, CancellationToken ct)
     {
-        if(!Guid.TryParse(User.FindFirstValue("sub"),out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ProcessRevision.ProcessRevisionCommand(actor, revisionId), ct);
         return result.IsSuccess ? Accepted($"/api/processing-jobs/{result.Value}", new { JobId = result.Value })
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
@@ -90,7 +108,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> ConfirmForTraining(Guid revisionId, CancellationToken ct)
     {
-        if (!Guid.TryParse(User.FindFirstValue("sub"), out var actor)) return Unauthorized();
+        var actor = User.GetActorId();
 
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ConfirmForTraining.ConfirmForTrainingCommand(actor, revisionId), ct);
 

@@ -38,13 +38,11 @@ public sealed class MailgunEmailService : IEmailService
             new KeyValuePair<string, string>("html", htmlBody),
         ]);
 
-        var response = await _http.PostAsync("messages", form, ct);
+        using var response = await _http.PostAsync("messages", form, ct);
 
         if (!response.IsSuccessStatusCode)
         {
-            var body = await response.Content.ReadAsStringAsync(ct);
-            throw new InvalidOperationException(
-                $"Mailgun error {(int)response.StatusCode}: {body}");
+            throw new HttpRequestException("Email delivery provider rejected the request.", null, response.StatusCode);
         }
     }
 }
