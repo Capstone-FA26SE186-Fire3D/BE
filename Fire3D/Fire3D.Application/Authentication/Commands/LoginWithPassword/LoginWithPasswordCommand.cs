@@ -11,9 +11,11 @@ public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordS
     public async Task<AuthResult<LoginResponse>> Handle(LoginWithPasswordCommand command, CancellationToken ct)
     {
         var email = PasswordResetValidation.NormalizeEmail(command.Email);
+
         if (email is null || string.IsNullOrEmpty(command.Password) || command.Password.Length > 128)
             return AuthResult<LoginResponse>.Fail("VALIDATION_ERROR", "Email and password are required (password maximum 128 characters).", 400);
         var user = await store.FindUserByEmailAsync(email, ct);
+
         if (user is null)
         {
             passwords.VerifyDummy(command.Password);
