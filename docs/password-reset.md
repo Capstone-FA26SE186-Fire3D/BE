@@ -1,5 +1,7 @@
 # Email/password local và Google Firebase
 
+Đây là ghi chú vận hành cho code BE hiện có, không thay thế contract sản phẩm trong [Docs requirements](../../Docs/fire_evacuation_requirements.md) và [Docs technology](../../Docs/fire-evacuation-training-technology.md). Source BE đối chiếu ở `main` commit `946017d` đã có Forgot/Reset Password và Change Password handlers/worker; phần provider thật cần cấu hình và kiểm tra riêng.
+
 BE quản lý mật khẩu thường bằng ASP.NET Core PasswordHasher: hash có salt nằm ở
 `users.password_hash`, property C# `PasswordHash`. Không trả hash qua API. Supabase
 chỉ cung cấp PostgreSQL; không dùng Supabase Auth. Firebase chỉ xác minh Google.
@@ -28,6 +30,8 @@ trùng tài khoản khác trả 409 ACCOUNT_LINK_REQUIRED, không tự gắn UID
 explicit Google linking trong thay đổi này. Tài khoản Google mới có password_hash NULL.
 
 ## Reset mật khẩu và tài khoản Firebase cũ
+
+Docs technology mục 14.8 còn một câu trạng thái cũ nói reset handler chưa hoàn tất revoke family. Câu đó không còn đúng với source BE ở commit nêu trên: `LocalPasswordReset` khóa user, consume token, revoke session và commit cùng transaction. Giữ contract đó làm tiêu chí; xác nhận lại theo source khi commit thay đổi.
 
 Worker đọc queue bền vững `password_reset_email_jobs`, tạo token ngẫu nhiên 32 byte,
 lưu SHA-256 của token ở `local_password_reset_tokens` rồi gửi Mailgun. Link:

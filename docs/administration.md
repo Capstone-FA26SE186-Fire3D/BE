@@ -2,6 +2,8 @@
 
 Phase 1 scope: PlatformAdmin creates organizations/accounts, reads paginated lists/details and changes their active status. Building management is separate. Authentication setup is in [authentication.md](authentication.md).
 
+Đây là mô tả các route quản trị hiện có. Tạo organization hiện còn gán `plan = "free"` theo mô hình code legacy; đây không phải entitlement thương mại theo Docs. Gói, quotation, payment và entitlement theo từng Building trong [Docs](../../Docs/fire-evacuation-training-technology.md) là contract đích, chưa được trang này tuyên bố đã triển khai.
+
 ## Endpoints
 
 All endpoints require a valid PlatformAdmin bearer token. OrganizationUser and Trainee receive 403; missing/invalid credentials receive 401.

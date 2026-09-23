@@ -1,356 +1,138 @@
-# Fire3D BE — checklist API và thứ tự triển khai
-
-Ngày rà soát: 19/09/2026. Đây là backlog triển khai dựa trên code và tài liệu, không phải báo cáo API đã nghiệm thu.
-
-## 1. Phạm vi và nguồn đối chiếu
-
-- Source BE được đọc: commit **54bc9281f75308e6700310be0a4ee8b25ab95d71**, ban đầu ở nhánh feature/be-foundation-review. API, Application handlers/contracts, Domain entities/enums, Infrastructure stores/mappings, DI, test source, migration, Docker/Render/Azure workflow và IFC spike được rà soát theo luồng.
-- Hướng dẫn: AGENTS.md, .codex/context.md, workflow.md, bootstrap.md, skills-inventory.md, lessons và handoff local. Handoff cũ chỉ là lịch sử.
-- Docs checkout tại máy: **64c41bff463e06bec505cb9928d03e36be912201**, schema v6.6. Sau fetch, đã đối chiếu thêm **origin/develop 5eaf152d36335f89b087bfbb243c2fc4eadd7079**, schema **v6.7**, có Redis/outbox/consumer receipt. Checklist lấy v6.7 làm thiết kế đích; chưa chuyển checkout Docs.
-- Đã đọc bộ Markdown và nội dung text proposal DOCX tại checkout, đối chiếu thay đổi remote liên quan. Chưa kiểm tra bố cục render DOCX.
-- Workspace hiện chỉ có BE và Docs. Chưa kiểm tra source FE, AI, Mobile/Unity; mô tả các phía đó là contract trong Docs.
-- Không chạy app, migration, gọi DB Supabase, Firebase, S3, PayOS hay AI trong lượt review này. Không dùng kết quả test cũ làm bằng chứng bản hiện tại.
-
-Nguồn sản phẩm: [requirements](../../Docs/fire_evacuation_requirements.md), [workflows](../../Docs/fire-evacuation-training-workflows.md), [technology](../../Docs/fire-evacuation-training-technology.md), [schema](../../Docs/fire_evacuation_schema.sql), [ERD](../../Docs/fire_evacuation_erd.md), [project overview](../../Docs/fire_evacuation_project_overview.md), [RAG](../../Docs/fire_evacuation_bim_rag_pccc.md), [web UX](../../Docs/fire3d-web-ux-design.md), [web implementation](../../Docs/fire3d-web-implementation.md). Liên kết tương đối mở checkout local; để xem phần v6.7 cần đối chiếu commit Docs nêu trên.
-
-Nguồn quyền admin bổ sung đã được người dùng chốt: [platform-admin-policy.md](platform-admin-policy.md). PlatformAdmin được thao tác dữ liệu nghiệp vụ thay tổ chức và xem dữ liệu cá nhân phục vụ quản trị; vẫn dùng danh tính admin và chịu validation/lifecycle/audit.
-
-## 2. Kết luận hiện trạng
-
-Checklist gốc ghi nhận 21 operation ở commit review cũ. Source hiện tại đã mở rộng; số này chỉ còn là dữ liệu lịch sử và không dùng làm tổng route hiện hành.
-
-Technology mục 9 có **38 cặp method/path đích**. Chỉ POST /api/buildings đã có route tương ứng; **37 contract còn lại chưa có route tương ứng** tại commit được đọc. Những API khác đang có như auth/accounts/list Building không nằm hết trong danh sách mẫu này.
-
-Không lấy số endpoint để suy ra số feature hoặc phần trăm hoàn thành. Một feature IFC cần nhiều API, worker, storage và QA; một endpoint start có nhiều invariant hơn một API đọc danh sách.
-
-Ký hiệu:
-- **Có — cần rà soát**: đã có route và xử lý, chưa nghiệm thu lại.
-- **Khung 501**: ký hiệu lịch sử cho endpoint chưa có xử lý nghiệp vụ; upload-url hiện đã được thay bằng alias initiation IFC.
-- **Thiếu — contract đích**: đường dẫn đã có trong technology mục 9.
-- **Đề xuất**: năng lực còn thiếu nhưng đường dẫn/DTO do checklist đề xuất, team cần chốt trước code.
-- Tất cả ô chưa tick là việc còn phải thực hiện hoặc kiểm chứng. Không tick chỉ vì có entity/controller.
-- **P0**: chặn triển khai tin cậy; **P1**: luồng cốt lõi; **P2**: hoàn thiện bản cuối hoặc mở rộng sau luồng lõi. P2 không tự động loại khỏi phạm vi đồ án.
-
-## 3. P0 — làm trước khi thêm module
-
-| ID | Checklist | Bằng chứng / đầu ra cần có |
-|---|---|---|
-| F01 | [ ] Sửa role mặc định của user Firebase mới | ExchangeFirebaseTokenCommand tạo User không gán Role; EnumProperties không có initializer; UserRole bắt đầu PlatformAdmin = 0. Gán Trainee tường minh cho self-onboarding được phép; role tổ chức/admin chỉ do provisioning có quyền. Thêm test đăng nhập mới không có quyền admin. Đây là phát hiện tĩnh, chưa thử khai thác trên hệ thống chạy. |
-| F02 | [ ] Sửa liên kết Firebase UID theo email | Handler tìm theo UID hoặc email rồi ghi đè FirebaseUid khác UID hiện tại. Không tự ghi đè liên kết đã tồn tại. Chốt luồng liên kết tài khoản legacy bằng danh tính đã xác minh, kiểm tra provider/email theo policy, unique UID và xử lý race first-login. TryCreateUserAsync trả false phải được xử lý. |
-| F03 | [ ] Đồng bộ mô hình xác thực với Docs | Hiện Firebase token chỉ dùng đổi lấy JWT/refresh token nội bộ; middleware vẫn HMAC JWT với sub GUID và sid. Thiết kế đích là Firebase identity được BE xác minh rồi ánh xạ DB role/tenant. Chọn implementation theo đích, hoặc ghi ADR nếu giữ token exchange. Không thay thẳng middleware rồi giữ Guid.Parse(Firebase sub) vì Firebase UID không phải GUID nội bộ. |
-| F04 | [ ] Sửa contract admin tạo account/bootstrap | CreateAccountRequest còn bắt password 12–128 ký tự nhưng AuthSupport.CreateAsync không hash/lưu password và không tạo credential Firebase. Chuyển provisioning thành cấp role/tenant và liên kết danh tính theo policy; không bắt nhập mật khẩu vô tác dụng. Rà soát bootstrap đầu tiên tương ứng. |
-| F05 | [ ] Chuẩn hóa actor/tenant và admin override | BuildingsController/RevisionsController parse organization_id trực tiếp; admin và Trainee không có organization có thể lỗi trước khi kiểm tra quyền. Tạo actor context từ identity đã xác minh + DB; OrganizationUser chỉ tenant của mình; admin chỉ định tenant đích rõ ràng, không impersonate. Handler cũng kiểm tra quyền. |
-| F06 | [ ] Chuẩn hóa validation và HTTP error | Building controller dùng Problem() chung, làm mất status/code 400/404 từ handler. Giữ mã lỗi nghiệp vụ, 401/403/404/409/422 và traceId nhất quán; validate nested location/contact, độ dài, tọa độ, null và pagination. Package FluentValidation có trong project chưa chứng minh đã có validator/pipeline thực thi. |
-| F07 | [ ] Lập migration tăng dần từ DB thật sang v6.7 | Đối chiếu bảng/cột/enum/FK/index/function/role hiện hữu trước; staging và backup/rollback. Không chạy nguyên schema thiết kế hoặc migration tên AddPasswordResetTokens lên DB đang có dữ liệu: migration hiện chứa CreateTable cho nhiều bảng nền tảng, không chỉ reset token. |
-| F08 | [ ] Sửa test fixture và auth regression | AuthTests vẫn gọi /api/auth/login và kiểm tra password_hash; route password login đã xóa. Viết lại auth adapter test/Firebase identity, tenant và concurrency; fixture chỉ DB tạm riêng. Không để WebApplicationFactory vô tình dùng connection application DB. Test bị skip không tính pass. |
-| F09 | [ ] Đưa tích hợp Firebase ra Infrastructure | Application đang tham chiếu FirebaseAdmin và gọi singleton SDK trực tiếp. Đề xuất IFirebaseIdentityVerifier tại Application, adapter tại Infrastructure, composition root tại API. Áp dụng tương tự S3/AI/payment/clock khi cần; không bắt buộc tạo project Interface mới. |
-| F10 | [ ] Giao dịch nghiệp vụ + audit + outbox | Building store hiện SaveChanges nghiệp vụ rồi ghi audit riêng. Cần transaction ngắn nguyên tử cho thay đổi có audit/event; rollback khi audit/outbox lỗi. Không giữ transaction trong lúc chờ S3/LLM/PayOS/worker. |
-| F11 | [ ] Sửa cấu hình runtime/deploy lệch source | Render dùng dockerContext ./Fire3D nhưng Dockerfile giả định context root BE và WORKDIR /src/Fire3D. Render đặt Jwt__Key còn code đọc Jwt:SigningKey. Firebase khởi tạo từ firebase-admin.json; cần cấu hình secret/mount đúng môi trường. Mailgun ValidateOnStart hiện bắt cấu hình ngay cả khi không dùng reset password. Đây là rà soát tĩnh, chưa chạy deploy. |
-| F12 | [ ] Cập nhật Swagger và tài liệu test | docs/authentication.md, testing-authorization.md và bằng chứng week2 có phần thuộc auth cũ. Document đúng loại token, DTO, role/tenant, ví dụ request, lỗi, prerequisite và idempotency. Bằng chứng “22 passed” lịch sử không phải kết quả commit này. |
-
-Bằng chứng chính: [Firebase handler](../Fire3D/Fire3D.Application/Authentication/Commands/FirebaseLogin/ExchangeFirebaseTokenCommand.cs), [User role](../Fire3D/Fire3D.Domain/Entities/EnumProperties.cs), [enums](../Fire3D/Fire3D.Domain/Enums/DatabaseEnums.cs), [auth support](../Fire3D/Fire3D.Application/Authentication/Internal/AuthSupport.cs), [JWT middleware](../Fire3D/Fire3D.API/Extensions/AuthenticationExtensions.cs), [BuildingsController](../Fire3D/Fire3D.API/Controllers/BuildingsController.cs), [migration](../Fire3D/Fire3D.Infrastructure/Migrations/20260916070926_AddPasswordResetTokens.cs), [Render](../render.yaml).
-
-## 4. Checklist 21 operation đang có
-
-ID ở đây chỉ quản lý việc sửa/nghiệm thu source hiện hữu; POST /api/buildings được tham chiếu lại ở phần contract đích, không tính là hai API.
+# Danh sách sửa BE theo contract trong Docs
 
-| ID | Method/path hiện tại | Trạng thái | Việc cần làm để nghiệm thu |
-|---|---|---|---|
-| E01 | POST /api/auth/login-firebase | Có — cần sửa P0 | F01–F03. Hiện body là JSON string token, chưa phải object DTO. Xác định DTO/flow mục tiêu; invalid token không tạo user; phân biệt token lỗi với dịch vụ xác thực không khả dụng; chống race first-login. |
-| E02 | POST /api/auth/refresh | Có — auth legacy | Quyết định giữ/loại theo F03; nếu giữ, rotation/replay/concurrency và lifetime cấu hình phải đúng. Không có hai luồng refresh không được mô tả. |
-| E03 | POST /api/auth/logout | Có — auth legacy | Chốt logout thiết bị hiện tại/toàn bộ; thu hồi session theo kiến trúc chọn và vô hiệu đăng ký push phù hợp. Không suy ra Firebase logout từ việc xóa local refresh token. |
-| E04 | GET /api/auth/me | Có — cần rà soát | Trả account DB, role/organization đúng hiện hành; user/org bị khóa bị từ chối; không lộ credential. |
-| E05 | PUT /api/auth/devices | Có — một phần | Actor lấy từ identity, không nhận UserId do client quyết định; validate UUID/token/metadata; upsert/rotate đồng thời; xử lý thiết bị đổi user. |
-| E06 | POST /api/accounts | Có — cần sửa P0 | F04; chỉ PlatformAdmin, unique email/UID, ràng buộc role–organization, audit, không tạo credential giả. |
-| E07 | GET /api/accounts | Có — cần rà soát | PlatformAdmin; phân trang/filter; DTO cá nhân tối thiểu, không token/hash; kiểm thử không leak cho role khác. |
-| E08 | GET /api/accounts/{id} | Có — cần rà soát | PlatformAdmin; 404 đúng; account deleted/inactive theo policy; DTO được phép. |
-| E09 | PATCH /api/accounts/{id}/status | Có — cần rà soát | Khóa/mở khóa, invalidate authorization hiện hành; bảo vệ admin cuối; audit transaction; cập nhật test theo Firebase. |
-| E10 | POST /api/organizations | Có — cần rà soát | PlatformAdmin; slug/name hợp lệ, duplicate 409, audit nguyên tử. |
-| E11 | GET /api/organizations | Có — cần rà soát | PlatformAdmin; phân trang/filter, không mở cho OrganizationUser chỉ để FE tiện gọi. |
-| E12 | GET /api/organizations/{id} | Có — cần rà soát | PlatformAdmin; 404 và DTO đúng. Nhu cầu org tự xem hồ sơ dùng contract riêng có scope. |
-| E13 | PATCH /api/organizations/{id}/status | Có — cần rà soát | Khóa org chặn nghiệp vụ mới/cấp account mới; test race với login/start/publish; không xóa lịch sử đã ghi. |
-| E14 | POST /api/buildings | Có — cần sửa | F05/F06/F10; tạo Building thuộc tenant được phép, location/contact hợp lệ. |
-| E15 | GET /api/buildings | Có — cần sửa | Filter/pagination đã có; kiểm thử tenant, admin target scope và account/org inactive. |
-| E16 | GET /api/buildings/{id} | Có — cần sửa | Truy xuất đúng tenant, lỗi 404/403 có chủ đích; không dùng Guid.Parse thiếu claim. |
-| E17 | PUT /api/buildings/{id} | Có — cần sửa | Quyền + validation + ETag/version chống mất cập nhật; thay geometry không ghi đè revision lịch sử. |
-| E18 | DELETE /api/buildings/{id} | Có — archive mềm | Hiện chỉ đặt IsActive=false. Document archive, không mô tả xóa vật lý; chốt hậu quả với start/publish và cách restore. |
-| E19 | POST /api/buildings/{id}/revisions/upload-url | Có — alias tương thích | Dùng cùng InitiateIfcUploadCommand/DTO/response với D02, trả 201. Client mới dùng D02; finalize vẫn phải kiểm object S3 thực. |
-| E20 | GET /api/buildings/{id}/revisions | Có — metadata | Scope, sort/pagination khi tăng dữ liệu, trạng thái/summary; chưa đại diện pipeline xử lý IFC. |
-| E21 | GET /api/revisions/{id} | Có — metadata | Scope/role/error, nguồn/hash/status đúng; artifacts/issues/jobs là contract bổ sung. |
+Tài liệu này là backlog đối chiếu code BE với chuẩn nghiệp vụ trong workspace [`Docs`](../../Docs/README.md). Contract gốc nằm ở [requirements](../../Docs/fire_evacuation_requirements.md), [workflows](../../Docs/fire-evacuation-training-workflows.md), [technology](../../Docs/fire-evacuation-training-technology.md), [schema SQL](../../Docs/fire_evacuation_schema.sql) và [ERD](../../Docs/fire_evacuation_erd.md). API guide mô tả hành vi source đang có; checklist này ghi phần còn phải sửa. Không coi tên entity, route hay thiết kế SQL là bằng chứng tính năng đã hoàn tất.
 
-Các operation trên đều còn cần nghiệm thu: [ ] E01–E05 auth/devices; [ ] E06–E13 administration; [ ] E14–E21 Building/revision.
+## Baseline và trạng thái
 
-GET /health đang có nhưng chỉ AddHealthChecks() không đăng ký kiểm tra dependency: xem O01 ở phần vận hành.
+Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhánh tài liệu khi lập checklist). Trước khi bắt đầu mỗi work item, người thực hiện phải xác nhận lại code và remote mới nhất; status dưới đây không thay thế review source sau này.
 
-## 5. Checklist 38 contract đã nêu trong technology mục 9
+- **GAP:** capability/contract còn thiếu hoặc source đang lệch.
+- **VERIFY:** đã thấy code cho một phần contract; cần kiểm thử và/hoặc khớp schema/provider trước khi kết luận.
+- **LATER:** requirement có trong Docs, triển khai sau dependency nêu trong thứ tự công việc.
+- Mỗi task triển khai cập nhật checklist, API guide và bằng chứng trong PR. Chỉ cập nhật trạng thái sau khi kiểm cả quyền, tenant, trạng thái, persistence, audit/idempotency và lỗi liên quan.
 
-Quyền viết tắt: **O** = OrganizationUser đúng tenant; **T** = Trainee; **A** = PlatformAdmin; **W** = adapter/hệ thống có credential riêng; **Public** = chưa đăng nhập. A thao tác thay O phải chọn tenant đích, ghi audit chính danh và tuân thủ entitlement/QA/lifecycle; không mặc nhiên bypass billing hoặc sửa snapshot.
+## A. Database và nền tảng dùng chung
 
-### 5.1 Building, IFC, processing và QA — P1
+### DB-01 — P0 · GAP · Schema mapping
 
-Nguồn: FR-BUILD, FR-IFC, FR-PROCESS; technology 9, 14.3.1; workflows BIM pipeline.
+- **Contract/current:** Schema trong Docs là đích; code/SQL còn theo mô hình cũ, gồm `organizations.plan` và bảng reset token riêng. Chưa có dữ liệu nghiệp vụ cần chuyển.
+- **Sửa code:** Lập mapping entity/enum/query/grant sang schema Docs; thay truy vấn legacy và tách reset token hash của schema đích khỏi queue email. Dựng database test mới theo schema đích; không dùng `EnsureCreated` thay SQL/gates.
+- **Nghiệm thu:** Database test mới dựng được từ schema mục tiêu; enum/FK/constraint/grant và truy vấn task chạy đúng. Không chạy destructive SQL lên DB dùng chung hoặc thêm backfill cho dữ liệu không tồn tại.
 
-| ID | Checklist API | Quyền | Acceptance riêng |
-|---|---|---|---|
-| D01 | [ ] POST /api/buildings | O/A | Nghiệm thu E14. Không tạo thêm controller trùng. |
-| D02 | [ ] POST /api/buildings/{buildingId}/ifc | O/A | Chốt upload initiation/receive contract; IFC-only, hạn mức thử, size/hash, private S3, revision/source ownership. Client không tùy chọn object key của tenant khác. Trả ID + trạng thái; nếu presigned flow phải có finalize (P08). |
-| D03 | [ ] POST /api/revisions/{revisionId}/process | O/A | Chỉ source đã xác nhận/quarantine đạt; job input hash + idempotency; job và ProcessingJobRequested outbox cùng transaction; trả 202/jobId. Không convert trong HTTP request. |
-| D04 | [ ] GET /api/revisions/{revisionId}/issues | O/A | Issue severity/object/floor/provenance theo validation run; phân biệt lỗi critical/error với warning. Không chỉ lấy revision_issues legacy rồi coi đủ v6.7. |
-| D05 | [x] GET /api/buildings/{buildingId}/editor-preview | O/A | revisionId query bắt buộc; current Geometry attempt thành công; metadata cùng artifact; URL TTL 5 phút; Ready/NotReady. Xem giới hạn kiểm thử trong ifc-api-progress.md. |
-| D06 | [ ] POST /api/processing-jobs/{jobId}/retry | O/A | Gate requeue; key mới chỉ Failed → Queued + outbox. Cùng key/envelope replay AlreadyRequeued dù job tiến trạng thái; khác envelope Conflict; Cancelled terminal. |
-| D07 | [ ] GET /api/processing-jobs/{jobId}/qa | O/A | Job/attempt hiện hành và validation/artifact hash khớp; không trình bày QA của attempt cũ như kết quả mới. |
-| D08 | [ ] GET /api/validation-runs/{validationRunId} | O/A | Trả summary/issues/provenance đúng tenant và runtime/toolchain; trạng thái chưa xong không báo Passed. |
+### AUTHZ-01 — P0 · GAP · Actor và tenant
 
-Dữ liệu: buildings, building_locations, building_contacts, building_floors, revisions, source_documents, processing_jobs, processing_job_attempts, revision_processing_logs, revision_artifacts, bim_facts, validation_runs, validation_issues, integration_outbox_events, integration_event_consumptions.
+- **Contract/current:** Mọi thao tác phải kiểm actor, role, tenant và trạng thái resource ở BE. Một số luồng dùng `Guid.Empty` làm scope rộng hoặc dựa vào tenant claim mà chưa xác minh quan hệ resource.
+- **Sửa code:** Rà controller, handler và store; lấy actor từ phiên đã xác thực, xác minh tenant qua quan hệ trong DB và áp dụng permission matrix của Docs. Bỏ fallback ID rỗng có thể tắt tenant check.
+- **Nghiệm thu:** Tenant đúng được phép; tenant khác, Trainee không đủ quyền hoặc account/organization/Building không hoạt động bị từ chối. Lỗi không làm lộ resource ngoài scope; audit có đúng actor.
 
-### 5.2 Scenario editor, version và playtest — P1
+## B. Tài khoản và xác thực
 
-Nguồn: FR-SCENARIO, FR-COMPAT; workflows authoring/playtest. Editor thao tác trên draft; snapshot immutable.
+### AUTH-01 — P0 · GAP · Đăng ký local
 
-| ID | Checklist API | Quyền | Acceptance riêng |
-|---|---|---|---|
-| D09 | [ ] POST /api/scenarios | O/A | Tạo logical scenario gắn Building/revision hợp lệ; nhiều scenario dùng lại geometry. |
-| D10 | [ ] POST /api/scenarios/{scenarioId}/draft | O/A | Tạo draft từ revision/version được phép; pin schema và base version; retry không tạo draft ngoài ý muốn. |
-| D11 | [ ] PUT /api/scenario-drafts/{draftId} | O/A | ETag/version chống overwrite; validate spawn, goals, hazards/items, routing_config, scoring_config, time_limit_seconds, IFC anchors và capabilities. Không cho client nhúng executable script. |
-| D12 | [ ] POST /api/scenario-drafts/{draftId}/snapshot | O/A | Snapshot append-only với canonical hash; retry cùng key/payload trả version cũ, payload khác 409; version không sửa tại chỗ. |
-| D13 | [ ] GET /api/scenario-interactions/catalog | O/A | Chỉ capability runtime hỗ trợ, version/schema/constraints; catalog server quản lý. Cache có version, không dùng client tự khai báo capability làm bằng chứng tương thích. |
-| D14 | [ ] POST /api/scenarios/{scenarioId}/playtests | O/A | Prepare riêng, pin draft/version/package/runtime; chưa cấp launch grant; không qua QR Trainee, không ghi learner analytics. |
-| D15 | [ ] POST /api/playtests/{playtestId}/start | O/A | Kiểm tra online Trial còn hạn/quota hoặc entitlement Active, identity, package/manifest/QA/runtime; grant và quota start nguyên tử/idempotent; hết hạn sau start không cắt phiên. |
-| D16 | [ ] POST /api/revisions/{revisionId}/confirm-for-training | O/A | Body xác định scenarioVersion/candidate package/validation cụ thể; QA và provenance khớp. Chỉ xác nhận readiness cặp revision–version; không khóa toàn revision hoặc tự publish. |
+- **Contract/current:** [RegisterUserCommand](../Fire3D/Fire3D.Application/Authentication/Commands/RegisterUser/RegisterUserCommand.cs) hiện tạo Trainee từ email/password/fullName; chưa nhận username và chưa có self-registration OrganizationUser.
+- **Sửa code:** Thêm hai luồng đăng ký theo Docs: Trainee có username; OrganizationUser có thông tin tổ chức. BE tự gán role/tenant, chuẩn hóa và bảo đảm username Trainee duy nhất không phân biệt hoa thường.
+- **Nghiệm thu:** Tạo đúng role/hồ sơ; email hoặc username trùng, username sai chuẩn và request cố gửi role/tenant bị từ chối. Kiểm tra đăng ký đồng thời cùng username trên PostgreSQL test.
 
-Dữ liệu: scenarios, scenario_drafts, scenario_versions, annotation_sets, revision_reviews, playtest_sessions, release_packages, runtime_compatibility_catalog, validation_runs, service_entitlements. Không sử dụng sessions Trainee như playtest mà không có phân loại và invariant tách biệt.
+### AUTH-02 — P0 · GAP · Google onboarding và link
 
-### 5.3 Release, Training và QR — P1
+- **Contract/current:** [ExchangeFirebaseTokenCommand](../Fire3D/Fire3D.Application/Authentication/Commands/FirebaseLogin/ExchangeFirebaseTokenCommand.cs) xác minh Google nhưng tài khoản mới thành Trainee; chưa có onboarding chọn role hoặc link có chứng minh tài khoản local.
+- **Sửa code:** Thêm onboarding token ngắn hạn, hoàn tất Trainee/OrganizationUser và link explicit sau khi xác thực local. Lưu hash/expiry và kết quả hoàn tất để retry cùng input trả kết quả đã commit.
+- **Nghiệm thu:** Kiểm tra UID mới/đã link, email local chưa link, token hết hạn, retry cùng/khác input và hai request đồng thời. Không tạo user/organization trùng hoặc đổi role/tenant tài khoản đã link.
 
-Nguồn: FR-RELEASE, FR-BILLING, FR-COMPAT. Cần billing entitlement trước khi nghiệm thu publish thật.
+### AUTH-03 — P1 · GAP · Profile, ETag và avatar
 
-| ID | Checklist API | Quyền | Acceptance riêng |
-|---|---|---|---|
-| D17 | [ ] POST /api/releases/{releaseId}/publish | O/A | Release Built, confirm đúng version, QA không còn lỗi chặn, package/artifact/validation/hash/build target khớp, runtime catalog hỗ trợ, Building entitlement Active. Publish nguyên tử + audit; retry không tạo release mới. |
-| D18 | [ ] GET /api/buildings/{buildingId}/trainings | O/A hoặc T theo view | Chốt view quản trị và view learner. T chỉ thấy bài được phép/Published và metadata công khai; không lộ draft/internal artifacts. Không dùng việc có BuildingId làm quyền đọc nội bộ. |
-| D19 | [ ] GET /api/qr/{qrToken} | Public | Chỉ public metadata/trạng thái/download/login links; QR canonical trỏ Building. Không trả raw IFC/private data. QR sai/revoked trả 404/410; hết service không xóa landing. |
-| D20 | [ ] GET /api/qr/{qrToken}/trainings | T | Firebase identity hợp lệ, resolve Building và danh sách Published; kiểm tra QR hiện hành. Lấy danh sách không tạo session/start grant. |
+- **Contract/current:** [UpdateCurrentProfileCommand](../Fire3D/Fire3D.Application/Authentication/Commands/RegisterUser/UpdateCurrentProfileCommand.cs) chỉ cập nhật full name; [OrganizationProfileController](../Fire3D/Fire3D.API/Controllers/OrganizationProfileController.cs) hiện chỉ GET. Docs yêu cầu profile revision/ETag.
+- **Sửa code:** Bổ sung GET/PATCH profile, username, avatar S3 intent/complete/delete và PATCH organization profile. GET trả ETag; cập nhật yêu cầu `If-Match`; ETag cũ bị từ chối. Chỉ nhận các trường profile được phép sửa.
+- **Nghiệm thu:** Lưu thành công trả ETag mới; ETag cũ không ghi đè thay đổi; không sửa được role/email/tenant/status; username, organization scope và quyền sở hữu object S3 được kiểm tra.
 
-Dữ liệu: releases, release_packages, trainings, release_qr_codes, service_entitlements, runtime_compatibility_catalog. ReleaseQrCode trong code còn ReleaseId/TrainingId: phải migrate thành QR cấp Building trước.
+### AUTH-04 — P1 · VERIFY · Reset và change password
 
-### 5.4 Training session, offline sync và result — P1
+- **Contract/current:** Forgot/reset gửi qua worker Mailgun; change xác minh mật khẩu cũ. [LocalPasswordReset](../Fire3D/Fire3D.Infrastructure/Authentication/LocalPasswordReset.cs) đã khóa user, consume token, đổi hash, revoke session và ghi audit trong transaction. Bảng token BE cần đối chiếu schema đích.
+- **Sửa code:** Giữ reset và change là hai luồng riêng. Hoàn tất mapping sang schema đích; kiểm tra rollback, race login/reset và mọi refresh-token family. Không coi có worker là bằng chứng Mailgun production đã gửi thành công.
+- **Nghiệm thu:** Token hết hạn/dùng lại thất bại; change sai mật khẩu hiện tại thất bại; lỗi DB/audit rollback toàn bộ; session cũ bị từ chối sau reset/change. Kiểm tra PostgreSQL riêng với provider Mailgun thật.
 
-Nguồn: FR-TRAINING, FR-ANALYTICS, FR-COMPAT; technology contract session. Backend giữ lifecycle/dữ liệu; Unity mô phỏng, Mobile giữ outbox offline.
+### AUTH-05 — P1 · VERIFY · FCM device token
 
-| ID | Checklist API | Quyền | Acceptance riêng |
-|---|---|---|---|
-| D21 | [ ] POST /api/training/sessions | T | Chỉ preparation: pin training/release/version/QR/package/manifest/schema/build target và preparation key; chưa started_at/grant; không tính lượt học. |
-| D22 | [ ] POST /api/training/sessions/{sessionId}/start | T sở hữu | Online recheck Published, QR, entitlement Active, package verify/runtime compatibility. Key + runtime payload phải khớp; cùng key khác input 409. Cấp grant và started_at đúng một lần. |
-| D23 | [ ] POST /api/training/sessions/{sessionId}/heartbeat | T sở hữu | Session đã start + grant hợp lệ; thời gian server ghi PostgreSQL trước ACK; không để client timestamp hoặc Redis tự quyết định active. |
-| D24 | [ ] POST /api/training/sessions/{sessionId}/events:batch | T sở hữu | Batch giới hạn, eventId ổn định/sequence/schema, pinned release/hash; duplicate cùng payload không nhân event, conflict khác payload; trả ACK rõ phần đã ghi. |
-| D25 | [ ] POST /api/training/sessions/{sessionId}/complete | T sở hữu | Trạng thái kết thúc hợp lệ + event/result evidence + duration/rubric version; không tin điểm client tùy ý. Idempotent, không ghi đè kết quả đã chốt; chính sách Assessment mở debrief sau nộp. |
-| D26 | [ ] POST /api/training/reconcile | T sở hữu | Đồng bộ phiên đã start khi trở lại mạng; xử lý mất ACK/out-of-order/duplicate/checkpoint. Không biến preparation/offline request mới thành phiên đã start. Hết entitlement sau start vẫn tiếp nhận sync hợp lệ. |
+- **Contract/current:** AuthController có đăng ký/xóa device token và adapter FCM.
+- **Sửa code:** Rà ownership theo user/installation, rotate/revoke, validate token và che token khỏi log. FCM chỉ dùng push, không dùng để đăng nhập.
+- **Nghiệm thu:** Nhiều thiết bị, token invalid/replaced và user khác xóa token đều được xử lý đúng. Unit/mock không được ghi là bằng chứng FCM thật.
 
-Dữ liệu: sessions, session_events, session_results, session_checkpoints, debrief_artifacts. Kết quả người khác bị chặn kể cả biết UUID; quyền admin xem dữ liệu không đồng nghĩa được sửa snapshot điểm lịch sử.
+## C. Building, IFC, authoring và release
 
-### 5.5 Payment và Building entitlement — P1
+### IFC-01 — P0 · GAP · Outbox và worker result
 
-Nguồn: FR-BILLING và FR-BILLING-RECOVERY; technology payment adapter và short transactions. Không dùng cờ isPaid do client gửi.
+- **Contract/current:** [IfcWriteStore](../Fire3D/Fire3D.Infrastructure/Ifc/IfcWriteStore.cs) ghi `payload_hash = 'hash'`; worker result phải qua gate lease-bound và receipt theo Docs.
+- **Sửa code:** Sinh canonical envelope/hash đúng schema, dùng outbox entry point được phép và nối worker result qua gate kiểm tra current attempt/lease/provenance. Commit business effect và receipt trước ACK; worker không có DML trực tiếp.
+- **Nghiệm thu:** Hash/envelope hợp lệ; duplicate delivery idempotent; sai hash, lease cũ hoặc attempt cũ bị từ chối; crash trước ACK replay không nhân đôi kết quả.
 
-| ID | Checklist API | Quyền | Acceptance riêng |
-|---|---|---|---|
-| D27 | [ ] GET /api/buildings/{buildingId}/service-entitlement | O/A | Trả Trial/Active/expired state, kỳ và capability/hạn mức liên quan; không dùng org plan chung thay entitlement từng Building. |
-| D28 | [ ] POST /api/quotations | O/A | Phân biệt BuildingService/AIUsage; duration, currency, price/terms snapshot; validate tenant/Building/period và idempotency. |
-| D29 | [ ] POST /api/payments/payos/create | O/A | Quotation hợp lệ, server tạo Pending/payment order qua gate; không giữ DB transaction chờ PayOS. Timeout có request/status reconcile, không tạo order trùng. |
-| D30 | [ ] POST /api/payments/payos/webhook | W | Verify theo SDK/contract PayOS trước apply; đối chiếu order/amount/currency/snapshot; duplicate/replay idempotent; giả mạo bị từ chối. Endpoint không dùng Firebase user token nhưng không phải thao tác vô điều kiện. |
-| D31 | [ ] POST /api/payments/{transactionId}/reconcile | O/A hoặc W có scope | Đối soát trạng thái tin cậy, sửa tình huống Applied nhưng chưa provision bằng deterministic key; không cấp hai kỳ dịch vụ. AIUsage payment chỉ chốt kỳ AI, không cấp Building service. |
+### IFC-02 — P1 · GAP · Readiness theo revision/version
 
-Dữ liệu: service_packages, quotations, payos_payment_requests, payment_transactions, invoice_metadata, service_entitlements, payment_provisioning_records. ReturnUrl/cancelUrl chỉ điều hướng.
+- **Contract/current:** `ConfirmForTrainingAsync` hiện đổi trạng thái toàn revision; API không gắn confirmation với scenario version. Docs yêu cầu readiness theo cặp revision–scenario version.
+- **Sửa code:** Đổi command/API/persistence/review để ghi và kiểm tra đúng cặp; release phải tham chiếu confirmation tương ứng.
+- **Nghiệm thu:** Confirm một cặp không làm sẵn sàng scenario khác; version không thuộc revision hoặc tenant sai bị từ chối; audit/replay giữ đúng cặp.
 
-### 5.6 AI/RAG và accounting — P1, triển khai sau identity/quota nền
-
-Nguồn: FR-AI, FR-BILLING-05/06, FR-AI-RECOVERY và RAG. Public client chỉ gọi .NET; FastAPI không được tự tính tiền/cấp quota/publish.
-
-| ID | Checklist API | Quyền | Acceptance riêng |
-|---|---|---|---|
-| D32 | [ ] GET /api/organizations/{organizationId}/ai-usage | O/A | Usage/quota/reserved/ước tính phí theo kỳ, filter Building/user/request type trong scope; không tính lại lịch sử theo giá mới. |
-| D33 | [ ] POST /api/organizations/{organizationId}/ai-overage-consents | O/A | Consent có actor, policy/version/price scope/thời điểm; idempotency; không mặc định đồng ý vì gửi câu hỏi. |
-| D34 | [ ] GET /api/ai/requests/{requestId} | Chủ request/O được cấp/A | Trạng thái và kết quả đã lưu, citations/provenance/usage kỹ thuật; tenant/user-scoped. Là đường tra cứu bắt buộc khi timeout. |
-| D35 | [ ] POST /api/ai/usage/{requestId}/reconcile | O/A hoặc W có scope | Đối soát theo evidence, settle/release reservation đúng một lần. Internal recovery vẫn xử lý request Accepted trước khi user bị khóa; không mở API cho user đã bị khóa. |
-| D36 | [ ] POST /api/ai/organization/scenario-draft | O/A | Authorize tenant/Building/revision, create request + reserve quota ngắn, gọi AI ngoài transaction; citations + BIM anchors, NeedsUserEdit. Không tự cập nhật scenario/editor hoặc publish. |
-| D37 | [ ] POST /api/ai/trainee/answer | T | Quota ngày theo user, chỉ corpus chung đã duyệt/nội dung được phép/kết quả chính mình; không dùng quota organization. Thiếu evidence trả InsufficientEvidence, safety rejection có trạng thái rõ. |
+### SCENARIO-01 — P1 · VERIFY · Draft ETag và snapshot
 
-Dữ liệu: ai_requests, ai_policy_versions, ai_quota_grants, ai_usage_reservations, ai_usage_reservation_allocations, ai_usage_ledger, ai_overage_consents, ai_billing_periods, ai_billing_period_items, ai_billing_adjustments, knowledge_sources, knowledge_chunks, bim_facts.
+- **Contract/current:** Draft GET/PUT, ETag dựa trên xmin và snapshot/version đã có. Không cần tạo API GET draft mới.
+- **Sửa code:** Giữ GET draft trả ETag; kiểm tra PUT `If-Match`, snapshot bất biến, liên kết version với đúng scenario/revision và review reject đúng cặp.
+- **Nghiệm thu:** GET draft lấy ETag ban đầu; lưu với ETag hiện tại thành công; thiếu/cũ ETag bị từ chối; hai editor không ghi đè nhau; snapshot cũ không đổi.
 
-Request idempotency gồm canonical input + identity/audience/scope/source/policy; cùng key khác input là conflict. Terminal result/policy bất biến. Lock order: period nếu có → request → ledger/reservation → grants theo ID tăng dần. Không dùng SKIP LOCKED để kết luận hết quota.
+### PLAYTEST-01 — P1 · GAP · Tenant và entitlement
 
-### 5.7 Feedback — P2 theo thứ tự triển khai
+- **Contract/current:** [PlaytestWriteStore](../Fire3D/Fire3D.Infrastructure/Scenarios/PlaytestWriteStore.cs) truy vấn entitlement bằng `is_active`, bắt lỗi DB rồi tiếp tục với `Guid.Empty`; start đổi trạng thái nhưng chưa cấp launch grant theo contract.
+- **Sửa code:** Dùng gate/schema entitlement đích: OrganizationUser đúng tenant, Trial còn quota hoặc entitlement Active của Building; pin version/package/runtime và cấp playtest grant/session type riêng. Bỏ nuốt lỗi và ID rỗng thay cho dữ liệu bắt buộc.
+- **Nghiệm thu:** Trial còn/hết quota, Active/Expired, tenant sai, DB lỗi, thiếu version và replay đều fail-closed/đúng trạng thái. Playtest không dùng QR Trainee, không ghi learner analytics; session đã bắt đầu vẫn sync theo contract.
 
-| ID | Checklist API | Quyền | Acceptance riêng |
-|---|---|---|---|
-| D38 | [ ] POST /api/feedback | User xác thực | Nội dung hợp lệ, reference session/building nếu có phải được phép, actor từ identity, trạng thái Submitted/audit; không cho gửi feedback dưới user khác. Nguồn FR-SUPPORT/FR-AUDIT. |
+### RELEASE-01 — P1 · GAP · Publish gates
 
-## 6. API bổ sung để các luồng chạy đủ — đường dẫn đề xuất
+- **Contract/current:** [ReleaseWriteStore](../Fire3D/Fire3D.Infrastructure/Releases/ReleaseWriteStore.cs) đã tạo Built, GET, publish và revoke. Create kiểm tra một phần revision/review/artifact; publish hiện chỉ kiểm tra Built và package.
+- **Sửa code:** Tách ghi nhận build hoàn tất khỏi việc chạy Unity. Trước publish kiểm tra package/manifest hash, artifact, validation Passed, blocker, runtime compatibility, Training và entitlement theo Docs.
+- **Nghiệm thu:** Provenance/review sai, QA lỗi hoặc còn blocker, runtime không tương thích, entitlement không Active đều không publish. Retry/revoke/audit đúng; create Built không bị mô tả là đã chạy Unity.
 
-Những hàng dưới **chưa phải đường dẫn đã chốt trong technology**. Có thể gộp vào response/API đã có nếu contract đáp ứng; không cần tạo endpoint riêng cho mỗi bảng. Mỗi ID là một capability để team review, không dùng tổng số hàng này như cam kết số endpoint cuối cùng.
+### SESSION-01 — P1 · LATER · QR và training session
 
-### 6.1 Identity, tổ chức và Building
+- **Contract/current:** QR Building, Training list, session preparation/start, launch grant và offline continuation/sync chưa có đủ API production.
+- **Sửa code:** Sau khi entitlement/release gates sẵn sàng, triển khai QR canonical cấp Building, preparation pin release/scenario/package, explicit online start cấp grant; hỗ trợ tiếp tục và sync kết quả sau mất mạng.
+- **Nghiệm thu:** Preparation không cấp quyền; start mới kiểm tra online và idempotency; session đã bắt đầu tiếp tục/sync được khi mất mạng nhưng không thể mở session mới khi entitlement hết hạn.
 
-- [ ] **P01 — DELETE /api/auth/devices/{deviceUuid}**: user hiện tại revoke installation/push token; idempotent; đăng xuất/đổi user không gửi push nhầm người. Sửa sender để xử lý token invalid/unregistered; không log nguyên FCM token.
-- [ ] **P02 — PATCH /api/auth/me**: nếu sản phẩm cho sửa tên/profile, chỉ các trường profile cho phép; role, tenant và Firebase UID không sửa qua self-profile.
-- [ ] **P03 — PATCH /api/accounts/{id}/authorization**: admin cấp/đổi role–organization có audit, concurrency và last-admin guard; không chỉnh role bằng generic entity update.
-- [ ] **P04 — GET /api/organizations/me**: O tự xem org của mình phục vụ dashboard; có thể gộp metadata vào /auth/me; không mở API list toàn bộ org.
-- [ ] **P05 — PATCH /api/organizations/{id}**: admin cập nhật thông tin org được phép; tách khỏi status; validate slug/name/concurrency.
-- [ ] **P06 — PATCH /api/buildings/{id}/status**: archive/restore có policy phụ thuộc release/session; hợp nhất ngữ nghĩa với E18, không xóa cascade dữ liệu học tập.
-- [ ] **P07 — GET/PUT /api/buildings/{id}/floors**: nếu cần hồ sơ tầng do người dùng nhập; phân biệt building_floors với tầng/facts trích IFC thuộc revision. Không sửa source geometry qua CRUD tầng.
-
-Không bổ sung lời mời thành viên/role thứ tư hoặc forgot-password nội bộ chỉ từ thói quen CRUD: Docs mới dùng Firebase Google. Mailgun có thể dùng notification nghiệp vụ, nhưng không đồng nghĩa cần thêm password_reset_tokens cho Google Sign-In.
-
-### 6.2 Hoàn tất IFC và editor
+## D. Billing, notification, AI, Learn và báo cáo
 
-- [ ] **P08 — POST /api/revisions/{revisionId}/upload-complete**: cần nếu D02 cấp presigned URL. Verify object tồn tại, ownership/key/size/hash/content/quarantine trước Uploaded; cùng upload finalize nhiều lần không tạo source/revision trùng.
-- [ ] **P09 — GET /api/revisions/{revisionId}/processing-jobs** và **GET /api/processing-jobs/{jobId}**: FE polling status/progress/attempt/error; trả trạng thái durable PostgreSQL, không chỉ push notification.
-- [ ] **P10 — GET /api/revisions/{revisionId}/processing-logs**: paging/log đã làm sạch; không lộ filesystem, secret, signed URL dài hạn hoặc log tenant khác.
-- [ ] **P11 — GET /api/revisions/{revisionId}/artifacts** và **GET /api/revisions/{revisionId}/bim-facts**: authorized artifact descriptors/facts có provenance; có thể trả qua editor-preview để giảm round trip.
-- [x] **P12 — GET/PUT /api/revisions/{revisionId}/annotations**: overlay nhãn/ghi chú IFC, ETag/version append-only, validate anchor cùng revision; transaction annotation + audit. Không nhận thay geometry/exit. Kiểm thử local không thay thế xác minh schema/quyền Supabase.
-- [ ] **P13 — GET /api/buildings/{buildingId}/scenarios** và **GET /api/scenarios/{scenarioId}**: danh sách/detail authoring đúng tenant, version/revision liên quan; cần cho editor mở lại.
-- [ ] **P14 — GET /api/scenario-drafts/{draftId}**: nạp lại draft và version/ETag để tiếp tục sửa; AI output chưa được accept không giả thành draft đã lưu.
-- [ ] **P15 — GET /api/scenarios/{scenarioId}/versions** và **GET /api/scenario-versions/{versionId}**: lịch sử/read-only snapshot; tránh API PUT version đã publish.
-- [ ] **P16 — POST /api/scenario-drafts/{draftId}/validate**: chạy validation cấu hình/geometry/capability; nếu tốn thời gian trả job/run để polling, không tự confirm-for-training.
-- [ ] **P17 — POST /api/ai/requests/{requestId}/review**: accept/edit/reject AI suggestion với actor và audit; accept vẫn đi qua validate draft + snapshot; không tự publish. Có thể tích hợp vào D11 nếu lưu được provenance/review decision.
-- [ ] **P18 — POST /api/revisions/{revisionId}/reviews**: ghi Rejected cho cặp revision–version và lý do. Không đổi toàn geometry dùng chung sang Rejected chỉ vì một scenario bị từ chối.
+### BILLING-01 — P1 · LATER · PayOS và entitlement Building
 
-### 6.3 Package, release, QR và training authoring
-
-- [ ] **P19 — POST /api/scenario-versions/{versionId}/package-builds**: yêu cầu Unity build job idempotent; artifact/validation/runtime/toolchain pinned. Có thể phát sinh tự động từ snapshot/validate nếu workflow chốt như vậy.
-- [x] **P20 — POST /api/releases** và **GET /api/releases/{releaseId}**: tạo/đọc Built release và package metadata trong transaction; pin revision/version/review/artifact, tenant scope và audit. Unity/package worker vẫn phải là nguồn tạo và kiểm chứng object/hash trước khi gọi API; live Supabase gate chưa được chứng nhận.
-- [ ] **P21 — POST /api/buildings/{buildingId}/trainings** và **PATCH /api/trainings/{trainingId}**: tạo/chỉnh cấu hình training hợp lệ, status/mode/release/version, policy debrief; không đổi pin phiên đã start.
-- [x] **P22 — POST /api/releases/{releaseId}/revoke**: Built/Published → Revoked, reason/actor/time/audit cùng transaction; retry idempotent; tenant scope. Session đã start giữ pin lịch sử theo policy, phần session enforcement còn thuộc module Training.
-- [ ] **P23 — POST/GET /api/buildings/{buildingId}/qr**: cấp/đọc metadata QR canonical. Đề xuất trả token gốc tại thời điểm cấp/rotate, DB giữ hash; chốt cơ chế in lại với FE, không hứa khôi phục token từ hash.
-- [ ] **P24 — POST /api/buildings/{buildingId}/qr/rotate** và **DELETE /api/buildings/{buildingId}/qr/{qrId}**: O/A, thu hồi QR cũ; canonical uniqueness và cache invalidation sau commit; không đổi Building của QR đã cấp.
-- [ ] **P25 — GET /api/training/sessions/{sessionId}/package** và **GET /api/playtests/{playtestId}/package**: scoped signed manifest/content URLs TTL + hashes/build target/runtime requirements; có thể gộp trong prepare response. Không phát raw IFC cho T, không cấp launch grant ở đây.
-
-### 6.4 Resume, playtest telemetry, kết quả và dashboard
-
-- [ ] **P26 — POST /api/playtests/{playtestId}/events:batch**, **/complete**, **/reconcile**: telemetry/results riêng của playtest, owner + grant, idempotency, không ghi learner plays/completion. Có thể reuse service nội bộ, vẫn tách authorization/session kind.
-- [ ] **P27 — PUT /api/training/sessions/{sessionId}/checkpoint** và **POST /api/training/sessions/{sessionId}/resume**: phiên đã start, checkpoint/schema/hash hợp lệ, bảo vệ resume sau crash theo policy; không mở một start offline mới. Mốc/checkpoint/resume grant chốt cùng Mobile/Unity.
-- [ ] **P28 — GET /api/training/sessions/{sessionId}** và **GET /api/training/sessions/{sessionId}/result**: chủ phiên xem status/score/debrief được phép; org chỉ aggregate trừ use case được cấp; admin truy cập dữ liệu có audit.
-- [ ] **P29 — GET /api/me/training-results**: T xem lịch sử của mình, pagination/filter; không nhận arbitrary userId để vượt ownership.
-- [ ] **P30 — GET /api/buildings/{buildingId}/analytics**: O/A, unique trainee/plays/active/completion/duration đúng định nghĩa Docs; loại preparation/playtest, sync chưa xác nhận chưa tính hoàn tất.
-- [ ] **P31 — GET /api/organizations/{organizationId}/analytics**: aggregate nhiều Building đúng tenant, cùng metric definitions. Export/cohort/heatmap mở rộng là giai đoạn sau, không làm trước dữ liệu session chuẩn.
-
-### 6.5 Đủ UI billing/AI và nội dung Learn
-
-- [ ] **P32 — GET /api/service-packages**: bảng gói/giá/terms đang áp dụng; admin tạo version giá qua contract quản trị riêng nếu cần UI. Đổi giá không sửa quotation/usage lịch sử.
-- [ ] **P33 — GET /api/quotations/{quotationId}**, **GET /api/payments/{transactionId}**, **GET /api/organizations/{organizationId}/payments**: scope, status và receipt để UI polling sau PayOS redirect; không coi redirect là bằng chứng trả tiền.
-- [ ] **P34 — GET /api/organizations/{organizationId}/ai-billing-periods** và **GET /api/ai-billing-periods/{periodId}**: kỳ/item/adjustment/invoice snapshot read-only theo scope; chưa Closed thì thể hiện tạm tính.
-- [ ] **P35 — POST /api/ai/organization/answer**: hỏi đáp BIM/kiến thức của O có scope/citations; D36 chỉ scenario-draft chưa bao trùm chức năng hỏi đáp. Reuse request/quota/reconcile pipeline.
-- [ ] **P36 — GET /api/me/ai-quota** và **GET /api/me/ai-requests**: quota ngày/lịch sử AI của T; không trừ org grant.
-- [ ] **P37 — API admin policy/quota và trial configuration**: đề xuất /api/ai/policies, /api/ai/quota-grants; actor A, versioned policy, không sửa snapshot lịch sử hoặc trực tiếp tăng counter bỏ qua ledger. Giá/quota cụ thể chốt theo project overview trước production.
-- [ ] **P38 — GET /api/learn/articles** và **GET /api/learn/articles/{slug}**: Public đọc/tìm bài đã duyệt có source/version. Có thể dùng nội dung tĩnh/CMS từ FE; nếu thế không xây BE CRUD không cần thiết.
-- [ ] **P39 — PUT/DELETE /api/me/saved-articles/{articleId}**, **GET /api/me/saved-articles**: yêu cầu lưu bài của web; cần thiết kế bảng bookmark mới nếu BE sở hữu, vì schema hiện chưa có bảng chuyên biệt.
-- [ ] **P40 — Quản trị knowledge source/ingestion**: đề xuất POST /api/knowledge/sources, POST /api/knowledge/sources/{id}/ingest, PATCH /api/knowledge/sources/{id}/status. A quản lý corpus chung được duyệt; O chỉ tài liệu riêng được phép. Async ingestion/index version, status polling, citations không mất provenance; quyền service indexing tối thiểu.
-
-### 6.6 Support và audit — hoàn thiện sau các luồng lõi
-
-- [ ] **P41 — GET /api/feedback** và **PATCH /api/feedback/{id}/status**: admin/owner view theo policy, Submitted → Reviewed → Closed, audit và pagination.
-- [ ] **P42 — POST/GET /api/support-tickets**, **GET /api/support-tickets/{id}**, **POST /api/support-tickets/{id}/replies**: người gửi xem ticket của mình, admin phản hồi; xác định model lưu reply vì support_tickets một bảng chưa chứng minh có conversation history.
-- [ ] **P43 — GET /api/audit-logs**: admin và org view được cấp, filter thời gian/entity/actor/correlation, pagination và redaction; không public generic SQL query hoặc trả token/credential trong old_values/new_values.
-
-## 7. Công việc nội bộ bắt buộc, không cộng thành API client
+- **Contract/current:** Chưa có API/persistence PayOS và entitlement Building production. Docs yêu cầu quotation nhiều Building, snapshot và provisioning theo từng dòng.
+- **Sửa code:** Thêm quotation/item, discount/terms snapshot, payment request và webhook đã xác minh; cấp/gia hạn entitlement từng Building bằng idempotency key; reconcile nếu provision một phần lỗi.
+- **Nghiệm thu:** Không cấp quyền từ return URL; webhook lặp/đến trễ/sai amount không ghi trùng; retry từng dòng không nhân đôi; kỳ từng Building độc lập.
 
-| ID | Checklist | Contract / kiểm chứng |
-|---|---|---|
-| W01 | [ ] Outbox enqueue + dispatcher Redis Streams | Nghiệp vụ và outbox cùng transaction; tenant allowlist ProcessingJobRequested/schema 1 và payload job_id đúng aggregate; SystemNotification/PlatformCacheInvalidation qua executor riêng; ProcessingJobRequeue chỉ gate requeue. Event không chứa worker lease. |
-| W02 | [ ] Dispatcher claim/renew/mark/fail/replay | Lease dispatcher riêng; SKIP LOCKED dùng cho hàng đợi outbox; mark Published không có nghĩa consumer xong; replay cùng envelope, stale token bị chặn, không trim mất cửa sổ recovery. |
-| W03 | [ ] Worker claim/renew/accept/fail | Backend cấp attempt/lease sau khi nhận job; job→attempt lock order; stale result bị chặn, artifact/validation/input/toolchain phải khớp. SQL gates đã có ở thiết kế; HTTP /internal/... nếu dùng là contract cần chốt, không public cho O/T. |
-| W04 | [ ] Consumer transaction + receipt + ACK | Đối chiếu outbox envelope/schema/hash/scope, kiểm tra receipt trước tác động, commit tác động và integration_event_consumptions rồi ACK. Worker/AI không được tự ghi receipt ngoài executor được cấp. Test crash trước/sau commit và mất ACK. |
-| W05 | [ ] IFC/Blender/Unity worker adapter | Spike CLI không phải production pipeline. Cần private input access, artifact upload/hash, structured failure và QA; worker không tự publish hoặc ghi billing. |
-| W06 | [ ] AI request/result + reservation/settlement | .NET tạo Accepted, reserve allocations, gọi AI ngoài TX; record result qua gate kiểm soát rồi settle một lần. Timeout giữ NeedsReconcile; background recovery không tạo charge mới. |
-| W07 | [ ] Close/invoice/pay AI period | Open → Closed → Invoiced → Paid; close tạo item snapshot nguyên tử; late usage qua adjustment có actor/lý do/idempotency. Accounting executor, không mở quyền DML trực tiếp cho AI. |
-| W08 | [ ] Payment provisioning/reconcile scheduler | Payment Applied và deterministic provisioning; retry/restart không cấp quyền hai lần; AIUsage settlement tách BuildingService. |
-| W09 | [ ] Notification delivery | FCM token rotation/revoke/cleanup; notification chỉ báo trạng thái, client đọc lại API authoritative; Mailgun cho use case email thật sự được yêu cầu. Retry có giới hạn và không log token. |
-| W10 | [ ] Redis cache-aside | Environment/tenant/user/version trong key khi cần, TTL/invalidation sau commit, chống stampede. Cache không cấp start/publish/quota/payment và không thay DB result/heartbeat. Redis lỗi fallback DB có giới hạn tải. |
+### NOTIFY-01 — P1 · LATER · Nhắc hết hạn
 
-Không tạo generic endpoint cho client enqueue event, ghi ledger, reserve quota, sửa entitlement hoặc upload “worker result” rồi tự publish. Đó là quyền backend/service riêng.
+- **Contract/current:** Mailgun hiện phục vụ reset; reminder dịch vụ chưa có. Docs yêu cầu web/email trước 5 ngày.
+- **Sửa code:** Thêm scheduler/outbox/delivery idempotent theo entitlement, kỳ và channel; gia hạn phải vô hiệu reminder cho kỳ cũ.
+- **Nghiệm thu:** Retry/duplicate không gửi trùng một kỳ/kênh; email và in-app notification cùng đúng entitlement; kiểm provider thật riêng với unit test.
 
-## 8. Checklist database cần đi cùng API
+### AI-01 — P1 · LATER · AI request và quota
 
-Schema v6.7 có **56 CREATE TABLE**. EF hiện có **37 ToTable trong DbContext chính + 1 auth_refresh_tokens trong configuration riêng = 38 mapping bảng**. Đây là đối chiếu source, không phải số bảng DB Supabase đang chạy.
+- **Contract/current:** Chưa có luồng production BE sở hữu AI request, authorization, quota, consent, reservation/settlement và reconcile.
+- **Sửa code:** Xây durable request/result qua BE và service AI; giữ quota/ledger/price snapshot ở BE; xử lý timeout/retry qua idempotency và reconcile, không cho AI ghi billing.
+- **Nghiệm thu:** Test concurrent reserve, duplicate/hash conflict, timeout sau khi AI trả kết quả, consent, quota Trainee riêng và scope organization/Building.
 
-**22 bảng thiết kế chưa có mapping tương ứng trong DbContext hiện tại**:
+### LEARN-01 — P1 · LATER · CMS và bookmark
 
-- BIM/editor/QA/runtime: bim_facts, scenario_drafts, validation_issues, playtest_sessions, runtime_compatibility_catalog.
-- Job/event: processing_job_attempts, integration_outbox_events, integration_event_consumptions.
-- Building payment: service_entitlements, payment_provisioning_records.
-- AI: ai_billing_periods, ai_quota_grants, ai_policy_versions, ai_overage_consents, ai_requests, ai_usage_ledger, ai_billing_period_items, ai_billing_adjustments, ai_usage_reservations, ai_usage_reservation_allocations, knowledge_sources, knowledge_chunks.
+- **Contract/current:** Chưa có CMS/API/persistence Learn production. Docs quy định PlatformAdmin quản trị; không có bước approve riêng.
+- **Sửa code:** Thêm post/version/situation/source/bookmark; public chỉ đọc Published; Hidden không public nhưng được phép RAG, Deleted bị loại; validate provider URL; audit/idempotency và cache invalidation qua outbox.
+- **Nghiệm thu:** Draft không public; version Published bất biến; Hidden/Deleted không trả public, Deleted không vào RAG; bookmark chỉ thuộc Trainee; không thêm approve route ngoài contract.
 
-EF còn revision_floors, revision_issues, password_reset_tokens và auth_refresh_tokens ngoài tập tên bảng CREATE TABLE v6.7. Không xóa ngay chỉ vì tên không khớp: cần migration mapping/backfill theo DB thật và quyết định auth.
+### REPORT-01 — P2 · LATER · Analytics/support/audit views
 
-| ID | Checklist dữ liệu | API phụ thuộc |
-|---|---|---|
-| DB01 | [ ] Identity UID unique + role/tenant/inactive constraints; migration account legacy không tự link đè | E01–E13, mọi API protected |
-| DB02 | [ ] Revision/source/floors/facts, private object keys/hash/quarantine, artifact provenance | D02–D08, P08–P12 |
-| DB03 | [ ] Job attempts/lease/current attempt/input hash + outbox/receipts và DB executor grants | D03/D06, W01–W05 |
-| DB04 | [ ] Draft mutable/version immutable; routing_config/scoring_config/time_limit_seconds/hash thống nhất | D09–D16 |
-| DB05 | [ ] QR cấp Building, release/package/manifest/runtime compatibility catalog, playtest/session pins | D14–D26, P19–P27 |
-| DB06 | [ ] Per-Building entitlement, Trial quota, quotation/payment/provisioning deterministic keys | D15/D17/D22, D27–D31 |
-| DB07 | [ ] AI request/ledger/reservation allocations/grants/consent/period/item/adjustment và lock order | D32–D37, W06/W07 |
-| DB08 | [ ] pgvector model/dimension/index scope, source/chunk version và ingestion permissions | P35/P40, D36/D37 |
-| DB09 | [ ] EventId/sequence/session-owner uniqueness, started_at/server heartbeat/complete/result immutability | D21–D26, P26–P31 |
-| DB10 | [ ] Thiết kế lưu saved articles/support replies nếu BE sở hữu; không giả định đã có trong v6.7 | P39/P42 |
-| DB11 | [ ] Kiểm thử constraint/function/GRANT với đúng runtime roles, không chỉ superuser | Tất cả invariant DB |
-| DB12 | [ ] Phân trang/index/query plan phù hợp workload; retention/backup/recovery gate theo quyết định team | API list, analytics, audit, jobs |
+- **Contract/current:** Analytics/support/audit views chưa được xác nhận hoàn chỉnh theo từng requirement.
+- **Sửa code:** Triển khai sau capability nguồn; định nghĩa plays, active sessions và Building usage theo Docs; áp tenant scope, pagination, retention và redaction.
+- **Nghiệm thu:** Playtest/preparation không tính learner play; dashboard/API dùng chung định nghĩa; người dùng không đọc tenant khác; dữ liệu nhạy cảm được che.
 
-Một số bảng trùng tên vẫn khác thiết kế: ReleaseQrCode còn pin release/training; ProcessingJob/ValidationRun thiếu mô hình attempt mới; ScenarioVersion cần hợp nhất config; Session/package thiếu các pin/compatibility fields mới. So tên bảng chỉ là bước đầu.
+## E. Thứ tự phụ thuộc và cách hoàn tất task
 
-database_overview.md còn trình bày nhóm bảng/lịch sử v6 để họp; không dùng riêng số bảng ở đó làm migration plan. Nguồn đích là schema/ERD + technology cùng commit, có kiểm tra runtime riêng.
+1. **DB-01, AUTHZ-01, AUTH-01–04:** schema test, tenant boundary, đăng ký/onboarding/profile/session/recovery.
+2. **IFC-01, IFC-02, SCENARIO-01:** outbox/worker gate, QA provenance, draft/version/readiness.
+3. **BILLING-01, NOTIFY-01, PLAYTEST-01, RELEASE-01:** entitlement Building và các gate phụ thuộc entitlement; song song hoàn thiện package/QA.
+4. **SESSION-01:** QR, Training, launch grant và offline sync sau khi release/entitlement đạt.
+5. **AI-01, LEARN-01, REPORT-01:** tích hợp các capability còn lại theo quyền và schema đã chốt.
 
-## 9. Vận hành, Swagger và Definition of Done
-
-- [ ] **O01**: phân biệt /health liveness hiện tại với readiness có DB/config thiết yếu; endpoint readiness đề xuất /health/ready. Không coi process còn sống là Firebase/Supabase/S3 sẵn sàng.
-- [ ] **O02**: config mẫu không secret, Firebase credential injection, connection pool, CORS, forwarded headers chỉ trust proxy đã cấu hình; Nginx topology/BE provider chưa chốt trong Docs.
-- [ ] **O03**: sửa Render context/JWT key nếu dùng; workflow Azure hiện build/deploy image nhưng chưa có bước chạy bộ regression auth/business. Không gọi “CI test pass” từ việc build image thành công.
-- [ ] **O04**: tracing/correlation từ API → outbox/job/AI/payment, log scrubbed, rate limits cho auth/AI/upload; raw IFC và token không đi vào log.
-- [ ] **O05**: mỗi operation Swagger ghi role, tenant source, prerequisite, request/response example, field bắt buộc, status/error code và idempotency/concurrency; không chỉ summary một dòng.
-
-Một API được tick hoàn thành khi:
-
-1. Contract được FE/Mobile/AI/Unity liên quan review; method/path/DTO/status và nguồn authority rõ.
-2. Có handler + authorization ở server + mapping/migration cần thiết; không trả 501/mock thay implementation.
-3. Validate body/query/nested object, resource state và liên kết cùng tenant; xử lý ID không có, role sai, user/org khóa.
-4. Thao tác side effect có audit/transaction/idempotency phù hợp; cần ETag thì kiểm thử cập nhật đồng thời.
-5. Có test meaningful cho happy path và failure đặc thù: duplicate/conflict, stale lease, package mismatch, quota race, payment replay hoặc offline sync tùy module.
-6. Chạy integration trên DB test tách biệt với runtime roles, không dùng production để kiểm chứng.
-7. Có bằng chứng request/response hoặc test report gắn commit; test skip/mock/old report được ghi rõ.
-8. Swagger và checklist cập nhật đúng trạng thái; issue có blocker/PR khi đến bước review Git.
-
-## 10. Thứ tự triển khai đề xuất cho BE
-
-| Đợt | Làm gì | Luồng phải chứng minh được |
-|---|---|---|
-| 0 | F01–F12, DB01 và kế hoạch DB02–DB12 | Firebase identity → user đúng role → admin provision → org scope; user mới không thành admin, truy cập chéo bị chặn. |
-| 1 | Building + IFC initiation/finalize + durable jobs/outbox + preview/QA | O tạo Building → upload IFC private → process → đọc trạng thái/issues/preview. Worker fail/retry không sinh artifact trùng. |
-| 2 | Scenario draft/version/catalog/validation + Unity build integration + Trial/playtest | Editor lưu/reload → snapshot → build/QA → playtest prepare/start → result riêng; chưa cần giả publish để demo. |
-| 3 | Payment/entitlement + confirm + Built/publish + canonical QR | PayOS verified → entitlement Active → publish → QR list. Payment replay không cấp hai lần; hết service chặn publish/start mới. |
-| 4 | Trainee prepare/start/package/events/complete/reconcile/results + analytics lõi | Firebase T → scan QR → chọn bài → verify package → online start → offline continue → sync → kết quả và metric đúng. |
-| 5 | AI request/quota/evidence/reconcile + org draft/answer + trainee AI + usage UI | Câu hỏi đúng scope → reserve → AI có nguồn → kết quả durable; retry không trừ hai lần; draft cần user review. Có thể làm song song các đợt khác sau nền auth/DB. |
-| 6 | Learn persistence/support/audit UI, analytics mở rộng và hardening tích hợp | Các chức năng bản cuối hoàn chỉnh, test cross-tenant/concurrency/recovery và benchmark liên service. |
-
-Đây là thứ tự dependency, chưa gán deadline/người vì team 4 người chưa chia task cụ thể. Không quy đổi mỗi đợt thành một tuần khi chưa có IFC sample/worker/Unity contract và capacity.
-
-## 11. Các quyết định cần team chốt trước khi code phần phụ thuộc
-
-Nguồn quyết định sản phẩm còn mở vẫn là bảng trong project overview; checklist không tự đặt giá/quota/provider mới.
-
-- Auth transition: triển khai Firebase trực tiếp hay ADR cho exchange JWT; self-onboarding chỉ Trainee; cách provision/link tài khoản admin/org cũ.
-- Admin acting scope: input tenant đích ở route/header/body nào, DTO cá nhân được xem, audit reason; không cần hỏi lại việc có quyền thao tác nghiệp vụ vì người dùng đã chốt có.
-- Upload: D02 và E19 hiện cùng tạo presigned upload; cần chốt thời điểm loại alias cũ, hoàn thiện finalize/hash/quarantine và kiểm chứng S3 thật.
-- Draft/snapshot/build/release/Training: chốt thao tác nào tự sinh resource, thao tác nào cần API riêng; ETag/idempotency keys và schemas cùng FE/Unity.
-- Runtime: catalog capability, package/manifest/build target và bridge contract; semantics playtest telemetry/resume/checkpoint.
-- Billing/AI: giá, quota thử/ngày/kỳ, overage consent, settlement/rollover/refund/cancel/retention theo project overview trước production.
-- Learn/bookmark/support: phần nào static FE, phần nào BE quản lý; bổ sung model cần thiết trước API.
-- Hạ tầng: BE/worker compute, Firebase/S3/Redis secrets, Redis provider/retention/TTL/recovery window; Azure cho AI không quyết định nơi chạy BE.
-
-## 12. Bằng chứng và cách dùng checklist
-
-Review này kiểm kê routes trong controller, đối chiếu 38 contract technology, so bảng CREATE TABLE với EF ToTable, đọc call path của auth/tenant/Building/device và so test/deploy cấu hình. Chưa chạy build/test, chưa xác minh dữ liệu hay quyền DB thực tế.
-
-Khi tạo Jira: dùng ID F/DB/D/P/W/O, ghi mục tiêu + prerequisite + acceptance ở hàng tương ứng + source contract + test evidence cần có. P là đề xuất contract, phải review trước implementation; D là đường dẫn đã nêu trong Docs; E là source cần sửa/nghiệm thu. Không tạo hai issue implementation trùng cho E14 và D01.
-
-Ưu tiên ticket đầu tiên: **F01 + F02 (Firebase onboarding/linking)**, sau đó **F03–F06 + DB01**, rồi **E14–E21/D02–D08** để có luồng IFC thật.
+Task chỉ hoàn tất khi contract, handler/store/schema/gate và role/tenant đúng; có kiểm tra happy path cùng lỗi/race/replay phù hợp trên database test; tài liệu API phản ánh source mới; và PR ghi lệnh, kết quả, phần bị mock/bỏ qua, cùng giới hạn provider. Không coi build, route tồn tại hoặc mock test là bằng chứng provider/production đã hoạt động. Đợt đồng bộ này chỉ cập nhật BE docs; không sửa bộ `Docs` chuẩn.

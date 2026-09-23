@@ -1,5 +1,7 @@
 # Rà soát BE sau merge main — 2026-09-22
 
+> Báo cáo này là ảnh chụp review ngày 22/09/2026, không phải trạng thái hiện tại. Nó được giữ làm lịch sử và đã được thay thế cho mục đích triển khai bởi [API guide](api-docs.md), [checklist theo Docs](api-implementation-checklist.md) và [index tài liệu BE](README.md). Nhánh BE main sau đó có thêm release lifecycle và các thay đổi API khác.
+
 ## Phạm vi và kết luận
 
 Rà soát solution, project references, controller routes, auth/DI/configuration,
