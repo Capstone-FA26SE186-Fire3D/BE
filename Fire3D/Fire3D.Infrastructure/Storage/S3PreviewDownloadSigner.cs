@@ -1,0 +1,20 @@
+using Amazon.S3;
+using Amazon.S3.Model;
+using Fire3D.Application.Ifc;
+
+namespace Fire3D.Infrastructure.Storage;
+
+public sealed class S3PreviewDownloadSigner(IAmazonS3 client) : IPreviewDownloadSigner
+{
+    public async Task<SignedDownload> SignAsync(string storageKey, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var expires = DateTimeOffset.UtcNow.AddMinutes(5);
+        var url = await client.GetPreSignedURLAsync(new GetPreSignedUrlRequest
+        {
+            BucketName = Environment.GetEnvironmentVariable("S3_BUCKET_NAME") ?? "fire3d-uploads",
+            Key = storageKey, Verb = HttpVerb.GET, Expires = expires.UtcDateTime
+        });
+        return new(url, expires);
+    }
+}
