@@ -97,11 +97,15 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 {
   "email": "trainee@example.com",
   "password": "Example-Password-2026!",
-  "fullName": "Nguyen Van A"
+  "fullName": "Nguyen Van A",
+  "dob": "2004-07-29",
+  "gender": "Male",
+  "phoneNumber": "+84901234567",
+  "avatarUrl": "https://cdn.example.test/avatars/trainee.png"
 }
 ```
 
-Email hợp lệ tối đa 254 ký tự, trim/lowercase; password 12–128 và không chỉ khoảng trắng; fullName bắt buộc, không chỉ khoảng trắng, tối đa 200. Không gửi role/organizationId để cấp quyền.
+Email hợp lệ tối đa 254 ký tự, trim/lowercase; password 12–128 và không chỉ khoảng trắng; fullName bắt buộc, không chỉ khoảng trắng, tối đa 200. `dob`, `gender`, `phoneNumber` và `avatarUrl` là field profile tùy chọn. Dob không được ở tương lai; gender là Male, Female, Other hoặc PreferNotToSay; phone 6–32 ký tự số/dấu gọi điện; avatar phải là HTTP(S) URL tối đa 2048 ký tự. Không gửi role/organizationId để cấp quyền.
 
 BE hash password vào `users.password_hash`, không tạo tài khoản email/password trên Firebase. Trả **201 AccountResponse**, chưa đăng nhập; gọi login tiếp theo:
 

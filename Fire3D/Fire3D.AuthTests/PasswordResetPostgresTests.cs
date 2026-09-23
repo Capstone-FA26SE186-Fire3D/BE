@@ -44,7 +44,7 @@ public sealed class PasswordResetPostgresTests
                 CREATE TYPE audit_action_enum AS ENUM ('Update','Login');
                 CREATE TABLE users (
                   id uuid PRIMARY KEY, organization_id uuid, email text NOT NULL, firebase_uid text,
-                  full_name text, password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
+                  full_name text, dob date, gender text, phone_number varchar(32), avatar_url varchar(2048), password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
                   last_login_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
                   updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz);
                 CREATE TABLE auth_refresh_tokens (
