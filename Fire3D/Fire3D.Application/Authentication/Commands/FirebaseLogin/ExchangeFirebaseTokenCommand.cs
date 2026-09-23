@@ -17,7 +17,7 @@ public sealed class ExchangeFirebaseTokenCommandHandler(IAuthStore store, IToken
         VerifiedIdentity identity;
         try { identity = await identityProvider.VerifyGoogleTokenAsync(request.IdToken,ct); }
         catch (OperationCanceledException) when(ct.IsCancellationRequested) { throw; }
-        catch (Exception) { return AuthResult<TokenResponse>.Fail("INVALID_FIREBASE_TOKEN","Invalid Google ID token.",401); }
+        catch (Exception) { return AuthResult<TokenResponse>.Fail("INVALID_FIREBASE_TOKEN","Invalid Firebase ID token.",401); }
         var email = PasswordResetValidation.NormalizeEmail(identity.Email);
         if (email is null) return AuthResult<TokenResponse>.Fail("INVALID_FIREBASE_TOKEN","Verified email is required.",401);
         var existing = await store.FindUserByFirebaseUidAsync(identity.Uid,ct);

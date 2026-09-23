@@ -1,7 +1,6 @@
 using System;
 using System.Net.Http;
 using System.Net.Http.Json;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -82,12 +81,6 @@ public class FirebaseIdentityProvider(
         {
             var decodedToken = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken, true, ct);
             var uid = decodedToken.Uid;
-            if (!decodedToken.Claims.TryGetValue("email_verified", out var verified) || verified is not true)
-                throw new InvalidOperationException("Verified Google email is required.");
-            using var claims = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(decodedToken.Claims));
-            if (!claims.RootElement.TryGetProperty("firebase", out var firebase) ||
-                !firebase.TryGetProperty("sign_in_provider", out var provider) || !FirebaseSignInProvider.IsGoogle(provider))
-                throw new InvalidOperationException("Google sign-in is required.");
             var email = decodedToken.Claims.TryGetValue("email", out var emailObj) ? emailObj?.ToString() : null;
 
             if (string.IsNullOrEmpty(email))
@@ -120,16 +113,5 @@ public class FirebaseIdentityProvider(
             throw new Exception("ProviderUnavailable");
         }
     }
-}
-
-public static class FirebaseSignInProvider
-{
-    public static bool IsGoogle(JsonElement provider) => provider.ValueKind switch
-    {
-        JsonValueKind.String => string.Equals(provider.GetString(), "google.com", StringComparison.Ordinal),
-        JsonValueKind.Array => provider.EnumerateArray().Any(item =>
-            item.ValueKind == JsonValueKind.String && string.Equals(item.GetString(), "google.com", StringComparison.Ordinal)),
-        _ => false
-    };
 }
 
