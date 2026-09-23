@@ -1,6 +1,6 @@
 # IFC API implementation progress
 
-Task branch: feature/ifc-api. Each endpoint is committed/pushed separately after its scoped checks.
+Current task branch: fix/auth-registration (continued IFC work). Earlier entries below are historical evidence, not current deployment certification.
 Target: section 4 of the 88-operation checklist (13 endpoints).
 Documentation schema reference: Docs origin/develop v6.7; actual deployment schema must be verified separately.
 
@@ -23,3 +23,13 @@ No migration or production data changes were made. Existing Firebase onboarding/
 - GET /api/revisions/{revisionId}/issues: paged issues with validation/attempt provenance and historical flag; 41 tests passed, 6 PostgreSQL tests; Release build passed.
 - GET /api/revisions/{revisionId}/artifacts: metadata-only with job/attempt provenance; 46 tests passed, 7 PostgreSQL tests; Release build passed.
 - GET /api/revisions/{revisionId}/bim-facts: paged typed facts with source hash and quality flags; 51 tests passed, 8 PostgreSQL tests; Release build passed.
+
+## Editor APIs — 2026-09-23
+
+- [x] D05 GET /api/buildings/{buildingId}/editor-preview: revisionId required; tenant scoped; successful current Geometry attempt and input-hash provenance; same-artifact transform/floors/semantic mapping; five-minute signed S3 GET; Ready/NotReady.
+- [x] P12 GET /api/revisions/{revisionId}/annotations: current immutable snapshot, empty version 0, ETag.
+- [x] P12 PUT /api/revisions/{revisionId}/annotations: If-Match required (428), stale version (412), IFC anchor validation, append-only version; revision lock and atomic annotation/audit transaction. Label/note overlay only, no geometry/exit mutation.
+- Targeted tests: 8 passed, 0 skipped, including isolated PostgreSQL concurrency, tenant/provenance and audit-failure rollback. This fixture exercises these SQL contracts, not all production triggers/RLS/permissions.
+- Regression run initially found processing logs pagination missing the created_at alias; corrected logged_at AS created_at. Two legacy Testcontainers tests require Docker, which is unavailable in this environment.
+- After the fix: 97 IFC tests passed, 0 skipped with the two Docker-dependent test classes explicitly excluded. Full solution build: 0 warnings, 0 errors. This is not a claim that the unfiltered 99-test suite passed.
+- Not verified: live S3 object existence/download, worker metadata output and deployed Supabase schema/permissions. No Supabase migration or production data mutation performed. See api-docs.md for request/response and worker metadata contract.

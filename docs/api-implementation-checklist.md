@@ -96,7 +96,7 @@ Nguồn: FR-BUILD, FR-IFC, FR-PROCESS; technology 9, 14.3.1; workflows BIM pipel
 | D02 | [ ] POST /api/buildings/{buildingId}/ifc | O/A | Chốt upload initiation/receive contract; IFC-only, hạn mức thử, size/hash, private S3, revision/source ownership. Client không tùy chọn object key của tenant khác. Trả ID + trạng thái; nếu presigned flow phải có finalize (P08). |
 | D03 | [ ] POST /api/revisions/{revisionId}/process | O/A | Chỉ source đã xác nhận/quarantine đạt; job input hash + idempotency; job và ProcessingJobRequested outbox cùng transaction; trả 202/jobId. Không convert trong HTTP request. |
 | D04 | [ ] GET /api/revisions/{revisionId}/issues | O/A | Issue severity/object/floor/provenance theo validation run; phân biệt lỗi critical/error với warning. Không chỉ lấy revision_issues legacy rồi coi đủ v6.7. |
-| D05 | [ ] GET /api/buildings/{buildingId}/editor-preview | O/A | Chọn revision rõ ràng, preview/transform/floor/semantic mapping và URL TTL; không trộn metadata nhiều revision; chưa sẵn sàng trả trạng thái rõ. |
+| D05 | [x] GET /api/buildings/{buildingId}/editor-preview | O/A | revisionId query bắt buộc; current Geometry attempt thành công; metadata cùng artifact; URL TTL 5 phút; Ready/NotReady. Xem giới hạn kiểm thử trong ifc-api-progress.md. |
 | D06 | [ ] POST /api/processing-jobs/{jobId}/retry | O/A | Gate requeue; key mới chỉ Failed → Queued + outbox. Cùng key/envelope replay AlreadyRequeued dù job tiến trạng thái; khác envelope Conflict; Cancelled terminal. |
 | D07 | [ ] GET /api/processing-jobs/{jobId}/qa | O/A | Job/attempt hiện hành và validation/artifact hash khớp; không trình bày QA của attempt cũ như kết quả mới. |
 | D08 | [ ] GET /api/validation-runs/{validationRunId} | O/A | Trả summary/issues/provenance đúng tenant và runtime/toolchain; trạng thái chưa xong không báo Passed. |
@@ -207,7 +207,7 @@ Không bổ sung lời mời thành viên/role thứ tư hoặc forgot-password 
 - [ ] **P09 — GET /api/revisions/{revisionId}/processing-jobs** và **GET /api/processing-jobs/{jobId}**: FE polling status/progress/attempt/error; trả trạng thái durable PostgreSQL, không chỉ push notification.
 - [ ] **P10 — GET /api/revisions/{revisionId}/processing-logs**: paging/log đã làm sạch; không lộ filesystem, secret, signed URL dài hạn hoặc log tenant khác.
 - [ ] **P11 — GET /api/revisions/{revisionId}/artifacts** và **GET /api/revisions/{revisionId}/bim-facts**: authorized artifact descriptors/facts có provenance; có thể trả qua editor-preview để giảm round trip.
-- [ ] **P12 — GET/PUT /api/revisions/{revisionId}/annotations**: chỉnh semantic overlays độc lập geometry, ETag/version, validate IFC anchors. Thay geometry/exit theo policy cần revision mới, không sửa artifact đã pin.
+- [x] **P12 — GET/PUT /api/revisions/{revisionId}/annotations**: overlay nhãn/ghi chú IFC, ETag/version append-only, validate anchor cùng revision; transaction annotation + audit. Không nhận thay geometry/exit. Kiểm thử local không thay thế xác minh schema/quyền Supabase.
 - [ ] **P13 — GET /api/buildings/{buildingId}/scenarios** và **GET /api/scenarios/{scenarioId}**: danh sách/detail authoring đúng tenant, version/revision liên quan; cần cho editor mở lại.
 - [ ] **P14 — GET /api/scenario-drafts/{draftId}**: nạp lại draft và version/ETag để tiếp tục sửa; AI output chưa được accept không giả thành draft đã lưu.
 - [ ] **P15 — GET /api/scenarios/{scenarioId}/versions** và **GET /api/scenario-versions/{versionId}**: lịch sử/read-only snapshot; tránh API PUT version đã publish.

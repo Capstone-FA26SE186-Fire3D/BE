@@ -45,6 +45,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(frontendUrls)
               .AllowAnyMethod()
               .AllowAnyHeader()
+              .WithExposedHeaders("ETag")
               .AllowCredentials();
     });
 });
