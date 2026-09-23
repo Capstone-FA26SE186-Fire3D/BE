@@ -22,7 +22,7 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Scenarios.Commands.RejectScenarioVersion.IScenarioReviewStore, Fire3D.Infrastructure.Scenarios.ScenarioReviewStore>();
         services.AddScoped<Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog.IRuntimeCatalogReadStore, Fire3D.Infrastructure.Scenarios.RuntimeCatalogReadStore>();
         services.AddScoped<Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.IPlaytestWriteStore, Fire3D.Infrastructure.Scenarios.PlaytestWriteStore>();
-        services.AddScoped<Fire3D.Application.Releases.Commands.PublishRelease.IReleaseWriteStore, Fire3D.Infrastructure.Releases.ReleaseWriteStore>();
+        services.AddScoped<Fire3D.Application.Releases.IReleaseStore, Fire3D.Infrastructure.Releases.ReleaseWriteStore>();
         services.AddScoped<Fire3D.Application.Buildings.IBuildingStore, Fire3D.Infrastructure.Buildings.BuildingStore>();
         services.AddScoped<Fire3D.Application.Buildings.Queries.GetTrainings.ITrainingReadStore, Fire3D.Infrastructure.Buildings.TrainingReadStore>();
         services.AddMediatR(options =>

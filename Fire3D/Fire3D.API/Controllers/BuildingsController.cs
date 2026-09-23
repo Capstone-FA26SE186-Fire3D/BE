@@ -57,9 +57,20 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/revisions/upload-url")]
-    public async Task<ActionResult> GetUploadUrl(Guid id, CancellationToken ct)
+    [ProducesResponseType<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>(201)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<ActionResult<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>> GetUploadUrl(
+        Guid id, Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadRequest request, CancellationToken ct)
     {
-        return StatusCode(501, "S3 Pre-signed URL generation is pending implementation.");
+        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadCommand(
+            User.GetActorId(), id, request), ct);
+        return result.IsSuccess
+            ? Created($"/api/revisions/{result.Value!.RevisionId}", result.Value)
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
     /// <summary>Danh sách revision IFC của Building, có phân trang.</summary>

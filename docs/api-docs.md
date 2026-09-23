@@ -2,7 +2,7 @@
 
 Cập nhật **23/09/2026**, bổ sung editor preview và annotations trên nhánh `fix/auth-registration`; các mục trước giữ nội dung đối chiếu ngày 22/09.
 
-Source hiện có **61 operation controller** (đếm HTTP action), trong đó một endpoint trả `501`. Số lượng route không xác nhận các luồng đã chạy end-to-end hay toàn bộ API trong proposal. Các phần thiếu được ghi rõ ở mục 9.
+Source hiện có **64 operation controller** (đếm HTTP action). Số lượng route không xác nhận các luồng đã chạy end-to-end hay toàn bộ API trong proposal. Các phần thiếu được ghi rõ ở mục 9.
 
 ## 1. Quy ước tích hợp
 
@@ -65,7 +65,6 @@ Framework có thể thêm type/traceId/errors. Building CRUD, một số IFC com
 | 412 | Thiếu/sai If-Match khi lưu draft |
 | 422 | Không xác minh được object upload |
 | 429 | Vượt rate limit |
-| 501 | Endpoint upload-url cũ chưa triển khai |
 
 Policy auth: **10 request/phút/IP** cho sáu auth public endpoint và POST accounts. Policy administration: **120 request/phút/IP** cho administration và IFC commands; POST accounts dùng auth. Fixed window, không xếp hàng; không suy ra tất cả route đều dùng hai policy này.
 
@@ -302,7 +301,7 @@ OrganizationResponse: id, name, slug, isActive, createdAt, updatedAt. List nhậ
 | GET | `/api/buildings/{id}` | Building CRUD | 200 BuildingResponse |
 | PUT | `/api/buildings/{id}` | Building CRUD | 200 BuildingResponse |
 | DELETE | `/api/buildings/{id}` | Building CRUD | 200 BuildingSummaryResponse |
-| POST | `/api/buildings/{id}/revisions/upload-url` | User | **501, chưa triển khai** |
+| POST | `/api/buildings/{id}/revisions/upload-url` | Editor | 201 InitiateIfcUploadResponse |
 | GET | `/api/buildings/{id}/revisions` | Editor | 200 Page<RevisionResponse> |
 | GET | `/api/buildings/{id}/trainings` | Editor | 200 TrainingDto[] |
 | GET | `/api/revisions/{id}` | Editor | 200 RevisionResponse |
@@ -337,19 +336,20 @@ Revision list nhận page/pageSize; detail nhận ID. Editor scope, Trainee 403,
 
 Trainings trả mảng, không phân trang: id, releaseId, name, description nullable, status, startDate/endDate nullable, allowedModes (string[]), createdAt. Query lọc training Active và release Published, chưa lọc khoảng ngày. Đây là Editor API, không phải danh sách học public/Trainee.
 
-Upload-url cũ luôn 501; dùng initiation IFC bên dưới.
+Upload-url cũ là route tương thích và dùng cùng `InitiateIfcUploadCommand` với `/api/buildings/{buildingId}/ifc`. Hai route nhận cùng body, tạo revision Draft và trả cùng response `revisionId`, `uploadUrl`, `objectKey`; client mới nên dùng route IFC. Không gọi đồng thời cả hai route cho cùng một file vì mỗi lần gọi tạo một revision mới.
 
-## 5. IFC commands — 5 endpoint
+## 5. IFC commands — 6 endpoint
 
 Tất cả cần Editor, rate limit administration. Storage phải được cấu hình thật; có route không đồng nghĩa worker IFC đã hoạt động.
 
 | Method | Path | Input | Thành công |
 | --- | --- | --- | --- |
-| POST | `/api/buildings/{buildingId}/ifc` | InitiateIfcUploadRequest | 200 InitiateIfcUploadResponse |
+| POST | `/api/buildings/{buildingId}/ifc` | InitiateIfcUploadRequest | 201 InitiateIfcUploadResponse |
 | POST | `/api/revisions/{revisionId}/upload-complete` | FinalizeIfcUploadRequest | 204 |
 | POST | `/api/revisions/{revisionId}/process` | Không body | 202 {jobId} |
 | POST | `/api/processing-jobs/{jobId}/retry` | requestId, reason | 202 RetryProcessingJobResponse |
 | POST | `/api/revisions/{revisionId}/confirm-for-training` | Không body | 200 rỗng |
+| POST | `/api/revisions/{revisionId}/reviews` | scenarioVersionId, action, validationRunId, message | 201 reviewId |
 
 ### 5.1 Initiate → upload → finalize
 
@@ -402,12 +402,13 @@ requestId là UUID khác Guid.Empty; reason không trống, tối đa 1000, đư
 
 Confirm chuyển ReadyForScenario → ConfirmedForTraining. Trạng thái khác: 400 INVALID_STATE; không thấy/ngoài phạm vi: 404; thành công 200 rỗng. Không tự tạo release/training.
 
-## 6. IFC queries — 7 endpoint
+## 6. IFC queries — 8 endpoint
 
 Tất cả cần Editor; list nhận page/pageSize. Sai filter/Guid.Empty 400, sai role 403, không thấy/ngoài tổ chức 404.
 
 | Method | Path | Thành công |
 | --- | --- | --- |
+| GET | `/api/revisions/{revisionId}/processing-logs` | 200 Page<RevisionProcessingLogResponse> |
 | GET | `/api/revisions/{revisionId}/processing-jobs` | 200 Page<ProcessingJobResponse> |
 | GET | `/api/processing-jobs/{jobId}` | 200 ProcessingJobDetailResponse |
 | GET | `/api/validation-runs/{validationRunId}` | 200 ValidationRunResponse |
@@ -525,28 +526,33 @@ Handler yêu cầu ít nhất một draftId/versionId; client nên gửi đúng 
 
 Contract thành công 201 id playtest. Start không body, chuyển Created → Running; khác Created 400 INVALID_STATE; không thấy/ngoài phạm vi 404. Không trả launch token, manifest hay URL package. Prepare/start còn rủi ro DB/entitlement (mục 9); 200 không chứng minh Unity đã khởi chạy hoặc đã ghi kết quả huấn luyện.
 
-## 8. Publish release — 1 endpoint
+## 8. Release lifecycle — 4 endpoint
 
 | Method | Path | Quyền | Input | Thành công |
 | --- | --- | --- | --- | --- |
-| POST | `/api/releases/{releaseId}/publish` | Editor | Không body | 200 rỗng |
+| POST | `/api/releases` | Editor | BuildReleaseRequest | 201 ReleaseResponse + Location |
+| GET | `/api/releases/{releaseId}` | Editor | Không body | 200 ReleaseResponse |
+| POST | `/api/releases/{releaseId}/publish` | Editor | Không body | 204 |
+| POST | `/api/releases/{releaseId}/revoke` | Editor | `{ "reason": "..." }` | 204 |
 
-Release trong phạm vi phải Built, chuyển Published, ghi publishedAt/publishedBy/audit. Sai trạng thái 400 INVALID_STATE, không thấy/ngoài phạm vi 404; controller không thêm code vào ProblemDetails.
+`POST /api/releases` ghi nhận một Unity/package build đã hoàn tất và tạo nguyên tử release trạng thái Built, package metadata và audit. Request pin revision, scenarioVersion, ConfirmForTraining review, candidate artifact, safetyThresholds JSON object, manifest/package private object key, hai SHA-256 64 ký tự, packageSizeBytes dương, minRuntimeVersion, schemaVersion và buildTarget. Revision phải ConfirmedForTraining; Building/tổ chức phải active; review và artifact phải khớp revision/version. Một cặp revision + scenarioVersion chỉ có một release; trùng trả 409 RELEASE_EXISTS.
 
-Chưa có API tạo/build release. Store publish chỉ kiểm Built, không bảo đảm đã kiểm đầy đủ QA/entitlement/package. Không tự tạo training; GET trainings chỉ trả training Active gắn release Published.
+Create/build được gộp vì schema bắt buộc release mới được tạo ở trạng thái Built; API không chạy Unity trong request. Worker phải upload và kiểm chứng artifact trước khi gọi API này. GET trả release cùng package metadata, không trả signed download URL. Publish chỉ nhận Built có package, chuyển Published và ghi audit trong transaction. Revoke nhận reason 1–1000 ký tự, cho Built/Published → Revoked, ghi actor/time/reason/audit; gọi lại release đã Revoked vẫn trả 204.
+
+Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 404 không thấy/khác tenant, 409 state hoặc release đã tồn tại. PlatformAdmin có thể đọc/thao tác liên tổ chức theo policy hiện tại. Publish vẫn phụ thuộc gate QA/runtime/entitlement/Training của schema triển khai; chưa tự tạo Training hoặc khởi chạy Unity build job.
 
 ## 9. Giới hạn thấy khi đối chiếu source
 
 | Phần | Hiện trạng và ảnh hưởng |
 | --- | --- |
 | Building CRUD | Scope khác Editor, PlatformAdmin không chọn tenant đích, role guard chưa nhất quán |
-| Upload-url cũ | Luôn 501; dùng initiation IFC |
+| Upload-url cũ | Đã là alias tương thích của initiation IFC; client mới dùng `/api/buildings/{buildingId}/ifc` |
 | IFC finalize | Chưa ràng buộc đủ key với revision/upload; chưa kiểm hash nội dung; validation MIME/tên/hash hạn chế |
 | IFC process | Outbox còn literal payload_hash = 'hash', không phải SHA-256 hợp lệ; chưa bảo đảm tương thích schema/gate/worker. Process/confirm truy cập navigation Building nhưng query không Include Building, có nguy cơ null |
 | Draft editor | Thiếu GET state/version hoặc version trong create response; chặn việc lấy If-Match đầu tiên |
 | Playtest prepare | SQL entitlement dùng is_active, bắt exception rồi giữ Guid.Empty; cần đối chiếu schema. Draft-only có thể ghi ScenarioVersionId = Guid.Empty và vướng FK |
 | Playtest start | Mới đổi trạng thái/audit, chưa trả launch grant |
-| Release/training | Thiếu create/build release và vòng đời training/session; publish chưa bảo đảm đầy đủ QA gates |
+| Release/training | Đã có create-Built/read/publish/revoke; còn thiếu package-build job và vòng đời Training/session. Publish vẫn phụ thuộc schema/gate triển khai |
 | Auth | Chưa có verify-email local, change-password, link/unlink Google hay logout-all riêng; email trùng không tự liên kết |
 | Token response | Login local bỏ expiresAt, Firebase login/refresh vẫn còn |
 | Device | Validation và xử lý bool thất bại chưa đầy đủ; 200 không chứng minh FCM delivery |
