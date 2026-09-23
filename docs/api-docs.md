@@ -153,7 +153,7 @@ Email được chuẩn hóa; password login không rỗng, tối đa 128, không
 }
 ```
 
-LoginResponse **không có accessTokenExpiresAt/refreshTokenExpiresAt**. Lỗi: 400 VALIDATION_ERROR; 401 INVALID_CREDENTIALS cho sai email/password hoặc chưa có hash local; 403 ACCOUNT_DISABLED khi password đúng nhưng tài khoản/tổ chức không hợp lệ.
+Login email/password chỉ đọc user và `password_hash` đã băm trong PostgreSQL; endpoint này không gọi Firebase. Firebase/Google chỉ đi qua `POST /api/auth/login-firebase`. LoginResponse **không có accessTokenExpiresAt/refreshTokenExpiresAt**. Lỗi: 400 VALIDATION_ERROR; 401 INVALID_CREDENTIALS cho sai email/password hoặc chưa có hash local; 403 ACCOUNT_DISABLED khi password đúng nhưng tài khoản/tổ chức không hợp lệ.
 
 ### 2.3 Google qua Firebase
 
