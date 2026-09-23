@@ -86,6 +86,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthChecks("/health");
+app.MapGet("/health/version", (IConfiguration configuration) => Results.Ok(new
+{
+    version = configuration["APP_VERSION"] ?? "unknown"
+}));
 app.MapControllers();
 
 app.Run();
