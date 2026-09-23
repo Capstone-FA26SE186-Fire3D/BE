@@ -1,5 +1,7 @@
 # Nền tảng BE — cấu trúc và module
 
+> Tài liệu này ghi nhận nền tảng/Week 2 ở thời điểm ban đầu. Bảng tiến độ module bên dưới đã lỗi thời sau khi main bổ sung Building/IFC, Scenario, Release và auth recovery. Dùng [API guide hiện tại](api-docs.md) cho source, [checklist theo Docs](api-implementation-checklist.md) cho phần còn thiếu và [Docs gốc](README.md) cho contract đích.
+
 ## Kiến trúc
 
 Chốt hướng triển khai: Clean Architecture, một ứng dụng BE, tổ chức use case theo module và MediatR command/query. Đây là đề xuất kỹ thuật đã triển khai của BE để team review, chưa thay thế việc leader xác nhận checklist.
