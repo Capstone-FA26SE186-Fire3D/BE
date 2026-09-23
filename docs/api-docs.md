@@ -115,7 +115,15 @@ BE hash password vào `users.password_hash`, không tạo tài khoản email/pas
   "email": "trainee@example.com",
   "fullName": "Nguyen Van A",
   "role": "Trainee",
-  "organizationId": null
+  "organizationId": null,
+  "dob": "2004-07-29",
+  "gender": "Male",
+  "phoneNumber": "+84901234567",
+  "avatarUrl": "https://cdn.example.test/avatars/trainee.png",
+  "isActive": true,
+  "lastLoginAt": "2026-09-23T10:00:00Z",
+  "createdAt": "2026-09-23T09:00:00Z",
+  "updatedAt": "2026-09-23T10:00:00Z"
 }
 ```
 
