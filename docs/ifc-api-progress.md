@@ -33,3 +33,10 @@ No migration or production data changes were made. Existing Firebase onboarding/
 - Regression run initially found processing logs pagination missing the created_at alias; corrected logged_at AS created_at. Two legacy Testcontainers tests require Docker, which is unavailable in this environment.
 - After the fix: 97 IFC tests passed, 0 skipped with the two Docker-dependent test classes explicitly excluded. Full solution build: 0 warnings, 0 errors. This is not a claim that the unfiltered 99-test suite passed.
 - Not verified: live S3 object existence/download, worker metadata output and deployed Supabase schema/permissions. No Supabase migration or production data mutation performed. See api-docs.md for request/response and worker metadata contract.
+
+## Docker follow-up verified — 2026-09-23
+
+- IFC: 99/99 passed, 0 skipped, including real retry/outbox SQL and Docker scenario flow.
+- Auth: 69/69 passed, 0 skipped, after provisioning raw SQL recovery tables, cleaning up fixture-owned FirebaseApp, and aligning disabled-login expectations with documented 403 ACCOUNT_DISABLED (refresh/access remain 401).
+- Fixed fixtures: PostgreSQL enum mapping, required active seed records and source metadata, real xmin concurrency values; replay asserts one outbox event and one audit.
+- Reproduction and scope: [integration-tests.md](integration-tests.md). No deployed Supabase schema/permissions or live Firebase/Mailgun/S3 certification implied.

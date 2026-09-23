@@ -9,4 +9,5 @@
     <ProjectReference Include="../Fire3D.Application/Fire3D.Application.csproj" />
     <ProjectReference Include="../Fire3D.Infrastructure/Fire3D.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup><None Update="retry-contract.sql" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>
