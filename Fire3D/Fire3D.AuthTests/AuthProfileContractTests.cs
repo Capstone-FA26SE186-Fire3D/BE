@@ -1,6 +1,9 @@
 using Fire3D.Application.Authentication.Commands.RegisterUser;
 using Fire3D.Application.Authentication;
 using Fire3D.Domain.Enums;
+using Fire3D.Infrastructure.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Xunit;
 
 namespace Fire3D.AuthTests;
@@ -38,5 +41,15 @@ public sealed class AuthProfileContractTests
         Assert.Equal(typeof(string), properties["AvatarUrl"].PropertyType);
         Assert.Equal(typeof(bool), properties["IsActive"].PropertyType);
         Assert.Equal(typeof(DateTime?), properties["LastLoginAt"].PropertyType);
+    }
+
+    [Fact]
+    public void Profile_schema_migration_has_ef_discovery_metadata()
+    {
+        var type = typeof(AddUserProfileFields);
+
+        Assert.NotNull(type.GetCustomAttributes(typeof(DbContextAttribute), false).SingleOrDefault());
+        var migration = Assert.Single(type.GetCustomAttributes(typeof(MigrationAttribute), false).Cast<MigrationAttribute>());
+        Assert.Equal("20260923120000_AddUserProfileFields", migration.Id);
     }
 }

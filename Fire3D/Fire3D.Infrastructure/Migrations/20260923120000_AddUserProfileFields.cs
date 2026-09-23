@@ -1,9 +1,13 @@
+using Fire3D.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace Fire3D.Infrastructure.Migrations;
 
+[DbContext(typeof(Fire3DDbContext))]
+[Migration("20260923120000_AddUserProfileFields")]
 public partial class AddUserProfileFields : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
