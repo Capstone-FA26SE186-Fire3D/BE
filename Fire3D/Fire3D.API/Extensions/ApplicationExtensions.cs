@@ -3,6 +3,7 @@ using Fire3D.Application.Administration;
 using Fire3D.Application.Email;
 using Fire3D.Infrastructure.Administration;
 using Fire3D.Infrastructure.Email;
+using Amazon.Runtime;
 
 namespace Fire3D.API.Extensions;
 
@@ -10,8 +11,14 @@ public static class ApplicationExtensions
 {
     public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddSingleton(configuration);
         services.AddScoped<IAdministrationStore, AdministrationStore>();
-        services.AddDefaultAWSOptions(configuration.GetAWSOptions()); services.AddAWSService<Amazon.S3.IAmazonS3>(); services.AddScoped<Fire3D.Application.Storage.IStorageService, Fire3D.Infrastructure.Storage.S3StorageService>();
+        var awsOptions = configuration.GetAWSOptions();
+        var accessKey = configuration["AWS:AccessKey"];
+        var secretKey = configuration["AWS:SecretKey"];
+        if (!string.IsNullOrWhiteSpace(accessKey) && !string.IsNullOrWhiteSpace(secretKey))
+            awsOptions.Credentials = new BasicAWSCredentials(accessKey, secretKey);
+        services.AddDefaultAWSOptions(awsOptions); services.AddAWSService<Amazon.S3.IAmazonS3>(); services.AddScoped<Fire3D.Application.Storage.IStorageService, Fire3D.Infrastructure.Storage.S3StorageService>();
         services.AddScoped<Fire3D.Application.Ifc.IIfcReadStore, Fire3D.Infrastructure.Ifc.IfcReadStore>();
         services.AddScoped<Fire3D.Application.Ifc.IEditorPreviewStore, Fire3D.Infrastructure.Ifc.EditorPreviewStore>();
         services.AddScoped<Fire3D.Application.Ifc.IPreviewDownloadSigner, Fire3D.Infrastructure.Storage.S3PreviewDownloadSigner>();

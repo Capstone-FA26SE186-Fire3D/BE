@@ -1,11 +1,12 @@
 using Amazon.S3;
 using Fire3D.Application.Storage;
+using Microsoft.Extensions.Configuration;
 
 namespace Fire3D.Infrastructure.Storage;
 
-public class S3StorageService(IAmazonS3 s3Client) : IStorageService
+public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration) : IStorageService
 {
-    private readonly string _bucketName = Environment.GetEnvironmentVariable("S3_BUCKET_NAME") ?? "fire3d-uploads";
+    private readonly string _bucketName = configuration["AWS:BucketName"] ?? Environment.GetEnvironmentVariable("S3_BUCKET_NAME") ?? "fire3d-uploads";
 
     public async Task<string> GeneratePresignedUploadUrlAsync(string objectKey, string mimeType, TimeSpan expiration, CancellationToken ct)
     {
