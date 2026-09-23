@@ -16,6 +16,8 @@ public static class ApplicationExtensions
         var awsOptions = configuration.GetAWSOptions();
         var accessKey = configuration["AWS:AccessKey"];
         var secretKey = configuration["AWS:SecretKey"];
+        if (string.IsNullOrWhiteSpace(accessKey) != string.IsNullOrWhiteSpace(secretKey))
+            throw new InvalidOperationException("AWS:AccessKey and AWS:SecretKey must be configured together.");
         if (!string.IsNullOrWhiteSpace(accessKey) && !string.IsNullOrWhiteSpace(secretKey))
             awsOptions.Credentials = new BasicAWSCredentials(accessKey, secretKey);
         services.AddDefaultAWSOptions(awsOptions); services.AddAWSService<Amazon.S3.IAmazonS3>(); services.AddScoped<Fire3D.Application.Storage.IStorageService, Fire3D.Infrastructure.Storage.S3StorageService>();

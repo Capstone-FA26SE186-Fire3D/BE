@@ -13,7 +13,7 @@ public sealed class S3PreviewDownloadSigner(IAmazonS3 client, IConfiguration con
         var expires = DateTimeOffset.UtcNow.AddMinutes(5);
         var url = await client.GetPreSignedURLAsync(new GetPreSignedUrlRequest
         {
-            BucketName = configuration["AWS:BucketName"] ?? Environment.GetEnvironmentVariable("S3_BUCKET_NAME") ?? "fire3d-uploads",
+            BucketName = S3StorageService.ResolveBucketName(configuration),
             Key = storageKey, Verb = HttpVerb.GET, Expires = expires.UtcDateTime
         });
         return new(url, expires);
