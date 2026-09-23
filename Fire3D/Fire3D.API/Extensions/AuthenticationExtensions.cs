@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using Fire3D.API.Authorization;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
@@ -24,6 +24,18 @@ public static class AuthenticationExtensions
         services.AddSingleton<IPasswordService, PasswordService>();
         services.AddSingleton<ITokenService, TokenService>();
         services.AddScoped<IAuthStore, AuthStore>();
+        services.AddScoped<ILocalPasswordReset, LocalPasswordReset>();
+        services.AddScoped<Fire3D.Application.Authentication.Services.Fire3DSessionIssuer>();
+        services.AddHttpClient<Fire3D.Application.Authentication.Abstractions.IIdentityProvider, FirebaseIdentityProvider>(
+            client => client.Timeout = TimeSpan.FromSeconds(15)).RemoveAllLoggers();
+        services.AddOptions<AuthEmailOptions>().Bind(configuration.GetSection("AuthEmail")).ValidateDataAnnotations();
+        services.AddSingleton<IFirebaseResetAdmin, FirebaseResetAdmin>();
+        services.AddScoped<IPasswordResetStore, PasswordResetStore>();
+        services.AddScoped<IPasswordResetQueue, PasswordResetQueue>();
+        services.AddExceptionHandler<PasswordResetExceptionHandler>();
+        services.AddHttpClient<IPasswordResetProvider, FirebasePasswordResetProvider>(client => client.Timeout = TimeSpan.FromSeconds(15))
+            .RemoveAllLoggers();
+        services.AddHostedService<Fire3D.Infrastructure.Workers.PasswordResetWorker>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
@@ -80,3 +92,6 @@ public static class AuthenticationExtensions
         return services;
     }
 }
+
+
+

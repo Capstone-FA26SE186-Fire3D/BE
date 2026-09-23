@@ -19,16 +19,14 @@ public class ScenarioStoreTests : IAsyncLifetime
         private PostgreSqlContainer _dbContainer;
     public ScenarioStoreTests()
     {
-        _dbContainer = new PostgreSqlBuilder().WithImage("postgres:15-alpine").Build();
+        _dbContainer = new PostgreSqlBuilder("postgres:15-alpine").Build();
     }
     public async Task InitializeAsync() => await _dbContainer.StartAsync();
     public async Task DisposeAsync() => await _dbContainer.DisposeAsync();
 
     private Fire3DDbContext GetDbContext()
     {
-        var options = new DbContextOptionsBuilder<Fire3DDbContext>()
-            .UseNpgsql(_dbContainer.GetConnectionString())
-            .Options;
+        var options = IfcTestOptions.Create(_dbContainer.GetConnectionString());
         var db = new Fire3DDbContext(options);
         db.Database.EnsureCreated();
         // Seed prerequisites
@@ -37,7 +35,8 @@ public class ScenarioStoreTests : IAsyncLifetime
         var revisionId = Guid.NewGuid();
         var userId = Guid.NewGuid();
 
-        db.Organizations.Add(new Organization { Id = orgId, IsActive = true, Name = "Org" });
+        db.Organizations.Add(new Organization { Id = orgId, IsActive = true, Name = "Org", Slug = "scenario-store-org" });
+        db.Users.Add(new User { Id = userId, OrganizationId = orgId, Email = "scenario@example.test", FullName = "Test editor", Role = Fire3D.Domain.Enums.UserRole.OrganizationUser, IsActive = true });
         db.Buildings.Add(new Building { Id = buildingId, OrganizationId = orgId, Name = "Building", IsActive = true, CreatedBy = userId });
         db.Revisions.Add(new Revision { Id = revisionId, BuildingId = buildingId, OrganizationId = orgId, UploadedBy = userId, VersionLabel = "v1" });
         db.SaveChanges();
@@ -55,7 +54,7 @@ public class ScenarioStoreTests : IAsyncLifetime
         var org = await db.Organizations.FirstAsync();
         var building = await db.Buildings.FirstAsync();
         var revision = await db.Revisions.FirstAsync();
-        var actorId = Guid.NewGuid();
+        var actorId = (await db.Users.SingleAsync()).Id;
 
         // 1. Create Scenario (D09)
         var createReq = new CreateScenarioRequest(building.Id, "Fire Evacuation Scenario");
@@ -76,7 +75,8 @@ public class ScenarioStoreTests : IAsyncLifetime
         var draft = await db.ScenarioDrafts.FindAsync(draftId);
         Assert.NotNull(draft);
         Assert.Equal(1, draft.DraftNumber);
-        Assert.Equal(1u, draft.Version);
+        Assert.NotEqual(0u, draft.Version); // PostgreSQL xmin is a transaction ID, not a counter starting at 1.
+        var originalVersion = draft.Version;
         Assert.NotNull(draft.State);
 
         // 3. Update Draft (D11)
@@ -87,11 +87,11 @@ public class ScenarioStoreTests : IAsyncLifetime
             RoutingConfig: new RoutingConfig(new System.Collections.Generic.List<string>())
         );
 
-        var updateResult = await store.UpdateScenarioDraftAsync(actorId, draftId, 1u, updateReq, org.Id, CancellationToken.None);
+        var updateResult = await store.UpdateScenarioDraftAsync(actorId, draftId, originalVersion, updateReq, org.Id, CancellationToken.None);
         Assert.True(updateResult.IsSuccess);
 
         // 4. Update Concurrency Conflict
-        var conflictResult = await store.UpdateScenarioDraftAsync(actorId, draftId, 1u /* Wrong expected version */, updateReq, org.Id, CancellationToken.None);
+        var conflictResult = await store.UpdateScenarioDraftAsync(actorId, draftId, originalVersion, updateReq, org.Id, CancellationToken.None);
         Assert.False(conflictResult.IsSuccess);
         Assert.Equal(409, conflictResult.Error!.Status);
 

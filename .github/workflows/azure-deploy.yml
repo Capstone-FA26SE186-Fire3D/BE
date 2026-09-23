@@ -2,16 +2,22 @@ name: Build and Deploy to Azure
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
+
+concurrency:
+  group: fire3d-api-production
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: capstone-fa26se186-fire3d/fire3d-api
+  APP_URL: https://fire3d-api-h3a5h2fgdvajfbcz.eastasia-01.azurewebsites.net
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       packages: write
@@ -23,21 +29,41 @@ jobs:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Fire3D/Dockerfile
           push: true
-          tags: ghcr.io/capstone-fa26se186-fire3d/fire3d-api:latest
+          build-args: |
+            APP_VERSION=${{ github.sha }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: fire3d-api
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          images: ghcr.io/capstone-fa26se186-fire3d/fire3d-api:latest
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          restart: true
+
+      - name: Verify deployed version
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            response="$(curl --fail --silent --show-error --connect-timeout 10 "${APP_URL}/health/version" || true)"
+            if [[ "${response}" == *"${GITHUB_SHA}"* ]]; then
+              echo "Fire3D API is running ${GITHUB_SHA}."
+              exit 0
+            fi
+            echo "Waiting for ${GITHUB_SHA}; attempt ${attempt}/30."
+            sleep 10
+          done
+          echo "Azure did not start the requested image version."
+          exit 1

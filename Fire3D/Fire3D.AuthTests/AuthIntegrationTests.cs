@@ -53,6 +53,7 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
     private WebApplicationFactory<Program>? factory;
     private HttpClient client = null!;
     private bool created;
+    private FirebaseAdmin.FirebaseApp? ownedFirebaseApp;
     private Guid adminId;
 
     public async Task InitializeAsync()
@@ -85,6 +86,9 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
         {
             await db.Database.EnsureCreatedAsync();
         }
+        // Raw SQL auth recovery tables are not part of the EF model.
+        await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "002_password_reset_recovery.sql")));
+        await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "003_local_password.sql")));
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(web =>
         {
             web.UseEnvironment("Development");
@@ -107,7 +111,16 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
                 services.AddDataProtection().UseEphemeralDataProtectionProvider();
             });
         });
-        client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+        var previousFirebaseApp = FirebaseAdmin.FirebaseApp.DefaultInstance;
+        try
+        {
+            client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+        }
+        finally
+        {
+            // Program creates a process-global SDK instance; this fixture owns only the instance it created.
+            if (previousFirebaseApp is null) ownedFirebaseApp = FirebaseAdmin.FirebaseApp.DefaultInstance;
+        }
         using var scope = factory.Services.CreateScope();
         Assert.Equal(databaseName, scope.ServiceProvider.GetRequiredService<Fire3DDbContext>().Database.GetDbConnection().Database);
         var result = await scope.ServiceProvider.GetRequiredService<ISender>()
@@ -205,7 +218,10 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
     {
         var token = await LoginAsync();
         await ExecuteAsync("UPDATE users SET is_active=false");
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/login", new LoginRequest("admin@example.test", password))).StatusCode);
+        var disabledLogin = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest("admin@example.test", password));
+        Assert.Equal(HttpStatusCode.Forbidden, disabledLogin.StatusCode); // Correct password, unavailable account: documented ACCOUNT_DISABLED contract.
+        var disabledProblem = await disabledLogin.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ACCOUNT_DISABLED", disabledProblem.GetProperty("code").GetString());
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/refresh", new RefreshRequest(token.RefreshToken))).StatusCode);
         client.DefaultRequestHeaders.Authorization = new("Bearer", token.AccessToken);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
@@ -304,7 +320,7 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
         await ExecuteAsync("UPDATE users SET deleted_at=now()");
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
         client.DefaultRequestHeaders.Authorization = null;
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/login",
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/auth/login",
             new LoginRequest("admin@example.test", password))).StatusCode);
     }
 
@@ -348,7 +364,8 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         client?.Dispose();
-        if (factory is not null) await factory.DisposeAsync();
+        try { if (factory is not null) await factory.DisposeAsync(); }
+        finally { ownedFirebaseApp?.Delete(); }
         if (!created) return;
         // Only the exact random database created by this fixture may be dropped.
         if (!databaseName.StartsWith("fire3d_auth_test_", StringComparison.Ordinal)) throw new InvalidOperationException();

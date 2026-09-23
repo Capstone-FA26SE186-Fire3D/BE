@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Text.Json.Nodes;
 using Fire3D.Domain.Enums;
 using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -953,6 +954,108 @@ namespace Fire3D.Infrastructure.Migrations
                     b.ToTable("payos_payment_requests", (string)null);
                 });
 
+            modelBuilder.Entity("Fire3D.Domain.Entities.PlaytestSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BuildingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("building_id");
+
+                    b.Property<string>("CompletionIdempotencyKey")
+                        .HasColumnType("text")
+                        .HasColumnName("completion_idempotency_key");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at");
+
+                    b.Property<string>("ManifestSchemaVersion")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("manifest_schema_version");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<string>("PackageHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("package_hash");
+
+                    b.Property<string>("PrepareIdempotencyKey")
+                        .HasColumnType("text")
+                        .HasColumnName("prepare_idempotency_key");
+
+                    b.Property<string>("ProtocolVersion")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("protocol_version");
+
+                    b.Property<Guid>("RevisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("revision_id");
+
+                    b.Property<string>("RuntimeVersion")
+                        .HasColumnType("text")
+                        .HasColumnName("runtime_version");
+
+                    b.Property<Guid?>("ScenarioDraftId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scenario_draft_id");
+
+                    b.Property<Guid>("ScenarioVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scenario_version_id");
+
+                    b.Property<Guid>("ServiceEntitlementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_entitlement_id");
+
+                    b.Property<string>("StartIdempotencyKey")
+                        .HasColumnType("text")
+                        .HasColumnName("start_idempotency_key");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuildingId");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("RevisionId");
+
+                    b.HasIndex("ScenarioDraftId");
+
+                    b.HasIndex("ScenarioVersionId");
+
+                    b.ToTable("playtest_sessions", (string)null);
+                });
+
             modelBuilder.Entity("Fire3D.Domain.Entities.ProcessingJob", b =>
                 {
                     b.Property<Guid>("Id")
@@ -960,12 +1063,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<int>("AttemptNumber")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("attempt_number");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -984,6 +1081,11 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Property<DateTime?>("HeartbeatAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("heartbeat_at");
+
+                    b.Property<string>("InputHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("input_hash");
 
                     b.Property<Guid>("JobKey")
                         .HasColumnType("uuid")
@@ -1022,11 +1124,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("status")
                         .HasDefaultValueSql("'Queued'::text");
-
-                    b.Property<string>("ToolchainVersion")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("toolchain_version");
 
                     b.HasKey("Id")
                         .HasName("processing_jobs_pkey");
@@ -1734,10 +1831,7 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<int>("AttemptNumber")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("attempt_number");
+                        .HasColumnType("integer");
 
                     b.Property<int?>("DurationMs")
                         .HasColumnType("integer")
@@ -1839,6 +1933,50 @@ namespace Fire3D.Infrastructure.Migrations
                     b.ToTable("revision_reviews", (string)null);
                 });
 
+            modelBuilder.Entity("Fire3D.Domain.Entities.RuntimeCompatibilityCatalog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<JsonNode>("Capabilities")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("capabilities");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("ManifestSchemaVersion")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("manifest_schema_version");
+
+                    b.Property<string>("ProtocolVersion")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("protocol_version");
+
+                    b.Property<string>("RuntimeVersion")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("runtime_version");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("runtime_compatibility_catalog", (string)null);
+                });
+
             modelBuilder.Entity("Fire3D.Domain.Entities.Scenario", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1884,6 +2022,84 @@ namespace Fire3D.Infrastructure.Migrations
                         {
                             t.HasComment("Logical training scenario belonging to a building; versions may pin different compatible building revisions.");
                         });
+                });
+
+            modelBuilder.Entity("Fire3D.Domain.Entities.ScenarioDraft", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BuildingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("building_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<int>("DraftNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("draft_number");
+
+                    b.Property<Guid?>("LastAiRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("last_ai_request_id");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<Guid>("RevisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("revision_id");
+
+                    b.Property<Guid>("ScenarioId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scenario_id");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("source");
+
+                    b.Property<JsonNode>("State")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("state");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuildingId");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("RevisionId");
+
+                    b.HasIndex("ScenarioId");
+
+                    b.ToTable("scenario_drafts", (string)null);
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.ScenarioVersion", b =>
@@ -2780,6 +2996,11 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("email");
 
+                    b.Property<string>("FirebaseUid")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("firebase_uid");
+
                     b.Property<string>("FullName")
                         .HasColumnType("text")
                         .HasColumnName("full_name");
@@ -2797,11 +3018,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Property<Guid?>("OrganizationId")
                         .HasColumnType("uuid")
                         .HasColumnName("organization_id");
-
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("password_hash");
 
                     b.Property<UserRole>("Role")
                         .HasColumnType("user_role_enum")
@@ -2850,6 +3066,11 @@ namespace Fire3D.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("device_uuid");
+
+                    b.Property<string>("FcmToken")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("fcm_token");
 
                     b.Property<DateTime>("LastSeenAt")
                         .ValueGeneratedOnAdd()
@@ -3171,6 +3392,55 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Navigation("RequestedByNavigation");
                 });
 
+            modelBuilder.Entity("Fire3D.Domain.Entities.PlaytestSession", b =>
+                {
+                    b.HasOne("Fire3D.Domain.Entities.Building", "Building")
+                        .WithMany()
+                        .HasForeignKey("BuildingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Fire3D.Domain.Entities.User", "CreatedByNavigation")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Fire3D.Domain.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Fire3D.Domain.Entities.Revision", "Revision")
+                        .WithMany()
+                        .HasForeignKey("RevisionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Fire3D.Domain.Entities.ScenarioDraft", "ScenarioDraft")
+                        .WithMany()
+                        .HasForeignKey("ScenarioDraftId");
+
+                    b.HasOne("Fire3D.Domain.Entities.ScenarioVersion", "ScenarioVersion")
+                        .WithMany()
+                        .HasForeignKey("ScenarioVersionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Building");
+
+                    b.Navigation("CreatedByNavigation");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("Revision");
+
+                    b.Navigation("ScenarioDraft");
+
+                    b.Navigation("ScenarioVersion");
+                });
+
             modelBuilder.Entity("Fire3D.Domain.Entities.ProcessingJob", b =>
                 {
                     b.HasOne("Fire3D.Domain.Entities.Revision", "Revision")
@@ -3487,6 +3757,49 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Navigation("Building");
 
                     b.Navigation("CreatedByNavigation");
+                });
+
+            modelBuilder.Entity("Fire3D.Domain.Entities.ScenarioDraft", b =>
+                {
+                    b.HasOne("Fire3D.Domain.Entities.Building", "Building")
+                        .WithMany()
+                        .HasForeignKey("BuildingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Fire3D.Domain.Entities.User", "CreatedByNavigation")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Fire3D.Domain.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Fire3D.Domain.Entities.Revision", "Revision")
+                        .WithMany()
+                        .HasForeignKey("RevisionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Fire3D.Domain.Entities.Scenario", "Scenario")
+                        .WithMany()
+                        .HasForeignKey("ScenarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Building");
+
+                    b.Navigation("CreatedByNavigation");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("Revision");
+
+                    b.Navigation("Scenario");
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.ScenarioVersion", b =>

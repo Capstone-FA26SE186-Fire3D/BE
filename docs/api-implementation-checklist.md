@@ -17,7 +17,7 @@ Nguồn quyền admin bổ sung đã được người dùng chốt: [platform-a
 
 ## 2. Kết luận hiện trạng
 
-**Có 21 operation trong controller và 1 health endpoint.** Trong đó 1 operation upload chỉ trả 501. Con số này không bao gồm Swagger/OpenAPI/static files và không có nghĩa 20 operation còn lại đã đạt acceptance.
+Checklist gốc ghi nhận 21 operation ở commit review cũ. Source hiện tại đã mở rộng; số này chỉ còn là dữ liệu lịch sử và không dùng làm tổng route hiện hành.
 
 Technology mục 9 có **38 cặp method/path đích**. Chỉ POST /api/buildings đã có route tương ứng; **37 contract còn lại chưa có route tương ứng** tại commit được đọc. Những API khác đang có như auth/accounts/list Building không nằm hết trong danh sách mẫu này.
 
@@ -25,7 +25,7 @@ Không lấy số endpoint để suy ra số feature hoặc phần trăm hoàn t
 
 Ký hiệu:
 - **Có — cần rà soát**: đã có route và xử lý, chưa nghiệm thu lại.
-- **Khung 501**: chưa có xử lý nghiệp vụ.
+- **Khung 501**: ký hiệu lịch sử cho endpoint chưa có xử lý nghiệp vụ; upload-url hiện đã được thay bằng alias initiation IFC.
 - **Thiếu — contract đích**: đường dẫn đã có trong technology mục 9.
 - **Đề xuất**: năng lực còn thiếu nhưng đường dẫn/DTO do checklist đề xuất, team cần chốt trước code.
 - Tất cả ô chưa tick là việc còn phải thực hiện hoặc kiểm chứng. Không tick chỉ vì có entity/controller.
@@ -74,7 +74,7 @@ ID ở đây chỉ quản lý việc sửa/nghiệm thu source hiện hữu; POS
 | E16 | GET /api/buildings/{id} | Có — cần sửa | Truy xuất đúng tenant, lỗi 404/403 có chủ đích; không dùng Guid.Parse thiếu claim. |
 | E17 | PUT /api/buildings/{id} | Có — cần sửa | Quyền + validation + ETag/version chống mất cập nhật; thay geometry không ghi đè revision lịch sử. |
 | E18 | DELETE /api/buildings/{id} | Có — archive mềm | Hiện chỉ đặt IsActive=false. Document archive, không mô tả xóa vật lý; chốt hậu quả với start/publish và cách restore. |
-| E19 | POST /api/buildings/{id}/revisions/upload-url | Khung 501 | Thay bằng/định tuyến tương thích với D02; không làm hai luồng upload độc lập. Cần S3 private và kiểm tra file thực sau upload. |
+| E19 | POST /api/buildings/{id}/revisions/upload-url | Có — alias tương thích | Dùng cùng InitiateIfcUploadCommand/DTO/response với D02, trả 201. Client mới dùng D02; finalize vẫn phải kiểm object S3 thực. |
 | E20 | GET /api/buildings/{id}/revisions | Có — metadata | Scope, sort/pagination khi tăng dữ liệu, trạng thái/summary; chưa đại diện pipeline xử lý IFC. |
 | E21 | GET /api/revisions/{id} | Có — metadata | Scope/role/error, nguồn/hash/status đúng; artifacts/issues/jobs là contract bổ sung. |
 
@@ -96,7 +96,7 @@ Nguồn: FR-BUILD, FR-IFC, FR-PROCESS; technology 9, 14.3.1; workflows BIM pipel
 | D02 | [ ] POST /api/buildings/{buildingId}/ifc | O/A | Chốt upload initiation/receive contract; IFC-only, hạn mức thử, size/hash, private S3, revision/source ownership. Client không tùy chọn object key của tenant khác. Trả ID + trạng thái; nếu presigned flow phải có finalize (P08). |
 | D03 | [ ] POST /api/revisions/{revisionId}/process | O/A | Chỉ source đã xác nhận/quarantine đạt; job input hash + idempotency; job và ProcessingJobRequested outbox cùng transaction; trả 202/jobId. Không convert trong HTTP request. |
 | D04 | [ ] GET /api/revisions/{revisionId}/issues | O/A | Issue severity/object/floor/provenance theo validation run; phân biệt lỗi critical/error với warning. Không chỉ lấy revision_issues legacy rồi coi đủ v6.7. |
-| D05 | [ ] GET /api/buildings/{buildingId}/editor-preview | O/A | Chọn revision rõ ràng, preview/transform/floor/semantic mapping và URL TTL; không trộn metadata nhiều revision; chưa sẵn sàng trả trạng thái rõ. |
+| D05 | [x] GET /api/buildings/{buildingId}/editor-preview | O/A | revisionId query bắt buộc; current Geometry attempt thành công; metadata cùng artifact; URL TTL 5 phút; Ready/NotReady. Xem giới hạn kiểm thử trong ifc-api-progress.md. |
 | D06 | [ ] POST /api/processing-jobs/{jobId}/retry | O/A | Gate requeue; key mới chỉ Failed → Queued + outbox. Cùng key/envelope replay AlreadyRequeued dù job tiến trạng thái; khác envelope Conflict; Cancelled terminal. |
 | D07 | [ ] GET /api/processing-jobs/{jobId}/qa | O/A | Job/attempt hiện hành và validation/artifact hash khớp; không trình bày QA của attempt cũ như kết quả mới. |
 | D08 | [ ] GET /api/validation-runs/{validationRunId} | O/A | Trả summary/issues/provenance đúng tenant và runtime/toolchain; trạng thái chưa xong không báo Passed. |
@@ -207,7 +207,7 @@ Không bổ sung lời mời thành viên/role thứ tư hoặc forgot-password 
 - [ ] **P09 — GET /api/revisions/{revisionId}/processing-jobs** và **GET /api/processing-jobs/{jobId}**: FE polling status/progress/attempt/error; trả trạng thái durable PostgreSQL, không chỉ push notification.
 - [ ] **P10 — GET /api/revisions/{revisionId}/processing-logs**: paging/log đã làm sạch; không lộ filesystem, secret, signed URL dài hạn hoặc log tenant khác.
 - [ ] **P11 — GET /api/revisions/{revisionId}/artifacts** và **GET /api/revisions/{revisionId}/bim-facts**: authorized artifact descriptors/facts có provenance; có thể trả qua editor-preview để giảm round trip.
-- [ ] **P12 — GET/PUT /api/revisions/{revisionId}/annotations**: chỉnh semantic overlays độc lập geometry, ETag/version, validate IFC anchors. Thay geometry/exit theo policy cần revision mới, không sửa artifact đã pin.
+- [x] **P12 — GET/PUT /api/revisions/{revisionId}/annotations**: overlay nhãn/ghi chú IFC, ETag/version append-only, validate anchor cùng revision; transaction annotation + audit. Không nhận thay geometry/exit. Kiểm thử local không thay thế xác minh schema/quyền Supabase.
 - [ ] **P13 — GET /api/buildings/{buildingId}/scenarios** và **GET /api/scenarios/{scenarioId}**: danh sách/detail authoring đúng tenant, version/revision liên quan; cần cho editor mở lại.
 - [ ] **P14 — GET /api/scenario-drafts/{draftId}**: nạp lại draft và version/ETag để tiếp tục sửa; AI output chưa được accept không giả thành draft đã lưu.
 - [ ] **P15 — GET /api/scenarios/{scenarioId}/versions** và **GET /api/scenario-versions/{versionId}**: lịch sử/read-only snapshot; tránh API PUT version đã publish.
@@ -218,9 +218,9 @@ Không bổ sung lời mời thành viên/role thứ tư hoặc forgot-password 
 ### 6.3 Package, release, QR và training authoring
 
 - [ ] **P19 — POST /api/scenario-versions/{versionId}/package-builds**: yêu cầu Unity build job idempotent; artifact/validation/runtime/toolchain pinned. Có thể phát sinh tự động từ snapshot/validate nếu workflow chốt như vậy.
-- [ ] **P20 — POST /api/releases** và **GET /api/releases/{releaseId}**: tạo/đọc Built release từ package đã validate, không nhận URL/hash tự khai tùy ý. Có thể tạo nội bộ sau worker accept; phải chốt để D17 có release đầu vào.
+- [x] **P20 — POST /api/releases** và **GET /api/releases/{releaseId}**: tạo/đọc Built release và package metadata trong transaction; pin revision/version/review/artifact, tenant scope và audit. Unity/package worker vẫn phải là nguồn tạo và kiểm chứng object/hash trước khi gọi API; live Supabase gate chưa được chứng nhận.
 - [ ] **P21 — POST /api/buildings/{buildingId}/trainings** và **PATCH /api/trainings/{trainingId}**: tạo/chỉnh cấu hình training hợp lệ, status/mode/release/version, policy debrief; không đổi pin phiên đã start.
-- [ ] **P22 — POST /api/releases/{releaseId}/revoke**: thu hồi có lý do/audit; ngăn cấp quyền mới, giữ lịch sử/pin và áp dụng policy continuation đã chốt; không chạy lại publish gate để được revoke.
+- [x] **P22 — POST /api/releases/{releaseId}/revoke**: Built/Published → Revoked, reason/actor/time/audit cùng transaction; retry idempotent; tenant scope. Session đã start giữ pin lịch sử theo policy, phần session enforcement còn thuộc module Training.
 - [ ] **P23 — POST/GET /api/buildings/{buildingId}/qr**: cấp/đọc metadata QR canonical. Đề xuất trả token gốc tại thời điểm cấp/rotate, DB giữ hash; chốt cơ chế in lại với FE, không hứa khôi phục token từ hash.
 - [ ] **P24 — POST /api/buildings/{buildingId}/qr/rotate** và **DELETE /api/buildings/{buildingId}/qr/{qrId}**: O/A, thu hồi QR cũ; canonical uniqueness và cache invalidation sau commit; không đổi Building của QR đã cấp.
 - [ ] **P25 — GET /api/training/sessions/{sessionId}/package** và **GET /api/playtests/{playtestId}/package**: scoped signed manifest/content URLs TTL + hashes/build target/runtime requirements; có thể gộp trong prepare response. Không phát raw IFC cho T, không cấp launch grant ở đây.
@@ -340,7 +340,7 @@ Nguồn quyết định sản phẩm còn mở vẫn là bảng trong project ov
 
 - Auth transition: triển khai Firebase trực tiếp hay ADR cho exchange JWT; self-onboarding chỉ Trainee; cách provision/link tài khoản admin/org cũ.
 - Admin acting scope: input tenant đích ở route/header/body nào, DTO cá nhân được xem, audit reason; không cần hỏi lại việc có quyền thao tác nghiệp vụ vì người dùng đã chốt có.
-- Upload: D02 nhận file hay tạo presigned upload; finalize và trạng thái quarantine; tương thích route E19 đang 501.
+- Upload: D02 và E19 hiện cùng tạo presigned upload; cần chốt thời điểm loại alias cũ, hoàn thiện finalize/hash/quarantine và kiểm chứng S3 thật.
 - Draft/snapshot/build/release/Training: chốt thao tác nào tự sinh resource, thao tác nào cần API riêng; ETag/idempotency keys và schemas cùng FE/Unity.
 - Runtime: catalog capability, package/manifest/build target và bridge contract; semantics playtest telemetry/resume/checkpoint.
 - Billing/AI: giá, quota thử/ngày/kỳ, overage consent, settlement/rollover/refund/cancel/retention theo project overview trước production.

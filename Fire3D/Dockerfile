@@ -17,12 +17,15 @@ RUN dotnet publish Fire3D.API/Fire3D.API.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
+ARG APP_VERSION=unknown
+
 # Sử dụng non-root user mặc định ('app') có sẵn từ .NET 8 trở lên
 USER $APP_UID
 
 COPY --from=build /app/publish .
 
 ENV ASPNETCORE_URLS=http://+:8080
+ENV APP_VERSION=${APP_VERSION}
 EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "Fire3D.API.dll"]

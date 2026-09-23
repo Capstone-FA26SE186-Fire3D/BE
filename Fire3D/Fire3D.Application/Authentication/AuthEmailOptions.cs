@@ -1,9 +1,12 @@
-namespace Fire3D.Application.Authentication;
-
-/// <summary>Options cho forgot-password flow, đọc từ appsettings "Auth" section.</summary>
-public sealed class AuthEmailOptions
+﻿namespace Fire3D.Application.Authentication;
+public class AuthEmailOptions
 {
-    public const string SectionName = "Auth";
-    /// <summary>Base URL của frontend, vd: https://fire3d.vercel.app</summary>
-    public string FrontendUrl { get; init; } = "http://localhost:3000";
+    public const string SectionName = "AuthEmail";
+    public string FrontendUrl { get; set; } = "http://localhost:3000";
+    public string FirebaseApiKey { get; set; } = string.Empty;
+    public bool WorkerEnabled { get; set; } = true;
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(FirebaseApiKey) &&
+        Uri.TryCreate(FrontendUrl, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == "https" || (uri.Scheme == "http" && uri.IsLoopback)) &&
+        string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment);
 }

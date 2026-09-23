@@ -20,6 +20,9 @@ internal sealed class SetAccountActiveCommandHandler(IAdministrationStore store,
         var target = await auth.FindUserAsync(command.Id, ct);
         if (target is null || target.DeletedAt.HasValue)
             return AdministrationSupport.NotFound<ManagedAccountResponse>();
+        if (!active && target.Role == Fire3D.Domain.Enums.UserRole.PlatformAdmin
+            && await auth.CountActiveAdminsAsync(ct) <= 1)
+            return AuthResult<ManagedAccountResponse>.Fail("LAST_ADMIN", "The last active PlatformAdmin cannot be deactivated.", 409);
         if (target.IsActive != active)
         {
             var now = AuthSupport.UtcNow(clock);

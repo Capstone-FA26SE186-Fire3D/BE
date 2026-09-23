@@ -1,4 +1,5 @@
 using Fire3D.API.Extensions;
+using Fire3D.API.Configuration;
 using Fire3D.Application.Authentication.Commands.BootstrapAdmin;
 using MediatR;
 using System.Text.Json.Serialization;
@@ -18,31 +19,33 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
 builder.Services.AddHealthChecks();
 
 // Cấu hình Firebase Admin SDK
-var firebaseConfigPath = Path.Combine(builder.Environment.ContentRootPath, "firebase-admin.json");
-if (File.Exists(firebaseConfigPath))
+var firebaseCredentialJson = FirebaseAdminConfiguration.GetCredentialJson(
+    builder.Configuration,
+    builder.Environment.ContentRootPath);
+if (!string.IsNullOrWhiteSpace(firebaseCredentialJson))
 {
-    var json = File.ReadAllText(firebaseConfigPath);
     FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions
     {
 #pragma warning disable CS0618
-        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromJson(json)
+        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromJson(firebaseCredentialJson)
 #pragma warning restore CS0618
     });
 }
 else
 {
     // Log a warning or throw, depending on preference. We'll ignore for now to allow compiling without the file in some envs.
-    Console.WriteLine("Warning: firebase-admin.json not found.");
+    Console.WriteLine("Warning: Firebase Admin credential is not configured.");
 }
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        var frontendUrl = builder.Configuration["Auth:FrontendUrl"] ?? "http://localhost:3000";
-        policy.WithOrigins(frontendUrl)
+        var frontendUrls = CorsOriginConfiguration.GetAllowedOrigins(builder.Configuration);
+        policy.WithOrigins(frontendUrls)
               .AllowAnyMethod()
               .AllowAnyHeader()
+              .WithExposedHeaders("ETag")
               .AllowCredentials();
     });
 });
@@ -84,8 +87,14 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthChecks("/health");
+app.MapGet("/health/version", (IConfiguration configuration) => Results.Ok(new
+{
+    version = configuration["APP_VERSION"] ?? "unknown"
+}));
 app.MapControllers();
 
 app.Run();
 
 public partial class Program;
+
+

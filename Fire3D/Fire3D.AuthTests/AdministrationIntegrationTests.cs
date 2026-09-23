@@ -76,7 +76,7 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(HttpStatusCode.OK, locked.StatusCode);
         Assert.False((await locked.Content.ReadFromJsonAsync<ManagedAccountResponse>(Json))!.IsActive);
         Assert.Equal(0L, await ScalarAsync($"SELECT count(*) FROM auth_refresh_tokens WHERE user_id='{account.Id}' AND revoked_at IS NULL"));
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(account.Email, password))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(account.Email, password))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.PatchAsJsonAsync($"/api/accounts/{account.Id}/status", new { isActive = false })).StatusCode);
         Assert.Equal(1L, await ScalarAsync($"SELECT count(*) FROM audit_logs WHERE target_id='{account.Id}' AND action='Update'"));
         Assert.Equal(HttpStatusCode.OK, (await client.PatchAsJsonAsync($"/api/accounts/{account.Id}/status", new { isActive = true })).StatusCode);
