@@ -1,5 +1,7 @@
 # Test phân quyền trên Visual Studio / Swagger
 
+> Hướng dẫn này áp dụng cho database local của implementation auth legacy để thử API hiện có; nó dùng schema v6 và script trong BE, không phải quy trình khởi tạo schema sản phẩm mới. Với contract đích, đọc [Docs schema/ERD](../../Docs/fire_evacuation_schema.sql) và [checklist BE](api-implementation-checklist.md). Chỉ chạy trên database disposable riêng; không trỏ Swagger vào môi trường dùng chung.
+
 ## 1. Chuẩn bị
 
 - Chọn Fire3D.API làm Startup Project, chọn profile **https**, nhấn F5 hoặc Ctrl+F5.

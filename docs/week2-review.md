@@ -1,5 +1,7 @@
 # Week 2 — đầu ra, nghiệm thu và bàn giao review
 
+> Đây là báo cáo lịch sử theo kết quả kiểm tra ngày 2026-09-15; số test, route và giới hạn dưới đây không đại diện cho source hiện tại. Xem [API guide](api-docs.md) và [checklist theo Docs](api-implementation-checklist.md) trước khi sửa code.
+
 Nhóm GFA26SE133; đề tài FA26SE186; BE phụ trách Nguyễn Hoàng Nam. PR review: https://github.com/Capstone-FA26SE186-Fire3D/BE/pull/2 (target develop). Kết quả dưới đây kiểm tra ngày 2026-09-15; chưa có review độc lập của thành viên khác.
 
 ## Tiêu chí và bằng chứng

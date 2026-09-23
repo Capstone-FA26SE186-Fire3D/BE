@@ -39,13 +39,13 @@
 Từ gốc BE, với .NET 10 SDK/phụ thuộc sẵn sàng:
 - `dotnet build Fire3D/Fire3D.slnx`: kiểm tra biên dịch, không thay thế integration test.
 - `dotnet run --project Fire3D/Fire3D.API/Fire3D.API.csproj`: chạy API khi task cần và đã có cấu hình database phù hợp.
-- Chưa thấy test project trong solution đã kiểm tra; không dùng kết quả `dotnet test` không chạy test nào để kết luận nghiệp vụ đạt.
+- Solution có `Fire3D.AuthTests` và `Fire3D.IfcTests`; chọn đúng test project/filter theo thay đổi. Sự tồn tại của test project không chứng minh test đã chạy hoặc toàn bộ nghiệp vụ đã đạt.
 - Với thay đổi database/enum, cần kiểm tra có mục tiêu trên database test được phép dùng; không tự kết nối production.
 - Ghi bằng chứng build/test của từng task trong handoff local hoặc PR; context này không phải báo cáo kiểm thử.
 
 ## Thiết kế liên quan
 
-Khi có Docs bên cạnh, đối chiếu `fire_evacuation_schema.sql`, `fire_evacuation_erd.md`, requirements và workflows theo task. Docs giữ ba vai trò PlatformAdmin, OrganizationUser, Trainee; readiness nội bộ không phải phê duyệt PCCC. Nếu clone độc lập thiếu tài liệu bắt buộc, báo thiếu thay vì đoán schema hoặc tự clone.
+Khi có Docs bên cạnh, đối chiếu `fire_evacuation_schema.sql`, `fire_evacuation_erd.md`, requirements và workflows theo task. Trước khi lập việc sửa BE theo contract, đọc [implementation checklist](../docs/api-implementation-checklist.md); đây là backlog có baseline code cần được kiểm tra lại khi bắt đầu task. Dùng [API guide](../docs/api-docs.md) để biết route source hiện có. Docs giữ ba vai trò PlatformAdmin, OrganizationUser, Trainee; readiness nội bộ không phải phê duyệt PCCC. Nếu clone độc lập thiếu tài liệu bắt buộc, báo thiếu thay vì đoán schema hoặc tự clone.
 
 ## Invariant SQL/contract bổ sung — 2026-09-18
 
@@ -87,7 +87,7 @@ Khi có Docs bên cạnh, đối chiếu `fire_evacuation_schema.sql`, `fire_eva
 
 - Target quotation header no longer contains `building_id`, `service_package_id` or `service_duration_months`; `quotation_building_items` is the only BuildingService line source. Any current EF/entity references are migration work, not a reason to reintroduce duplicate fields.
 - Learn editorial orchestration uses a durable application-command receipt keyed by actor/operation/idempotency key and canonical input hash. The .NET service locks post → version → links, then writes state, audit and outbox atomically; SQL re-reads version status after acquiring locks.
-- Password reset/change must run under the existing user advisory/database transaction, consume the reset token, revoke every refresh-token family and rely on `OnTokenValidated` family checks to reject old access JWTs. Current reset handler has not yet completed that target transaction/revocation behavior.
+- Password reset/change source đã dùng user advisory/database transaction để consume token, đổi password, revoke session và ghi audit; `OnTokenValidated` kiểm tra family khi xác thực access JWT. Đối chiếu lại source khi task sửa auth; vẫn cần kiểm tra trên schema target, lỗi rollback và race trên PostgreSQL test. Docs technology có ghi chú trạng thái handler cũ; không lấy ghi chú đó làm bằng chứng source hiện tại.
 - Google onboarding completion must persist the created `user_id` and canonical input hash on the short-lived onboarding record so a retried completion returns the committed result instead of creating a second user or organization; it never stores a password or bearer token.
 - Current SQL/Docs updates are design-only. Do not claim database execution, permission, concurrency, S3 or email recovery tests passed.
 - Quotation target lifecycle records `accepted_at` once on `Issued → Accepted`; quotation lines cannot move between quotations after creation. The design grants the PayOS ledger owner only the row-lock privilege it needs, gives the processing owner attempt INSERT, and gives the backend executor the minimum auth/profile/Building write path; these privileges still require database execution tests.

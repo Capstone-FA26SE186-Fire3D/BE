@@ -1,13 +1,13 @@
 # Fire3D — Hướng dẫn tích hợp API hiện tại
 
-Cập nhật **23/09/2026**, bổ sung editor preview và annotations trên nhánh `fix/auth-registration`; các mục trước giữ nội dung đối chiếu ngày 22/09.
+Cập nhật **23/09/2026** theo source BE `main` tại `946017d`, gồm release lifecycle, editor preview và annotations. Đây là mô tả API source hiện có, không phải danh sách đầy đủ contract sản phẩm.
 
-Source hiện có **64 operation controller** (đếm HTTP action). Số lượng route không xác nhận các luồng đã chạy end-to-end hay toàn bộ API trong proposal. Các phần thiếu được ghi rõ ở mục 9.
+Source hiện có **64 HTTP action** trong controller. Số lượng route không xác nhận các luồng đã chạy end-to-end hay toàn bộ API trong proposal. Đối chiếu contract đích và phần còn thiếu trong [implementation checklist](api-implementation-checklist.md).
 
 ## 1. Quy ước tích hợp
 
 - Dùng origin BE đang chạy làm `BASE_URL`; đường dẫn bên dưới đã có `/api`.
-- Swagger `/swagger`, OpenAPI `/openapi/v1.json`, health `/health` không tính vào 61 operation. Health không chứng minh DB/Mailgun/Firebase/storage đã kết nối thành công.
+- Swagger `/swagger`, OpenAPI `/openapi/v1.json` và health `/health` không tính vào số action controller. Health không chứng minh DB/Mailgun/Firebase/storage đã kết nối thành công.
 - Body: `Content-Type: application/json`, tên thuộc tính `camelCase`, GUID là chuỗi UUID, ngày giờ ISO 8601.
 - Enum JSON dùng tên như `"OrganizationUser"`; không gửi số cho role.
 - Không có envelope chung `{success,data}`. Đọc trực tiếp DTO. `204` và một số `200` không có body; không luôn gọi `response.json()`.
@@ -74,7 +74,7 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 { "items": [], "totalCount": 0, "page": 1, "pageSize": 20 }
 ```
 
-## 2. Authentication — 9 endpoint
+## 2. Authentication — 12 endpoint
 
 | Method | Path | Quyền | Thành công |
 | --- | --- | --- | --- |
@@ -84,7 +84,9 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 | POST | `/api/auth/refresh` | Public | 200 TokenResponse |
 | POST | `/api/auth/logout` | User | 204 |
 | GET | `/api/auth/me` | User | 200 AccountResponse |
+| PATCH | `/api/auth/me` | User | 200 AccountResponse |
 | PUT | `/api/auth/devices` | User | 200 rỗng |
+| DELETE | `/api/auth/devices/{deviceUuid}` | User | 204 |
 | POST | `/api/auth/forgot-password` | Public | 202 với message chung |
 | POST | `/api/auth/reset-password` | Public | 204 |
 | POST | `/api/auth/change-password` | User | 204 |
@@ -114,6 +116,8 @@ BE hash password vào `users.password_hash`, không tạo tài khoản email/pas
 ```
 
 Lỗi: 400 VALIDATION_ERROR, 409 EMAIL_EXISTS. AccountResponse từ nguồn tạo khác có thể có fullName null.
+
+Đây là route hiện có của source, chưa phải contract đăng ký đích: request chưa nhận username/confirm password và chỉ tạo Trainee. Docs đích còn yêu cầu đăng ký OrganizationUser với hồ sơ organization; xem [checklist](api-implementation-checklist.md#b-tài-khoản-và-xác-thực).
 
 ### 2.2 Login local
 
@@ -154,6 +158,8 @@ BE kiểm token, trạng thái thu hồi, email đã xác minh và provider goog
 - Email thuộc tài khoản khác/chưa liên kết UID này: 409 ACCOUNT_LINK_REQUIRED; không tự ghép chỉ vì trùng email.
 - Xung đột tạo đồng thời có thể 409 ACCOUNT_EXISTS; tài khoản bị khóa 403 ACCOUNT_DISABLED.
 
+Google identity mới hiện đăng nhập thẳng thành Trainee. Đây là gap so với Docs: chưa có onboarding token để người dùng chọn Trainee/OrganizationUser và hoàn tất hồ sơ OrganizationUser.
+
 Response hiện là TokenResponse, **vẫn có expiresAt**:
 
 ```json
@@ -184,7 +190,7 @@ Refresh không cần access token:
 
 Token không trống, tối đa 256. Thành công trả TokenResponse còn hai expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả 401 INVALID_REFRESH_TOKEN; replay token đã dùng có thể thu hồi cả family.
 
-Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại, không logout mọi thiết bị. Me không body, trả AccountResponse hoặc 401.
+Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại, không logout mọi thiết bị. `GET /api/auth/me` trả AccountResponse; `PATCH /api/auth/me` hiện sửa fullName cơ bản, không hỗ trợ username/ETag/avatar. `GET /api/organizations/me` đọc organization hiện tại; chưa có PATCH profile organization.
 
 Devices upsert cho user hiện tại:
 
@@ -524,7 +530,7 @@ Prepare cần `?buildingId=<building UUID>` cùng scenarioId trên path:
 
 Handler yêu cầu ít nhất một draftId/versionId; client nên gửi đúng một. Hiện chưa reject cả hai và store ưu tiên kiểm version. Revision/scenario phải thuộc building; draft/version thuộc scenario. Thiếu nguồn 400, quan hệ không thấy 404. Package hash phải lấy từ package thật.
 
-Contract thành công 201 id playtest. Start không body, chuyển Created → Running; khác Created 400 INVALID_STATE; không thấy/ngoài phạm vi 404. Không trả launch token, manifest hay URL package. Prepare/start còn rủi ro DB/entitlement (mục 9); 200 không chứng minh Unity đã khởi chạy hoặc đã ghi kết quả huấn luyện.
+Prepare thành công trả 201 cùng playtest ID. Start không body, chuyển Created → Running; khác Created 400 INVALID_STATE; không thấy/ngoài phạm vi 404. Không trả launch token, manifest hay URL package. Prepare/start còn rủi ro DB/entitlement (mục 9); 200 không chứng minh Unity đã khởi chạy hoặc đã ghi kết quả huấn luyện.
 
 ## 8. Release lifecycle — 4 endpoint
 
@@ -549,11 +555,11 @@ Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 40
 | Upload-url cũ | Đã là alias tương thích của initiation IFC; client mới dùng `/api/buildings/{buildingId}/ifc` |
 | IFC finalize | Chưa ràng buộc đủ key với revision/upload; chưa kiểm hash nội dung; validation MIME/tên/hash hạn chế |
 | IFC process | Outbox còn literal payload_hash = 'hash', không phải SHA-256 hợp lệ; chưa bảo đảm tương thích schema/gate/worker. Process/confirm truy cập navigation Building nhưng query không Include Building, có nguy cơ null |
-| Draft editor | Thiếu GET state/version hoặc version trong create response; chặn việc lấy If-Match đầu tiên |
+| Draft editor | GET draft state/version đã có. Kiểm tra response ETag/xmin trước khi tích hợp; không coi đây là API còn thiếu. |
 | Playtest prepare | SQL entitlement dùng is_active, bắt exception rồi giữ Guid.Empty; cần đối chiếu schema. Draft-only có thể ghi ScenarioVersionId = Guid.Empty và vướng FK |
 | Playtest start | Mới đổi trạng thái/audit, chưa trả launch grant |
 | Release/training | Đã có create-Built/read/publish/revoke; còn thiếu package-build job và vòng đời Training/session. Publish vẫn phụ thuộc schema/gate triển khai |
-| Auth | Chưa có verify-email local, change-password, link/unlink Google hay logout-all riêng; email trùng không tự liên kết |
+| Auth | Local register hiện chỉ tạo Trainee, chưa nhận username/confirm password; thiếu OrganizationUser self-registration, Google onboarding/link, profile ETag/avatar và organization PATCH. Change Password và Forgot/Reset đã có route/handler. Không có email verification hoặc logout-all route riêng. |
 | Token response | Login local bỏ expiresAt, Firebase login/refresh vẫn còn |
 | Device | Validation và xử lý bool thất bại chưa đầy đủ; 200 không chứng minh FCM delivery |
 
@@ -584,7 +590,7 @@ Số endpoint không phản ánh mức độ hoàn thiện luồng. Cập nhật
 1. Chuẩn bị OrganizationUser, building, storage; initiate → upload bytes → finalize. Sai object/file → lỗi tương ứng.
 2. Sửa blocker process/worker rồi mới test chuỗi process → poll → QA/artifacts/BIM facts; không dùng QA lịch sử làm kết luận hiện tại.
 3. Retry Failed cùng requestId → không requeue lặp; key cũ/reason khác → 409.
-4. Bổ sung contract version ban đầu rồi test create → edit; thiếu header 412, version cũ 409, lưu đúng 204/ETag.
+4. GET draft hiện trả state và ETag; dùng ETag nhận được để test create → edit. Thiếu header bị từ chối, ETag cũ không được ghi đè, lưu đúng trả 204 cùng ETag mới.
 5. Test playtest/package/entitlement/publish với DB/runtime thật sau khi hoàn thiện; không đồng nhất playtest và Trainee session.
 
 ## 11. Nguồn đối chiếu và bảo trì
