@@ -6,6 +6,13 @@ namespace Fire3D.Application.Authentication.Abstractions;
 public record IdentityUser(string Uid, string Email, string FullName);
 public record VerifiedIdentity(string Uid, string Email);
 
+public sealed class IdentityProviderException(string code, string message, int status) : Exception(message)
+{
+    public AuthError Error { get; } = new(code, message, status);
+    public static IdentityProviderException InvalidToken() => new("INVALID_FIREBASE_TOKEN", "Invalid Google ID token.", 401);
+    public static IdentityProviderException Unavailable() => new("IDENTITY_UNAVAILABLE", "Identity service is temporarily unavailable.", 503);
+}
+
 public interface IIdentityProvider
 {
     Task<IdentityUser> CreateEmailPasswordUserAsync(

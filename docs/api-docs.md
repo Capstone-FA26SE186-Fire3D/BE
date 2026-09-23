@@ -75,7 +75,7 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 { "items": [], "totalCount": 0, "page": 1, "pageSize": 20 }
 ```
 
-## 2. Authentication — 9 endpoint
+## 2. Authentication - 12 endpoint
 
 | Method | Path | Quyền | Thành công |
 | --- | --- | --- | --- |
@@ -85,7 +85,9 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 | POST | `/api/auth/refresh` | Public | 200 TokenResponse |
 | POST | `/api/auth/logout` | User | 204 |
 | GET | `/api/auth/me` | User | 200 AccountResponse |
+| PATCH | `/api/auth/me` | User | 200 AccountResponse |
 | PUT | `/api/auth/devices` | User | 200 rỗng |
+| DELETE | `/api/auth/devices/{deviceUuid}` | User | 204 |
 | POST | `/api/auth/forgot-password` | Public | 202 với message chung |
 | POST | `/api/auth/reset-password` | Public | 204 |
 | POST | `/api/auth/change-password` | User | 204 |
@@ -185,7 +187,7 @@ Refresh không cần access token:
 
 Token không trống, tối đa 256. Thành công trả TokenResponse còn hai expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả 401 INVALID_REFRESH_TOKEN; replay token đã dùng có thể thu hồi cả family.
 
-Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại, không logout mọi thiết bị. Me không body, trả AccountResponse hoặc 401.
+Logout requires Bearer, returns 204 and revokes the current session family only. Me returns AccountResponse or 401. PATCH `/api/auth/me` updates only the current user full name; role, organization, email and status are immutable. DELETE `/api/auth/devices/{deviceUuid}` requires Bearer, is idempotent and returns 204.
 
 Devices upsert cho user hiện tại:
 
@@ -198,7 +200,7 @@ Devices upsert cho user hiện tại:
 }
 ```
 
-Command có userId nhưng controller ghi đè bằng sub JWT, frontend không cần gửi. Ba trường cuối nullable. Handler chưa có validation riêng đầy đủ cho deviceUuid/FCM; controller không kiểm kết quả bool store. 200 không chứng minh push notification đã gửi.
+The controller overwrites the command UserId with the JWT subject; the client does not send it. `deviceUuid` is a 1-255 character string and does not have to be a GUID; FCM token is at most 255 characters, deviceModel at most 200 and osVersion at most 100. Invalid input returns 400. PUT upsert returns an empty 200; DELETE with the same deviceUuid returns 204 and revokes only push delivery for the current user.
 
 ### 2.5 Forgot/reset password qua Mailgun
 
@@ -225,7 +227,7 @@ Sai email: 400 INVALID_EMAIL. Email đúng định dạng có/không tồn tại
 
 Phải dùng token thật từ email: 64 ký tự hex, hạn 30 phút, một lần; DB chỉ lưu hash token. Password 12–128, không chỉ khoảng trắng. Sai/hết hạn/đã dùng token: 400 INVALID_RESET_CODE; password sai: 400 INVALID_PASSWORD; thành công 204.
 
-Reset đổi hash local, tiêu thụ token, vô hiệu token reset còn lại và thu hồi phiên Fire3D trong transaction. Phải login lại; không trả JWT mới. Chủ email tài khoản Google/Firebase cũ có thể thiết lập password local qua link và vẫn giữ UID. Không đổi password Google/Firebase; không nhận oobCode Firebase cũ. Không có endpoint đọc password/hash/reset token.
+Reset changes the local hash, consumes the reset token, invalidates remaining reset tokens and revokes Fire3D sessions in one transaction. The client must sign in again. A Google-only account without `password_hash` cannot use reset to create a local password; set-password/link Google is a separate API. Firebase passwords and oobCode are not changed or accepted.
 
 Chi tiết vận hành: [password-reset.md](password-reset.md).
 
@@ -547,9 +549,9 @@ Chưa có API tạo/build release. Store publish chỉ kiểm Built, không bả
 | Playtest prepare | SQL entitlement dùng is_active, bắt exception rồi giữ Guid.Empty; cần đối chiếu schema. Draft-only có thể ghi ScenarioVersionId = Guid.Empty và vướng FK |
 | Playtest start | Mới đổi trạng thái/audit, chưa trả launch grant |
 | Release/training | Thiếu create/build release và vòng đời training/session; publish chưa bảo đảm đầy đủ QA gates |
-| Auth | Chưa có verify-email local, change-password, link/unlink Google hay logout-all riêng; email trùng không tự liên kết |
+| Auth | Local email verification, Google link/unlink and logout-all are not implemented; duplicate email is never implicitly linked. Google onboarding and username requirements remain implementation work. |
 | Token response | Login local bỏ expiresAt, Firebase login/refresh vẫn còn |
-| Device | Validation và xử lý bool thất bại chưa đầy đủ; 200 không chứng minh FCM delivery |
+| Device | Device identifiers and FCM metadata are validated; PUT upsert returns 200 and DELETE revoke returns 204. Delivery is not guaranteed by the API response. |
 
 Số endpoint không phản ánh mức độ hoàn thiện luồng. Cập nhật tài liệu không thay source, chạy migration hoặc xác nhận kết nối dịch vụ thực tế.
 

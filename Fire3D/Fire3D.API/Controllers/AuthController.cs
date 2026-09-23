@@ -41,6 +41,13 @@ public sealed class AuthController(ISender sender) : ControllerBase
     [HttpPost("login-firebase")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
+    [ProducesResponseType<TokenResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(429)]
+    [ProducesResponseType<ProblemDetails>(503)]
     public async Task<ActionResult> LoginFirebase([FromBody] string firebaseIdToken, CancellationToken ct)
     {
         var result = await sender.Send(new Fire3D.Application.Authentication.Commands.FirebaseLogin.ExchangeFirebaseTokenCommand(firebaseIdToken), ct);
@@ -121,8 +128,8 @@ public sealed class AuthController(ISender sender) : ControllerBase
     public async Task<IActionResult> RegisterDevice([FromBody] Fire3D.Application.Users.Commands.RegisterDevice.RegisterDeviceCommand request, CancellationToken ct)
     {
         var userId = User.GetActorId();
-        await sender.Send(request with { UserId = userId }, ct);
-        return Ok();
+        var result = await sender.Send(request with { UserId = userId }, ct);
+        return result.IsSuccess ? Ok() : ResetProblem(result.Error!);
     }
 
     /// <summary>Revokes push delivery for one installation owned by the current account.</summary>
@@ -146,8 +153,8 @@ public sealed class AuthController(ISender sender) : ControllerBase
     /// Gửi hướng dẫn đặt lại mật khẩu qua email. Không cần Bearer.
     /// </summary>
     /// <remarks>Body: email hợp lệ, tối đa 254 ký tự. Trả 202 cho cả email có và không có tài khoản;
-    /// 202 chỉ xác nhận đã nhận yêu cầu, không đảm bảo email đã được gửi. Chủ email đã xác minh
-    /// qua link có thể đặt mật khẩu local, kể cả tài khoản trước đây chỉ dùng Firebase.</remarks>
+    /// 202 only acknowledges the request; it does not guarantee delivery. Only accounts with a local
+    /// password are eligible for reset; Google-only accounts use the separate set-password/link flow.</remarks>
     [HttpPost("forgot-password")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]

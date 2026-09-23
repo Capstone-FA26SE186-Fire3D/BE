@@ -14,7 +14,7 @@ public sealed class LocalPasswordReset(Fire3DDbContext db, IAuthStore accounts,
     public async Task<string?> CreateLinkAsync(string email, CancellationToken ct)
     {
         var user = await accounts.FindUserByEmailAsync(email, ct);
-        if (user is null || !user.IsActive || user.DeletedAt.HasValue) return null;
+        if (user is null || !user.IsActive || user.DeletedAt.HasValue || user.PasswordHash is null) return null;
         var url = options.Value.FrontendUrl;
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
             (uri.Scheme != "https" && !(uri.Scheme == "http" && uri.IsLoopback)) ||
@@ -24,7 +24,7 @@ public sealed class LocalPasswordReset(Fire3DDbContext db, IAuthStore accounts,
         var hash = Hash(raw);
         await using var tx = await accounts.BeginUserTransactionAsync(user.Id, ct);
         user = await accounts.FindUserAsync(user.Id, ct);
-        if (user is null || !user.IsActive || user.DeletedAt.HasValue) return null;
+        if (user is null || !user.IsActive || user.DeletedAt.HasValue || user.PasswordHash is null) return null;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO public.local_password_reset_tokens(id,user_id,token_hash,expires_at)
             VALUES ({Guid.NewGuid()},{user.Id},{hash},now()+interval '30 minutes')
@@ -43,7 +43,7 @@ public sealed class LocalPasswordReset(Fire3DDbContext db, IAuthStore accounts,
         if (userId == Guid.Empty) return false;
         await using var tx = await accounts.BeginUserTransactionAsync(userId,ct);
         var user = await accounts.FindUserAsync(userId,ct);
-        if (user is null || !user.IsActive || user.DeletedAt.HasValue) return false;
+        if (user is null || !user.IsActive || user.DeletedAt.HasValue || user.PasswordHash is null) return false;
         var changed = await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE public.local_password_reset_tokens SET used_at=clock_timestamp()
              WHERE user_id={userId} AND token_hash={hash} AND used_at IS NULL AND expires_at>clock_timestamp()

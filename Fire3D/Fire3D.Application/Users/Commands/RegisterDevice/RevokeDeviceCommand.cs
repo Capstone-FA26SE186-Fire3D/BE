@@ -10,8 +10,8 @@ public sealed class RevokeDeviceCommandHandler(IAuthStore store, TimeProvider cl
 {
     public async Task<AuthResult<bool>> Handle(RevokeDeviceCommand request, CancellationToken ct)
     {
-        if (request.UserId == Guid.Empty || !Guid.TryParse(request.DeviceUuid, out _))
-            return AuthResult<bool>.Fail("VALIDATION_ERROR", "A valid device UUID is required.", 400);
+        if (request.UserId == Guid.Empty || !DeviceRegistrationValidation.IsValid(request.DeviceUuid, 255, true))
+            return AuthResult<bool>.Fail("VALIDATION_ERROR", "A valid device identifier is required.", 400);
 
         await store.RevokeDeviceAsync(request.UserId, request.DeviceUuid, clock.GetUtcNow().UtcDateTime, ct);
         return AuthResult<bool>.Ok(true);

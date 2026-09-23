@@ -41,11 +41,7 @@ kiểm tra phiên. Hash mới, consume token, revoke và audit cùng một trans
 user advisory lock. Login xác minh hash dưới cùng lock nên không cấp phiên bằng
 mật khẩu cũ sau khi reset đã commit. Audit/DB failure rollback toàn bộ.
 
-Forgot trả 202 chung kể cả email không tồn tại. Tài khoản Firebase cũ không có hash
-không thể đăng nhập local bằng mật khẩu Firebase cũ: chủ email dùng reset để đặt
-mật khẩu BE mới. Việc này không thay đổi mật khẩu Firebase. Chủ email của tài khoản
-Google cũng có thể thiết lập mật khẩu local qua cùng quy trình, giữ nguyên UID.
-
+A Firebase-only account without a local hash cannot log in with its Firebase password and cannot use reset to create a local password. Set-password/link Google is a separate flow; reset does not change the Firebase password.
 Queue có cooldown một phút/email, lease hai phút, timeout việc 45 giây, tối đa năm
 lần thử và backoff. Email có thể lặp nếu Mailgun đã nhận nhưng worker chết trước ack.
 Token của các lần gửi chưa hết hạn cùng dùng được cho tới khi một lần reset thành công.

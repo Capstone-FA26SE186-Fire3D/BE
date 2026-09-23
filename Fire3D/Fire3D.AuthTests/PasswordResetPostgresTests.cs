@@ -105,6 +105,11 @@ public sealed class PasswordResetPostgresTests
         Assert.True((await login.Handle(new("user@example.test","OriginalPassword12!"),default)).IsSuccess);
         Assert.Equal(401,(await login.Handle(new("user@example.test","wrong"),default)).Error?.Status);
         var reset=new LocalPasswordReset(db,accounts,passwords,Microsoft.Extensions.Options.Options.Create(new AuthEmailOptions { FrontendUrl="https://app.example.test" }));
+        var googleOnly = new User { Id=Guid.NewGuid(), Email="google-only@example.test", FirebaseUid="google-uid", PasswordHash=null,
+            Role=UserRole.Trainee, IsActive=true, CreatedAt=DateTime.UtcNow, UpdatedAt=DateTime.UtcNow };
+        db.Users.Add(googleOnly);
+        await db.SaveChangesAsync();
+        Assert.Null(await reset.CreateLinkAsync(googleOnly.Email,default));
         var link=await reset.CreateLinkAsync(user.Email,default);
         var raw=System.Web.HttpUtility.ParseQueryString(new Uri(link!).Query)["token"]!;
         Assert.Equal(64,raw.Length);

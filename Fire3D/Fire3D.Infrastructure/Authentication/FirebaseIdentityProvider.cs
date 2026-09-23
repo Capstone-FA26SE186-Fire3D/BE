@@ -81,23 +81,38 @@ public class FirebaseIdentityProvider(
         {
             var decodedToken = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken, true, ct);
             var uid = decodedToken.Uid;
+            if (!decodedToken.Claims.TryGetValue("email_verified", out var verified) || verified is not true)
+                throw IdentityProviderException.InvalidToken();
+            using var claims = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(decodedToken.Claims));
+            if (!claims.RootElement.TryGetProperty("firebase", out var firebase)
+                || !firebase.TryGetProperty("sign_in_provider", out var provider)
+                || provider.GetString() != "google.com")
+                throw IdentityProviderException.InvalidToken();
             var email = decodedToken.Claims.TryGetValue("email", out var emailObj) ? emailObj?.ToString() : null;
 
             if (string.IsNullOrEmpty(email))
             {
-                throw new Exception("InvalidToken");
+                throw IdentityProviderException.InvalidToken();
             }
 
             return new VerifiedIdentity(uid, email);
         }
-        catch (FirebaseAuthException ex) when (ex.AuthErrorCode == AuthErrorCode.RevokedIdToken || ex.AuthErrorCode == AuthErrorCode.ExpiredIdToken)
+        catch (FirebaseAuthException ex) when (ex.AuthErrorCode == AuthErrorCode.RevokedIdToken || ex.AuthErrorCode == AuthErrorCode.ExpiredIdToken || ex.AuthErrorCode == AuthErrorCode.InvalidIdToken)
         {
-            throw new Exception("InvalidToken");
+            throw IdentityProviderException.InvalidToken();
+        }
+        catch (IdentityProviderException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "VerifyGoogleTokenAsync failed");
-            throw new Exception("InvalidToken");
+            throw IdentityProviderException.Unavailable();
         }
     }
 
