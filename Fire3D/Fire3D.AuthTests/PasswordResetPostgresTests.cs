@@ -58,6 +58,7 @@ public sealed class PasswordResetPostgresTests
                 """);
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"002_password_reset_recovery.sql")));
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"003_local_password.sql")));
+            await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"005_email_verification.sql")));
             return db;
         }
         private DbContextOptions<Fire3DDbContext>? contextOptions;
