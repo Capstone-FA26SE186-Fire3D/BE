@@ -15,8 +15,13 @@ public sealed class OrganizationsController(ISender sender) : AdministrationCont
     /// Tạo mới một tổ chức (Organization) - Chỉ dành cho PlatformAdmin.
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<OrganizationResponse>> Create(CreateOrganizationRequest request, CancellationToken ct) =>
-        Respond(await sender.Send(new CreateOrganizationCommand(ActorId, request, NewCorrelationId()), ct), 201);
+    public async Task<ActionResult<OrganizationResponse>> Create(CreateOrganizationRequest request, CancellationToken ct)
+    {
+        var result = await sender.Send(new CreateOrganizationCommand(ActorId, request, NewCorrelationId()), ct);
+        return result.IsSuccess ? Created($"/api/organizations/{result.Value!.Id}", result.Value)
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
 
     /// <summary>
     /// Lấy danh sách các tổ chức (có phân trang và tìm kiếm).

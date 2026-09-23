@@ -13,6 +13,9 @@ public static class ApplicationExtensions
         services.AddScoped<IAdministrationStore, AdministrationStore>();
         services.AddDefaultAWSOptions(configuration.GetAWSOptions()); services.AddAWSService<Amazon.S3.IAmazonS3>(); services.AddScoped<Fire3D.Application.Storage.IStorageService, Fire3D.Infrastructure.Storage.S3StorageService>();
         services.AddScoped<Fire3D.Application.Ifc.IIfcReadStore, Fire3D.Infrastructure.Ifc.IfcReadStore>();
+        services.AddScoped<Fire3D.Application.Ifc.IEditorPreviewStore, Fire3D.Infrastructure.Ifc.EditorPreviewStore>();
+        services.AddScoped<Fire3D.Application.Ifc.IPreviewDownloadSigner, Fire3D.Infrastructure.Storage.S3PreviewDownloadSigner>();
+        services.AddScoped<Fire3D.Application.Ifc.IAnnotationStore, Fire3D.Infrastructure.Ifc.AnnotationStore>();
         services.AddScoped<Fire3D.Application.Ifc.IIfcWriteStore, Fire3D.Infrastructure.Ifc.IfcWriteStore>();
         services.AddScoped<Fire3D.Application.Scenarios.IScenarioWriteStore, Fire3D.Infrastructure.Scenarios.ScenarioWriteStore>();
         services.AddScoped<Fire3D.Application.Scenarios.IScenarioReadStore, Fire3D.Infrastructure.Scenarios.ScenarioReadStore>();

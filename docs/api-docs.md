@@ -1,17 +1,33 @@
 # Fire3D — Hướng dẫn tích hợp API hiện tại
 
-Cập nhật **22/09/2026**, đối chiếu controller, DTO, handler và store tại source commit `d18c3c3`, nhánh `fix/auth-registration`.
+Cập nhật **23/09/2026**, bổ sung editor preview và annotations trên nhánh `fix/auth-registration`; các mục trước giữ nội dung đối chiếu ngày 22/09.
 
-Tài liệu bao gồm **46 endpoint controller**, trong đó một endpoint trả `501`. Đây là danh mục code hiện có, không phải xác nhận 46 luồng đã chạy end-to-end hay toàn bộ API trong proposal. Các phần thiếu được ghi rõ ở mục 9.
+Source hiện có **61 operation controller** (đếm HTTP action), trong đó một endpoint trả `501`. Số lượng route không xác nhận các luồng đã chạy end-to-end hay toàn bộ API trong proposal. Các phần thiếu được ghi rõ ở mục 9.
 
 ## 1. Quy ước tích hợp
 
 - Dùng origin BE đang chạy làm `BASE_URL`; đường dẫn bên dưới đã có `/api`.
-- Swagger `/swagger`, OpenAPI `/openapi/v1.json`, health `/health` không tính vào 46 endpoint. Health không chứng minh DB/Mailgun/Firebase/storage đã kết nối thành công.
+- Swagger `/swagger`, OpenAPI `/openapi/v1.json`, health `/health` không tính vào 61 operation. Health không chứng minh DB/Mailgun/Firebase/storage đã kết nối thành công.
 - Body: `Content-Type: application/json`, tên thuộc tính `camelCase`, GUID là chuỗi UUID, ngày giờ ISO 8601.
 - Enum JSON dùng tên như `"OrganizationUser"`; không gửi số cho role.
 - Không có envelope chung `{success,data}`. Đọc trực tiếp DTO. `204` và một số `200` không có body; không luôn gọi `response.json()`.
+- POST tạo resource đồng bộ trả `201 Created` cùng header `Location`. POST yêu cầu xử lý nền bền vững trả `202 Accepted`; POST action trên resource đã có có thể trả `200` hoặc `204`.
 - Các ID, token, hash, password minh họa phải thay bằng dữ liệu test thực tế.
+
+### POST status và Location
+
+| Path | Thành công | Header `Location` |
+| --- | --- | --- |
+| `POST /api/auth/register` | 201 AccountResponse | `/api/accounts/{id}` |
+| `POST /api/accounts` | 201 AccountResponse | `/api/accounts/{id}` |
+| `POST /api/organizations` | 201 OrganizationResponse | `/api/organizations/{id}` |
+| `POST /api/buildings` | 201 BuildingResponse | `/api/buildings/{id}` |
+| `POST /api/buildings/{buildingId}/ifc` | 201 InitiateIfcUploadResponse | `/api/revisions/{revisionId}` |
+| `POST /api/revisions/{revisionId}/process` | 202 | `/api/processing-jobs/{jobId}` |
+| `POST /api/processing-jobs/{jobId}/retry` | 202 | `/api/processing-jobs/{jobId}` |
+| `POST /api/auth/forgot-password` | 202 | Không có |
+
+`login`, `login-firebase`, `refresh`, validate draft, publish, confirm-for-training và start playtest trả 200 vì không tạo API resource mới. `logout`, `reset-password` và `upload-complete` trả 204 vì không có body thành công.
 
 ### Bearer, role và phạm vi tổ chức
 
@@ -72,6 +88,7 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 | PUT | `/api/auth/devices` | User | 200 rỗng |
 | POST | `/api/auth/forgot-password` | Public | 202 với message chung |
 | POST | `/api/auth/reset-password` | Public | 204 |
+| POST | `/api/auth/change-password` | User | 204 |
 
 ### 2.1 Register local
 
@@ -211,6 +228,21 @@ Phải dùng token thật từ email: 64 ký tự hex, hạn 30 phút, một l�
 Reset đổi hash local, tiêu thụ token, vô hiệu token reset còn lại và thu hồi phiên Fire3D trong transaction. Phải login lại; không trả JWT mới. Chủ email tài khoản Google/Firebase cũ có thể thiết lập password local qua link và vẫn giữ UID. Không đổi password Google/Firebase; không nhận oobCode Firebase cũ. Không có endpoint đọc password/hash/reset token.
 
 Chi tiết vận hành: [password-reset.md](password-reset.md).
+
+### 2.6 Change password khi đã đăng nhập
+
+Endpoint cần `Authorization: Bearer <Fire3D accessToken>` và không nhận `actorId` từ body:
+
+```json
+{
+  "currentPassword": "Current-Example-Password-2026!",
+  "newPassword": "New-Example-Password-2026!"
+}
+```
+
+`currentPassword` không rỗng và tối đa 128 ký tự. `newPassword` phải dài 12–128 ký tự, không chỉ khoảng trắng và phải khác mật khẩu hiện tại. Sai mật khẩu hiện tại: 400 `INVALID_CURRENT_PASSWORD`; mật khẩu mới không hợp lệ: 400 `INVALID_PASSWORD`; trùng mật khẩu hiện tại: 400 `PASSWORD_UNCHANGED`; tài khoản/organization không còn hoạt động: 401 `UNAUTHORIZED`.
+
+Thành công trả 204. Trong cùng transaction khóa theo user, BE cập nhật `password_hash`, vô hiệu token reset chưa dùng, thu hồi toàn bộ refresh session và ghi audit. Access JWT hiện tại sẽ không còn được chấp nhận sau khi family session bị thu hồi; client phải đăng nhập lại. Endpoint không gửi email, không thay đổi password Google/Firebase và không nhận Firebase oobCode.
 
 ## 3. Accounts và Organizations — 8 endpoint
 
@@ -561,3 +593,45 @@ Số endpoint không phản ánh mức độ hoàn thiện luồng. Cập nhật
 - Publish: [ReleaseWriteStore.cs](../Fire3D/Fire3D.Infrastructure/Releases/ReleaseWriteStore.cs).
 
 Khi đổi API, cập nhật method/path, permission, request/response, status, validation và ví dụ. Đối chiếu handler/store, không chỉ annotation Swagger. Tài liệu được kiểm danh mục route, JSON và liên kết nội bộ; không thay báo cáo integration test.
+
+## Editor preview và annotations — bổ sung 2026-09-23
+
+Cả ba operation yêu cầu Bearer Fire3D hợp lệ. Backend đọc lại account từ DB: OrganizationUser chỉ truy cập tenant của mình; PlatformAdmin được truy cập liên tổ chức; Trainee nhận 403. Account không hoạt động nhận 401; revision không tồn tại/ngoài tenant hoặc Building/organization ngừng hoạt động nhận 404. Response không cache.
+
+| Method | Route | Request | Thành công |
+|---|---|---|---|
+| GET | `/api/buildings/{buildingId}/editor-preview?revisionId={revisionId}` | Bắt buộc chọn revision thuộc Building | 200 `EditorPreviewResponse` |
+| GET | `/api/revisions/{revisionId}/annotations` | Không có body | 200 snapshot + header `ETag` |
+| PUT | `/api/revisions/{revisionId}/annotations` | Body bên dưới; header `If-Match` lấy từ GET | 200 snapshot mới + `ETag` mới |
+
+Preview trả `buildingId`, `revisionId`, `revisionStatus`, `status` (`Ready`/`NotReady`), `artifactId`, `attemptId`, `sha256Hash`, `downloadUrl`, `expiresAt`, `coordinateTransform`, `floors`, `semanticMapping`. Không trả storage key. Signed GET URL tồn tại 5 phút, chỉ ký khi artifact `preview_glb` thuộc current attempt của Geometry job, job/attempt đều Succeeded và input hash khớp; hash SHA-256 và metadata bắt buộc hợp lệ. Chưa đủ dữ liệu trả 200 `NotReady`, URL/expiry null. Sai/missing GUID đầu vào trả 400. Trạng thái Ready không cấp quyền publish hoặc training.
+
+Worker contract hiện tại: metadata của chính artifact chứa `coordinateTransform` là mảng phẳng 16 số hữu hạn, `floors` là array, `semanticMapping` là object. Không ghép metadata từ revision khác. Worker chưa xuất các trường này thì preview vẫn NotReady. Backend chưa HEAD object S3 để xác minh file thực sự tồn tại; việc ký URL không chứng minh worker upload thành công.
+
+Annotations GET khi chưa có bản lưu trả `version: 0`, `id: null`, `data: {"items":[]}`, header `ETag: "0"`. Snapshot có `revisionId`, `id`, `version`, `data`, `provenance`, `createdBy`, `createdAt`, `eTag`. PUT gửi:
+
+```http
+PUT /api/revisions/{revisionId}/annotations
+Authorization: Bearer <accessToken>
+If-Match: "0"
+Content-Type: application/json
+```
+
+```json
+{
+  "items": [
+    {
+      "id": "3e63037d-1a9b-4d91-a311-c88caf34f966",
+      "ifcGlobalId": "IFC-SPACE-1",
+      "label": "Phòng kỹ thuật",
+      "note": "Nhãn phục vụ editor"
+    }
+  ]
+}
+```
+
+Tối đa 500 item, id GUID khác rỗng và không trùng; ifcGlobalId tối đa 255 ký tự và phải có trong bim_facts cùng revision; label bắt buộc ≤200 ký tự; note tùy chọn ≤2000 ký tự. Không nhận trường JSON ngoài contract. `items: []` tạo overlay rỗng mới, giữ nguyên lịch sử. Đây là nhãn/ghi chú, không thay đổi geometry, cấu hình exit hay artifact đã pin.
+
+Thiếu If-Match: 428 `PRECONDITION_REQUIRED`; sai định dạng (wildcard/weak/multiple tag không được hỗ trợ): 400; ETag cũ: 412 `PRECONDITION_FAILED`; anchor không tồn tại trong revision: 400 `INVALID_ANCHOR`. Sau 412, FE GET lại và cho người dùng đối chiếu thay đổi, không tự ghi đè.
+
+PUT khóa revision, kiểm tra version rồi append annotation_sets + audit_logs trong cùng transaction PostgreSQL. Lỗi audit rollback annotation. Mỗi bản cũ bất biến; chưa có event/outbox cho annotations vì chưa có downstream consumer trong phạm vi này. Không cần bảng mới nếu deployment đã có schema đích annotation_sets và các cột provenance của processing jobs/artifacts; chưa chạy migration Supabase trong task này.

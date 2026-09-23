@@ -21,7 +21,7 @@ public sealed class AccountsController(ISender sender) : AdministrationControlle
     public async Task<ActionResult<AccountResponse>> Create(CreateAccountRequest request, CancellationToken ct)
     {
         var result = await sender.Send(new CreateAccountCommand(ActorId, request, NewCorrelationId()), ct);
-        return result.IsSuccess ? StatusCode(StatusCodes.Status201Created, result.Value)
+        return result.IsSuccess ? Created($"/api/accounts/{result.Value!.Id}", result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }

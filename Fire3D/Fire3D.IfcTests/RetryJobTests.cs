@@ -43,7 +43,7 @@ public class IfcWriteSqlTests : IAsyncLifetime
 
     public IfcWriteSqlTests()
     {
-        _dbContainer = new Testcontainers.PostgreSql.PostgreSqlBuilder().WithImage("postgres:15-alpine").Build();
+        _dbContainer = new Testcontainers.PostgreSql.PostgreSqlBuilder("postgres:15-alpine").Build();
     }
 
     public async Task InitializeAsync()
@@ -51,16 +51,22 @@ public class IfcWriteSqlTests : IAsyncLifetime
         await _dbContainer.StartAsync();
         using var db = Context();
         await db.Database.EnsureCreatedAsync();
+        // EnsureCreated omits SQL functions. Execute the real v6.7 gate and dependencies, never a stub.
+        await using (var sql = new Npgsql.NpgsqlConnection(_dbContainer.GetConnectionString()))
+        {
+            await sql.OpenAsync();
+            await new Npgsql.NpgsqlCommand(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "retry-contract.sql")), sql).ExecuteNonQueryAsync();
+        }
 
         // Seed data
-        db.Organizations.Add(new Fire3D.Domain.Entities.Organization { Id = OrgId, Name = "Org", Slug = "retry-job-org", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
-        db.Users.Add(new Fire3D.Domain.Entities.User { Id = ActorId, Email = "actor@org", FullName = "A", Role = UserRole.OrganizationUser, OrganizationId = OrgId, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
-        db.Users.Add(new Fire3D.Domain.Entities.User { Id = OtherActorId, Email = "other@org", FullName = "O", Role = UserRole.OrganizationUser, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+        db.Organizations.Add(new Fire3D.Domain.Entities.Organization { Id = OrgId, IsActive = true, Name = "Org", Slug = "retry-job-org", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+        db.Users.Add(new Fire3D.Domain.Entities.User { Id = ActorId, IsActive = true, Email = "actor@org", FullName = "A", Role = UserRole.OrganizationUser, OrganizationId = OrgId, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+        db.Users.Add(new Fire3D.Domain.Entities.User { Id = OtherActorId, IsActive = true, Email = "other@org", FullName = "O", Role = UserRole.OrganizationUser, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         
-        var building = new Fire3D.Domain.Entities.Building { Id = Guid.NewGuid(), OrganizationId = OrgId, Name = "B", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+        var building = new Fire3D.Domain.Entities.Building { Id = Guid.NewGuid(), OrganizationId = OrgId, IsActive = true, Name = "B", CreatedBy = ActorId, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
         db.Buildings.Add(building);
 
-        var doc = new Fire3D.Domain.Entities.SourceDocument { Id = Guid.NewGuid(), OriginalFilename = "1.ifc", StorageUrl = "url", UploadedBy = ActorId, FileSizeBytes = 100, CreatedAt = DateTime.UtcNow };
+        var doc = new Fire3D.Domain.Entities.SourceDocument { Id = Guid.NewGuid(), OriginalFilename = "1.ifc", StorageUrl = "test/1.ifc", MimeType = "application/x-step", Sha256Hash = new string('a',64), UsageRights = "owned", UploadedBy = ActorId, FileSizeBytes = 100, CreatedAt = DateTime.UtcNow };
         db.SourceDocuments.Add(doc);
 
         var rev = new Fire3D.Domain.Entities.Revision { Id = RevisionId, BuildingId = building.Id, OrganizationId = OrgId, UploadedBy = ActorId, VersionLabel = "1", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow, SourceDocument = doc };
@@ -75,7 +81,7 @@ public class IfcWriteSqlTests : IAsyncLifetime
 
     public Fire3D.Infrastructure.Persistence.Fire3DDbContext Context()
     {
-        var options = new DbContextOptionsBuilder<Fire3D.Infrastructure.Persistence.Fire3DDbContext>().UseNpgsql(_dbContainer.GetConnectionString()).Options;
+        var options = IfcTestOptions.Create(_dbContainer.GetConnectionString());
         return new Fire3D.Infrastructure.Persistence.Fire3DDbContext(options);
     }
 
@@ -89,7 +95,7 @@ public class IfcWriteSqlTests : IAsyncLifetime
         Assert.Equal(404, (await store.RetryJobAsync(OtherActorId, FailedJobId, key, "Retry", default)).Error?.Status);
         
         var first = await store.RetryJobAsync(ActorId, FailedJobId, key, "Retry", default);
-        Assert.True(first.IsSuccess); 
+        Assert.True(first.IsSuccess, first.Error?.ToString());
         Assert.Equal("Requeued", first.Value?.Outcome);
         
         var replay = await store.RetryJobAsync(ActorId, FailedJobId, key, "Retry", default);
@@ -100,6 +106,8 @@ public class IfcWriteSqlTests : IAsyncLifetime
         
         var eventCount = await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM integration_outbox_events WHERE aggregate_id={0}", FailedJobId).SingleAsync();
         Assert.Equal(1, eventCount);
+        var auditCount = await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM audit_logs WHERE target_id={0}", FailedJobId).SingleAsync();
+        Assert.Equal(1, auditCount);
     }
 }
 

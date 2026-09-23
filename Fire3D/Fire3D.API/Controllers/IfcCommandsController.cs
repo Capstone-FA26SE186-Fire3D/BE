@@ -56,7 +56,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     }
 
     [HttpPost("buildings/{buildingId:guid}/ifc")]
-    [ProducesResponseType<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>(200)]
+    [ProducesResponseType<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<ActionResult<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>> InitiateUpload(Guid buildingId,
@@ -64,7 +64,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     {
         var actor = User.GetActorId();
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadCommand(actor, buildingId, request), ct);
-        return result.IsSuccess ? Ok(result.Value)
+        return result.IsSuccess ? Created($"/api/revisions/{result.Value!.RevisionId}", result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
