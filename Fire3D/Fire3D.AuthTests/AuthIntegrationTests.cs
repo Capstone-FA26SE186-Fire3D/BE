@@ -181,7 +181,7 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var rotated = (await response.Content.ReadFromJsonAsync<TokenResponse>(Json))!;
         Assert.NotEqual(first.RefreshToken, rotated.RefreshToken);
-        Assert.Equal(firstRefreshExpiry, rotated.RefreshTokenExpiresAt);
+        Assert.Equal(firstRefreshExpiry, (DateTime)(await ScalarAsync("SELECT expires_at FROM auth_refresh_tokens WHERE token_hash <> (SELECT token_hash FROM auth_refresh_tokens ORDER BY created_at LIMIT 1) ORDER BY created_at DESC LIMIT 1"))!);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/refresh", new RefreshRequest(first.RefreshToken))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/refresh", new RefreshRequest(rotated.RefreshToken))).StatusCode);
         client.DefaultRequestHeaders.Authorization = new("Bearer", rotated.AccessToken);

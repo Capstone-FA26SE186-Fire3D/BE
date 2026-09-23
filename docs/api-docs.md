@@ -172,14 +172,12 @@ BE kiểm token, trạng thái thu hồi, email đã xác minh và provider goog
 
 Google identity mới hiện đăng nhập thẳng thành Trainee. Đây là gap so với Docs: chưa có onboarding token để người dùng chọn Trainee/OrganizationUser và hoàn tất hồ sơ OrganizationUser.
 
-Response hiện là TokenResponse, **vẫn có expiresAt**:
+Response là TokenResponse. Vì thời hạn token là chi tiết vận hành phía server, response không trả `accessTokenExpiresAt` hoặc `refreshTokenExpiresAt`:
 
 ```json
 {
   "accessToken": "<Fire3D JWT>",
-  "accessTokenExpiresAt": "2026-09-22T10:00:00Z",
   "refreshToken": "<refresh token>",
-  "refreshTokenExpiresAt": "2026-09-29T09:00:00Z",
   "user": {
     "id": "11111111-1111-4111-8111-111111111111",
     "email": "trainee@example.com",
@@ -200,7 +198,7 @@ Refresh không cần access token:
 { "refreshToken": "<latest refresh token>" }
 ```
 
-Token không trống, tối đa 256. Thành công trả TokenResponse còn hai expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả 401 INVALID_REFRESH_TOKEN; replay token đã dùng có thể thu hồi cả family.
+Token không trống, tối đa 256. Thành công trả TokenResponse gồm access token, refresh token mới và hồ sơ user; không trả hai trường expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả 401 INVALID_REFRESH_TOKEN; replay token đã dùng có thể thu hồi cả family.
 
 Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại, không logout mọi thiết bị. `GET /api/auth/me` trả AccountResponse; `PATCH /api/auth/me` hiện sửa fullName cơ bản, không hỗ trợ username/ETag/avatar. `GET /api/organizations/me` đọc organization hiện tại; chưa có PATCH profile organization.
 
@@ -572,7 +570,7 @@ Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 40
 | Playtest start | Mới đổi trạng thái/audit, chưa trả launch grant |
 | Release/training | Đã có create-Built/read/publish/revoke; còn thiếu package-build job và vòng đời Training/session. Publish vẫn phụ thuộc schema/gate triển khai |
 | Auth | Local register hiện chỉ tạo Trainee, chưa nhận username/confirm password; thiếu OrganizationUser self-registration, Google onboarding/link, profile ETag/avatar và organization PATCH. Change Password và Forgot/Reset đã có route/handler. Không có email verification hoặc logout-all route riêng. |
-| Token response | Login local bỏ expiresAt, Firebase login/refresh vẫn còn |
+| Token response | Login local, Firebase login và refresh đều không trả expiresAt |
 | Device | Validation và xử lý bool thất bại chưa đầy đủ; 200 không chứng minh FCM delivery |
 
 Số endpoint không phản ánh mức độ hoàn thiện luồng. Cập nhật tài liệu không thay source, chạy migration hoặc xác nhận kết nối dịch vụ thực tế.

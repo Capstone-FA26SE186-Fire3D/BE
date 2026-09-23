@@ -34,7 +34,7 @@ public class AnonymousAuthHttpTests
             return route switch {
                 "login" => (object)Task.FromResult(AuthResult<LoginResponse>.Ok(new("access","refresh",account))),
                 "register" => Task.FromResult(AuthResult<AccountResponse>.Ok(account)),
-                "login-firebase" => Task.FromResult(AuthResult<TokenResponse>.Ok(new("access",DateTime.UtcNow.AddMinutes(15),"refresh",DateTime.UtcNow.AddDays(7),account))),
+                "login-firebase" => Task.FromResult(AuthResult<TokenResponse>.Ok(new("access","refresh",account))),
                 _ => Task.FromResult(AuthResult<bool>.Ok(true))
             };
         });

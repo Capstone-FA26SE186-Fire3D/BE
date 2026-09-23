@@ -52,7 +52,7 @@ internal static class AuthSupport
             TokenHash = tokens.HashRefreshToken(raw), CreatedAt = now, ExpiresAt = refreshExpiresAt
         }, ct);
         var access = tokens.CreateAccessToken(user, familyId, now);
-        return new(access.Value, access.ExpiresAt, raw, refreshExpiresAt, AuthSupport.ToAccount(user));
+        return new(access.Value, raw, AuthSupport.ToAccount(user));
     }
 
     internal static Task<bool> IsActiveAsync(IAuthStore store, User user, CancellationToken ct) =>

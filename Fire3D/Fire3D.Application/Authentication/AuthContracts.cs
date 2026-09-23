@@ -12,8 +12,7 @@ public sealed record AccountResponse(Guid Id, string Email, string? FullName,
     string? PhoneNumber = null, string? AvatarUrl = null, bool IsActive = true,
     DateTime? LastLoginAt = null, DateTime? CreatedAt = null, DateTime? UpdatedAt = null);
 public sealed record LoginResponse(string AccessToken, string RefreshToken, AccountResponse User);
-public sealed record TokenResponse(string AccessToken, DateTime AccessTokenExpiresAt,
-    string RefreshToken, DateTime RefreshTokenExpiresAt, AccountResponse User);
+public sealed record TokenResponse(string AccessToken, string RefreshToken, AccountResponse User);
 public sealed record ForgotPasswordRequest(string Email);
 public sealed record ResetPasswordRequest(Guid Token, string NewPassword);
 public sealed record AuthError(string Code, string Message, int Status);

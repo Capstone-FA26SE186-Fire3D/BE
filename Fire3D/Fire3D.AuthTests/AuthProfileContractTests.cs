@@ -8,6 +8,15 @@ namespace Fire3D.AuthTests;
 public sealed class AuthProfileContractTests
 {
     [Fact]
+    public void Token_response_does_not_expose_token_expiry_timestamps()
+    {
+        var properties = typeof(TokenResponse).GetProperties().Select(property => property.Name);
+
+        Assert.DoesNotContain("AccessTokenExpiresAt", properties);
+        Assert.DoesNotContain("RefreshTokenExpiresAt", properties);
+    }
+
+    [Fact]
     public void Register_command_exposes_the_required_profile_fields()
     {
         var properties = typeof(RegisterUserCommand).GetProperties().ToDictionary(property => property.Name);
