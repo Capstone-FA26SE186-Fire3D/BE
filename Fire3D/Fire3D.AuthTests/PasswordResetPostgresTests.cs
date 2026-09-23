@@ -92,7 +92,7 @@ public sealed class PasswordResetPostgresTests
         var accounts=new AuthStore(db);var passwords=new PasswordService();
         // Minimal test enum only needs the extra label for registration audit.
         await database.Sql("ALTER TYPE audit_action_enum ADD VALUE IF NOT EXISTS 'Create'");
-        var register=new Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommandHandler(accounts,passwords,TimeProvider.System);
+        var register=new Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommandHandler(accounts,passwords,ResetProxy.For<Fire3D.Application.Authentication.IEmailVerificationQueue>((_,_)=>Task.CompletedTask),TimeProvider.System);
         var created=await register.Handle(new(" USER@EXAMPLE.TEST ","OriginalPassword12!","Test User"),default);
         Assert.True(created.IsSuccess,created.Error?.Message);
         var user=await accounts.FindUserByEmailAsync("user@example.test",default);

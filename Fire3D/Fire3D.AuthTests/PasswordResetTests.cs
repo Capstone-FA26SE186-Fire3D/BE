@@ -44,7 +44,9 @@ public class PasswordResetTests
     public async Task Local_login_verifies_the_database_password_hash_without_firebase()
     {
         var user = new User { Id = Guid.NewGuid(), Email = "local@example.test", IsActive = true,
-            Role = Fire3D.Domain.Enums.UserRole.Trainee, PasswordHash = "database-hash" };
+            Role = Fire3D.Domain.Enums.UserRole.Trainee };
+        var passwords = new PasswordService();
+        user.PasswordHash = passwords.Hash(user, "LongPassword12!");
         var transaction = ResetProxy.For<IAuthTransaction>((method, _) => method switch
         {
             "CommitAsync" => Task.CompletedTask,
@@ -58,11 +60,6 @@ public class PasswordResetTests
             "FindUserAsync" => Task.FromResult<User?>(user),
             "UpdateLoginAsync" or "AddRefreshTokenAsync" or "WriteAuditAsync" => Task.CompletedTask,
             _ => throw new Exception("Unexpected database operation: " + method)
-        });
-        var passwords = ResetProxy.For<IPasswordService>((method, args) => method switch
-        {
-            "Verify" => SetVerifyResult(args, true),
-            _ => throw new Exception("Unexpected password operation: " + method)
         });
         var tokens = ResetProxy.For<ITokenService>((method, _) => method switch
         {
@@ -80,11 +77,6 @@ public class PasswordResetTests
         Assert.Equal("local@example.test", result.Value!.User.Email);
     }
 
-    private static object SetVerifyResult(object?[] arguments, bool result)
-    {
-        arguments[2] = false;
-        return result;
-    }
     [Theory] [InlineData(false,400)] [InlineData(true,503)]
     public async Task Controllers_preserve_error_status(bool reset,int status)
     {

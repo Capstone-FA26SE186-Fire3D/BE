@@ -27,6 +27,8 @@ public partial class User
 
     public string? AvatarUrl { get; set; }
 
+    public DateTime? EmailVerifiedAt { get; set; }
+
     public bool IsActive { get; set; }
 
     public DateTime? LastLoginAt { get; set; }

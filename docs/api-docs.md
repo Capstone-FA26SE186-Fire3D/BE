@@ -74,7 +74,7 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 { "items": [], "totalCount": 0, "page": 1, "pageSize": 20 }
 ```
 
-## 2. Authentication — 12 endpoint
+## 2. Authentication — 14 endpoint
 
 | Method | Path | Quyền | Thành công |
 | --- | --- | --- | --- |
@@ -90,6 +90,8 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 | POST | `/api/auth/forgot-password` | Public | 202 với message chung |
 | POST | `/api/auth/reset-password` | Public | 204 |
 | POST | `/api/auth/change-password` | User | 204 |
+| POST | `/api/auth/resend-verification` | Public | 202 |
+| POST | `/api/auth/verify-email` | Public | 204 |
 
 ### 2.1 Register local
 
@@ -130,6 +132,8 @@ BE hash password vào `users.password_hash`, không tạo tài khoản email/pas
 Lỗi: 400 VALIDATION_ERROR, 409 EMAIL_EXISTS. AccountResponse từ nguồn tạo khác có thể có fullName null.
 
 Đây là route hiện có của source, chưa phải contract đăng ký đích: request chưa nhận username/confirm password và chỉ tạo Trainee. Docs đích còn yêu cầu đăng ký OrganizationUser với hồ sơ organization; xem [checklist](api-implementation-checklist.md#b-tài-khoản-và-xác-thực).
+
+Register enqueue email xác minh trong cùng transaction. Worker Mailgun gửi link có thời hạn 24 giờ; AccountResponse trả thêm `emailVerifiedAt` (null trước khi xác minh).
 
 ### 2.2 Login local
 
@@ -190,7 +194,13 @@ Response là TokenResponse. Vì thời hạn token là chi tiết vận hành ph
 
 Thời gian ví dụ không thay cấu hình môi trường. Chưa có API liên kết Google vào tài khoản local có sẵn.
 
-### 2.4 Refresh, logout, me, devices
+### 2.4 Email verification
+
+`POST /api/auth/resend-verification` là Public, nhận `{ "email": "trainee@example.com" }` và trả 202. Response được giữ chung cho email không tồn tại, account đã xác minh hoặc bị vô hiệu hóa. Mỗi email có cooldown 1 phút.
+
+`POST /api/auth/verify-email` là Public, nhận `{ "token": "<64 hex token từ email>" }`. Token có thời hạn 24 giờ, dùng một lần; token cũ chưa dùng bị thu hồi khi gửi lại. Thành công trả 204 và cập nhật `emailVerifiedAt`; token không hợp lệ, hết hạn hoặc đã dùng trả 400 `INVALID_VERIFICATION_TOKEN`.
+
+### 2.5 Refresh, logout, me, devices
 
 Refresh không cần access token:
 

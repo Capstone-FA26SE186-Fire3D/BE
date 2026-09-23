@@ -41,6 +41,7 @@ public sealed class AuthProfileContractTests
         Assert.Equal(typeof(string), properties["AvatarUrl"].PropertyType);
         Assert.Equal(typeof(bool), properties["IsActive"].PropertyType);
         Assert.Equal(typeof(DateTime?), properties["LastLoginAt"].PropertyType);
+        Assert.Equal(typeof(DateTime?), properties["EmailVerifiedAt"].PropertyType);
     }
 
     [Fact]

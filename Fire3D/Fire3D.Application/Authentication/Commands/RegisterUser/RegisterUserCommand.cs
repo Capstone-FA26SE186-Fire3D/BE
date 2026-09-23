@@ -9,7 +9,7 @@ public sealed record RegisterUserCommand(string Email, string Password, string F
     DateOnly? Dob = null, UserGender? Gender = null, string? PhoneNumber = null, string? AvatarUrl = null)
     : IRequest<AuthResult<AccountResponse>>;
 
-public sealed class RegisterUserCommandHandler(IAuthStore store, IPasswordService passwords, TimeProvider clock)
+public sealed class RegisterUserCommandHandler(IAuthStore store, IPasswordService passwords, IEmailVerificationQueue verificationQueue, TimeProvider clock)
     : IRequestHandler<RegisterUserCommand, AuthResult<AccountResponse>>
 {
     public async Task<AuthResult<AccountResponse>> Handle(RegisterUserCommand command, CancellationToken ct)
@@ -37,6 +37,7 @@ public sealed class RegisterUserCommandHandler(IAuthStore store, IPasswordServic
         await using var transaction = await store.BeginUserTransactionAsync(user.Id, ct);
         if (!await store.TryCreateUserAsync(user, ct))
             return AuthResult<AccountResponse>.Fail("EMAIL_EXISTS", "Email is already registered.", 409);
+        await verificationQueue.EnqueueAsync(user.Email, ct);
         await store.WriteAuditAsync(user, "Create", user.Id, now, ct);
         await transaction.CommitAsync(ct);
         return AuthResult<AccountResponse>.Ok(AuthSupport.ToAccount(user));
