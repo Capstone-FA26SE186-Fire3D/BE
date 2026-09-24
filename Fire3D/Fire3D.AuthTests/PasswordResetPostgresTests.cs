@@ -4,6 +4,7 @@ using Fire3D.Domain.Enums;
 using Fire3D.Infrastructure.Authentication;
 using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using Npgsql.NameTranslation;
 using Xunit;
@@ -140,6 +141,43 @@ public sealed class PasswordResetPostgresTests
             await using var c=db.Context();return await new PasswordResetQueue(c).ClaimAsync(default);
         }));
         Assert.Single(claims,x=>x!=null);
+    }
+    [ResetPostgresFact]
+    public async Task Email_verification_deduplicates_fences_stale_worker_and_consumes_token_once()
+    {
+        await using var database = await Database.Create();
+        var userId = Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role) VALUES ('{userId}','verify@example.com','Trainee')");
+        var settings = Options.Create(new AuthEmailOptions { FrontendUrl = "https://app.example.test" });
+
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
+        {
+            await using var context = database.Context();
+            await new EmailVerificationQueue(context, settings).EnqueueAsync("verify@example.com", default);
+        }));
+        Assert.Equal(1L, await database.Sql("SELECT count(*) FROM email_verification_jobs"));
+
+        await using var firstContext = database.Context();
+        var firstQueue = new EmailVerificationQueue(firstContext, settings);
+        var first = Assert.IsType<VerificationEmailJob>(await firstQueue.ClaimAsync(default));
+        await database.Sql("UPDATE email_verification_jobs SET lease_until=now()-interval '1 second'");
+
+        await using var secondContext = database.Context();
+        var secondQueue = new EmailVerificationQueue(secondContext, settings);
+        var second = Assert.IsType<VerificationEmailJob>(await secondQueue.ClaimAsync(default));
+        Assert.NotEqual(first.LeaseToken, second.LeaseToken);
+        Assert.Null(await firstQueue.CreateLinkAsync(first, default));
+
+        var link = await secondQueue.CreateLinkAsync(second, default);
+        var raw = System.Web.HttpUtility.ParseQueryString(new Uri(link!).Query)["token"]!;
+        Assert.Equal(64, raw.Length);
+        Assert.NotEqual(raw, await database.Sql("SELECT token_hash FROM email_verification_tokens LIMIT 1"));
+
+        await using var verifyContext = database.Context();
+        var verifyQueue = new EmailVerificationQueue(verifyContext, settings);
+        Assert.True(await verifyQueue.VerifyAsync(raw.ToUpperInvariant(), default));
+        Assert.False(await verifyQueue.VerifyAsync(raw, default));
+        Assert.Equal(1L, await database.Sql("SELECT count(*) FROM users WHERE id='" + userId + "' AND email_verified_at IS NOT NULL"));
     }
     [ResetPostgresFact]
     public async Task Lease_recovery_fences_stale_ack_and_retries_with_backoff()

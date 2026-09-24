@@ -22,14 +22,17 @@ public sealed class EmailVerificationWorker(IServiceScopeFactory scopes, IOption
                 var queue = scope.ServiceProvider.GetRequiredService<IEmailVerificationQueue>();
                 var job = await queue.ClaimAsync(stoppingToken);
                 if (job is null) { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); continue; }
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                timeout.CancelAfter(TimeSpan.FromSeconds(45));
                 try
                 {
-                    var link = await queue.CreateLinkAsync(job, stoppingToken);
+                    var link = await queue.CreateLinkAsync(job, timeout.Token);
                     if (link is not null)
                         await scope.ServiceProvider.GetRequiredService<IEmailService>().SendAsync(job.Email, "Verify your Fire3D email",
-                            "<p>Verify your Fire3D email address.</p><p><a href=\"" + WebUtility.HtmlEncode(link) + "\">Verify email</a></p>", stoppingToken);
+                            "<p>Verify your Fire3D email address.</p><p><a href=\"" + WebUtility.HtmlEncode(link) + "\">Verify email</a></p>", timeout.Token);
                     await queue.CompleteAsync(job, stoppingToken);
                 }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
                 catch (Exception exception)
                 {
                     await queue.FailAsync(job, false, stoppingToken);
