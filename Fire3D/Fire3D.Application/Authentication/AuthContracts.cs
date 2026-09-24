@@ -8,9 +8,12 @@ public sealed record RefreshRequest(string RefreshToken);
 public sealed record CreateAccountRequest(string Email, string Password, string? FullName,
     UserRole? Role, Guid? OrganizationId);
 public sealed record AccountResponse(Guid Id, string Email, string? FullName,
-    UserRole Role, Guid? OrganizationId);
+    UserRole Role, Guid? OrganizationId, DateOnly? Dob = null, UserGender? Gender = null,
+    string? PhoneNumber = null, string? AvatarUrl = null, bool IsActive = true,
+    DateTime? LastLoginAt = null, DateTime? CreatedAt = null, DateTime? UpdatedAt = null,
+    DateTime? EmailVerifiedAt = null);
 public sealed record LoginResponse(string AccessToken, string RefreshToken, AccountResponse User);
-public sealed record TokenResponse(string AccessToken,string RefreshToken, AccountResponse User);
+public sealed record TokenResponse(string AccessToken, string RefreshToken, AccountResponse User);
 public sealed record ForgotPasswordRequest(string Email);
 public sealed record ResetPasswordRequest(Guid Token, string NewPassword);
 public sealed record AuthError(string Code, string Message, int Status);

@@ -74,7 +74,7 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 { "items": [], "totalCount": 0, "page": 1, "pageSize": 20 }
 ```
 
-## 2. Authentication — 12 endpoint
+## 2. Authentication — 14 endpoint
 
 | Method | Path | Quyền | Thành công |
 | --- | --- | --- | --- |
@@ -90,6 +90,8 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 | POST | `/api/auth/forgot-password` | Public | 202 với message chung |
 | POST | `/api/auth/reset-password` | Public | 204 |
 | POST | `/api/auth/change-password` | User | 204 |
+| POST | `/api/auth/resend-verification` | Public | 202 |
+| POST | `/api/auth/verify-email` | Public | 204 |
 
 ### 2.1 Register local
 
@@ -97,11 +99,15 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 {
   "email": "trainee@example.com",
   "password": "Example-Password-2026!",
-  "fullName": "Nguyen Van A"
+  "fullName": "Nguyen Van A",
+  "dob": "2004-07-29",
+  "gender": "Male",
+  "phoneNumber": "+84901234567",
+  "avatarUrl": "https://cdn.example.test/avatars/trainee.png"
 }
 ```
 
-Email hợp lệ tối đa 254 ký tự, trim/lowercase; password 12–128 và không chỉ khoảng trắng; fullName bắt buộc, không chỉ khoảng trắng, tối đa 200. Không gửi role/organizationId để cấp quyền.
+Email hợp lệ tối đa 254 ký tự, trim/lowercase; password 12–128 và không chỉ khoảng trắng; fullName bắt buộc, không chỉ khoảng trắng, tối đa 200. `dob`, `gender`, `phoneNumber` và `avatarUrl` là field profile tùy chọn. Dob không được ở tương lai; gender là Male, Female, Other hoặc PreferNotToSay; phone 6–32 ký tự số/dấu gọi điện; avatar phải là HTTP(S) URL tối đa 2048 ký tự. Không gửi role/organizationId để cấp quyền.
 
 BE hash password vào `users.password_hash`, không tạo tài khoản email/password trên Firebase. Trả **201 AccountResponse**, chưa đăng nhập; gọi login tiếp theo:
 
@@ -111,13 +117,23 @@ BE hash password vào `users.password_hash`, không tạo tài khoản email/pas
   "email": "trainee@example.com",
   "fullName": "Nguyen Van A",
   "role": "Trainee",
-  "organizationId": null
+  "organizationId": null,
+  "dob": "2004-07-29",
+  "gender": "Male",
+  "phoneNumber": "+84901234567",
+  "avatarUrl": "https://cdn.example.test/avatars/trainee.png",
+  "isActive": true,
+  "lastLoginAt": "2026-09-23T10:00:00Z",
+  "createdAt": "2026-09-23T09:00:00Z",
+  "updatedAt": "2026-09-23T10:00:00Z"
 }
 ```
 
 Lỗi: 400 VALIDATION_ERROR, 409 EMAIL_EXISTS. AccountResponse từ nguồn tạo khác có thể có fullName null.
 
 Đây là route hiện có của source, chưa phải contract đăng ký đích: request chưa nhận username/confirm password và chỉ tạo Trainee. Docs đích còn yêu cầu đăng ký OrganizationUser với hồ sơ organization; xem [checklist](api-implementation-checklist.md#b-tài-khoản-và-xác-thực).
+
+Register enqueue email xác minh trong cùng transaction. Worker Mailgun gửi link có thời hạn 24 giờ; AccountResponse trả thêm `emailVerifiedAt` (null trước khi xác minh).
 
 ### 2.2 Login local
 
@@ -141,7 +157,7 @@ Email được chuẩn hóa; password login không rỗng, tối đa 128, không
 }
 ```
 
-LoginResponse **không có accessTokenExpiresAt/refreshTokenExpiresAt**. Lỗi: 400 VALIDATION_ERROR; 401 INVALID_CREDENTIALS cho sai email/password hoặc chưa có hash local; 403 ACCOUNT_DISABLED khi password đúng nhưng tài khoản/tổ chức không hợp lệ.
+Login email/password chỉ đọc user và `password_hash` đã băm trong PostgreSQL; endpoint này không gọi Firebase. Firebase/Google chỉ đi qua `POST /api/auth/login-firebase`. LoginResponse **không có accessTokenExpiresAt/refreshTokenExpiresAt**. Lỗi: 400 VALIDATION_ERROR; 401 INVALID_CREDENTIALS cho sai email/password hoặc chưa có hash local; 403 ACCOUNT_DISABLED khi password đúng nhưng tài khoản/tổ chức không hợp lệ.
 
 ### 2.3 Google qua Firebase
 
@@ -160,14 +176,12 @@ BE kiểm token, trạng thái thu hồi, email đã xác minh và provider goog
 
 Google identity mới hiện đăng nhập thẳng thành Trainee. Đây là gap so với Docs: chưa có onboarding token để người dùng chọn Trainee/OrganizationUser và hoàn tất hồ sơ OrganizationUser.
 
-Response hiện là TokenResponse, **vẫn có expiresAt**:
+Response là TokenResponse. Vì thời hạn token là chi tiết vận hành phía server, response không trả `accessTokenExpiresAt` hoặc `refreshTokenExpiresAt`:
 
 ```json
 {
   "accessToken": "<Fire3D JWT>",
-  "accessTokenExpiresAt": "2026-09-22T10:00:00Z",
   "refreshToken": "<refresh token>",
-  "refreshTokenExpiresAt": "2026-09-29T09:00:00Z",
   "user": {
     "id": "11111111-1111-4111-8111-111111111111",
     "email": "trainee@example.com",
@@ -180,7 +194,13 @@ Response hiện là TokenResponse, **vẫn có expiresAt**:
 
 Thời gian ví dụ không thay cấu hình môi trường. Chưa có API liên kết Google vào tài khoản local có sẵn.
 
-### 2.4 Refresh, logout, me, devices
+### 2.4 Email verification
+
+`POST /api/auth/resend-verification` là Public, nhận `{ "email": "trainee@example.com" }` và trả 202. Response được giữ chung cho email không tồn tại, account đã xác minh hoặc bị vô hiệu hóa. Mỗi email có cooldown 1 phút.
+
+`POST /api/auth/verify-email` là Public, nhận `{ "token": "<64 hex token từ email>" }`. Token có thời hạn 24 giờ, dùng một lần; token cũ chưa dùng bị thu hồi khi gửi lại. Thành công trả 204 và cập nhật `emailVerifiedAt`; token không hợp lệ, hết hạn hoặc đã dùng trả 400 `INVALID_VERIFICATION_TOKEN`.
+
+### 2.5 Refresh, logout, me, devices
 
 Refresh không cần access token:
 
@@ -188,7 +208,7 @@ Refresh không cần access token:
 { "refreshToken": "<latest refresh token>" }
 ```
 
-Token không trống, tối đa 256. Thành công trả TokenResponse còn hai expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả 401 INVALID_REFRESH_TOKEN; replay token đã dùng có thể thu hồi cả family.
+Token không trống, tối đa 256. Thành công trả TokenResponse gồm access token, refresh token mới và hồ sơ user; không trả hai trường expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả 401 INVALID_REFRESH_TOKEN; replay token đã dùng có thể thu hồi cả family.
 
 Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại, không logout mọi thiết bị. `GET /api/auth/me` trả AccountResponse; `PATCH /api/auth/me` hiện sửa fullName cơ bản, không hỗ trợ username/ETag/avatar. `GET /api/organizations/me` đọc organization hiện tại; chưa có PATCH profile organization.
 
@@ -560,7 +580,7 @@ Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 40
 | Playtest start | Mới đổi trạng thái/audit, chưa trả launch grant |
 | Release/training | Đã có create-Built/read/publish/revoke; còn thiếu package-build job và vòng đời Training/session. Publish vẫn phụ thuộc schema/gate triển khai |
 | Auth | Local register hiện chỉ tạo Trainee, chưa nhận username/confirm password; thiếu OrganizationUser self-registration, Google onboarding/link, profile ETag/avatar và organization PATCH. Change Password và Forgot/Reset đã có route/handler. Không có email verification hoặc logout-all route riêng. |
-| Token response | Login local bỏ expiresAt, Firebase login/refresh vẫn còn |
+| Token response | Login local, Firebase login và refresh đều không trả expiresAt |
 | Device | Validation và xử lý bool thất bại chưa đầy đủ; 200 không chứng minh FCM delivery |
 
 Số endpoint không phản ánh mức độ hoàn thiện luồng. Cập nhật tài liệu không thay source, chạy migration hoặc xác nhận kết nối dịch vụ thực tế.

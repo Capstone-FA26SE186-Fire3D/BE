@@ -4,6 +4,7 @@ using Fire3D.API.Controllers;
 using Fire3D.Application.Authentication;
 using Fire3D.Application.Authentication.Commands.ForgotPassword;
 using Fire3D.Application.Authentication.Commands.ResetPassword;
+using Fire3D.Application.Authentication.Commands.LoginWithPassword;
 using Fire3D.Domain.Entities;
 using Fire3D.Infrastructure.Authentication;
 using MediatR;
@@ -39,6 +40,43 @@ public class PasswordResetTests
             Assert.Equal("EnqueuePasswordResetAsync",method);Assert.Equal("a@example.test",args[0]);return Task.CompletedTask;});
         Assert.True((await new ForgotPasswordCommandHandler(store).Handle(new(" A@EXAMPLE.TEST "),default)).IsSuccess);
     }
+    [Fact]
+    public async Task Local_login_verifies_the_database_password_hash_without_firebase()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "local@example.test", IsActive = true,
+            Role = Fire3D.Domain.Enums.UserRole.Trainee };
+        var passwords = new PasswordService();
+        user.PasswordHash = passwords.Hash(user, "LongPassword12!");
+        var transaction = ResetProxy.For<IAuthTransaction>((method, _) => method switch
+        {
+            "CommitAsync" => Task.CompletedTask,
+            "DisposeAsync" => ValueTask.CompletedTask,
+            _ => throw new Exception(method)
+        });
+        var store = ResetProxy.For<IAuthStore>((method, args) => method switch
+        {
+            "FindUserByEmailAsync" => Task.FromResult<User?>(user),
+            "BeginUserTransactionAsync" => Task.FromResult(transaction),
+            "FindUserAsync" => Task.FromResult<User?>(user),
+            "UpdateLoginAsync" or "AddRefreshTokenAsync" or "WriteAuditAsync" => Task.CompletedTask,
+            _ => throw new Exception("Unexpected database operation: " + method)
+        });
+        var tokens = ResetProxy.For<ITokenService>((method, _) => method switch
+        {
+            "CreateAccessToken" => new AccessTokenValue("access", DateTime.UtcNow.AddMinutes(15)),
+            "CreateRefreshToken" => "refresh",
+            "HashRefreshToken" => "refresh-hash",
+            "get_RefreshTokenLifetime" => TimeSpan.FromDays(7),
+            _ => throw new Exception("Unexpected token operation: " + method)
+        });
+
+        var result = await new LoginWithPasswordCommandHandler(store, passwords, tokens, TimeProvider.System)
+            .Handle(new LoginWithPasswordCommand(" LOCAL@example.test ", "LongPassword12!"), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("local@example.test", result.Value!.User.Email);
+    }
+
     [Theory] [InlineData(false,400)] [InlineData(true,503)]
     public async Task Controllers_preserve_error_status(bool reset,int status)
     {

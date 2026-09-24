@@ -68,6 +68,28 @@ public sealed class AuthController(ISender sender) : ControllerBase
         return Created($"/api/accounts/{result.Value!.Id}", result.Value);
     }
 
+    [HttpPost("resend-verification")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> ResendVerification([FromBody] Fire3D.Application.Authentication.ResendVerificationCommand command, CancellationToken ct)
+    {
+        var result = await sender.Send(command, ct);
+        return result.IsSuccess ? Accepted() : ResetProblem(result.Error!);
+    }
+
+    [HttpPost("verify-email")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> VerifyEmail([FromBody] Fire3D.Application.Authentication.VerifyEmailCommand command, CancellationToken ct)
+    {
+        var result = await sender.Send(command, ct);
+        return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
+    }
+
     /// <summary>
     /// Cấp lại Access Token mới dựa vào Refresh Token hợp lệ.
     /// </summary>

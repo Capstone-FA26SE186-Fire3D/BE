@@ -44,7 +44,7 @@ public sealed class PasswordResetPostgresTests
                 CREATE TYPE audit_action_enum AS ENUM ('Update','Login');
                 CREATE TABLE users (
                   id uuid PRIMARY KEY, organization_id uuid, email text NOT NULL, firebase_uid text,
-                  full_name text, password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
+                  full_name text, dob date, gender text, phone_number varchar(32), avatar_url varchar(2048), password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
                   last_login_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
                   updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz);
                 CREATE TABLE auth_refresh_tokens (
@@ -58,6 +58,7 @@ public sealed class PasswordResetPostgresTests
                 """);
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"002_password_reset_recovery.sql")));
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"003_local_password.sql")));
+            await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"005_email_verification.sql")));
             return db;
         }
         private DbContextOptions<Fire3DDbContext>? contextOptions;
@@ -92,7 +93,7 @@ public sealed class PasswordResetPostgresTests
         var accounts=new AuthStore(db);var passwords=new PasswordService();
         // Minimal test enum only needs the extra label for registration audit.
         await database.Sql("ALTER TYPE audit_action_enum ADD VALUE IF NOT EXISTS 'Create'");
-        var register=new Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommandHandler(accounts,passwords,TimeProvider.System);
+        var register=new Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommandHandler(accounts,passwords,ResetProxy.For<Fire3D.Application.Authentication.IEmailVerificationQueue>((_,_)=>Task.CompletedTask),TimeProvider.System);
         var created=await register.Handle(new(" USER@EXAMPLE.TEST ","OriginalPassword12!","Test User"),default);
         Assert.True(created.IsSuccess,created.Error?.Message);
         var user=await accounts.FindUserByEmailAsync("user@example.test",default);

@@ -10,6 +10,14 @@ public enum UserRole
     Trainee
 }
 
+public enum UserGender
+{
+    Male,
+    Female,
+    Other,
+    PreferNotToSay
+}
+
 public enum FileType
 {
     IFC
