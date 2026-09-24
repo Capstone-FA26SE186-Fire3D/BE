@@ -3,6 +3,7 @@ using System.Text;
 using Fire3D.Application.Authentication;
 using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
@@ -12,12 +13,17 @@ public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmai
 {
     public async Task EnqueueAsync(string email, CancellationToken ct)
     {
+        await using var transaction = db.Database.CurrentTransaction is null
+            ? await db.Database.BeginTransactionAsync(ct) : null;
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:verification-email:" + email},0))", ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO public.email_verification_jobs(id,email)
             SELECT {Guid.NewGuid()},{email}
              WHERE NOT EXISTS(SELECT 1 FROM public.email_verification_jobs
                 WHERE email={email} AND created_at > now()-interval '1 minute')
             """, ct);
+        if (transaction is not null) await transaction.CommitAsync(ct);
     }
 
     public async Task<VerificationEmailJob?> ClaimAsync(CancellationToken ct)
@@ -43,11 +49,19 @@ public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmai
 
     public async Task<string?> CreateLinkAsync(VerificationEmailJob job, CancellationToken ct)
     {
-        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Email == job.Email && x.IsActive && x.DeletedAt == null && x.EmailVerifiedAt == null, ct);
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var ownsLease = await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM public.email_verification_jobs
+              WHERE id={job.Id} AND status='Leased' AND lease_token={job.LeaseToken} AND lease_until>now()) AS "Value"
+            """).SingleAsync(ct);
+        if (!ownsLease) return null;
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:verification-account:" + job.Email},0))", ct);
+        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(
+            x => x.Email == job.Email && x.IsActive && x.DeletedAt == null && x.EmailVerifiedAt == null, ct);
         if (user is null) return null;
         var raw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant();
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE public.email_verification_tokens SET used_at=now() WHERE user_id={user.Id} AND used_at IS NULL", ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO public.email_verification_tokens(id,user_id,token_hash,expires_at) VALUES ({Guid.NewGuid()},{user.Id},{hash},now()+interval '24 hours')", ct);
         await transaction.CommitAsync(ct);
@@ -57,17 +71,25 @@ public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmai
     public async Task<bool> VerifyAsync(string token, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token) || token.Length != 64 || !token.All(Uri.IsHexDigit)) return false;
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant();
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token.ToLowerInvariant()))).ToLowerInvariant();
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        var userId = await db.Database.SqlQuery<Guid?>($"""
+        Guid? userId = null;
+        await using (var command = new NpgsqlCommand("""
             UPDATE public.email_verification_tokens SET used_at=now()
-             WHERE token_hash={hash} AND used_at IS NULL AND expires_at>now()
-             RETURNING user_id AS "Value"
-            """).SingleOrDefaultAsync(ct);
+             WHERE token_hash=@hash AND used_at IS NULL AND expires_at>now()
+             RETURNING user_id
+            """, (NpgsqlConnection)db.Database.GetDbConnection(),
+            (NpgsqlTransaction)transaction.GetDbTransaction()))
+        {
+            command.Parameters.AddWithValue("hash", hash);
+            var result = await command.ExecuteScalarAsync(ct);
+            if (result is Guid id) userId = id;
+        }
         if (userId is null) return false;
-        await db.Users.Where(user => user.Id == userId.Value).ExecuteUpdateAsync(setters => setters
+        var updated = await db.Users.Where(user => user.Id == userId.Value).ExecuteUpdateAsync(setters => setters
             .SetProperty(user => user.EmailVerifiedAt, DateTime.UtcNow)
             .SetProperty(user => user.UpdatedAt, DateTime.UtcNow), ct);
+        if (updated != 1) return false;
         await transaction.CommitAsync(ct);
         return true;
     }
