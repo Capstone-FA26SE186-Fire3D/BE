@@ -19,6 +19,8 @@ Source hiện có **64 HTTP action** trong controller. Số lượng route khôn
 | Path | Thành công | Header `Location` |
 | --- | --- | --- |
 | `POST /api/auth/register` | 201 AccountResponse | `/api/accounts/{id}` |
+| `POST /api/auth/register/trainee` | 201 AccountResponse | `/api/accounts/{id}` |
+| `POST /api/auth/register/organization` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/accounts` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/organizations` | 201 OrganizationResponse | `/api/organizations/{id}` |
 | `POST /api/buildings` | 201 BuildingResponse | `/api/buildings/{id}` |
@@ -74,11 +76,13 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 { "items": [], "totalCount": 0, "page": 1, "pageSize": 20 }
 ```
 
-## 2. Authentication — 12 endpoint
+## 2. Authentication — 14 endpoint
 
 | Method | Path | Quyền | Thành công |
 | --- | --- | --- | --- |
 | POST | `/api/auth/register` | Public | 201 AccountResponse |
+| POST | `/api/auth/register/trainee` | Public | 201 AccountResponse |
+| POST | `/api/auth/register/organization` | Public | 201 AccountResponse |
 | POST | `/api/auth/login` | Public | 200 LoginResponse |
 | POST | `/api/auth/login-firebase` | Public | 200 TokenResponse |
 | POST | `/api/auth/refresh` | Public | 200 TokenResponse |
@@ -96,12 +100,14 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 ```json
 {
   "email": "trainee@example.com",
+  "username": "nguyen.van.a",
   "password": "Example-Password-2026!",
+  "confirmPassword": "Example-Password-2026!",
   "fullName": "Nguyen Van A"
 }
 ```
 
-Email hợp lệ tối đa 254 ký tự, trim/lowercase; password 12–128 và không chỉ khoảng trắng; fullName bắt buộc, không chỉ khoảng trắng, tối đa 200. Không gửi role/organizationId để cấp quyền.
+`/api/auth/register/trainee` yêu cầu email hợp lệ tối đa 254 ký tự, username lowercase theo `[a-z0-9._-]{3,30}`, password 12–128 và confirmPassword trùng password; fullName tùy chọn, tối đa 200. Username unique không phân biệt hoa thường. Không gửi role/organizationId để cấp quyền.
 
 BE hash password vào `users.password_hash`, không tạo tài khoản email/password trên Firebase. Trả **201 AccountResponse**, chưa đăng nhập; gọi login tiếp theo:
 
@@ -111,13 +117,14 @@ BE hash password vào `users.password_hash`, không tạo tài khoản email/pas
   "email": "trainee@example.com",
   "fullName": "Nguyen Van A",
   "role": "Trainee",
-  "organizationId": null
+  "organizationId": null,
+  "username": "nguyen.van.a"
 }
 ```
 
-Lỗi: 400 VALIDATION_ERROR, 409 EMAIL_EXISTS. AccountResponse từ nguồn tạo khác có thể có fullName null.
+Lỗi: 400 VALIDATION_ERROR, 409 EMAIL_EXISTS hoặc USERNAME_EXISTS. AccountResponse từ nguồn tạo khác có thể có fullName/username null.
 
-Đây là route hiện có của source, chưa phải contract đăng ký đích: request chưa nhận username/confirm password và chỉ tạo Trainee. Docs đích còn yêu cầu đăng ký OrganizationUser với hồ sơ organization; xem [checklist](api-implementation-checklist.md#b-tài-khoản-và-xác-thực).
+`POST /api/auth/register` là alias tương thích cho request Trainee cùng contract. `POST /api/auth/register/organization` nhận email/password/confirmPassword, fullName tùy chọn, organizationName, organizationAddress và organizationPhoneNumber; backend tạo owner `OrganizationUser` cùng organization trong một transaction.
 
 ### 2.2 Login local
 
@@ -158,7 +165,7 @@ BE kiểm token, trạng thái thu hồi, email đã xác minh và provider goog
 - Email thuộc tài khoản khác/chưa liên kết UID này: 409 ACCOUNT_LINK_REQUIRED; không tự ghép chỉ vì trùng email.
 - Xung đột tạo đồng thời có thể 409 ACCOUNT_EXISTS; tài khoản bị khóa 403 ACCOUNT_DISABLED.
 
-Google identity mới hiện đăng nhập thẳng thành Trainee. Đây là gap so với Docs: chưa có onboarding token để người dùng chọn Trainee/OrganizationUser và hoàn tất hồ sơ OrganizationUser.
+Google identity mới trả `{ status: "OnboardingRequired" }` và không tạo tài khoản. UID đã liên kết trả `{ status: "Authenticated", authentication: TokenResponse }`. Chưa có onboarding token/endpoint để người dùng hoàn tất chọn Trainee/OrganizationUser.
 
 Response hiện là TokenResponse, **vẫn có expiresAt**:
 
@@ -559,7 +566,7 @@ Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 40
 | Playtest prepare | SQL entitlement dùng is_active, bắt exception rồi giữ Guid.Empty; cần đối chiếu schema. Draft-only có thể ghi ScenarioVersionId = Guid.Empty và vướng FK |
 | Playtest start | Mới đổi trạng thái/audit, chưa trả launch grant |
 | Release/training | Đã có create-Built/read/publish/revoke; còn thiếu package-build job và vòng đời Training/session. Publish vẫn phụ thuộc schema/gate triển khai |
-| Auth | Local register hiện chỉ tạo Trainee, chưa nhận username/confirm password; thiếu OrganizationUser self-registration, Google onboarding/link, profile ETag/avatar và organization PATCH. Change Password và Forgot/Reset đã có route/handler. Không có email verification hoặc logout-all route riêng. |
+| Auth | Local self-registration cho Trainee và OrganizationUser đã có username/confirm password/organization profile ban đầu. Google onboarding/link, profile ETag/avatar, organization PATCH và email verification vẫn thiếu. Change Password và Forgot/Reset đã có route/handler. Không có logout-all route riêng. |
 | Token response | Login local bỏ expiresAt, Firebase login/refresh vẫn còn |
 | Device | Validation và xử lý bool thất bại chưa đầy đủ; 200 không chứng minh FCM delivery |
 

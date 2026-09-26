@@ -27,11 +27,11 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 
 ## B. Tài khoản và xác thực
 
-### AUTH-01 — P0 · GAP · Đăng ký local
+### AUTH-01 — P1 · PARTIAL · Đăng ký local
 
-- **Contract/current:** [RegisterUserCommand](../Fire3D/Fire3D.Application/Authentication/Commands/RegisterUser/RegisterUserCommand.cs) hiện tạo Trainee từ email/password/fullName; chưa nhận username và chưa có self-registration OrganizationUser.
-- **Sửa code:** Thêm hai luồng đăng ký theo Docs: Trainee có username; OrganizationUser có thông tin tổ chức. BE tự gán role/tenant, chuẩn hóa và bảo đảm username Trainee duy nhất không phân biệt hoa thường.
-- **Nghiệm thu:** Tạo đúng role/hồ sơ; email hoặc username trùng, username sai chuẩn và request cố gửi role/tenant bị từ chối. Kiểm tra đăng ký đồng thời cùng username trên PostgreSQL test.
+- **Contract/current:** `POST /api/auth/register/trainee` và `/api/auth/register/organization` đã tạo đúng role/tenant server-owned. Migration `20260926085252_AddSelfRegistration` thêm username, organization address/phone, index unique lowercase và constraint cho Trainee mới. `/api/auth/register` vẫn là alias Trainee có validation username/confirm password.
+- **Còn thiếu:** Google onboarding/link, email verification, profile ETag và migration/backfill đầy đủ profile target không thuộc work item này.
+- **Nghiệm thu đã có:** HTTP/PostgreSQL disposable kiểm tra hai role, organization transaction và collision username khác hoa/thường. Còn cần test race concurrent cùng username và chuyển dữ liệu production trước khi đóng hoàn toàn.
 
 ### AUTH-02 — P0 · GAP · Google onboarding và link
 

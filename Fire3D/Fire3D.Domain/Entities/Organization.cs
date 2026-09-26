@@ -11,6 +11,10 @@ public partial class Organization
 
     public string Slug { get; set; } = null!;
 
+    public string? Address { get; set; }
+
+    public string? PhoneNumber { get; set; }
+
     public string Plan { get; set; } = null!;
 
     public bool IsActive { get; set; }

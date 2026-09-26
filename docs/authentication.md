@@ -16,9 +16,9 @@
 
 | Năng lực | Source hiện có | Khác biệt so với contract đích |
 |---|---|---|
-| Local registration | `POST /api/auth/register` tạo Trainee bằng email/password/fullName | Thiếu username và confirm password trong contract; chưa có đăng ký OrganizationUser tự phục vụ |
+| Local registration | `POST /api/auth/register/trainee` tạo Trainee với username lowercase; `POST /api/auth/register/organization` tạo OrganizationUser và organization trong một transaction. `/api/auth/register` là alias Trainee cũ nhưng dùng cùng validation mới | Google onboarding/link, email verification và profile ETag vẫn chưa hoàn tất |
 | Local login/session | Login, refresh rotation, logout và `/api/auth/me` dùng Fire3D access/refresh token | Không đổi thành Firebase-only; rà response/client storage theo API guide |
-| Google | `POST /api/auth/login-firebase`; tài khoản Google mới hiện được tạo thành Trainee | Chưa có onboarding chọn role và hoàn tất hồ sơ OrganizationUser; chưa có link Google tường minh |
+| Google | `POST /api/auth/login-firebase`; UID đã liên kết trả `Authenticated`, email local trùng trả `ACCOUNT_LINK_REQUIRED`, Google mới trả `OnboardingRequired` và không tự tạo tài khoản | Chưa có endpoint onboarding/link tường minh để hoàn tất chọn loại tài khoản |
 | Profile | `GET/PATCH /api/auth/me` hiện đọc/cập nhật thông tin tên cơ bản | Chưa có username, ETag, avatar S3 hoặc organization profile PATCH như Docs |
 | Reset password | Forgot tạo job bền vững; worker gửi Mailgun; reset tiêu thụ token, đổi hash, thu hồi phiên và ghi audit trong user transaction | Core local reset đã có code; cần đối chiếu bảng token với schema target và kiểm thử rollback/race. Chưa khẳng định Mailgun production đã gửi thật |
 | Change password | `POST /api/auth/change-password` kiểm tra mật khẩu hiện tại, lưu mật khẩu mới, vô hiệu token reset và thu hồi phiên trong user transaction | Đã có code; không gửi email; cần giữ kiểm tra rollback/session cũ khi đồng bộ schema |
@@ -27,11 +27,9 @@ Chi tiết request/response hiện tại nằm ở [API guide](api-docs.md). Chi
 
 ## Hướng triển khai khi sửa auth
 
-1. Thêm đúng các endpoint register/onboarding/profile từ mục 9 của Docs technology; giữ role/tenant do backend quyết định.
-2. Lưu và kiểm username toàn cục lowercase; collect username Trainee ở đăng ký/onboarding; không thêm game-start gate.
-3. Hoàn tất Google onboarding idempotent, giữ role/tenant của UID đã link, yêu cầu xác thực local trước khi link vào email local hiện có.
-4. Bổ sung ETag/profile revision, organization profile và avatar private S3 theo contract; không nhận URL/avatar data tùy ý từ client.
-5. Giữ reset và change thành hai use case riêng nhưng dùng cùng chính sách transaction, token/session revoke và audit của Docs. Core transaction hiện có; đối chiếu mapping schema token và kiểm thử PostgreSQL trước khi coi luồng hoàn tất. Không dùng Firebase password reset cho local password.
+1. Hoàn tất Google onboarding idempotent, giữ role/tenant của UID đã link, yêu cầu xác thực local trước khi link vào email local hiện có.
+2. Bổ sung ETag/profile revision, organization profile và avatar private S3 theo contract; không nhận URL/avatar data tùy ý từ client.
+3. Giữ reset và change thành hai use case riêng nhưng dùng cùng chính sách transaction, token/session revoke và audit của Docs. Core transaction hiện có; đối chiếu mapping schema token và kiểm thử PostgreSQL trước khi coi luồng hoàn tất. Không dùng Firebase password reset cho local password.
 
 ## Quy tắc bảo mật
 

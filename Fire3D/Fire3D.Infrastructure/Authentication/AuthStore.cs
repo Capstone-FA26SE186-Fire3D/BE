@@ -50,6 +50,24 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" }) { return false; }
     }
 
+    public async Task<RegisterConflict> TryCreateTraineeAsync(User user, CancellationToken ct)
+    {
+        db.Users.Add(user);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return RegisterConflict.None;
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg
+            && pg.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            db.Entry(user).State = EntityState.Detached;
+            return pg.ConstraintName == "users_username_lower_key"
+                ? RegisterConflict.UsernameTaken
+                : RegisterConflict.EmailTaken;
+        }
+    }
+
     public async Task UpdateUserAsync(User user, CancellationToken ct)
     {
         db.Users.Update(user);
@@ -188,7 +206,9 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
             db.Entry(user).State = EntityState.Detached;
             return pg.ConstraintName == "organizations_slug_key"
                 ? RegisterConflict.SlugTaken
-                : RegisterConflict.EmailTaken;
+                : pg.ConstraintName == "users_username_lower_key"
+                    ? RegisterConflict.UsernameTaken
+                    : RegisterConflict.EmailTaken;
         }
     }
     public Task EnqueuePasswordResetAsync(string email, CancellationToken ct) =>

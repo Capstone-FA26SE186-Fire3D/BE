@@ -214,7 +214,6 @@ public partial class Fire3DDbContext : DbContext
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("updated_at");
-
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.Buildings)
                 .HasForeignKey(d => d.CreatedBy)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -520,6 +519,7 @@ public partial class Fire3DDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
+            entity.Property(e => e.Address).HasColumnName("address");
             entity.Property(e => e.DeletedAt).HasColumnName("deleted_at");
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
@@ -529,6 +529,9 @@ public partial class Fire3DDbContext : DbContext
                 .HasColumnType("jsonb")
                 .HasColumnName("metadata");
             entity.Property(e => e.Name).HasColumnName("name");
+            entity.Property(e => e.PhoneNumber)
+                .HasMaxLength(50)
+                .HasColumnName("phone");
             entity.Property(e => e.Plan)
                 .HasMaxLength(50)
                 .HasDefaultValueSql("'free'::character varying")
@@ -1731,6 +1734,9 @@ public partial class Fire3DDbContext : DbContext
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("updated_at");
+            entity.Property(e => e.Username)
+                .HasMaxLength(30)
+                .HasColumnName("username");
 
             entity.HasOne(d => d.Organization).WithMany(p => p.Users)
                 .HasForeignKey(d => d.OrganizationId)

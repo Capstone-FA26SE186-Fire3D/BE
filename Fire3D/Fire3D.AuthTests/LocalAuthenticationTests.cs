@@ -31,6 +31,24 @@ public class LocalAuthenticationTests
         Assert.Null(local.FirebaseUid);
     }
     [Fact]
+    public async Task New_google_identity_requires_onboarding_without_creating_a_trainee()
+    {
+        var accounts=ResetProxy.For<IAuthStore>((method,_)=>method switch {
+            "FindUserByFirebaseUidAsync" or "FindUserByEmailAsync" => Task.FromResult<User?>(null),
+            _ => throw new Exception("Must not mutate account: "+method)
+        });
+        var provider=ResetProxy.For<Fire3D.Application.Authentication.Abstractions.IIdentityProvider>((_,_)=>
+            Task.FromResult(new Fire3D.Application.Authentication.Abstractions.VerifiedIdentity("google-uid","new@example.test")));
+        var tokens=ResetProxy.For<ITokenService>((_,_)=>throw new Exception("Must not issue session"));
+        var handler=new Fire3D.Application.Authentication.Commands.FirebaseLogin.ExchangeFirebaseTokenCommandHandler(accounts,tokens,provider,TimeProvider.System);
+
+        var result=await handler.Handle(new("id-token"),default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("OnboardingRequired",result.Value?.Status);
+        Assert.Null(result.Value?.Authentication);
+    }
+    [Fact]
     public void Passwords_are_salted_and_verified_without_exposing_hash()
     {
         var service=new PasswordService();var user=new User();

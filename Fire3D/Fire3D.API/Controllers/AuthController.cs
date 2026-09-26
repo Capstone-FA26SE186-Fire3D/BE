@@ -51,20 +51,45 @@ public sealed class AuthController(ISender sender) : ControllerBase
         return Ok(result.Value);
     }
 
-    /// <summary>
-    /// Đăng ký tài khoản thường. BE hash mật khẩu và tạo hồ sơ Trainee trong PostgreSQL.
-    /// </summary>
+    /// <summary>Deprecated Trainee registration alias. New clients should use /api/auth/register/trainee.</summary>
     [HttpPost("register")]
     [ProducesResponseType<AccountResponse>(201)]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
-    public async Task<ActionResult<AccountResponse>> Register([FromBody] Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommand command, CancellationToken ct)
+    public Task<ActionResult<AccountResponse>> Register(
+        [FromBody] Fire3D.Application.Authentication.Commands.SelfRegistration.RegisterTraineeCommand command,
+        CancellationToken ct) => RegisterTrainee(command, ct);
+
+    /// <summary>Registers a Trainee with a globally unique lowercase username.</summary>
+    [HttpPost("register/trainee")]
+    [ProducesResponseType<AccountResponse>(201)]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult<AccountResponse>> RegisterTrainee(
+        [FromBody] Fire3D.Application.Authentication.Commands.SelfRegistration.RegisterTraineeCommand command,
+        CancellationToken ct)
     {
         var result = await sender.Send(command, ct);
         if (!result.IsSuccess)
         {
             return Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
         }
+        return Created($"/api/accounts/{result.Value!.Id}", result.Value);
+    }
+
+    /// <summary>Registers a new organization and its initial OrganizationUser owner atomically.</summary>
+    [HttpPost("register/organization")]
+    [ProducesResponseType<AccountResponse>(201)]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult<AccountResponse>> RegisterOrganization(
+        [FromBody] Fire3D.Application.Authentication.Commands.SelfRegistration.RegisterOrganizationCommand command,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(command, ct);
+        if (!result.IsSuccess)
+            return Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
         return Created($"/api/accounts/{result.Value!.Id}", result.Value);
     }
 

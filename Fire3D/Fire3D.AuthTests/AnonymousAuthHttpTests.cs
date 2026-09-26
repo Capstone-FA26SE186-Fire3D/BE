@@ -22,6 +22,8 @@ public class AnonymousAuthHttpTests
     [Theory]
     [InlineData("login",false,200)] [InlineData("login",true,200)]
     [InlineData("register",false,201)] [InlineData("register",true,201)]
+    [InlineData("register/trainee",false,201)] [InlineData("register/trainee",true,201)]
+    [InlineData("register/organization",false,201)] [InlineData("register/organization",true,201)]
     [InlineData("forgot-password",false,202)] [InlineData("forgot-password",true,202)]
     [InlineData("reset-password",false,204)] [InlineData("reset-password",true,204)]
     [InlineData("login-firebase",false,200)] [InlineData("login-firebase",true,200)]
@@ -33,8 +35,8 @@ public class AnonymousAuthHttpTests
             calls++;
             return route switch {
                 "login" => (object)Task.FromResult(AuthResult<LoginResponse>.Ok(new("access","refresh",account))),
-                "register" => Task.FromResult(AuthResult<AccountResponse>.Ok(account)),
-                "login-firebase" => Task.FromResult(AuthResult<TokenResponse>.Ok(new("access",DateTime.UtcNow.AddMinutes(15),"refresh",DateTime.UtcNow.AddDays(7),account))),
+                "register" or "register/trainee" or "register/organization" => Task.FromResult(AuthResult<AccountResponse>.Ok(account)),
+                "login-firebase" => Task.FromResult(AuthResult<GoogleExchangeResponse>.Ok(new("Authenticated", new("access",DateTime.UtcNow.AddMinutes(15),"refresh",DateTime.UtcNow.AddDays(7),account)))),
                 _ => Task.FromResult(AuthResult<bool>.Ok(true))
             };
         });
@@ -53,8 +55,12 @@ public class AnonymousAuthHttpTests
         })).StartAsync();
         using var client=host.GetTestClient();
         if(badBearer)client.DefaultRequestHeaders.Authorization=new AuthenticationHeaderValue("Bearer","invalid-expired-token");
-        object body=route=="login-firebase" ? "firebase-id-token" : new {
-            email="user@example.test",password="StrongPassword12!",fullName="Test",token=new string('a',64),newPassword="Replacement12!"
+        object body = route switch
+        {
+            "login-firebase" => "firebase-id-token",
+            "register" or "register/trainee" => new { email = "user@example.test", username = "trainee", password = "StrongPassword12!", confirmPassword = "StrongPassword12!", fullName = "Test" },
+            "register/organization" => new { email = "owner@example.test", password = "StrongPassword12!", confirmPassword = "StrongPassword12!", fullName = "Owner", organizationName = "Fire3D Co", organizationAddress = "1 Fire Street", organizationPhoneNumber = "+84123456789" },
+            _ => new { email = "user@example.test", password = "StrongPassword12!", fullName = "Test", token = new string('a', 64), newPassword = "Replacement12!" }
         };
         var response=await client.PostAsJsonAsync("/api/auth/"+route,body);
         Assert.Equal(status,(int)response.StatusCode);Assert.Equal(1,calls);
