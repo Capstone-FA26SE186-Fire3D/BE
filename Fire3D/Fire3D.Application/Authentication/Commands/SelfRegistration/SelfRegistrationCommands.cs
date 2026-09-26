@@ -14,7 +14,8 @@ public sealed record RegisterOrganizationCommand(
     string OrganizationName, string OrganizationAddress, string OrganizationPhoneNumber)
     : IRequest<AuthResult<AccountResponse>>;
 
-public sealed class RegisterTraineeCommandHandler(IAuthStore store, IPasswordService passwords, TimeProvider clock)
+public sealed class RegisterTraineeCommandHandler(IAuthStore store, IPasswordService passwords,
+    IEmailVerificationQueue verificationQueue, TimeProvider clock)
     : IRequestHandler<RegisterTraineeCommand, AuthResult<AccountResponse>>
 {
     public async Task<AuthResult<AccountResponse>> Handle(RegisterTraineeCommand command, CancellationToken ct)
@@ -30,19 +31,22 @@ public sealed class RegisterTraineeCommandHandler(IAuthStore store, IPasswordSer
         var user = new User
         {
             Id = Guid.NewGuid(), Email = email, Username = username, FullName = fullName,
-            Role = UserRole.Trainee, IsActive = true, CreatedAt = now, UpdatedAt = now
+            Role = UserRole.Trainee, IsActive = true, CreatedAt = now, UpdatedAt = now,
+            RegistrationExpiresAt = now.AddHours(2)
         };
         user.PasswordHash = passwords.Hash(user, command.Password);
         await using var transaction = await store.BeginUserTransactionAsync(user.Id, ct);
         var conflict = await store.TryCreateTraineeAsync(user, ct);
         if (conflict != RegisterConflict.None) return SelfRegistrationValidation.Conflict<AccountResponse>(conflict);
+        await verificationQueue.EnqueueAsync(user.Id, user.Email, ct);
         await store.WriteAuditAsync(user, "Create", user.Id, now, ct);
         await transaction.CommitAsync(ct);
         return AuthResult<AccountResponse>.Ok(AuthSupport.ToAccount(user));
     }
 }
 
-public sealed class RegisterOrganizationCommandHandler(IAuthStore store, IPasswordService passwords, TimeProvider clock)
+public sealed class RegisterOrganizationCommandHandler(IAuthStore store, IPasswordService passwords,
+    IEmailVerificationQueue verificationQueue, TimeProvider clock)
     : IRequestHandler<RegisterOrganizationCommand, AuthResult<AccountResponse>>
 {
     public async Task<AuthResult<AccountResponse>> Handle(RegisterOrganizationCommand command, CancellationToken ct)
@@ -67,12 +71,14 @@ public sealed class RegisterOrganizationCommandHandler(IAuthStore store, IPasswo
         var user = new User
         {
             Id = Guid.NewGuid(), Email = email, FullName = fullName, Role = UserRole.OrganizationUser,
-            OrganizationId = organization.Id, IsActive = true, CreatedAt = now, UpdatedAt = now
+            OrganizationId = organization.Id, IsActive = true, CreatedAt = now, UpdatedAt = now,
+            RegistrationExpiresAt = now.AddHours(2)
         };
         user.PasswordHash = passwords.Hash(user, command.Password);
         await using var transaction = await store.BeginUserTransactionAsync(user.Id, ct);
         var conflict = await store.TryCreateOrganizationWithUserAsync(organization, user, ct);
         if (conflict != RegisterConflict.None) return SelfRegistrationValidation.Conflict<AccountResponse>(conflict);
+        await verificationQueue.EnqueueAsync(user.Id, user.Email, ct);
         await store.WriteAuditAsync(user, "Create", user.Id, now, ct);
         await transaction.CommitAsync(ct);
         return AuthResult<AccountResponse>.Ok(AuthSupport.ToAccount(user));

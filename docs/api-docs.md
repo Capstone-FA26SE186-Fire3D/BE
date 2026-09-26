@@ -21,6 +21,8 @@ Source hiện có **64 HTTP action** trong controller. Số lượng route khôn
 | `POST /api/auth/register` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/auth/register/trainee` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/auth/register/organization` | 201 AccountResponse | `/api/accounts/{id}` |
+| `POST /api/auth/resend-verification` | 202 Accepted | Generic response; 429 with `Retry-After`; 503 when Redis protection is unavailable |
+| `POST /api/auth/verify-email` | 204 No Content | Token is single-use and expires after 15 minutes |
 | `POST /api/accounts` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/organizations` | 201 OrganizationResponse | `/api/organizations/{id}` |
 | `POST /api/buildings` | 201 BuildingResponse | `/api/buildings/{id}` |
@@ -83,6 +85,8 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 | POST | `/api/auth/register` | Public | 201 AccountResponse |
 | POST | `/api/auth/register/trainee` | Public | 201 AccountResponse |
 | POST | `/api/auth/register/organization` | Public | 201 AccountResponse |
+| POST | `/api/auth/resend-verification` | Public | 202 Accepted |
+| POST | `/api/auth/verify-email` | Public | 204 No Content |
 | POST | `/api/auth/login` | Public | 200 LoginResponse |
 | POST | `/api/auth/login-firebase` | Public | 200 TokenResponse |
 | POST | `/api/auth/refresh` | Public | 200 TokenResponse |
@@ -110,6 +114,8 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 `/api/auth/register/trainee` yêu cầu email hợp lệ tối đa 254 ký tự, username lowercase theo `[a-z0-9._-]{3,30}`, password 12–128 và confirmPassword trùng password; fullName tùy chọn, tối đa 200. Username unique không phân biệt hoa thường. Không gửi role/organizationId để cấp quyền.
 
 BE hash password vào `users.password_hash`, không tạo tài khoản email/password trên Firebase. Trả **201 AccountResponse**, chưa đăng nhập; gọi login tiếp theo:
+
+Tài khoản tự đăng ký có 2 giờ để xác minh email. Trong thời gian chờ, login/refresh bị từ chối bằng `EMAIL_NOT_VERIFIED`; sau hạn dùng là `REGISTRATION_EXPIRED` và background worker xóa đăng ký chờ để có thể dùng lại email. `POST /api/auth/resend-verification` luôn trả 202 cho email hợp lệ để tránh dò tài khoản; Redis áp giới hạn theo email/IP và trả 429 cùng `Retry-After`, hoặc 503 khi Redis bắt buộc không hoạt động. `POST /api/auth/verify-email` nhận `{ "token": "<64 hex>" }`, chỉ trả 204 khi token còn hạn và chưa dùng.
 
 ```json
 {

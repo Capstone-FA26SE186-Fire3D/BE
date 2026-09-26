@@ -9,6 +9,7 @@ using Fire3D.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Fire3D.API.Extensions;
@@ -32,10 +33,24 @@ public static class AuthenticationExtensions
         services.AddSingleton<IFirebaseResetAdmin, FirebaseResetAdmin>();
         services.AddScoped<IPasswordResetStore, PasswordResetStore>();
         services.AddScoped<IPasswordResetQueue, PasswordResetQueue>();
+        services.AddScoped<IEmailVerificationQueue, EmailVerificationQueue>();
+        services.AddOptions<RedisOptions>().Bind(configuration.GetSection(RedisOptions.SectionName));
+        var redisOptions = configuration.GetSection(RedisOptions.SectionName).Get<RedisOptions>() ?? new RedisOptions();
+        if (redisOptions.Enabled && !string.IsNullOrWhiteSpace(redisOptions.Configuration))
+        {
+            services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(new ConfigurationOptions
+            {
+                EndPoints = { redisOptions.Configuration }, AbortOnConnectFail = false, ConnectRetry = 1,
+                ConnectTimeout = 2_000, SyncTimeout = 2_000
+            }));
+        }
+        services.AddSingleton<IEmailVerificationRateLimiter, RedisVerificationRateLimiter>();
         services.AddExceptionHandler<PasswordResetExceptionHandler>();
         services.AddHttpClient<IPasswordResetProvider, FirebasePasswordResetProvider>(client => client.Timeout = TimeSpan.FromSeconds(15))
             .RemoveAllLoggers();
         services.AddHostedService<Fire3D.Infrastructure.Workers.PasswordResetWorker>();
+        services.AddHostedService<Fire3D.Infrastructure.Workers.EmailVerificationWorker>();
+        services.AddHostedService<Fire3D.Infrastructure.Workers.PendingRegistrationCleanupWorker>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)

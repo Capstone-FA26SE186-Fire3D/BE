@@ -28,7 +28,7 @@ public sealed class SelfRegistrationTests
             _ => throw new InvalidOperationException("Unexpected store operation: " + method)
         });
 
-        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), TimeProvider.System);
+        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), VerificationQueue(), TimeProvider.System);
         var result = await handler.Handle(
             new RegisterTraineeCommand(" trainee@example.test ", "Fire.Drill", "StrongPassword12!", "StrongPassword12!", "Trainee"),
             CancellationToken.None);
@@ -47,7 +47,7 @@ public sealed class SelfRegistrationTests
     public async Task Trainee_registration_rejects_password_confirmation_mismatch_before_persistence()
     {
         var store = ResetProxy.For<IAuthStore>((method, _) => throw new InvalidOperationException("Unexpected store operation: " + method));
-        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), TimeProvider.System);
+        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), VerificationQueue(), TimeProvider.System);
 
         var result = await handler.Handle(
             new RegisterTraineeCommand("trainee@example.test", "trainee", "StrongPassword12!", "DifferentPassword12!", "Trainee"),
@@ -75,7 +75,7 @@ public sealed class SelfRegistrationTests
             _ => throw new InvalidOperationException("Unexpected store operation: " + method)
         });
 
-        var handler = new RegisterOrganizationCommandHandler(store, new PasswordService(), TimeProvider.System);
+        var handler = new RegisterOrganizationCommandHandler(store, new PasswordService(), VerificationQueue(), TimeProvider.System);
         var result = await handler.Handle(
             new RegisterOrganizationCommand("owner@example.test", "StrongPassword12!", "StrongPassword12!", "Owner", "Fire3D Co", "1 Fire Street", "+84 123456789"),
             CancellationToken.None);
@@ -95,6 +95,9 @@ public sealed class SelfRegistrationTests
         capture((User)args[0]!);
         return Task.FromResult(RegisterConflict.None);
     }
+
+    private static IEmailVerificationQueue VerificationQueue() =>
+        ResetProxy.For<IEmailVerificationQueue>((method, _) => method == "EnqueueAsync" ? Task.CompletedTask : throw new InvalidOperationException("Unexpected queue operation"));
 
     private static Task<RegisterConflict> CaptureOrganization(object?[] args, Action<Organization, User> capture)
     {

@@ -13,7 +13,7 @@ namespace Fire3D.API.Controllers;
 [ApiController]
 [Route("api/auth")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class AuthController(ISender sender) : ControllerBase
+public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter verificationRateLimiter) : ControllerBase
 {
     /// <summary>Đăng nhập email/password do BE quản lý. Không cần Bearer.</summary>
     /// <remarks>Body: email, password. BE kiểm tra hash trong PostgreSQL; không gọi Firebase.
@@ -69,6 +69,8 @@ public sealed class AuthController(ISender sender) : ControllerBase
         [FromBody] Fire3D.Application.Authentication.Commands.SelfRegistration.RegisterTraineeCommand command,
         CancellationToken ct)
     {
+        var limited = await verificationRateLimiter.CheckRegistrationAsync(command.Email, RemoteIp(), ct);
+        if (!limited.Allowed) return VerificationRateLimitProblem(limited);
         var result = await sender.Send(command, ct);
         if (!result.IsSuccess)
         {
@@ -86,11 +88,37 @@ public sealed class AuthController(ISender sender) : ControllerBase
         [FromBody] Fire3D.Application.Authentication.Commands.SelfRegistration.RegisterOrganizationCommand command,
         CancellationToken ct)
     {
+        var limited = await verificationRateLimiter.CheckRegistrationAsync(command.Email, RemoteIp(), ct);
+        if (!limited.Allowed) return VerificationRateLimitProblem(limited);
         var result = await sender.Send(command, ct);
         if (!result.IsSuccess)
             return Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
         return Created($"/api/accounts/{result.Value!.Id}", result.Value);
+    }
+
+    [HttpPost("resend-verification")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> ResendVerification([FromBody] Fire3D.Application.Authentication.ResendVerificationCommand command, CancellationToken ct)
+    {
+        var limited = await verificationRateLimiter.CheckResendAsync(command.Email, RemoteIp(), ct);
+        if (!limited.Allowed) return VerificationRateLimitProblem(limited);
+        var result = await sender.Send(command, ct);
+        return result.IsSuccess ? Accepted() : ResetProblem(result.Error!);
+    }
+
+    [HttpPost("verify-email")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> VerifyEmail([FromBody] Fire3D.Application.Authentication.VerifyEmailCommand command, CancellationToken ct)
+    {
+        var result = await sender.Send(command, ct);
+        return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
     }
 
     /// <summary>
@@ -229,4 +257,15 @@ public sealed class AuthController(ISender sender) : ControllerBase
     }
     private ObjectResult ResetProblem(AuthError error) => Problem(statusCode:error.Status,title:error.Message,
         extensions:new Dictionary<string,object?> { ["code"] = error.Code });
+
+    private string RemoteIp() => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    private ObjectResult VerificationRateLimitProblem(VerificationRateLimitDecision decision)
+    {
+        if (decision.Unavailable)
+            return Problem(statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Verification requests are temporarily unavailable.", extensions: new Dictionary<string, object?> { ["code"] = "VERIFICATION_RATE_LIMIT_UNAVAILABLE" });
+        Response.Headers["Retry-After"] = Math.Ceiling((decision.RetryAfter ?? TimeSpan.FromMinutes(1)).TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Problem(statusCode: StatusCodes.Status429TooManyRequests, title: "Too many verification requests.",
+            extensions: new Dictionary<string, object?> { ["code"] = "VERIFICATION_RATE_LIMITED" });
+    }
 }

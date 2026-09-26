@@ -8,10 +8,13 @@ public sealed record RefreshRequest(string RefreshToken);
 public sealed record CreateAccountRequest(string Email, string Password, string? FullName,
     UserRole? Role, Guid? OrganizationId, string? Username = null);
 public sealed record AccountResponse(Guid Id, string Email, string? FullName,
-    UserRole Role, Guid? OrganizationId, string? Username = null);
+    UserRole Role, Guid? OrganizationId, string? Username = null,
+    DateOnly? Dob = null, UserGender? Gender = null,
+    string? PhoneNumber = null, string? AvatarUrl = null, bool IsActive = true,
+    DateTime? LastLoginAt = null, DateTime? CreatedAt = null, DateTime? UpdatedAt = null,
+    DateTime? EmailVerifiedAt = null, DateTime? RegistrationExpiresAt = null);
 public sealed record LoginResponse(string AccessToken, string RefreshToken, AccountResponse User);
-public sealed record TokenResponse(string AccessToken, DateTime AccessTokenExpiresAt,
-    string RefreshToken, DateTime RefreshTokenExpiresAt, AccountResponse User);
+public sealed record TokenResponse(string AccessToken, string RefreshToken, AccountResponse User);
 public sealed record GoogleExchangeResponse(string Status, TokenResponse? Authentication = null);
 public sealed record ForgotPasswordRequest(string Email);
 public sealed record ResetPasswordRequest(Guid Token, string NewPassword);

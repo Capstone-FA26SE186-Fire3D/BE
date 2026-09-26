@@ -11,9 +11,11 @@ public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordS
     public async Task<AuthResult<LoginResponse>> Handle(LoginWithPasswordCommand command, CancellationToken ct)
     {
         var email = PasswordResetValidation.NormalizeEmail(command.Email);
+
         if (email is null || string.IsNullOrEmpty(command.Password) || command.Password.Length > 128)
             return AuthResult<LoginResponse>.Fail("VALIDATION_ERROR", "Email and password are required (password maximum 128 characters).", 400);
         var user = await store.FindUserByEmailAsync(email, ct);
+
         if (user is null)
         {
             passwords.VerifyDummy(command.Password);
@@ -26,6 +28,10 @@ public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordS
         if (!passwords.Verify(user, command.Password, out var rehash)) return InvalidCredentials();
         if (!await AuthSupport.IsActiveAsync(store, user, ct))
             return AuthResult<LoginResponse>.Fail("ACCOUNT_DISABLED", "Account or organization is unavailable.", 403);
+        if (AuthSupport.RegistrationHasExpired(user, AuthSupport.UtcNow(clock)))
+            return AuthResult<LoginResponse>.Fail("REGISTRATION_EXPIRED", "This unverified registration has expired. Register again to receive a new link.", 403);
+        if (AuthSupport.IsPendingEmailVerification(user))
+            return AuthResult<LoginResponse>.Fail("EMAIL_NOT_VERIFIED", "Verify your email before signing in.", 403);
         if (rehash)
         {
             user.PasswordHash = passwords.Hash(user, command.Password);

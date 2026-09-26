@@ -677,10 +677,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
-                    b.Property<string>("Address")
-                        .HasColumnType("text")
-                        .HasColumnName("address");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -690,6 +686,10 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
+
+                    b.Property<string>("Address")
+                        .HasColumnType("text")
+                        .HasColumnName("address");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
@@ -709,11 +709,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
-                    b.Property<string>("PhoneNumber")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("phone");
-
                     b.Property<string>("Plan")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -721,6 +716,11 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("plan")
                         .HasDefaultValueSql("'free'::character varying");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("phone");
 
                     b.Property<string>("Slug")
                         .IsRequired()
@@ -2984,6 +2984,11 @@ namespace Fire3D.Infrastructure.Migrations
 
             modelBuilder.Entity("Fire3D.Domain.Entities.User", b =>
                 {
+                    b.Property<string>("AvatarUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("avatar_url");
+
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
@@ -3000,10 +3005,22 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<DateOnly?>("Dob")
+                        .HasColumnType("date")
+                        .HasColumnName("dob");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("email");
+
+                    b.Property<DateTime?>("EmailVerifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("email_verified_at");
+
+                    b.Property<DateTime?>("RegistrationExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("registration_expires_at");
 
                     b.Property<string>("FirebaseUid")
                         .HasMaxLength(128)
@@ -3013,6 +3030,10 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Property<string>("FullName")
                         .HasColumnType("text")
                         .HasColumnName("full_name");
+
+                    b.Property<UserGender?>("Gender")
+                        .HasColumnType("text")
+                        .HasColumnName("gender");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
@@ -3032,20 +3053,25 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
 
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("phone_number");
+
                     b.Property<UserRole>("Role")
                         .HasColumnType("user_role_enum")
                         .HasColumnName("role");
+
+                    b.Property<string>("Username")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("username");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("now()");
-
-                    b.Property<string>("Username")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("username");
 
                     b.HasKey("Id")
                         .HasName("users_pkey");

@@ -16,7 +16,8 @@
 
 | Năng lực | Source hiện có | Khác biệt so với contract đích |
 |---|---|---|
-| Local registration | `POST /api/auth/register/trainee` tạo Trainee với username lowercase; `POST /api/auth/register/organization` tạo OrganizationUser và organization trong một transaction. `/api/auth/register` là alias Trainee cũ nhưng dùng cùng validation mới | Google onboarding/link, email verification và profile ETag vẫn chưa hoàn tất |
+| Local registration | `POST /api/auth/register/trainee` tạo Trainee với username lowercase; `POST /api/auth/register/organization` tạo OrganizationUser và organization trong một transaction. `/api/auth/register` là alias Trainee cũ nhưng dùng cùng validation mới. Local self-registration phải xác minh email trong 2 giờ trước khi login. | Google onboarding/link và profile ETag vẫn chưa hoàn tất |
+| Email verification | `POST /api/auth/resend-verification`, `POST /api/auth/verify-email`, email worker, trang `/verify-email/` và `/check-email/`; token dùng một lần, 15 phút; worker xóa đăng ký chưa xác minh sau 2 giờ. | Redis cần được cấu hình bắt buộc ngoài test; provider Mailgun production vẫn cần nghiệm thu riêng. |
 | Local login/session | Login, refresh rotation, logout và `/api/auth/me` dùng Fire3D access/refresh token | Không đổi thành Firebase-only; rà response/client storage theo API guide |
 | Google | `POST /api/auth/login-firebase`; UID đã liên kết trả `Authenticated`, email local trùng trả `ACCOUNT_LINK_REQUIRED`, Google mới trả `OnboardingRequired` và không tự tạo tài khoản | Chưa có endpoint onboarding/link tường minh để hoàn tất chọn loại tài khoản |
 | Profile | `GET/PATCH /api/auth/me` hiện đọc/cập nhật thông tin tên cơ bản | Chưa có username, ETag, avatar S3 hoặc organization profile PATCH như Docs |

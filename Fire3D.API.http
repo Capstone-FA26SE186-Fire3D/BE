@@ -1,0 +1,138 @@
+@HostAddress = http://localhost:5000
+@PlatformAdminToken = YOUR_ADMIN_TOKEN_HERE
+@UserToken = YOUR_USER_TOKEN_HERE
+@OrganizationId = YOUR_ORG_ID_HERE
+@BuildingId = YOUR_BUILDING_ID_HERE
+@RevisionId = YOUR_REVISION_ID_HERE
+@ScenarioId = YOUR_SCENARIO_ID_HERE
+@DraftId = YOUR_DRAFT_ID_HERE
+
+### 1.1 Login Email/Password
+# @name login
+POST {{HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "Password123!"
+}
+
+### L?y Token t? response login d? set bi?n môi tru?ng (VS Code REST Client)
+@UserToken = {{login.response.body.accessToken}}
+
+### 1.2 Ðang ký tài kho?n (Public Signup)
+POST {{HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "newuser@example.com",
+  "password": "mySecurePassword123!",
+  "fullName": "Jane Doe",
+  "organizationName": "Fire Rescue Dept 1"
+}
+
+### 1.4 Quên m?t kh?u
+POST {{HostAddress}}/api/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "user@example.com"
+}
+
+### 2.1 T?o Organization (PlatformAdmin)
+POST {{HostAddress}}/api/organizations
+Content-Type: application/json
+Authorization: Bearer {{PlatformAdminToken}}
+
+{
+  "name": "S? PCCC Hà N?i",
+  "slug": "pccc-hn"
+}
+
+### 3.1 Kh?i t?o Tòa nhà
+# @name createBuilding
+POST {{HostAddress}}/api/buildings
+Content-Type: application/json
+Authorization: Bearer {{UserToken}}
+
+{
+  "name": "Vincom Landmark 81",
+  "buildingType": "Commercial",
+  "totalFloors": 81,
+  "location": {
+    "address": "720A Ði?n Biên Ph?",
+    "city": "H? Chí Minh",
+    "district": "Bình Th?nh",
+    "latitude": 10.793,
+    "longitude": 106.721
+  }
+}
+
+### 3.2 L?y danh sách tòa nhà
+GET {{HostAddress}}/api/buildings
+Authorization: Bearer {{UserToken}}
+
+### 4.1 Xin URL Upload (Initiate IFC Upload)
+# @name initUpload
+POST {{HostAddress}}/api/buildings/{{BuildingId}}/ifc
+Content-Type: application/json
+Authorization: Bearer {{UserToken}}
+
+{
+  "fileSizeBytes": 15000000,
+  "originalFilename": "Landmark_v1.ifc",
+  "versionLabel": "B?n v? hoàn công 2024"
+}
+
+### 4.2 Xác nh?n Upload Thành Công
+POST {{HostAddress}}/api/revisions/{{RevisionId}}/upload-complete
+Content-Type: application/json
+Authorization: Bearer {{UserToken}}
+
+{
+  "objectKey": "s3-object-key-path",
+  "fileSizeBytes": 15000000,
+  "mimeType": "application/x-step",
+  "sha256Hash": "a1b2c3d4",
+  "originalFilename": "Landmark_v1.ifc"
+}
+
+### 4.3 Kích ho?t h? th?ng x? lý (Trigger Process)
+POST {{HostAddress}}/api/revisions/{{RevisionId}}/process
+Authorization: Bearer {{UserToken}}
+
+### 5.1 T?o Scenario m?i
+# @name createScenario
+POST {{HostAddress}}/api/scenarios
+Content-Type: application/json
+Authorization: Bearer {{UserToken}}
+
+{
+  "buildingId": "{{BuildingId}}",
+  "name": "Fire drill level 1"
+}
+
+### 5.2 T?o Scenario Draft
+# @name createDraft
+POST {{HostAddress}}/api/scenarios/{{ScenarioId}}/draft
+Content-Type: application/json
+Authorization: Bearer {{UserToken}}
+
+{
+  "revisionId": "{{RevisionId}}"
+}
+
+### 5.3 Luu tr?ng thái kéo th? K?ch b?n
+PUT {{HostAddress}}/api/scenario-drafts/{{DraftId}}
+Content-Type: application/json
+Authorization: Bearer {{UserToken}}
+
+{
+  "expectedVersion": 1,
+  "state": {
+    "nodes": [
+      { "id": "fire_1", "type": "FireNode", "position": [10.5, 0, -5.2] }
+    ],
+    "edges": []
+  }
+}

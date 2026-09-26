@@ -4,6 +4,7 @@ using Fire3D.API.Controllers;
 using Fire3D.Application.Authentication;
 using Fire3D.Application.Authentication.Commands.ForgotPassword;
 using Fire3D.Application.Authentication.Commands.ResetPassword;
+using Fire3D.Application.Authentication.Commands.LoginWithPassword;
 using Fire3D.Domain.Entities;
 using Fire3D.Infrastructure.Authentication;
 using MediatR;
@@ -39,13 +40,50 @@ public class PasswordResetTests
             Assert.Equal("EnqueuePasswordResetAsync",method);Assert.Equal("a@example.test",args[0]);return Task.CompletedTask;});
         Assert.True((await new ForgotPasswordCommandHandler(store).Handle(new(" A@EXAMPLE.TEST "),default)).IsSuccess);
     }
+    [Fact]
+    public async Task Local_login_verifies_the_database_password_hash_without_firebase()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "local@example.test", IsActive = true,
+            Role = Fire3D.Domain.Enums.UserRole.Trainee };
+        var passwords = new PasswordService();
+        user.PasswordHash = passwords.Hash(user, "LongPassword12!");
+        var transaction = ResetProxy.For<IAuthTransaction>((method, _) => method switch
+        {
+            "CommitAsync" => Task.CompletedTask,
+            "DisposeAsync" => ValueTask.CompletedTask,
+            _ => throw new Exception(method)
+        });
+        var store = ResetProxy.For<IAuthStore>((method, args) => method switch
+        {
+            "FindUserByEmailAsync" => Task.FromResult<User?>(user),
+            "BeginUserTransactionAsync" => Task.FromResult(transaction),
+            "FindUserAsync" => Task.FromResult<User?>(user),
+            "UpdateLoginAsync" or "AddRefreshTokenAsync" or "WriteAuditAsync" => Task.CompletedTask,
+            _ => throw new Exception("Unexpected database operation: " + method)
+        });
+        var tokens = ResetProxy.For<ITokenService>((method, _) => method switch
+        {
+            "CreateAccessToken" => new AccessTokenValue("access", DateTime.UtcNow.AddMinutes(15)),
+            "CreateRefreshToken" => "refresh",
+            "HashRefreshToken" => "refresh-hash",
+            "get_RefreshTokenLifetime" => TimeSpan.FromDays(7),
+            _ => throw new Exception("Unexpected token operation: " + method)
+        });
+
+        var result = await new LoginWithPasswordCommandHandler(store, passwords, tokens, TimeProvider.System)
+            .Handle(new LoginWithPasswordCommand(" LOCAL@example.test ", "LongPassword12!"), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("local@example.test", result.Value!.User.Email);
+    }
+
     [Theory] [InlineData(false,400)] [InlineData(true,503)]
     public async Task Controllers_preserve_error_status(bool reset,int status)
     {
         var sender=ResetProxy.For<ISender>((_,_)=>Task.FromResult(AuthResult<bool>.Fail("TEST","Test error",status)));
         var services=new ServiceCollection();services.AddLogging();services.AddControllers();
         using var sp=services.BuildServiceProvider();
-        var controller=new AuthController(sender){ControllerContext=new(){HttpContext=new DefaultHttpContext{RequestServices=sp}}};
+        var controller=new AuthController(sender, AllowVerification()){ControllerContext=new(){HttpContext=new DefaultHttpContext{RequestServices=sp}}};
         var result=reset?await controller.ResetPassword(new("code","LongPassword12!"),default):await controller.ForgotPassword(new("@"),default);
         var problem=Assert.IsType<ObjectResult>(result);Assert.Equal(status,problem.StatusCode);
         Assert.Equal("TEST",Assert.IsType<ProblemDetails>(problem.Value).Extensions["code"]);
@@ -54,12 +92,14 @@ public class PasswordResetTests
     public async Task Controllers_success_status(bool reset,int status)
     {
         var sender=ResetProxy.For<ISender>((_,_)=>Task.FromResult(AuthResult<bool>.Ok(true)));
-        var controller=new AuthController(sender);
+        var controller=new AuthController(sender, AllowVerification());
         var result=reset?await controller.ResetPassword(new("code","LongPassword12!"),default):await controller.ForgotPassword(new("a@example.test"),default);
         Assert.Equal(status,result is ObjectResult o?o.StatusCode:((StatusCodeResult)result).StatusCode);
     }
     private sealed class Transport(HttpStatusCode status,string body) : HttpMessageHandler
     { protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)=>Task.FromResult(new HttpResponseMessage(status){Content=new StringContent(body)}); }
+    private static IEmailVerificationRateLimiter AllowVerification() =>
+        ResetProxy.For<IEmailVerificationRateLimiter>((_, _) => Task.FromResult(new VerificationRateLimitDecision(true)));
     private static FirebasePasswordResetProvider Provider(HttpStatusCode status,string body) => new(new HttpClient(new Transport(status,body)),Unexpected<IAuthStore>(),
         Options.Create(new AuthEmailOptions{FirebaseApiKey="test",FrontendUrl="https://example.test"}),Unexpected<IFirebaseResetAdmin>());
     [Theory]
