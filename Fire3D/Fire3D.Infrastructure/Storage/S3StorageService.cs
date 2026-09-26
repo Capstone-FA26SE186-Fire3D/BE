@@ -1,12 +1,18 @@
 using Amazon.S3;
 using Amazon.S3.Model;
 using Fire3D.Application.Storage;
+using Microsoft.Extensions.Configuration;
 
 namespace Fire3D.Infrastructure.Storage;
 
-public class S3StorageService(IAmazonS3 s3Client) : IStorageService
+public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration) : IStorageService
 {
-    private readonly string _bucketName = Environment.GetEnvironmentVariable("S3_BUCKET_NAME") ?? "fire3d-uploads";
+    private readonly string _bucketName = ResolveBucketName(configuration);
+
+    internal static string ResolveBucketName(IConfiguration configuration) =>
+        string.IsNullOrWhiteSpace(configuration["AWS:BucketName"])
+            ? Environment.GetEnvironmentVariable("S3_BUCKET_NAME") ?? "fire3d-uploads"
+            : configuration["AWS:BucketName"]!;
 
     public async Task<string> GeneratePresignedUploadUrlAsync(string objectKey, string mimeType, TimeSpan expiration, CancellationToken ct)
     {
@@ -36,10 +42,6 @@ public class S3StorageService(IAmazonS3 s3Client) : IStorageService
             return response.ContentLength == expectedSizeBytes;
         }
         catch (Amazon.S3.AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return false;
-        }
-        catch
         {
             return false;
         }

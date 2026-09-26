@@ -27,3 +27,20 @@ Thiết kế SQL/ERD trong `Docs` là schema mục tiêu. Theo xác nhận hiệ
 `Docs` chỉ mô tả thiết kế, không chứng minh migration, quyền PostgreSQL, provider hoặc luồng production đã chạy. Ghi riêng trạng thái code, schema từng môi trường và kết quả test.
 
 Source BE hiện còn mapping/entity legacy; database tạo theo schema đích chưa chắc chạy được với API source hiện tại cho tới khi EF mapping, SQL gates, quyền và use case được đồng bộ. Không xem “chưa có dữ liệu” là bằng chứng database bất kỳ đang trống hoặc được phép xóa.
+
+## Cấu hình S3
+
+Lưu cấu hình local trong User Secrets, không commit vào `appsettings.json`:
+
+```json
+{
+  "AWS": {
+    "Region": "ap-northeast-1",
+    "AccessKey": "<AWS access key>",
+    "SecretKey": "<AWS secret key>",
+    "BucketName": "fire3d-bucket"
+  }
+}
+```
+
+Khi deploy, dùng `AWS__Region`, `AWS__AccessKey`, `AWS__SecretKey` và `AWS__BucketName`. AccessKey và SecretKey phải được đặt cùng nhau. `S3_BUCKET_NAME` chỉ là fallback tương thích cũ cho bucket.

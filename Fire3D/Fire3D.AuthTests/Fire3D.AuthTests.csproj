@@ -15,4 +15,5 @@
   </ItemGroup>
   <ItemGroup><None Include="../../database/002_password_reset_recovery.sql" Link="002_password_reset_recovery.sql" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
   <ItemGroup><None Include="../../database/003_local_password.sql" Link="003_local_password.sql" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup><None Include="../../database/005_email_verification.sql" Link="005_email_verification.sql" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>

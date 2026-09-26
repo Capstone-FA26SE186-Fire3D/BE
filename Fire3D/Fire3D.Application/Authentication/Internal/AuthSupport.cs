@@ -52,7 +52,7 @@ internal static class AuthSupport
             TokenHash = tokens.HashRefreshToken(raw), CreatedAt = now, ExpiresAt = refreshExpiresAt
         }, ct);
         var access = tokens.CreateAccessToken(user, familyId, now);
-        return new(access.Value, access.ExpiresAt, raw, refreshExpiresAt, AuthSupport.ToAccount(user));
+        return new(access.Value, raw, AuthSupport.ToAccount(user));
     }
 
     internal static Task<bool> IsActiveAsync(IAuthStore store, User user, CancellationToken ct) =>
@@ -66,7 +66,8 @@ internal static class AuthSupport
         var now = clock.GetUtcNow().UtcDateTime;
         return new DateTime(now.Ticks - now.Ticks % 10, DateTimeKind.Utc);
     }
-    internal static AccountResponse ToAccount(User user) => new(user.Id, user.Email, user.FullName, user.Role, user.OrganizationId);
+    internal static AccountResponse ToAccount(User user) => new(user.Id, user.Email, user.FullName, user.Role, user.OrganizationId,
+        user.Dob, user.Gender, user.PhoneNumber, user.AvatarUrl, user.IsActive, user.LastLoginAt, user.CreatedAt, user.UpdatedAt, user.EmailVerifiedAt);
     internal static AuthResult<TokenResponse> InvalidCredentials() => AuthResult<TokenResponse>.Fail("INVALID_CREDENTIALS", "Invalid email or password.", 401);
     internal static AuthResult<TokenResponse> InvalidRefresh() => AuthResult<TokenResponse>.Fail("INVALID_REFRESH_TOKEN", "Refresh token is invalid or expired.", 401);
     internal static string? NormalizeEmail(string? input)

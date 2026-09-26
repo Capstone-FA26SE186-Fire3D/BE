@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Fire3D.Domain.Enums;
 
 namespace Fire3D.Domain.Entities;
 
@@ -21,6 +22,16 @@ public partial class User
     public string? AvatarStorageKey { get; set; }
 
     public long ProfileRevision { get; set; } = 1;
+
+    public DateOnly? Dob { get; set; }
+
+    public UserGender? Gender { get; set; }
+
+    public string? PhoneNumber { get; set; }
+
+    public string? AvatarUrl { get; set; }
+
+    public DateTime? EmailVerifiedAt { get; set; }
 
     public bool IsActive { get; set; }
 

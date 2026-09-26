@@ -89,6 +89,7 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
         // Raw SQL auth recovery tables are not part of the EF model.
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "002_password_reset_recovery.sql")));
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "003_local_password.sql")));
+        await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "005_email_verification.sql")));
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(web =>
         {
             web.UseEnvironment("Development");
@@ -175,13 +176,11 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
     public async Task Rotation_replay_revokes_family_but_not_another_login()
     {
         var first = await LoginAsync();
-        var firstRefreshExpiry = (DateTime)(await ScalarAsync("SELECT expires_at FROM auth_refresh_tokens LIMIT 1"))!;
         var other = await LoginAsync();
         var response = await client.PostAsJsonAsync("/api/auth/refresh", new RefreshRequest(first.RefreshToken));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var rotated = (await response.Content.ReadFromJsonAsync<TokenResponse>(Json))!;
         Assert.NotEqual(first.RefreshToken, rotated.RefreshToken);
-        Assert.Equal(firstRefreshExpiry, rotated.RefreshTokenExpiresAt);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/refresh", new RefreshRequest(first.RefreshToken))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/refresh", new RefreshRequest(rotated.RefreshToken))).StatusCode);
         client.DefaultRequestHeaders.Authorization = new("Bearer", rotated.AccessToken);

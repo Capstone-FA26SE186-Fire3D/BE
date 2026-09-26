@@ -32,10 +32,12 @@ public static class AuthenticationExtensions
         services.AddSingleton<IFirebaseResetAdmin, FirebaseResetAdmin>();
         services.AddScoped<IPasswordResetStore, PasswordResetStore>();
         services.AddScoped<IPasswordResetQueue, PasswordResetQueue>();
+        services.AddScoped<IEmailVerificationQueue, EmailVerificationQueue>();
         services.AddExceptionHandler<PasswordResetExceptionHandler>();
         services.AddHttpClient<IPasswordResetProvider, FirebasePasswordResetProvider>(client => client.Timeout = TimeSpan.FromSeconds(15))
             .RemoveAllLoggers();
         services.AddHostedService<Fire3D.Infrastructure.Workers.PasswordResetWorker>();
+        services.AddHostedService<Fire3D.Infrastructure.Workers.EmailVerificationWorker>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)

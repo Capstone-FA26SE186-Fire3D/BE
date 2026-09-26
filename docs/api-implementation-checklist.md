@@ -79,13 +79,13 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 
 ### PLAYTEST-01 — P1 · GAP · Tenant và entitlement
 
-- **Contract/current:** [PlaytestWriteStore](../Fire3D/Fire3D.Infrastructure/Scenarios/PlaytestWriteStore.cs) truy vấn entitlement bằng `is_active`, bắt lỗi DB rồi tiếp tục với `Guid.Empty`; start đổi trạng thái nhưng chưa cấp launch grant theo contract.
+- **Contract/current:** Runtime dùng [FailClosedPlaytestWriteStore](../Fire3D/Fire3D.Infrastructure/Scenarios/FailClosedPlaytestWriteStore.cs): prepare trả 503 thay vì tạo session khi entitlement gate chưa deployed; start kiểm owner. Legacy store còn source nhưng không được DI đăng ký. Launch grant vẫn chưa có.
 - **Sửa code:** Dùng gate/schema entitlement đích: OrganizationUser đúng tenant, Trial còn quota hoặc entitlement Active của Building; pin version/package/runtime và cấp playtest grant/session type riêng. Bỏ nuốt lỗi và ID rỗng thay cho dữ liệu bắt buộc.
 - **Nghiệm thu:** Trial còn/hết quota, Active/Expired, tenant sai, DB lỗi, thiếu version và replay đều fail-closed/đúng trạng thái. Playtest không dùng QR Trainee, không ghi learner analytics; session đã bắt đầu vẫn sync theo contract.
 
 ### RELEASE-01 — P1 · GAP · Publish gates
 
-- **Contract/current:** [ReleaseWriteStore](../Fire3D/Fire3D.Infrastructure/Releases/ReleaseWriteStore.cs) đã tạo Built, GET, publish và revoke. Create kiểm tra một phần revision/review/artifact; publish hiện chỉ kiểm tra Built và package.
+- **Contract/current:** Runtime dùng [FailClosedReleaseStore](../Fire3D/Fire3D.Infrastructure/Releases/FailClosedReleaseStore.cs): publish trả 503 thay vì bỏ qua gate. Create Built, GET và revoke vẫn delegate implementation hiện có.
 - **Sửa code:** Tách ghi nhận build hoàn tất khỏi việc chạy Unity. Trước publish kiểm tra package/manifest hash, artifact, validation Passed, blocker, runtime compatibility, Training và entitlement theo Docs.
 - **Nghiệm thu:** Provenance/review sai, QA lỗi hoặc còn blocker, runtime không tương thích, entitlement không Active đều không publish. Retry/revoke/audit đúng; create Built không bị mô tả là đã chạy Unity.
 

@@ -24,6 +24,8 @@ public class AnonymousAuthHttpTests
     [InlineData("register",false,201)] [InlineData("register",true,201)]
     [InlineData("forgot-password",false,202)] [InlineData("forgot-password",true,202)]
     [InlineData("reset-password",false,204)] [InlineData("reset-password",true,204)]
+    [InlineData("resend-verification",false,202)] [InlineData("resend-verification",true,202)]
+    [InlineData("verify-email",false,204)] [InlineData("verify-email",true,204)]
     [InlineData("login-firebase",false,200)] [InlineData("login-firebase",true,200)]
     public async Task Public_auth_routes_reach_handler_without_valid_bearer(string route,bool badBearer,int status)
     {
@@ -34,7 +36,7 @@ public class AnonymousAuthHttpTests
             return route switch {
                 "login" => (object)Task.FromResult(AuthResult<LoginResponse>.Ok(new("access","refresh",account))),
                 "register" => Task.FromResult(AuthResult<AccountResponse>.Ok(account)),
-                "login-firebase" => Task.FromResult(AuthResult<TokenResponse>.Ok(new("access",DateTime.UtcNow.AddMinutes(15),"refresh",DateTime.UtcNow.AddDays(7),account))),
+                "login-firebase" => Task.FromResult(AuthResult<TokenResponse>.Ok(new("access","refresh",account))),
                 _ => Task.FromResult(AuthResult<bool>.Ok(true))
             };
         });
