@@ -33,15 +33,30 @@ namespace Fire3D.Infrastructure.Migrations
                 """);
             migrationBuilder.Sql("CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_key ON public.users (lower(username)) WHERE username IS NOT NULL;");
             migrationBuilder.Sql("ALTER TABLE public.users ADD CONSTRAINT check_user_username CHECK (username IS NULL OR (username = lower(username) AND username ~ '^[a-z0-9._-]{3,30}$')) NOT VALID;");
-            // Existing accounts are retained and can complete a username later. PostgreSQL still
-            // validates every newly inserted Trainee against this constraint.
-            migrationBuilder.Sql("ALTER TABLE public.users ADD CONSTRAINT check_trainee_username_required CHECK (role <> 'Trainee' OR username IS NOT NULL) NOT VALID;");
+            // A CHECK constraint would also reject an unrelated UPDATE to a legacy Trainee that
+            // has no username. The trigger protects new Trainees while allowing those accounts
+            // to sign in and complete their profile.
+            migrationBuilder.Sql("""
+                CREATE OR REPLACE FUNCTION public.require_username_for_new_trainee()
+                RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                  IF NEW.role = 'Trainee' AND NEW.username IS NULL THEN
+                    RAISE EXCEPTION 'Trainee username is required' USING ERRCODE = '23514';
+                  END IF;
+                  RETURN NEW;
+                END $$;
+                DROP TRIGGER IF EXISTS users_require_username_for_new_trainee ON public.users;
+                CREATE TRIGGER users_require_username_for_new_trainee
+                  BEFORE INSERT OR UPDATE OF role, username ON public.users
+                  FOR EACH ROW EXECUTE FUNCTION public.require_username_for_new_trainee();
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql("ALTER TABLE public.users DROP CONSTRAINT IF EXISTS check_trainee_username_required;");
+            migrationBuilder.Sql("DROP TRIGGER IF EXISTS users_require_username_for_new_trainee ON public.users;");
+            migrationBuilder.Sql("DROP FUNCTION IF EXISTS public.require_username_for_new_trainee();");
             migrationBuilder.Sql("ALTER TABLE public.users DROP CONSTRAINT IF EXISTS check_user_username;");
             migrationBuilder.Sql("DROP INDEX IF EXISTS public.users_username_lower_key;");
             migrationBuilder.DropColumn(

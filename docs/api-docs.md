@@ -165,7 +165,7 @@ BE kiểm token, trạng thái thu hồi, email đã xác minh và provider goog
 - Email thuộc tài khoản khác/chưa liên kết UID này: 409 ACCOUNT_LINK_REQUIRED; không tự ghép chỉ vì trùng email.
 - Xung đột tạo đồng thời có thể 409 ACCOUNT_EXISTS; tài khoản bị khóa 403 ACCOUNT_DISABLED.
 
-Google identity mới hiện đăng nhập thẳng thành Trainee. Đây là gap so với Docs: chưa có onboarding token để người dùng chọn Trainee/OrganizationUser và hoàn tất hồ sơ OrganizationUser.
+Google identity mới trả `{ status: "OnboardingRequired" }` và không tạo tài khoản. UID đã liên kết trả `{ status: "Authenticated", authentication: TokenResponse }`. Chưa có onboarding token/endpoint để người dùng hoàn tất chọn Trainee/OrganizationUser.
 
 Response hiện là TokenResponse, **vẫn có expiresAt**:
 
