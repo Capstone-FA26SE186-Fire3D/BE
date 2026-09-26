@@ -550,7 +550,7 @@ Prepare cần `?buildingId=<building UUID>` cùng scenarioId trên path:
 
 Handler yêu cầu ít nhất một draftId/versionId; client nên gửi đúng một. Hiện chưa reject cả hai và store ưu tiên kiểm version. Revision/scenario phải thuộc building; draft/version thuộc scenario. Thiếu nguồn 400, quan hệ không thấy 404. Package hash phải lấy từ package thật.
 
-Prepare thành công trả 201 cùng playtest ID. Start không body, chuyển Created → Running; khác Created 400 INVALID_STATE; không thấy/ngoài phạm vi 404. Không trả launch token, manifest hay URL package. Prepare/start còn rủi ro DB/entitlement (mục 9); 200 không chứng minh Unity đã khởi chạy hoặc đã ghi kết quả huấn luyện.
+Prepare hiện trả 503 `ENTITLEMENT_UNAVAILABLE`: API đang fail-closed cho đến khi Building entitlement/trial gate được migrate. Start giữ 404 cho session không thuộc actor; một session Created hợp lệ từ dữ liệu cũ mới có thể chuyển Created → Running. Không trả launch token, manifest hay URL package. 200 không chứng minh Unity đã khởi chạy hoặc đã ghi kết quả huấn luyện.
 
 ## 8. Release lifecycle — 4 endpoint
 
@@ -563,7 +563,7 @@ Prepare thành công trả 201 cùng playtest ID. Start không body, chuyển Cr
 
 `POST /api/releases` ghi nhận một Unity/package build đã hoàn tất và tạo nguyên tử release trạng thái Built, package metadata và audit. Request pin revision, scenarioVersion, ConfirmForTraining review, candidate artifact, safetyThresholds JSON object, manifest/package private object key, hai SHA-256 64 ký tự, packageSizeBytes dương, minRuntimeVersion, schemaVersion và buildTarget. Revision phải ConfirmedForTraining; Building/tổ chức phải active; review và artifact phải khớp revision/version. Một cặp revision + scenarioVersion chỉ có một release; trùng trả 409 RELEASE_EXISTS.
 
-Create/build được gộp vì schema bắt buộc release mới được tạo ở trạng thái Built; API không chạy Unity trong request. Worker phải upload và kiểm chứng artifact trước khi gọi API này. GET trả release cùng package metadata, không trả signed download URL. Publish chỉ nhận Built có package, chuyển Published và ghi audit trong transaction. Revoke nhận reason 1–1000 ký tự, cho Built/Published → Revoked, ghi actor/time/reason/audit; gọi lại release đã Revoked vẫn trả 204.
+Create/build được gộp vì schema bắt buộc release mới được tạo ở trạng thái Built; API không chạy Unity trong request. Worker phải upload và kiểm chứng artifact trước khi gọi API này. GET trả release cùng package metadata, không trả signed download URL. Publish hiện trả 503 `PUBLISH_GATE_UNAVAILABLE` cho đến khi entitlement, validation, issue, runtime compatibility và Training gate được triển khai. Revoke nhận reason 1–1000 ký tự, cho Built/Published → Revoked, ghi actor/time/reason/audit; gọi lại release đã Revoked vẫn trả 204.
 
 Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 404 không thấy/khác tenant, 409 state hoặc release đã tồn tại. PlatformAdmin có thể đọc/thao tác liên tổ chức theo policy hiện tại. Publish vẫn phụ thuộc gate QA/runtime/entitlement/Training của schema triển khai; chưa tự tạo Training hoặc khởi chạy Unity build job.
 
@@ -576,9 +576,9 @@ Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 40
 | IFC finalize | Chưa ràng buộc đủ key với revision/upload; chưa kiểm hash nội dung; validation MIME/tên/hash hạn chế |
 | IFC process | Outbox còn literal payload_hash = 'hash', không phải SHA-256 hợp lệ; chưa bảo đảm tương thích schema/gate/worker. Process/confirm truy cập navigation Building nhưng query không Include Building, có nguy cơ null |
 | Draft editor | GET draft state/version đã có. Kiểm tra response ETag/xmin trước khi tích hợp; không coi đây là API còn thiếu. |
-| Playtest prepare | SQL entitlement dùng is_active, bắt exception rồi giữ Guid.Empty; cần đối chiếu schema. Draft-only có thể ghi ScenarioVersionId = Guid.Empty và vướng FK |
-| Playtest start | Mới đổi trạng thái/audit, chưa trả launch grant |
-| Release/training | Đã có create-Built/read/publish/revoke; còn thiếu package-build job và vòng đời Training/session. Publish vẫn phụ thuộc schema/gate triển khai |
+| Playtest prepare | Runtime hiện fail-closed 503 `ENTITLEMENT_UNAVAILABLE`; entitlement/trial, compatibility và launch grant chưa triển khai. Store legacy không được DI đăng ký. |
+| Playtest start | Runtime kiểm owner session trước khi delegate trạng thái/audit; chưa trả launch grant. |
+| Release/training | Đã có create-Built/read/revoke; runtime publish fail-closed 503 `PUBLISH_GATE_UNAVAILABLE` cho đến khi có gate. Còn thiếu package-build job và vòng đời Training/session. |
 | Auth | Local register hiện chỉ tạo Trainee, chưa nhận username/confirm password; thiếu OrganizationUser self-registration, Google onboarding/link, profile ETag/avatar và organization PATCH. Change Password và Forgot/Reset đã có route/handler. Không có email verification hoặc logout-all route riêng. |
 | Token response | Login local, Firebase login và refresh đều không trả expiresAt |
 | Device | Validation và xử lý bool thất bại chưa đầy đủ; 200 không chứng minh FCM delivery |
@@ -621,8 +621,8 @@ Số endpoint không phản ánh mức độ hoàn thiện luồng. Cập nhật
 - Building/revision: [BuildingContracts.cs](../Fire3D/Fire3D.Application/Buildings/BuildingContracts.cs).
 - IFC: [Application/Ifc](../Fire3D/Fire3D.Application/Ifc), [IfcWriteStore.cs](../Fire3D/Fire3D.Infrastructure/Ifc/IfcWriteStore.cs).
 - Draft: [ScenarioDraftStateDto.cs](../Fire3D/Fire3D.Application/Scenarios/Dto/ScenarioDraftStateDto.cs).
-- Playtest: [PlaytestWriteStore.cs](../Fire3D/Fire3D.Infrastructure/Scenarios/PlaytestWriteStore.cs).
-- Publish: [ReleaseWriteStore.cs](../Fire3D/Fire3D.Infrastructure/Releases/ReleaseWriteStore.cs).
+- Playtest: [FailClosedPlaytestWriteStore.cs](../Fire3D/Fire3D.Infrastructure/Scenarios/FailClosedPlaytestWriteStore.cs).
+- Publish: [FailClosedReleaseStore.cs](../Fire3D/Fire3D.Infrastructure/Releases/FailClosedReleaseStore.cs).
 
 Khi đổi API, cập nhật method/path, permission, request/response, status, validation và ví dụ. Đối chiếu handler/store, không chỉ annotation Swagger. Tài liệu được kiểm danh mục route, JSON và liên kết nội bộ; không thay báo cáo integration test.
 
