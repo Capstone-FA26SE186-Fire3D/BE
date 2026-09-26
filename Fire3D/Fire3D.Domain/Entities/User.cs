@@ -16,6 +16,8 @@ public partial class User
     [System.Text.Json.Serialization.JsonIgnore]
     public string? PasswordHash { get; set; }
 
+    public string? Username { get; set; }
+
     public string? FullName { get; set; }
 
     public bool IsActive { get; set; }

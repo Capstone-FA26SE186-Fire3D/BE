@@ -6,9 +6,9 @@ public sealed record LoginRequest(string Email, string Password);
 public sealed record RegisterRequest(string Email, string Password, string? FullName, string OrganizationName);
 public sealed record RefreshRequest(string RefreshToken);
 public sealed record CreateAccountRequest(string Email, string Password, string? FullName,
-    UserRole? Role, Guid? OrganizationId);
+    UserRole? Role, Guid? OrganizationId, string? Username = null);
 public sealed record AccountResponse(Guid Id, string Email, string? FullName,
-    UserRole Role, Guid? OrganizationId);
+    UserRole Role, Guid? OrganizationId, string? Username = null);
 public sealed record LoginResponse(string AccessToken, string RefreshToken, AccountResponse User);
 public sealed record TokenResponse(string AccessToken, DateTime AccessTokenExpiresAt,
     string RefreshToken, DateTime RefreshTokenExpiresAt, AccountResponse User);

@@ -201,7 +201,8 @@ public sealed partial class AuthIntegrationTests
 
     private async Task<AccountResponse> CreateAccountAsync(string email, UserRole role, Guid? organizationId = null)
     {
-        var response = await client.PostAsJsonAsync("/api/accounts", new CreateAccountRequest(email, password, "Test user", role, organizationId), Json);
+        var username = role == UserRole.Trainee ? "test-" + Guid.NewGuid().ToString("N")[..12] : null;
+        var response = await client.PostAsJsonAsync("/api/accounts", new CreateAccountRequest(email, password, "Test user", role, organizationId, username), Json);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var account = (await response.Content.ReadFromJsonAsync<AccountResponse>(Json))!;
         var correlation = Guid.Parse(response.Headers.GetValues("X-Correlation-ID").Single());
