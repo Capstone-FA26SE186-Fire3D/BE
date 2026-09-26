@@ -88,6 +88,8 @@ public partial class Fire3DDbContext : DbContext
 
     public virtual DbSet<UserDevice> UserDevices { get; set; }
 
+    public virtual DbSet<AvatarUploadIntent> AvatarUploadIntents { get; set; }
+
     public virtual DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
     public virtual DbSet<ValidationRun> ValidationRuns { get; set; }

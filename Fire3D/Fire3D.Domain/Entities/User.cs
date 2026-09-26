@@ -18,6 +18,10 @@ public partial class User
 
     public string? FullName { get; set; }
 
+    public string? AvatarStorageKey { get; set; }
+
+    public long ProfileRevision { get; set; } = 1;
+
     public bool IsActive { get; set; }
 
     public DateTime? LastLoginAt { get; set; }

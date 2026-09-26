@@ -11,4 +11,12 @@ public interface IStorageService
     /// Verifies that an object exists in storage and matches the expected size.
     /// </summary>
     Task<bool> VerifyObjectExistsAsync(string objectKey, long expectedSizeBytes, CancellationToken ct);
+
+    Task<StorageObjectMetadata?> GetObjectMetadataAsync(string objectKey, CancellationToken ct);
+    Task<byte[]?> ReadObjectPrefixAsync(string objectKey, int length, CancellationToken ct);
+    Task CopyObjectAsync(string sourceKey, string destinationKey, string contentType, CancellationToken ct);
+    Task DeleteObjectAsync(string objectKey, CancellationToken ct);
+    Task<string> GeneratePresignedDownloadUrlAsync(string objectKey, TimeSpan expiration, CancellationToken ct);
 }
+
+public sealed record StorageObjectMetadata(long ContentLength, string? ContentType);
