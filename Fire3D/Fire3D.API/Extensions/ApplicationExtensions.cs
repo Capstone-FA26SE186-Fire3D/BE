@@ -3,6 +3,8 @@ using Fire3D.Application.Administration;
 using Fire3D.Application.Email;
 using Fire3D.Infrastructure.Administration;
 using Fire3D.Infrastructure.Email;
+using Fire3D.Infrastructure.Authentication;
+using Fire3D.Application.Authentication.Avatar;
 using Amazon.Runtime;
 
 namespace Fire3D.API.Extensions;
@@ -13,6 +15,8 @@ public static class ApplicationExtensions
     {
         services.AddSingleton(configuration);
         services.AddScoped<IAdministrationStore, AdministrationStore>();
+        services.AddScoped<IAvatarStore, AvatarStore>();
+        services.AddScoped<IAvatarService, AvatarService>();
         var awsOptions = configuration.GetAWSOptions();
         var accessKey = configuration["AWS:AccessKey"];
         var secretKey = configuration["AWS:SecretKey"];

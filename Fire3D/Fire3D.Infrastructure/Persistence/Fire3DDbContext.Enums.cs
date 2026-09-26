@@ -9,6 +9,8 @@ public partial class Fire3DDbContext
     {
         modelBuilder.ApplyConfiguration(new Configurations.RefreshTokenConfiguration());
         modelBuilder.Entity<User>().Property(x => x.PasswordHash).HasColumnName("password_hash");
+        modelBuilder.Entity<User>().Property(x => x.AvatarStorageKey).HasColumnName("avatar_storage_key");
+        modelBuilder.Entity<User>().Property(x => x.ProfileRevision).HasColumnName("profile_revision").HasDefaultValue(1L);
         modelBuilder.Entity<User>().Property(x => x.Dob).HasColumnName("dob");
         modelBuilder.Entity<User>().Property(x => x.Gender).HasColumnName("gender").HasConversion<string>();
         modelBuilder.Entity<User>().Property(x => x.PhoneNumber).HasColumnName("phone_number").HasMaxLength(32);
@@ -18,6 +20,22 @@ public partial class Fire3DDbContext
             .Property(x => x.Role)
             .HasColumnName("role")
             .HasColumnType("user_role_enum");
+
+        modelBuilder.Entity<AvatarUploadIntent>(entity =>
+        {
+            entity.ToTable("avatar_upload_intents");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.UserId, x.ExpiresAt });
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.UserId).HasColumnName("user_id");
+            entity.Property(x => x.StagingObjectKey).HasColumnName("staging_object_key");
+            entity.Property(x => x.ContentType).HasColumnName("content_type");
+            entity.Property(x => x.ExpectedSizeBytes).HasColumnName("expected_size_bytes");
+            entity.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(x => x.CompletedAt).HasColumnName("completed_at");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
 
         modelBuilder.Entity<Revision>(entity =>
         {

@@ -19,6 +19,10 @@ public partial class User
 
     public string? FullName { get; set; }
 
+    public string? AvatarStorageKey { get; set; }
+
+    public long ProfileRevision { get; set; } = 1;
+
     public DateOnly? Dob { get; set; }
 
     public UserGender? Gender { get; set; }
