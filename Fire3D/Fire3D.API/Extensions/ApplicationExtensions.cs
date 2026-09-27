@@ -3,6 +3,8 @@ using Fire3D.Application.Administration;
 using Fire3D.Application.Email;
 using Fire3D.Infrastructure.Administration;
 using Fire3D.Infrastructure.Email;
+using Fire3D.Infrastructure.Authentication;
+using Fire3D.Application.Authentication.Avatar;
 using Amazon.Runtime;
 
 namespace Fire3D.API.Extensions;
@@ -13,6 +15,8 @@ public static class ApplicationExtensions
     {
         services.AddSingleton(configuration);
         services.AddScoped<IAdministrationStore, AdministrationStore>();
+        services.AddScoped<IAvatarStore, AvatarStore>();
+        services.AddScoped<IAvatarService, AvatarService>();
         var awsOptions = configuration.GetAWSOptions();
         var accessKey = configuration["AWS:AccessKey"];
         var secretKey = configuration["AWS:SecretKey"];
@@ -30,8 +34,8 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Scenarios.IScenarioReadStore, Fire3D.Infrastructure.Scenarios.ScenarioReadStore>();
         services.AddScoped<Fire3D.Application.Scenarios.Commands.RejectScenarioVersion.IScenarioReviewStore, Fire3D.Infrastructure.Scenarios.ScenarioReviewStore>();
         services.AddScoped<Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog.IRuntimeCatalogReadStore, Fire3D.Infrastructure.Scenarios.RuntimeCatalogReadStore>();
-        services.AddScoped<Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.IPlaytestWriteStore, Fire3D.Infrastructure.Scenarios.PlaytestWriteStore>();
-        services.AddScoped<Fire3D.Application.Releases.IReleaseStore, Fire3D.Infrastructure.Releases.ReleaseWriteStore>();
+        services.AddScoped<Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.IPlaytestWriteStore, Fire3D.Infrastructure.Scenarios.FailClosedPlaytestWriteStore>();
+        services.AddScoped<Fire3D.Application.Releases.IReleaseStore, Fire3D.Infrastructure.Releases.FailClosedReleaseStore>();
         services.AddScoped<Fire3D.Application.Buildings.IBuildingStore, Fire3D.Infrastructure.Buildings.BuildingStore>();
         services.AddScoped<Fire3D.Application.Buildings.Queries.GetTrainings.ITrainingReadStore, Fire3D.Infrastructure.Buildings.TrainingReadStore>();
         services.AddMediatR(options =>
