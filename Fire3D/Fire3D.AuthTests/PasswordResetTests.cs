@@ -58,7 +58,7 @@ public class PasswordResetTests
             "FindUserByEmailAsync" => Task.FromResult<User?>(user),
             "BeginUserTransactionAsync" => Task.FromResult(transaction),
             "FindUserAsync" => Task.FromResult<User?>(user),
-            "UpdateLoginAsync" or "AddRefreshTokenAsync" or "WriteAuditAsync" => Task.CompletedTask,
+            "UpdatePasswordHashAsync" or "UpdateLoginAsync" or "AddRefreshTokenAsync" or "WriteAuditAsync" => Task.CompletedTask,
             _ => throw new Exception("Unexpected database operation: " + method)
         });
         var tokens = ResetProxy.For<ITokenService>((method, _) => method switch

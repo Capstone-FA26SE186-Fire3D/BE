@@ -48,7 +48,7 @@ public sealed class PasswordResetPostgresTests
                 CREATE TYPE audit_action_enum AS ENUM ('Update','Login');
                 CREATE TABLE users (
                   id uuid PRIMARY KEY, organization_id uuid, email text NOT NULL, firebase_uid text,
-                  full_name text, username varchar(30), dob date, gender text, phone_number varchar(32), avatar_url varchar(2048), password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
+                  full_name text, username varchar(30), dob date, gender text, phone_number varchar(32), avatar_url varchar(2048), avatar_storage_key text, profile_revision bigint NOT NULL DEFAULT 1, password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
                   last_login_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
                   updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz,
                   registration_expires_at timestamptz);
@@ -216,6 +216,34 @@ public sealed class PasswordResetPostgresTests
 
         Assert.Equal(1, outcomes.Count(result => result));
         Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM users WHERE id='{userId}' AND email_verified_at IS NOT NULL"));
+    }
+
+    [ResetPostgresFact]
+    public async Task Avatar_finalization_consumes_an_intent_once_under_concurrent_requests()
+    {
+        await using var database = await Database.Create();
+        await database.Sql("""
+            CREATE TABLE avatar_upload_intents (
+              id uuid PRIMARY KEY, user_id uuid NOT NULL, staging_object_key text NOT NULL,
+              content_type text NOT NULL, expected_size_bytes bigint NOT NULL,
+              expires_at timestamptz NOT NULL, completed_at timestamptz NULL, created_at timestamptz NOT NULL
+            )
+            """);
+        var userId = Guid.NewGuid();
+        var intentId = Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role) VALUES ('{userId}','avatar-race@example.com','Trainee')");
+        await database.Sql($"INSERT INTO avatar_upload_intents(id,user_id,staging_object_key,content_type,expected_size_bytes,expires_at,created_at) VALUES ('{intentId}','{userId}','avatars/staging/test','image/png',1024,now()+interval '5 minutes',now())");
+
+        var outcomes = await Task.WhenAll(Enumerable.Range(0, 2).Select(async attempt =>
+        {
+            await using var context = database.Context();
+            return await new AvatarStore(context).FinalizeUploadAsync(intentId, userId, 1,
+                "avatars/users/" + attempt, DateTime.UtcNow, default);
+        }));
+
+        Assert.Equal(1, outcomes.Count(result => result.Status == Fire3D.Application.Authentication.Avatar.AvatarFinalizeStatus.Finalized));
+        Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM avatar_upload_intents WHERE id='{intentId}' AND completed_at IS NOT NULL"));
+        Assert.Equal(2L, await database.Sql($"SELECT profile_revision FROM users WHERE id='{userId}'"));
     }
 
     [ResetPostgresFact]

@@ -35,7 +35,7 @@ public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordS
         if (rehash)
         {
             user.PasswordHash = passwords.Hash(user, command.Password);
-            await store.UpdateUserAsync(user, ct);
+            await store.UpdatePasswordHashAsync(user.Id, user.PasswordHash, AuthSupport.UtcNow(clock), ct);
         }
         var now = AuthSupport.UtcNow(clock);
         await store.UpdateLoginAsync(user.Id, now, ct);

@@ -149,7 +149,9 @@ public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter
     public async Task<ActionResult<AccountResponse>> Me(CancellationToken ct)
     {
         var account = await sender.Send(new GetCurrentAccountQuery(User.GetActorId()), ct);
-        return account is null ? Unauthorized() : Ok(account);
+        if (account is null) return Unauthorized();
+        Response.Headers.ETag = ProfileEtag.Format(account.ProfileRevision);
+        return Ok(account);
     }
 
     /// <summary>Updates the current account profile. Role, organization, identity provider and password are not mutable here.</summary>
@@ -159,11 +161,14 @@ public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(401)]
     public async Task<ActionResult<AccountResponse>> UpdateMe(
-        Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileRequest request, CancellationToken ct)
+        Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileRequest request,
+        [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
     {
         var result = await sender.Send(
-            new Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileCommand(User.GetActorId(), request), ct);
-        return result.IsSuccess ? Ok(result.Value) : ResetProblem(result.Error!);
+            new Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileCommand(User.GetActorId(), ifMatch, request), ct);
+        if (!result.IsSuccess) return ResetProblem(result.Error!);
+        Response.Headers.ETag = ProfileEtag.Format(result.Value!.ProfileRevision);
+        return Ok(result.Value);
     }
 
     /// <summary>

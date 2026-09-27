@@ -33,7 +33,7 @@ public sealed class AvatarServiceTests
         var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, storage, TimeProvider.System);
         var intent = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
 
-        var result = await service.CompleteUploadAsync(user.Id, new(intent.Value!.UploadId), default);
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(intent.Value!.UploadId), default);
 
         Assert.Equal("INVALID_AVATAR_CONTENT", result.Error?.Code);
         Assert.False(storage.Copied);
@@ -49,10 +49,44 @@ public sealed class AvatarServiceTests
         var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, storage, TimeProvider.System);
         var intent = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
 
-        var result = await service.CompleteUploadAsync(user.Id, new(intent.Value!.UploadId), default);
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(intent.Value!.UploadId), default);
 
         Assert.True(result.IsSuccess);
         Assert.True(avatarStore.Finalized);
+    }
+
+    [Fact]
+    public async Task Complete_rejects_when_the_inspected_s3_object_changes_before_copy()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
+        var avatarStore = new AvatarStoreFake();
+        var storage = new AvatarStorageFake { CopySucceeds = false };
+        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, storage, TimeProvider.System);
+        var intent = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
+
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(intent.Value!.UploadId), default);
+
+        Assert.Equal("AVATAR_UPLOAD_CHANGED", result.Error?.Code);
+        Assert.False(avatarStore.Finalized);
+    }
+
+    [Fact]
+    public async Task Losing_complete_attempt_never_deletes_the_winning_final_object()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
+        var avatarStore = new AvatarStoreFake { FinalizeStatuses = [AvatarFinalizeStatus.Finalized, AvatarFinalizeStatus.PreconditionFailed] };
+        var storage = new AvatarStorageFake();
+        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, storage, TimeProvider.System);
+        var intent = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
+
+        Assert.True((await service.CompleteUploadAsync(user.Id, 1, new(intent.Value!.UploadId), default)).IsSuccess);
+        var loser = await service.CompleteUploadAsync(user.Id, 1, new(intent.Value!.UploadId), default);
+
+        Assert.Equal("PRECONDITION_FAILED", loser.Error?.Code);
+        Assert.Equal(2, storage.CopiedKeys.Count);
+        Assert.NotEqual(storage.CopiedKeys[0], storage.CopiedKeys[1]);
+        Assert.DoesNotContain(storage.CopiedKeys[0], storage.DeletedKeys);
+        Assert.Contains(storage.CopiedKeys[1], storage.DeletedKeys);
     }
 
     private sealed class AvatarAuthStoreFake(User user) : IAuthStore
@@ -67,6 +101,8 @@ public sealed class AvatarServiceTests
         public Task<bool> TryCreateUserAsync(User user, CancellationToken ct) => throw new NotSupportedException();
         public Task<RegisterConflict> TryCreateTraineeAsync(User user, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateUserAsync(User user, CancellationToken ct) => throw new NotSupportedException();
+        public Task UpdatePasswordHashAsync(Guid userId, string passwordHash, DateTime now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username, DateTime now, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> UpsertDeviceAsync(Guid userId, string deviceUuid, string? fcmToken, string? deviceModel, string? osVersion, CancellationToken ct) => throw new NotSupportedException();
         public Task RevokeDeviceAsync(Guid userId, string deviceUuid, DateTime now, CancellationToken ct) => throw new NotSupportedException();
@@ -88,11 +124,18 @@ public sealed class AvatarServiceTests
     private sealed class AvatarStoreFake : IAvatarStore
     {
         private readonly Dictionary<Guid, AvatarUploadIntent> intents = [];
+        private int finalizeCount;
         public bool Finalized { get; private set; }
+        public AvatarFinalizeStatus[] FinalizeStatuses { get; init; } = [AvatarFinalizeStatus.Finalized];
         public Task SaveUploadIntentAsync(AvatarUploadIntent intent, CancellationToken ct) { intents.Add(intent.Id, intent); return Task.CompletedTask; }
         public Task<AvatarUploadIntent?> FindUploadIntentAsync(Guid id, Guid userId, CancellationToken ct) => Task.FromResult(intents.GetValueOrDefault(id) is { UserId: var owner } intent && owner == userId ? intent : null);
-        public Task<AvatarFinalizeResult> FinalizeUploadAsync(Guid intentId, Guid userId, string objectKey, DateTime completedAt, CancellationToken ct) { Finalized = true; return Task.FromResult(new AvatarFinalizeResult(true, null)); }
-        public Task<AvatarDeleteResult> DeleteAvatarAsync(Guid userId, DateTime deletedAt, CancellationToken ct) => Task.FromResult(new AvatarDeleteResult(true, null));
+        public Task<AvatarFinalizeResult> FinalizeUploadAsync(Guid intentId, Guid userId, long expectedProfileRevision, string objectKey, DateTime completedAt, CancellationToken ct)
+        {
+            var status = FinalizeStatuses[Math.Min(finalizeCount++, FinalizeStatuses.Length - 1)];
+            Finalized |= status == AvatarFinalizeStatus.Finalized;
+            return Task.FromResult(new AvatarFinalizeResult(status, null));
+        }
+        public Task<AvatarDeleteResult> DeleteAvatarAsync(Guid userId, long expectedProfileRevision, DateTime deletedAt, CancellationToken ct) => Task.FromResult(new AvatarDeleteResult(AvatarDeleteStatus.Deleted, null));
     }
 
     private sealed class AvatarStorageFake : IStorageService
@@ -103,13 +146,24 @@ public sealed class AvatarServiceTests
         public byte[] Prefix { get; init; } = [137, 80, 78, 71, 13, 10, 26, 10];
         public bool Copied { get; private set; }
         public bool ThrowOnDelete { get; init; }
+        public bool CopySucceeds { get; init; } = true;
+        public List<string> CopiedKeys { get; } = [];
+        public List<string> DeletedKeys { get; } = [];
         public Task<string> GeneratePresignedUploadUrlAsync(string objectKey, string mimeType, TimeSpan expiration, CancellationToken ct) { UploadedKey = objectKey; UploadContentType = mimeType; UploadExpiration = expiration; return Task.FromResult("https://storage.test/upload"); }
         public Task<bool> VerifyObjectExistsAsync(string objectKey, long expectedSizeBytes, CancellationToken ct) => Task.FromResult(true);
-        public Task<StorageObjectMetadata?> GetObjectMetadataAsync(string objectKey, CancellationToken ct) => Task.FromResult<StorageObjectMetadata?>(new(1024, "image/png"));
-        public Task<byte[]?> ReadObjectPrefixAsync(string objectKey, int length, CancellationToken ct) => Task.FromResult<byte[]?>(Prefix);
-        public Task CopyObjectAsync(string sourceKey, string destinationKey, string contentType, CancellationToken ct) { Copied = true; return Task.CompletedTask; }
-        public Task DeleteObjectAsync(string objectKey, CancellationToken ct) => ThrowOnDelete
-            ? Task.FromException(new InvalidOperationException("temporary storage failure")) : Task.CompletedTask;
+        public Task<StorageObjectMetadata?> GetObjectMetadataAsync(string objectKey, CancellationToken ct) => Task.FromResult<StorageObjectMetadata?>(new(1024, "image/png", "etag"));
+        public Task<byte[]?> ReadObjectPrefixAsync(string objectKey, int length, string expectedETag, CancellationToken ct) => Task.FromResult<byte[]?>(Prefix);
+        public Task<bool> CopyObjectIfUnchangedAsync(string sourceKey, string sourceETag, string destinationKey, string contentType, CancellationToken ct)
+        {
+            Copied = true;
+            CopiedKeys.Add(destinationKey);
+            return Task.FromResult(CopySucceeds);
+        }
+        public Task DeleteObjectAsync(string objectKey, CancellationToken ct)
+        {
+            DeletedKeys.Add(objectKey);
+            return ThrowOnDelete ? Task.FromException(new InvalidOperationException("temporary storage failure")) : Task.CompletedTask;
+        }
         public Task<string> GeneratePresignedDownloadUrlAsync(string objectKey, TimeSpan expiration, CancellationToken ct) => Task.FromResult("https://storage.test/download");
     }
 

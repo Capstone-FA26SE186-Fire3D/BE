@@ -203,7 +203,7 @@ Refresh không cần access token:
 
 Token không trống, tối đa 256. Thành công trả TokenResponse còn hai expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả 401 INVALID_REFRESH_TOKEN; replay token đã dùng có thể thu hồi cả family.
 
-Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại, không logout mọi thiết bị. `GET /api/auth/me` trả AccountResponse; `PATCH /api/auth/me` hiện sửa fullName cơ bản, không hỗ trợ username/ETag/avatar. `GET /api/organizations/me` đọc organization hiện tại; chưa có PATCH profile organization.
+Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại, không logout mọi thiết bị. `GET /api/auth/me` trả AccountResponse cùng `ETag: "<profileRevision>"`; `PATCH /api/auth/me` nhận header đó trong `If-Match`, sửa fullName và/hoặc username, rồi trả ETag mới. `POST /api/me/avatar/complete` và `DELETE /api/me/avatar` cũng yêu cầu cùng If-Match; thiếu trả 428, ETag cũ trả 412. `GET /api/organizations/me` đọc organization hiện tại; chưa có PATCH profile organization.
 
 Devices upsert cho user hiện tại:
 
@@ -572,7 +572,7 @@ Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 40
 | Playtest prepare | Runtime hiện fail-closed 503 `ENTITLEMENT_UNAVAILABLE`; entitlement/trial, compatibility và launch grant chưa triển khai. Store legacy không được DI đăng ký. |
 | Playtest start | Runtime kiểm owner session trước khi delegate trạng thái/audit; chưa trả launch grant. |
 | Release/training | Đã có create-Built/read/revoke; runtime publish fail-closed 503 `PUBLISH_GATE_UNAVAILABLE` cho đến khi có gate. Còn thiếu package-build job và vòng đời Training/session. |
-| Auth | Local self-registration cho Trainee và OrganizationUser đã có username/confirm password/organization profile ban đầu; email verification đã có route, worker và thời hạn đăng ký chờ. Còn thiếu Google onboarding/link, profile ETag/avatar, organization PATCH và logout-all route riêng. Change Password và Forgot/Reset đã có route/handler. |
+| Auth | Local self-registration cho Trainee và OrganizationUser đã có username/confirm password/organization profile ban đầu; email verification đã có route, worker và thời hạn đăng ký chờ. `GET/PATCH /api/auth/me` và avatar complete/delete dùng profile ETag; avatar copy kiểm source ETag và final key riêng mỗi request. Còn thiếu Google onboarding/link, organization PATCH, avatar orphan cleanup/decoder và logout-all route riêng. Change Password và Forgot/Reset đã có route/handler. |
 | Token response | Login local, Firebase login và refresh đều không trả expiresAt |
 | Device | Validation và xử lý bool thất bại chưa đầy đủ; 200 không chứng minh FCM delivery |
 
