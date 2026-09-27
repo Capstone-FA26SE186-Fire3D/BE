@@ -53,6 +53,7 @@ public sealed partial class AuthIntegrationTests
             await ExecuteAsync("ALTER TABLE users ENABLE TRIGGER users_require_username_for_new_trainee;");
         }
 
+        await ExecuteAsync("UPDATE users SET email_verified_at=now(), registration_expires_at=NULL WHERE email='legacy@example.test';");
         var login = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest("legacy@example.test", "StrongPassword12!"));
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
     }

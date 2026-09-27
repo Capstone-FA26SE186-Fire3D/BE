@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -100,7 +101,9 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
                 ["Jwt:Issuer"] = "Fire3D.Tests", ["Jwt:Audience"] = "Fire3D.Tests.Client",
                 ["Jwt:SigningKey"] = signingKey, ["Logging:LogLevel:Default"] = "Critical",
                 ["Mailgun:ApiKey"] = "test-key", ["Mailgun:Domain"] = "example.test",
-                ["Mailgun:From"] = "noreply@example.test"
+                ["Mailgun:From"] = "noreply@example.test",
+                ["Redis:Enabled"] = "false",
+                ["AuthEmail:WorkerEnabled"] = "false"
             };
             web.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(settings));
             web.ConfigureServices(services =>
@@ -112,6 +115,7 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
                 services.RemoveAll<IDbContextOptionsConfiguration<Fire3DDbContext>>();
                 services.AddDatabase(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
                 services.AddDataProtection().UseEphemeralDataProtectionProvider();
+                services.RemoveAll<IHostedService>();
             });
         });
         var previousFirebaseApp = FirebaseAdmin.FirebaseApp.DefaultInstance;
