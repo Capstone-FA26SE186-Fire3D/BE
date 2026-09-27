@@ -219,6 +219,30 @@ public sealed class PasswordResetPostgresTests
     }
 
     [ResetPostgresFact]
+    public async Task Resend_keeps_an_already_issued_link_valid_until_it_expires()
+    {
+        await using var database = await Database.Create();
+        var userId = Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role,registration_expires_at) VALUES ('{userId}','resend@example.com','Trainee',now()+interval '2 hours')");
+        var settings = Options.Create(new AuthEmailOptions { FrontendUrl = "https://app.example.test" });
+
+        await using var firstContext = database.Context();
+        var firstQueue = new EmailVerificationQueue(firstContext, settings);
+        await firstQueue.EnqueueAsync(userId, "resend@example.com", default);
+        var firstJob = Assert.IsType<VerificationEmailJob>(await firstQueue.ClaimAsync(default));
+        var firstLink = Assert.IsType<string>(await firstQueue.CreateLinkAsync(firstJob, default));
+        var firstToken = new Uri(firstLink).Fragment["#token=".Length..];
+        await firstQueue.CompleteAsync(firstJob, default);
+
+        await using var resendContext = database.Context();
+        var resendQueue = new EmailVerificationQueue(resendContext, settings);
+        await resendQueue.EnqueueAsync("resend@example.com", default);
+
+        await using var verifyContext = database.Context();
+        Assert.True(await new EmailVerificationQueue(verifyContext, settings).VerifyAsync(firstToken, default));
+    }
+
+    [ResetPostgresFact]
     public async Task Cleanup_removes_only_the_organization_owned_by_the_expired_registration()
     {
         await using var database = await Database.Create();
@@ -240,6 +264,29 @@ public sealed class PasswordResetPostgresTests
         Assert.Equal(0L, await database.Sql($"SELECT count(*) FROM users WHERE id IN ('{owner}','{retainedUser}')"));
         Assert.Equal(0L, await database.Sql($"SELECT count(*) FROM organizations WHERE id='{ownedOrganization}'"));
         Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM organizations WHERE id='{retainedOrganization}'"));
+    }
+
+    [ResetPostgresFact]
+    public async Task Cleanup_skips_an_expired_registration_while_its_verification_account_lock_is_held()
+    {
+        await using var database = await Database.Create();
+        var userId = Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role,registration_expires_at) VALUES ('{userId}','locked@example.com','Trainee',now()-interval '1 second')");
+        await using var held = new NpgsqlConnection(database.Connection);
+        await held.OpenAsync();
+        await using var transaction = await held.BeginTransactionAsync();
+        await new NpgsqlCommand($"SELECT pg_advisory_xact_lock(hashtextextended('fire3d:verification-account:{userId}', 0))", held, transaction).ExecuteNonQueryAsync();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddScoped<Fire3DDbContext>(_ => database.Context());
+        await using var provider = services.BuildServiceProvider();
+        var worker = new PendingRegistrationCleanupWorker(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            provider.GetRequiredService<ILogger<PendingRegistrationCleanupWorker>>());
+
+        Assert.Equal(0, await worker.DeleteBatchAsync(default));
+        Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM users WHERE id='{userId}'"));
     }
     [ResetPostgresFact]
     public async Task Lease_recovery_fences_stale_ack_and_retries_with_backoff()

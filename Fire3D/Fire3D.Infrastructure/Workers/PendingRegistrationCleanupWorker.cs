@@ -46,6 +46,9 @@ public sealed class PendingRegistrationCleanupWorker(IServiceScopeFactory scopes
                  AND u.deleted_at IS NULL
                  AND NOT EXISTS (SELECT 1 FROM public.buildings b WHERE b.organization_id=u.organization_id)
                  AND NOT EXISTS (SELECT 1 FROM public.sessions s WHERE s.trainee_user_id=u.id)
+                  -- Verification, resend and delivery all take this lock before a user/token row.
+                  -- Cleanup never waits behind one of them: it leaves the account for the next batch.
+                  AND pg_try_advisory_xact_lock(hashtextextended('fire3d:verification-account:' || u.id::text, 0))
                ORDER BY u.registration_expires_at
                FOR UPDATE SKIP LOCKED LIMIT {BatchSize}
             ), removed_tokens AS (

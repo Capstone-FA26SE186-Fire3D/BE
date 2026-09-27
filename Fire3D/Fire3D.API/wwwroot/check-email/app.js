@@ -11,7 +11,7 @@ document.querySelector('#form').addEventListener('submit', async event => {
     status.textContent = response.status === 429
       ? 'Bạn đã yêu cầu quá nhiều lần. Vui lòng thử lại sau.'
       : response.ok
-        ? 'Nếu tài khoản đang chờ xác minh, liên kết mới sẽ được gửi đến email này.'
+        ? 'Nếu tài khoản đang chờ xác minh, một liên kết xác minh sẽ được gửi đến email này.'
         : 'Không thể gửi yêu cầu lúc này. Vui lòng thử lại sau.';
   } catch {
     status.textContent = 'Không thể gửi yêu cầu lúc này. Vui lòng thử lại sau.';

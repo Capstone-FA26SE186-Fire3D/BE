@@ -115,7 +115,7 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 
 BE hash password vào `users.password_hash`, không tạo tài khoản email/password trên Firebase. Trả **201 AccountResponse**, chưa đăng nhập; gọi login tiếp theo:
 
-Tài khoản tự đăng ký có 2 giờ để xác minh email. Trong thời gian chờ, login/refresh bị từ chối bằng `EMAIL_NOT_VERIFIED`; sau hạn dùng là `REGISTRATION_EXPIRED` và background worker xóa đăng ký chờ để có thể dùng lại email. `POST /api/auth/resend-verification` luôn trả 202 cho email hợp lệ để tránh dò tài khoản; Redis áp giới hạn theo email/IP và trả 429 cùng `Retry-After`, hoặc 503 khi Redis bắt buộc không hoạt động. `POST /api/auth/verify-email` nhận `{ "token": "<64 hex>" }`, chỉ trả 204 khi token còn hạn và chưa dùng.
+Tài khoản tự đăng ký có 2 giờ để xác minh email. Trong thời gian chờ, login/refresh bị từ chối bằng `EMAIL_NOT_VERIFIED`; sau hạn dùng là `REGISTRATION_EXPIRED` và background worker xóa đăng ký chờ để có thể dùng lại email. `POST /api/auth/resend-verification` luôn trả 202 cho email hợp lệ để tránh dò tài khoản; Redis áp giới hạn theo email/IP và trả 429 cùng `Retry-After`, hoặc 503 khi Redis bắt buộc không hoạt động. Resend không gia hạn registration và không hủy token đã phát hành: mỗi token còn dùng được đến hạn riêng của nó, tối đa 15 phút. `POST /api/auth/verify-email` nhận `{ "token": "<64 hex>" }`, chỉ trả 204 khi token còn hạn và chưa dùng.
 
 ```json
 {

@@ -17,7 +17,7 @@ public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmai
 {
     public async Task EnqueueAsync(Guid userId, string email, CancellationToken ct)
     {
-        await InsertJobAsync(userId, email, invalidateExistingTokens: false, ct);
+        await InsertJobAsync(userId, email, startNewGeneration: false, ct);
     }
 
     public async Task EnqueueAsync(string email, CancellationToken ct)
@@ -26,10 +26,10 @@ public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmai
         if (user is null || !user.RegistrationExpiresAt.HasValue || user.EmailVerifiedAt.HasValue ||
             user.RegistrationExpiresAt <= DateTime.UtcNow)
             return; // indistinguishable 202 prevents account enumeration.
-        await InsertJobAsync(user.Id, user.Email, invalidateExistingTokens: true, ct);
+        await InsertJobAsync(user.Id, user.Email, startNewGeneration: true, ct);
     }
 
-    private async Task InsertJobAsync(Guid userId, string email, bool invalidateExistingTokens, CancellationToken ct)
+    private async Task InsertJobAsync(Guid userId, string email, bool startNewGeneration, CancellationToken ct)
     {
         await using var owned = db.Database.CurrentTransaction is null
             ? await db.Database.BeginTransactionAsync(ct) : null;
@@ -48,21 +48,17 @@ public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmai
             SELECT COALESCE(MAX(generation), 0) AS "Value"
             FROM public.email_verification_jobs WHERE user_id={userId}
             """).SingleAsync(ct);
-        if (invalidateExistingTokens)
+        if (startNewGeneration)
         {
             generation++;
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE public.email_verification_tokens SET used_at=now()
-                 WHERE user_id={userId} AND used_at IS NULL
-                """, ct);
         }
         else if (generation == 0)
         {
             generation = 1;
         }
 
-        // Initial registration is idempotent inside its transaction. Resend deliberately creates
-        // a new generation so an old queued job cannot mail an invalidated link.
+        // Initial registration is idempotent inside its transaction. Resend creates a new
+        // delivery generation, but already-issued links remain usable until their own expiry.
         var exists = await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM public.email_verification_jobs
               WHERE user_id={userId} AND generation={generation}
