@@ -14,7 +14,7 @@ internal sealed class ValidateSessionQueryHandler(IAuthStore store, TimeProvider
         var role = command.Role;
         var organizationId = command.OrganizationId;
         var user = await store.FindUserAsync(userId, ct);
-        return user is not null && await AuthSupport.IsActiveAsync(store, user, ct)
+        return user is not null && !AuthSupport.IsPendingEmailVerification(user) && await AuthSupport.IsActiveAsync(store, user, ct)
             && user.Role.ToString() == role && user.OrganizationId?.ToString() == organizationId
             && await store.FamilyIsActiveAsync(userId, familyId, AuthSupport.UtcNow(clock), ct);
     }

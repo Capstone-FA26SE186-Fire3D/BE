@@ -33,6 +33,12 @@ internal sealed class RefreshTokenCommandHandler(IAuthStore store, ITokenService
             await transaction.CommitAsync(ct);
             return AuthSupport.InvalidRefresh();
         }
+        if (AuthSupport.IsPendingEmailVerification(user))
+        {
+            await store.RevokeFamilyAsync(token.UserId, token.FamilyId, now, ct);
+            await transaction.CommitAsync(ct);
+            return AuthSupport.InvalidRefresh();
+        }
         await store.ConsumeRefreshTokenAsync(token.Id, now, ct);
         // Rotation preserves the original absolute session expiry.
         var response = await AuthSupport.IssueAsync(store, tokens, user, token.FamilyId, now, token.ExpiresAt, ct);

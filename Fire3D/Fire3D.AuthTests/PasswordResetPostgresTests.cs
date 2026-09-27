@@ -4,10 +4,13 @@ using Fire3D.Domain.Enums;
 using Fire3D.Infrastructure.Authentication;
 using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using Npgsql.NameTranslation;
 using Xunit;
+using Fire3D.Infrastructure.Workers;
 namespace Fire3D.AuthTests;
 
 // Explicit opt-in: never fall back to appsettings or a developer/production database.
@@ -45,9 +48,15 @@ public sealed class PasswordResetPostgresTests
                 CREATE TYPE audit_action_enum AS ENUM ('Update','Login');
                 CREATE TABLE users (
                   id uuid PRIMARY KEY, organization_id uuid, email text NOT NULL, firebase_uid text,
-                  full_name text, dob date, gender text, phone_number varchar(32), avatar_url varchar(2048), password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
+                  full_name text, username varchar(30), dob date, gender text, phone_number varchar(32), avatar_url varchar(2048), password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
                   last_login_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
-                  updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz);
+                  updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz,
+                  registration_expires_at timestamptz);
+                CREATE TABLE organizations (
+                  id uuid PRIMARY KEY, registration_owner_user_id uuid NULL);
+                CREATE TABLE buildings (id uuid PRIMARY KEY, organization_id uuid NOT NULL);
+                CREATE TABLE sessions (id uuid PRIMARY KEY, trainee_user_id uuid NULL);
+                CREATE TABLE user_devices (id uuid PRIMARY KEY, user_id uuid NULL);
                 CREATE TABLE auth_refresh_tokens (
                   id uuid PRIMARY KEY,user_id uuid REFERENCES users(id),family_id uuid NOT NULL,
                   token_hash varchar(64) NOT NULL UNIQUE,created_at timestamptz NOT NULL,expires_at timestamptz NOT NULL,
@@ -60,6 +69,7 @@ public sealed class PasswordResetPostgresTests
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"002_password_reset_recovery.sql")));
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"003_local_password.sql")));
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"005_email_verification.sql")));
+            await db.Sql("ALTER TABLE email_verification_jobs ADD COLUMN user_id uuid, ADD COLUMN generation integer NOT NULL DEFAULT 1;");
             return db;
         }
         private DbContextOptions<Fire3DDbContext>? contextOptions;
@@ -95,7 +105,7 @@ public sealed class PasswordResetPostgresTests
         // Minimal test enum only needs the extra label for registration audit.
         await database.Sql("ALTER TYPE audit_action_enum ADD VALUE IF NOT EXISTS 'Create'");
         var register=new Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommandHandler(accounts,passwords,ResetProxy.For<Fire3D.Application.Authentication.IEmailVerificationQueue>((_,_)=>Task.CompletedTask),TimeProvider.System);
-        var created=await register.Handle(new(" USER@EXAMPLE.TEST ","OriginalPassword12!","Test User"),default);
+        var created=await register.Handle(new(" USER@EXAMPLE.TEST ","OriginalPassword12!","Test User","test-user","OriginalPassword12!"),default);
         Assert.True(created.IsSuccess,created.Error?.Message);
         var user=await accounts.FindUserByEmailAsync("user@example.test",default);
         Assert.NotNull(user);Assert.Null(user.FirebaseUid);Assert.NotEqual("OriginalPassword12!",user.PasswordHash);
@@ -103,6 +113,8 @@ public sealed class PasswordResetPostgresTests
         var tokens=new TokenService(Microsoft.Extensions.Options.Options.Create(new JwtOptions {
             Issuer="test",Audience="test",SigningKey=Convert.ToBase64String(new byte[64]) }));
         var login=new Fire3D.Application.Authentication.Commands.LoginWithPassword.LoginWithPasswordCommandHandler(accounts,passwords,tokens,TimeProvider.System);
+        Assert.Equal("EMAIL_NOT_VERIFIED", (await login.Handle(new("USER@example.test","OriginalPassword12!"),default)).Error?.Code);
+        await database.Sql("UPDATE users SET email_verified_at=now(), registration_expires_at=NULL WHERE id='" + user.Id + "'");
         Assert.True((await login.Handle(new("USER@example.test","OriginalPassword12!"),default)).IsSuccess);
         Assert.True((await login.Handle(new("user@example.test","OriginalPassword12!"),default)).IsSuccess);
         Assert.Equal(401,(await login.Handle(new("user@example.test","wrong"),default)).Error?.Status);
@@ -147,13 +159,13 @@ public sealed class PasswordResetPostgresTests
     {
         await using var database = await Database.Create();
         var userId = Guid.NewGuid();
-        await database.Sql($"INSERT INTO users(id,email,role) VALUES ('{userId}','verify@example.com','Trainee')");
+        await database.Sql($"INSERT INTO users(id,email,role,registration_expires_at) VALUES ('{userId}','verify@example.com','Trainee',now()+interval '2 hours')");
         var settings = Options.Create(new AuthEmailOptions { FrontendUrl = "https://app.example.test" });
 
         await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
         {
             await using var context = database.Context();
-            await new EmailVerificationQueue(context, settings).EnqueueAsync("verify@example.com", default);
+            await new EmailVerificationQueue(context, settings).EnqueueAsync(userId, "verify@example.com", default);
         }));
         Assert.Equal(1L, await database.Sql("SELECT count(*) FROM email_verification_jobs"));
 
@@ -169,7 +181,7 @@ public sealed class PasswordResetPostgresTests
         Assert.Null(await firstQueue.CreateLinkAsync(first, default));
 
         var link = await secondQueue.CreateLinkAsync(second, default);
-        var raw = System.Web.HttpUtility.ParseQueryString(new Uri(link!).Query)["token"]!;
+        var raw = new Uri(link!).Fragment["#token=".Length..];
         Assert.Equal(64, raw.Length);
         Assert.NotEqual(raw, await database.Sql("SELECT token_hash FROM email_verification_tokens LIMIT 1"));
 
@@ -178,6 +190,103 @@ public sealed class PasswordResetPostgresTests
         Assert.True(await verifyQueue.VerifyAsync(raw.ToUpperInvariant(), default));
         Assert.False(await verifyQueue.VerifyAsync(raw, default));
         Assert.Equal(1L, await database.Sql("SELECT count(*) FROM users WHERE id='" + userId + "' AND email_verified_at IS NOT NULL"));
+    }
+
+    [ResetPostgresFact]
+    public async Task Concurrent_verification_of_two_active_tokens_has_one_winner_without_deadlock()
+    {
+        await using var database = await Database.Create();
+        var userId = Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role,registration_expires_at) VALUES ('{userId}','parallel@example.com','Trainee',now()+interval '2 hours')");
+        var settings = Options.Create(new AuthEmailOptions { FrontendUrl = "https://app.example.test" });
+        await using var setup = database.Context();
+        var queue = new EmailVerificationQueue(setup, settings);
+        await queue.EnqueueAsync(userId, "parallel@example.com", default);
+        var job = Assert.IsType<VerificationEmailJob>(await queue.ClaimAsync(default));
+        var first = await queue.CreateLinkAsync(job, default);
+        var second = await queue.CreateLinkAsync(job, default);
+        var firstToken = new Uri(first!).Fragment["#token=".Length..];
+        var secondToken = new Uri(second!).Fragment["#token=".Length..];
+
+        var outcomes = await Task.WhenAll(Enumerable.Range(0, 2).Select(async index =>
+        {
+            await using var context = database.Context();
+            return await new EmailVerificationQueue(context, settings).VerifyAsync(index == 0 ? firstToken : secondToken, default);
+        }));
+
+        Assert.Equal(1, outcomes.Count(result => result));
+        Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM users WHERE id='{userId}' AND email_verified_at IS NOT NULL"));
+    }
+
+    [ResetPostgresFact]
+    public async Task Resend_keeps_an_already_issued_link_valid_until_it_expires()
+    {
+        await using var database = await Database.Create();
+        var userId = Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role,registration_expires_at) VALUES ('{userId}','resend@example.com','Trainee',now()+interval '2 hours')");
+        var settings = Options.Create(new AuthEmailOptions { FrontendUrl = "https://app.example.test" });
+
+        await using var firstContext = database.Context();
+        var firstQueue = new EmailVerificationQueue(firstContext, settings);
+        await firstQueue.EnqueueAsync(userId, "resend@example.com", default);
+        var firstJob = Assert.IsType<VerificationEmailJob>(await firstQueue.ClaimAsync(default));
+        var firstLink = Assert.IsType<string>(await firstQueue.CreateLinkAsync(firstJob, default));
+        var firstToken = new Uri(firstLink).Fragment["#token=".Length..];
+        await firstQueue.CompleteAsync(firstJob, default);
+
+        await using var resendContext = database.Context();
+        var resendQueue = new EmailVerificationQueue(resendContext, settings);
+        await resendQueue.EnqueueAsync("resend@example.com", default);
+
+        await using var verifyContext = database.Context();
+        Assert.True(await new EmailVerificationQueue(verifyContext, settings).VerifyAsync(firstToken, default));
+    }
+
+    [ResetPostgresFact]
+    public async Task Cleanup_removes_only_the_organization_owned_by_the_expired_registration()
+    {
+        await using var database = await Database.Create();
+        var ownedOrganization = Guid.NewGuid();
+        var owner = Guid.NewGuid();
+        var retainedOrganization = Guid.NewGuid();
+        var retainedUser = Guid.NewGuid();
+        await database.Sql($"INSERT INTO organizations(id,registration_owner_user_id) VALUES ('{ownedOrganization}','{owner}'),('{retainedOrganization}','{Guid.NewGuid()}')");
+        await database.Sql($"INSERT INTO users(id,organization_id,email,role,registration_expires_at) VALUES ('{owner}','{ownedOrganization}','expired-owner@example.com','Trainee',now()-interval '1 second'),('{retainedUser}','{retainedOrganization}','expired-retained@example.com','Trainee',now()-interval '1 second')");
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddScoped<Fire3DDbContext>(_ => database.Context());
+        await using var provider = services.BuildServiceProvider();
+        var worker = new PendingRegistrationCleanupWorker(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            provider.GetRequiredService<ILogger<PendingRegistrationCleanupWorker>>());
+
+        Assert.Equal(2, await worker.DeleteBatchAsync(default));
+        Assert.Equal(0L, await database.Sql($"SELECT count(*) FROM users WHERE id IN ('{owner}','{retainedUser}')"));
+        Assert.Equal(0L, await database.Sql($"SELECT count(*) FROM organizations WHERE id='{ownedOrganization}'"));
+        Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM organizations WHERE id='{retainedOrganization}'"));
+    }
+
+    [ResetPostgresFact]
+    public async Task Cleanup_skips_an_expired_registration_while_its_verification_account_lock_is_held()
+    {
+        await using var database = await Database.Create();
+        var userId = Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role,registration_expires_at) VALUES ('{userId}','locked@example.com','Trainee',now()-interval '1 second')");
+        await using var held = new NpgsqlConnection(database.Connection);
+        await held.OpenAsync();
+        await using var transaction = await held.BeginTransactionAsync();
+        await new NpgsqlCommand($"SELECT pg_advisory_xact_lock(hashtextextended('fire3d:verification-account:{userId}', 0))", held, transaction).ExecuteNonQueryAsync();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddScoped<Fire3DDbContext>(_ => database.Context());
+        await using var provider = services.BuildServiceProvider();
+        var worker = new PendingRegistrationCleanupWorker(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            provider.GetRequiredService<ILogger<PendingRegistrationCleanupWorker>>());
+
+        Assert.Equal(0, await worker.DeleteBatchAsync(default));
+        Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM users WHERE id='{userId}'"));
     }
     [ResetPostgresFact]
     public async Task Lease_recovery_fences_stale_ack_and_retries_with_backoff()

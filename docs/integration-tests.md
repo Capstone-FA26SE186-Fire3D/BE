@@ -12,7 +12,7 @@ Use the same isolated local server for all three; do not use the application's S
 
 ## Fixture contracts
 
-- EF `EnsureCreated` only creates mapped schema. Auth tests additionally execute `database/002_password_reset_recovery.sql` and `003_local_password.sql` in the newly created database.
+- Auth tests apply EF migrations to each disposable database, then additionally execute `database/002_password_reset_recovery.sql` and `003_local_password.sql`. This covers migration changes such as username constraints, but does not prove a shared or production database has been migrated.
 - Retry uses `Fire3D.IfcTests/retry-contract.sql`, containing the actual v6.7 hash/outbox/requeue functions and outbox table copied from Docs `fire_evacuation_schema.sql` at `addd4df`, plus the `current_attempt_id` column needed by the gate. The SQL runs through Npgsql, so braces in SQL regexes are not interpreted as EF format arguments.
 - This retry fixture checks store/gate/replay/audit integration against real PostgreSQL. It does **not** apply the complete production schema, security-definer ownership/grants, all triggers, dispatcher or consumer contracts. Synchronize the fixture when those source SQL functions change; passing tests are not proof of deployed Supabase schema or least-privilege permissions.
 - Test PostgreSQL enum mapping preserves label case. Seed data includes active users/tenants/buildings and required source-document fields.

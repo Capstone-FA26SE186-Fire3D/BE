@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -84,7 +85,7 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
             .Options;
         using (var db = new Fire3DDbContext(options))
         {
-            await db.Database.EnsureCreatedAsync();
+            await db.Database.MigrateAsync();
         }
         // Raw SQL auth recovery tables are not part of the EF model.
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "002_password_reset_recovery.sql")));
@@ -98,7 +99,11 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
             {
                 ["ConnectionStrings:DefaultConnection"] = testConnection,
                 ["Jwt:Issuer"] = "Fire3D.Tests", ["Jwt:Audience"] = "Fire3D.Tests.Client",
-                ["Jwt:SigningKey"] = signingKey, ["Logging:LogLevel:Default"] = "Critical"
+                ["Jwt:SigningKey"] = signingKey, ["Logging:LogLevel:Default"] = "Critical",
+                ["Mailgun:ApiKey"] = "test-key", ["Mailgun:Domain"] = "example.test",
+                ["Mailgun:From"] = "noreply@example.test",
+                ["Redis:Enabled"] = "false",
+                ["AuthEmail:WorkerEnabled"] = "false"
             };
             web.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(settings));
             web.ConfigureServices(services =>
@@ -110,6 +115,7 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
                 services.RemoveAll<IDbContextOptionsConfiguration<Fire3DDbContext>>();
                 services.AddDatabase(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
                 services.AddDataProtection().UseEphemeralDataProtectionProvider();
+                services.RemoveAll<IHostedService>();
             });
         });
         var previousFirebaseApp = FirebaseAdmin.FirebaseApp.DefaultInstance;
@@ -151,7 +157,7 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
     [PostgresFact]
     public async Task Provisioning_requires_admin_and_enforces_role_organization_rules()
     {
-        var request = new CreateAccountRequest("trainee@example.test", password, "Trainee", UserRole.Trainee, null);
+        var request = new CreateAccountRequest("trainee@example.test", password, "Trainee", UserRole.Trainee, null, "trainee");
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/accounts", request, Json)).StatusCode);
         var admin = await LoginAsync();
         client.DefaultRequestHeaders.Authorization = new("Bearer", admin.AccessToken);

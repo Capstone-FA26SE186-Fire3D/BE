@@ -17,6 +17,7 @@ public interface IAuthStore
     Task<int> CountActiveAdminsAsync(CancellationToken ct);
     Task<bool> OrganizationIsActiveAsync(Guid id, CancellationToken ct);
     Task<bool> TryCreateUserAsync(User user, CancellationToken ct);
+    Task<RegisterConflict> TryCreateTraineeAsync(User user, CancellationToken ct);
     Task UpdateUserAsync(User user, CancellationToken ct);
     Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct);
     Task<bool> UpsertDeviceAsync(Guid userId, string deviceUuid, string? fcmToken, string? deviceModel, string? osVersion, CancellationToken ct);
@@ -40,7 +41,7 @@ public interface IAuthStore
     Task EnqueuePasswordResetAsync(string email, CancellationToken ct);
 }
 
-public enum RegisterConflict { None, SlugTaken, EmailTaken }
+public enum RegisterConflict { None, SlugTaken, EmailTaken, UsernameTaken }
 
 public interface IPasswordService
 {

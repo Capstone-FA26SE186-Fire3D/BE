@@ -731,6 +731,10 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<string>("Address")
+                        .HasColumnType("text")
+                        .HasColumnName("address");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -756,6 +760,15 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("plan")
                         .HasDefaultValueSql("'free'::character varying");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("phone");
+
+                    b.Property<Guid?>("RegistrationOwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("registration_owner_user_id");
 
                     b.Property<string>("Slug")
                         .IsRequired()
@@ -3057,6 +3070,10 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("email_verified_at");
 
+                    b.Property<DateTime?>("RegistrationExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("registration_expires_at");
+
                     b.Property<string>("FirebaseUid")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
@@ -3102,6 +3119,11 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Property<UserRole>("Role")
                         .HasColumnType("user_role_enum")
                         .HasColumnName("role");
+
+                    b.Property<string>("Username")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("username");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()

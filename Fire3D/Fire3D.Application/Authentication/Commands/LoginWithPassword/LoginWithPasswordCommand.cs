@@ -28,6 +28,10 @@ public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordS
         if (!passwords.Verify(user, command.Password, out var rehash)) return InvalidCredentials();
         if (!await AuthSupport.IsActiveAsync(store, user, ct))
             return AuthResult<LoginResponse>.Fail("ACCOUNT_DISABLED", "Account or organization is unavailable.", 403);
+        if (AuthSupport.RegistrationHasExpired(user, AuthSupport.UtcNow(clock)))
+            return AuthResult<LoginResponse>.Fail("REGISTRATION_EXPIRED", "This unverified registration has expired. Register again to receive a new link.", 403);
+        if (AuthSupport.IsPendingEmailVerification(user))
+            return AuthResult<LoginResponse>.Fail("EMAIL_NOT_VERIFIED", "Verify your email before signing in.", 403);
         if (rehash)
         {
             user.PasswordHash = passwords.Hash(user, command.Password);

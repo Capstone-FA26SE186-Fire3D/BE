@@ -2,16 +2,28 @@ using MediatR;
 
 namespace Fire3D.Application.Authentication;
 
-public sealed record VerificationEmailJob(Guid Id, string Email, Guid LeaseToken, int Attempt);
+public sealed record VerificationEmailJob(Guid Id, Guid UserId, string Email, Guid LeaseToken, int Attempt);
 
 public interface IEmailVerificationQueue
 {
+    /// <summary>Queues the initial verification job in the caller's registration transaction.</summary>
+    Task EnqueueAsync(Guid userId, string email, CancellationToken ct);
+    /// <summary>Compatibility overload for existing requests; it only queues eligible pending registrations.</summary>
     Task EnqueueAsync(string email, CancellationToken ct);
     Task<VerificationEmailJob?> ClaimAsync(CancellationToken ct);
     Task<string?> CreateLinkAsync(VerificationEmailJob job, CancellationToken ct);
+    Task<bool> CanDeliverAsync(VerificationEmailJob job, CancellationToken ct);
     Task CompleteAsync(VerificationEmailJob job, CancellationToken ct);
     Task FailAsync(VerificationEmailJob job, bool permanent, CancellationToken ct);
     Task<bool> VerifyAsync(string token, CancellationToken ct);
+}
+
+public sealed record VerificationRateLimitDecision(bool Allowed, TimeSpan? RetryAfter = null, bool Unavailable = false);
+
+public interface IEmailVerificationRateLimiter
+{
+    Task<VerificationRateLimitDecision> CheckRegistrationAsync(string email, string remoteIp, CancellationToken ct);
+    Task<VerificationRateLimitDecision> CheckResendAsync(string email, string remoteIp, CancellationToken ct);
 }
 
 public sealed record ResendVerificationCommand(string Email) : IRequest<AuthResult<bool>>;

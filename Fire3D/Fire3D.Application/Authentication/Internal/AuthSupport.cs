@@ -1,4 +1,5 @@
 using System.Net.Mail;
+using Fire3D.Application.Authentication.Commands.SelfRegistration;
 using Fire3D.Domain.Entities;
 using Fire3D.Domain.Enums;
 
@@ -10,9 +11,14 @@ internal static class AuthSupport
         IPasswordService passwords, TimeProvider clock, CreateAccountRequest request, User? actor, CancellationToken ct, Guid? correlationId = null)
     {
         var email = AuthSupport.NormalizeEmail(request.Email);
+        var username = request.Role == UserRole.Trainee
+            ? SelfRegistrationValidation.NormalizeUsername(request.Username)
+            : request.Username is null ? null : SelfRegistrationValidation.NormalizeUsername(request.Username);
         if (email is null || request.Password is null || request.Password.Length is < 12 or > 128
             || string.IsNullOrWhiteSpace(request.Password) || request.FullName?.Length > 200
-            || request.Role is null || !Enum.IsDefined(request.Role.Value))
+            || request.Role is null || !Enum.IsDefined(request.Role.Value)
+            || (request.Role == UserRole.Trainee && username is null)
+            || (request.Role != UserRole.Trainee && request.Username is not null && username is null))
             return AuthResult<AccountResponse>.Fail("VALIDATION_ERROR", "Use a valid email, a 12–128 character password, and a valid role/name.", 400);
         if ((request.Role == UserRole.OrganizationUser) != request.OrganizationId.HasValue)
             return AuthResult<AccountResponse>.Fail("INVALID_ORGANIZATION", "Only OrganizationUser must have an organization.", 400);
@@ -20,7 +26,7 @@ internal static class AuthSupport
         var user = new User
         {
             Id = Guid.NewGuid(), Email = email, FullName = request.FullName?.Trim(),
-            Role = request.Role.Value, OrganizationId = request.OrganizationId,
+            Role = request.Role.Value, OrganizationId = request.OrganizationId, Username = username,
             IsActive = true, CreatedAt = now, UpdatedAt = now
         };
         user.PasswordHash = passwords.Hash(user, request.Password);
@@ -35,7 +41,13 @@ internal static class AuthSupport
         // Recheck inside the transaction, serialized against organization deactivation.
         if (request.OrganizationId is Guid org && !await store.OrganizationIsActiveAsync(org, ct))
             return AuthResult<AccountResponse>.Fail("INVALID_ORGANIZATION", "Organization is unavailable.", 400);
-        if (!await store.TryCreateUserAsync(user, ct))
+        if (user.Role == UserRole.Trainee)
+        {
+            var conflict = await store.TryCreateTraineeAsync(user, ct);
+            if (conflict != RegisterConflict.None)
+                return SelfRegistrationValidation.Conflict<AccountResponse>(conflict);
+        }
+        else if (!await store.TryCreateUserAsync(user, ct))
             return AuthResult<AccountResponse>.Fail("EMAIL_EXISTS", "Email is already registered.", 409);
         await store.WriteAuditAsync(actor ?? user, "Create", user.Id, now, ct, correlationId);
         if (transaction is not null) await transaction.CommitAsync(ct);
@@ -67,7 +79,14 @@ internal static class AuthSupport
         return new DateTime(now.Ticks - now.Ticks % 10, DateTimeKind.Utc);
     }
     internal static AccountResponse ToAccount(User user) => new(user.Id, user.Email, user.FullName, user.Role, user.OrganizationId,
-        user.Dob, user.Gender, user.PhoneNumber, user.AvatarUrl, user.IsActive, user.LastLoginAt, user.CreatedAt, user.UpdatedAt, user.EmailVerifiedAt);
+        user.Username, user.Dob, user.Gender, user.PhoneNumber, user.AvatarUrl, user.IsActive,
+        user.LastLoginAt, user.CreatedAt, user.UpdatedAt, user.EmailVerifiedAt, user.RegistrationExpiresAt);
+
+    internal static bool IsPendingEmailVerification(User user) =>
+        user.RegistrationExpiresAt.HasValue && !user.EmailVerifiedAt.HasValue;
+
+    internal static bool RegistrationHasExpired(User user, DateTime now) =>
+        IsPendingEmailVerification(user) && user.RegistrationExpiresAt <= now;
     internal static AuthResult<TokenResponse> InvalidCredentials() => AuthResult<TokenResponse>.Fail("INVALID_CREDENTIALS", "Invalid email or password.", 401);
     internal static AuthResult<TokenResponse> InvalidRefresh() => AuthResult<TokenResponse>.Fail("INVALID_REFRESH_TOKEN", "Refresh token is invalid or expired.", 401);
     internal static string? NormalizeEmail(string? input)

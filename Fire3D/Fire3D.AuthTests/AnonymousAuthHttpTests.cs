@@ -36,12 +36,13 @@ public class AnonymousAuthHttpTests
             return route switch {
                 "login" => (object)Task.FromResult(AuthResult<LoginResponse>.Ok(new("access","refresh",account))),
                 "register" => Task.FromResult(AuthResult<AccountResponse>.Ok(account)),
-                "login-firebase" => Task.FromResult(AuthResult<TokenResponse>.Ok(new("access","refresh",account))),
+                "login-firebase" => Task.FromResult(AuthResult<GoogleExchangeResponse>.Ok(new("Authenticated",new("access","refresh",account)))),
                 _ => Task.FromResult(AuthResult<bool>.Ok(true))
             };
         });
         var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> {
-            ["Jwt:Issuer"]="test",["Jwt:Audience"]="test",["Jwt:SigningKey"]=Convert.ToBase64String(new byte[64])
+            ["Jwt:Issuer"]="test",["Jwt:Audience"]="test",["Jwt:SigningKey"]=Convert.ToBase64String(new byte[64]),
+            ["Redis:Enabled"]="false"
         }).Build();
         using var host=await new HostBuilder().ConfigureWebHost(web=>web.UseTestServer().ConfigureServices(services=> {
             services.AddLogging();services.AddRouting();
@@ -56,7 +57,7 @@ public class AnonymousAuthHttpTests
         using var client=host.GetTestClient();
         if(badBearer)client.DefaultRequestHeaders.Authorization=new AuthenticationHeaderValue("Bearer","invalid-expired-token");
         object body=route=="login-firebase" ? "firebase-id-token" : new {
-            email="user@example.test",password="StrongPassword12!",fullName="Test",token=new string('a',64),newPassword="Replacement12!"
+            email="user@example.test",username="test-user",password="StrongPassword12!",confirmPassword="StrongPassword12!",fullName="Test",token=new string('a',64),newPassword="Replacement12!"
         };
         var response=await client.PostAsJsonAsync("/api/auth/"+route,body);
         Assert.Equal(status,(int)response.StatusCode);Assert.Equal(1,calls);

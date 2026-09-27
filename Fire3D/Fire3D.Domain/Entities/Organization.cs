@@ -11,6 +11,10 @@ public partial class Organization
 
     public string Slug { get; set; } = null!;
 
+    public string? Address { get; set; }
+
+    public string? PhoneNumber { get; set; }
+
     public string Plan { get; set; } = null!;
 
     public bool IsActive { get; set; }
@@ -22,6 +26,9 @@ public partial class Organization
     public DateTime UpdatedAt { get; set; }
 
     public DateTime? DeletedAt { get; set; }
+
+    /// <summary>Initial owner of an organization created through pending self-registration.</summary>
+    public Guid? RegistrationOwnerUserId { get; set; }
 
     public virtual ICollection<Building> Buildings { get; set; } = new List<Building>();
 

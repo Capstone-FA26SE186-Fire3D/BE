@@ -2,6 +2,8 @@ using Fire3D.API.Extensions;
 using Fire3D.API.Configuration;
 using Fire3D.Application.Authentication.Commands.BootstrapAdmin;
 using MediatR;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,6 +13,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddAccountAuthentication(builder.Configuration);
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    foreach (var value in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+    {
+        if (!IPAddress.TryParse(value, out var address))
+            throw new InvalidOperationException("ForwardedHeaders:KnownProxies must contain only IP addresses.");
+        options.KnownProxies.Add(address);
+    }
+});
 
 
 builder.Services.AddControllers().AddJsonOptions(options =>
@@ -65,8 +78,21 @@ if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
 }
 
 app.UseExceptionHandler();
+app.UseForwardedHeaders();
 
 // Configure the HTTP request pipeline.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/verify-email") || context.Request.Path.StartsWithSegments("/check-email"))
+    {
+        context.Response.Headers.CacheControl = "no-store, max-age=0";
+        context.Response.Headers.Pragma = "no-cache";
+        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'self'";
+    }
+    await next();
+});
+app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapOpenApi();
 

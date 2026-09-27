@@ -9,6 +9,7 @@ using Fire3D.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Fire3D.API.Extensions;
@@ -33,11 +34,29 @@ public static class AuthenticationExtensions
         services.AddScoped<IPasswordResetStore, PasswordResetStore>();
         services.AddScoped<IPasswordResetQueue, PasswordResetQueue>();
         services.AddScoped<IEmailVerificationQueue, EmailVerificationQueue>();
+        services.AddOptions<RedisOptions>().Bind(configuration.GetSection(RedisOptions.SectionName));
+        var redisOptions = configuration.GetSection(RedisOptions.SectionName).Get<RedisOptions>() ?? new RedisOptions();
+        if (redisOptions.Enabled && !string.IsNullOrWhiteSpace(redisOptions.Configuration))
+        {
+            services.AddSingleton<IConnectionMultiplexer>(_ =>
+            {
+                var settings = ConfigurationOptions.Parse(redisOptions.Configuration);
+                if (!string.IsNullOrWhiteSpace(redisOptions.Password)) settings.Password = redisOptions.Password;
+                if (redisOptions.Ssl.HasValue) settings.Ssl = redisOptions.Ssl.Value;
+                settings.AbortOnConnectFail = false;
+                settings.ConnectRetry = 1;
+                settings.ConnectTimeout = 2_000;
+                settings.SyncTimeout = 2_000;
+                return ConnectionMultiplexer.Connect(settings);
+            });
+        }
+        services.AddSingleton<IEmailVerificationRateLimiter, RedisVerificationRateLimiter>();
         services.AddExceptionHandler<PasswordResetExceptionHandler>();
         services.AddHttpClient<IPasswordResetProvider, FirebasePasswordResetProvider>(client => client.Timeout = TimeSpan.FromSeconds(15))
             .RemoveAllLoggers();
         services.AddHostedService<Fire3D.Infrastructure.Workers.PasswordResetWorker>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.EmailVerificationWorker>();
+        services.AddHostedService<Fire3D.Infrastructure.Workers.PendingRegistrationCleanupWorker>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
