@@ -14,7 +14,7 @@
   button.addEventListener('click', async () => {
     button.disabled = true;
     try {
-      const response = await fetch('/api/auth/verify-email', {
+      const response = await fetch(new URL('../api/auth/verify-email', location.href), {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
         body: JSON.stringify({ token })
       });

@@ -41,8 +41,8 @@ public static class AuthenticationExtensions
             services.AddSingleton<IConnectionMultiplexer>(_ =>
             {
                 var settings = ConfigurationOptions.Parse(redisOptions.Configuration);
-                settings.Password = redisOptions.Password;
-                settings.Ssl = redisOptions.Ssl;
+                if (!string.IsNullOrWhiteSpace(redisOptions.Password)) settings.Password = redisOptions.Password;
+                if (redisOptions.Ssl.HasValue) settings.Ssl = redisOptions.Ssl.Value;
                 settings.AbortOnConnectFail = false;
                 settings.ConnectRetry = 1;
                 settings.ConnectTimeout = 2_000;

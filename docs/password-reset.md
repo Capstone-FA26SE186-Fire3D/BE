@@ -70,6 +70,8 @@ Các script SQL này cần chạy riêng, không được thay bằng EF EnsureC
 - `AuthEmail__FrontendUrl`: HTTPS base URL (localhost HTTP cho dev), không query/fragment.
 - `AuthEmail__VerificationUrl`: URL public phục vụ `/verify-email/`; nên đặt bằng origin API khi dùng trang xác minh do BE cung cấp. Nếu bỏ trống, hệ thống dùng `FrontendUrl` để tương thích cấu hình cũ.
 - `AuthEmail__WorkerEnabled`: true để gửi email, false khi test không cần worker.
+- `Redis__Configuration`: Redis endpoint hoặc connection string. Có thể chứa `password=` và `ssl=`; chỉ dùng `Redis__Password` hoặc `Redis__Ssl` khi muốn ghi đè riêng hai giá trị đó.
+- `ForwardedHeaders__KnownProxies__0`: IP của reverse proxy tin cậy. Cần cấu hình khi API chạy sau Nginx để rate limit dùng IP client thật; không tin header do client trực tiếp gửi.
 - `Mailgun__ApiKey`, `Mailgun__Domain`, `Mailgun__From`, `Mailgun__BaseUrl`: Mailgun.
 - Firebase Admin credential: chỉ cần cho Google; secret JSON, section hoặc file local.
   Email/password/reset local không cần Firebase Web API key hoặc lời gọi Firebase.

@@ -4,7 +4,7 @@ document.querySelector('#form').addEventListener('submit', async event => {
   const button = event.currentTarget.querySelector('button');
   button.disabled = true;
   try {
-    const response = await fetch('/api/auth/resend-verification', {
+    const response = await fetch(new URL('../api/auth/resend-verification', location.href), {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
       body: JSON.stringify({ email: document.querySelector('#email').value })
     });

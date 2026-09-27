@@ -4,10 +4,13 @@ using Fire3D.Domain.Enums;
 using Fire3D.Infrastructure.Authentication;
 using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using Npgsql.NameTranslation;
 using Xunit;
+using Fire3D.Infrastructure.Workers;
 namespace Fire3D.AuthTests;
 
 // Explicit opt-in: never fall back to appsettings or a developer/production database.
@@ -49,6 +52,11 @@ public sealed class PasswordResetPostgresTests
                   last_login_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
                   updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz,
                   registration_expires_at timestamptz);
+                CREATE TABLE organizations (
+                  id uuid PRIMARY KEY, registration_owner_user_id uuid NULL);
+                CREATE TABLE buildings (id uuid PRIMARY KEY, organization_id uuid NOT NULL);
+                CREATE TABLE sessions (id uuid PRIMARY KEY, trainee_user_id uuid NULL);
+                CREATE TABLE user_devices (id uuid PRIMARY KEY, user_id uuid NULL);
                 CREATE TABLE auth_refresh_tokens (
                   id uuid PRIMARY KEY,user_id uuid REFERENCES users(id),family_id uuid NOT NULL,
                   token_hash varchar(64) NOT NULL UNIQUE,created_at timestamptz NOT NULL,expires_at timestamptz NOT NULL,
@@ -182,6 +190,56 @@ public sealed class PasswordResetPostgresTests
         Assert.True(await verifyQueue.VerifyAsync(raw.ToUpperInvariant(), default));
         Assert.False(await verifyQueue.VerifyAsync(raw, default));
         Assert.Equal(1L, await database.Sql("SELECT count(*) FROM users WHERE id='" + userId + "' AND email_verified_at IS NOT NULL"));
+    }
+
+    [ResetPostgresFact]
+    public async Task Concurrent_verification_of_two_active_tokens_has_one_winner_without_deadlock()
+    {
+        await using var database = await Database.Create();
+        var userId = Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role,registration_expires_at) VALUES ('{userId}','parallel@example.com','Trainee',now()+interval '2 hours')");
+        var settings = Options.Create(new AuthEmailOptions { FrontendUrl = "https://app.example.test" });
+        await using var setup = database.Context();
+        var queue = new EmailVerificationQueue(setup, settings);
+        await queue.EnqueueAsync(userId, "parallel@example.com", default);
+        var job = Assert.IsType<VerificationEmailJob>(await queue.ClaimAsync(default));
+        var first = await queue.CreateLinkAsync(job, default);
+        var second = await queue.CreateLinkAsync(job, default);
+        var firstToken = new Uri(first!).Fragment["#token=".Length..];
+        var secondToken = new Uri(second!).Fragment["#token=".Length..];
+
+        var outcomes = await Task.WhenAll(Enumerable.Range(0, 2).Select(async index =>
+        {
+            await using var context = database.Context();
+            return await new EmailVerificationQueue(context, settings).VerifyAsync(index == 0 ? firstToken : secondToken, default);
+        }));
+
+        Assert.Equal(1, outcomes.Count(result => result));
+        Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM users WHERE id='{userId}' AND email_verified_at IS NOT NULL"));
+    }
+
+    [ResetPostgresFact]
+    public async Task Cleanup_removes_only_the_organization_owned_by_the_expired_registration()
+    {
+        await using var database = await Database.Create();
+        var ownedOrganization = Guid.NewGuid();
+        var owner = Guid.NewGuid();
+        var retainedOrganization = Guid.NewGuid();
+        var retainedUser = Guid.NewGuid();
+        await database.Sql($"INSERT INTO organizations(id,registration_owner_user_id) VALUES ('{ownedOrganization}','{owner}'),('{retainedOrganization}','{Guid.NewGuid()}')");
+        await database.Sql($"INSERT INTO users(id,organization_id,email,role,registration_expires_at) VALUES ('{owner}','{ownedOrganization}','expired-owner@example.com','Trainee',now()-interval '1 second'),('{retainedUser}','{retainedOrganization}','expired-retained@example.com','Trainee',now()-interval '1 second')");
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddScoped<Fire3DDbContext>(_ => database.Context());
+        await using var provider = services.BuildServiceProvider();
+        var worker = new PendingRegistrationCleanupWorker(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            provider.GetRequiredService<ILogger<PendingRegistrationCleanupWorker>>());
+
+        Assert.Equal(2, await worker.DeleteBatchAsync(default));
+        Assert.Equal(0L, await database.Sql($"SELECT count(*) FROM users WHERE id IN ('{owner}','{retainedUser}')"));
+        Assert.Equal(0L, await database.Sql($"SELECT count(*) FROM organizations WHERE id='{ownedOrganization}'"));
+        Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM organizations WHERE id='{retainedOrganization}'"));
     }
     [ResetPostgresFact]
     public async Task Lease_recovery_fences_stale_ack_and_retries_with_backoff()

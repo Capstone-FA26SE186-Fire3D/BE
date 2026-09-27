@@ -14,7 +14,7 @@ public sealed class RedisOptions
     public string KeyPrefix { get; set; } = "fire3d";
     public string? KeyHashSecret { get; set; }
     public string? Password { get; set; }
-    public bool Ssl { get; set; }
+    public bool? Ssl { get; set; }
     public bool Enabled { get; set; } = true;
 }
 

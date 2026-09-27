@@ -141,6 +141,16 @@ public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmai
         if (string.IsNullOrWhiteSpace(token) || token.Length != 64 || !token.All(Uri.IsHexDigit)) return false;
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var hash = Hash(token.ToLowerInvariant());
+        // Serialize token consumption, resend and delivery per account before taking the token row.
+        // Taking two different token locks before the shared account row can deadlock concurrent
+        // verification requests after a retry has minted more than one active token.
+        var tokenUserId = await db.Database.SqlQuery<Guid>($"""
+            SELECT user_id AS "Value" FROM public.email_verification_tokens
+             WHERE token_hash={hash} AND used_at IS NULL AND expires_at>now()
+            """).SingleOrDefaultAsync(ct);
+        if (tokenUserId == Guid.Empty) return false;
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:verification-account:" + tokenUserId}, 0))", ct);
         await using var command = new NpgsqlCommand("""
             UPDATE public.email_verification_tokens t SET used_at=now()
               FROM public.users u
