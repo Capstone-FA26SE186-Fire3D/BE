@@ -68,6 +68,7 @@ Các script SQL này cần chạy riêng, không được thay bằng EF EnsureC
 - `ConnectionStrings__DefaultConnection`: PostgreSQL backend connection.
 - `Jwt__Issuer`, `Jwt__Audience`, `Jwt__SigningKey`: JWT Fire3D; signing key base64 đủ độ dài.
 - `AuthEmail__FrontendUrl`: HTTPS base URL (localhost HTTP cho dev), không query/fragment.
+- `AuthEmail__VerificationUrl`: URL public phục vụ `/verify-email/`; nên đặt bằng origin API khi dùng trang xác minh do BE cung cấp. Nếu bỏ trống, hệ thống dùng `FrontendUrl` để tương thích cấu hình cũ.
 - `AuthEmail__WorkerEnabled`: true để gửi email, false khi test không cần worker.
 - `Mailgun__ApiKey`, `Mailgun__Domain`, `Mailgun__From`, `Mailgun__BaseUrl`: Mailgun.
 - Firebase Admin credential: chỉ cần cho Google; secret JSON, section hoặc file local.

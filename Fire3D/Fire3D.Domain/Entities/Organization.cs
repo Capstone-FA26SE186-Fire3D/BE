@@ -27,6 +27,9 @@ public partial class Organization
 
     public DateTime? DeletedAt { get; set; }
 
+    /// <summary>Initial owner of an organization created through pending self-registration.</summary>
+    public Guid? RegistrationOwnerUserId { get; set; }
+
     public virtual ICollection<Building> Buildings { get; set; } = new List<Building>();
 
     public virtual ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();

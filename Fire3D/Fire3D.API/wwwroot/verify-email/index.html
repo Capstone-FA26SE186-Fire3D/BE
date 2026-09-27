@@ -3,21 +3,9 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="referrer" content="no-referrer"><meta http-equiv="Cache-Control" content="no-store">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Xác minh email | Fire3D</title>
   <style>body{margin:0;background:#f4f6f9;font:16px Arial,sans-serif;color:#202124}.card{max-width:480px;margin:9vh auto;background:#fff;padding:36px;border-radius:10px;box-shadow:0 2px 12px #0002}h1{color:#c62828}a{color:#b71c1c}#status{line-height:1.6}</style>
 </head>
-<body><main class="card"><h1>🔥 Fire3D</h1><h2>Xác minh email</h2><p id="status">Đang xác minh liên kết của bạn…</p><p><a href="/check-email/">Gửi lại liên kết xác minh</a></p></main>
-<script>
-(() => {
-  const status = document.querySelector('#status');
-  const fragment = new URLSearchParams(location.hash.slice(1));
-  const legacy = new URLSearchParams(location.search);
-  const token = fragment.get('token') || legacy.get('token');
-  if (legacy.has('token')) history.replaceState(null, '', location.pathname + '#token=' + encodeURIComponent(token || ''));
-  if (!token || !/^[a-f0-9]{64}$/i.test(token)) { status.textContent = 'Liên kết xác minh không hợp lệ. Hãy yêu cầu gửi lại email.'; return; }
-  fetch('/api/auth/verify-email', {method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-store'},body:JSON.stringify({token})})
-    .then(r => { if (r.status === 204) { status.textContent = 'Email đã được xác minh. Bạn có thể đăng nhập.'; history.replaceState(null,'',location.pathname); return; } throw new Error(); })
-    .catch(() => { status.textContent = 'Liên kết đã hết hạn, đã dùng hoặc không hợp lệ. Hãy yêu cầu gửi lại email.'; });
-})();
-</script></body></html>
+<body><main class="card"><h1>🔥 Fire3D</h1><h2>Xác minh email</h2><p id="status">Đang kiểm tra liên kết của bạn…</p><button id="verify" type="button" hidden>Xác minh email</button><p><a href="/check-email/">Gửi lại liên kết xác minh</a></p></main>
+<script src="/verify-email/app.js" defer></script></body></html>

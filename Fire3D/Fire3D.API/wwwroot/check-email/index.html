@@ -3,16 +3,9 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="referrer" content="no-referrer"><meta http-equiv="Cache-Control" content="no-store">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'self'">
   <title>Kiểm tra email | Fire3D</title>
   <style>body{margin:0;background:#f4f6f9;font:16px Arial,sans-serif;color:#202124}.card{max-width:480px;margin:9vh auto;background:#fff;padding:36px;border-radius:10px;box-shadow:0 2px 12px #0002}h1,button{color:#fff;background:#c62828}h1{margin:-36px -36px 28px;padding:24px;font-size:25px}input,button{box-sizing:border-box;width:100%;padding:12px;margin:8px 0;border-radius:5px}input{border:1px solid #bbb}button{border:0;font-weight:bold;cursor:pointer}#status{min-height:24px;line-height:1.5}</style>
 </head>
 <body><main class="card"><h1>🔥 Fire3D</h1><h2>Chưa nhận được email?</h2><p>Nhập email đã đăng ký để nhận lại liên kết xác minh.</p><form id="form"><input id="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"><button type="submit">Gửi lại liên kết</button></form><p id="status" aria-live="polite"></p></main>
-<script>
-document.querySelector('#form').addEventListener('submit', async event => {
-  event.preventDefault(); const status=document.querySelector('#status'), button=event.currentTarget.querySelector('button'); button.disabled=true;
-  try { const response=await fetch('/api/auth/resend-verification',{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-store'},body:JSON.stringify({email:document.querySelector('#email').value})});
-    if(response.status===429){status.textContent='Bạn đã yêu cầu quá nhiều lần. Vui lòng thử lại sau.';} else if(response.ok){status.textContent='Nếu tài khoản đang chờ xác minh, liên kết mới sẽ được gửi đến email này.';} else {status.textContent='Không thể gửi yêu cầu lúc này. Vui lòng thử lại sau.';}
-  } catch { status.textContent='Không thể gửi yêu cầu lúc này. Vui lòng thử lại sau.'; } finally {button.disabled=false;}
-});
-</script></body></html>
+<script src="/check-email/app.js" defer></script></body></html>

@@ -722,6 +722,10 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("phone");
 
+                    b.Property<Guid?>("RegistrationOwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("registration_owner_user_id");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasColumnType("text")

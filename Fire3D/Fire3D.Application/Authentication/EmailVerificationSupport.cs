@@ -12,6 +12,7 @@ public interface IEmailVerificationQueue
     Task EnqueueAsync(string email, CancellationToken ct);
     Task<VerificationEmailJob?> ClaimAsync(CancellationToken ct);
     Task<string?> CreateLinkAsync(VerificationEmailJob job, CancellationToken ct);
+    Task<bool> CanDeliverAsync(VerificationEmailJob job, CancellationToken ct);
     Task CompleteAsync(VerificationEmailJob job, CancellationToken ct);
     Task FailAsync(VerificationEmailJob job, bool permanent, CancellationToken ct);
     Task<bool> VerifyAsync(string token, CancellationToken ct);

@@ -67,6 +67,18 @@ if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
 app.UseExceptionHandler();
 
 // Configure the HTTP request pipeline.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/verify-email") || context.Request.Path.StartsWithSegments("/check-email"))
+    {
+        context.Response.Headers.CacheControl = "no-store, max-age=0";
+        context.Response.Headers.Pragma = "no-cache";
+        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'self'";
+    }
+    await next();
+});
+app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapOpenApi();
 

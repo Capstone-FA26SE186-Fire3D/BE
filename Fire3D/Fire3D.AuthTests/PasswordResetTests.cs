@@ -124,4 +124,13 @@ public class PasswordResetTests
         Assert.Equal("https://app.example.test/reset-password?mode=resetPassword&oobCode=opaque%2Bcode",await p.GenerateResetLinkAsync("a@example.test",default));
         password=false;Assert.True((await Assert.ThrowsAsync<PasswordResetException>(()=>p.GenerateResetLinkAsync("a@example.test",default))).Permanent);
     }
+    [Fact]
+    public void Verification_page_url_uses_explicit_public_origin_or_legacy_frontend()
+    {
+        Assert.Equal("https://app.example.test", new AuthEmailOptions { FrontendUrl = "https://app.example.test/" }.GetVerificationPageBaseUrl());
+        Assert.Equal("https://api.example.test/fire3d", new AuthEmailOptions {
+            FrontendUrl = "https://app.example.test", VerificationUrl = "https://api.example.test/fire3d/"
+        }.GetVerificationPageBaseUrl());
+        Assert.Throws<InvalidOperationException>(() => new AuthEmailOptions { VerificationUrl = "https://api.example.test/?token=bad" }.GetVerificationPageBaseUrl());
+    }
 }

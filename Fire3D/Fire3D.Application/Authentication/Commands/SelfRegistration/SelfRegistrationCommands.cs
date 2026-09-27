@@ -74,6 +74,7 @@ public sealed class RegisterOrganizationCommandHandler(IAuthStore store, IPasswo
             OrganizationId = organization.Id, IsActive = true, CreatedAt = now, UpdatedAt = now,
             RegistrationExpiresAt = now.AddHours(2)
         };
+        organization.RegistrationOwnerUserId = user.Id;
         user.PasswordHash = passwords.Hash(user, command.Password);
         await using var transaction = await store.BeginUserTransactionAsync(user.Id, ct);
         var conflict = await store.TryCreateOrganizationWithUserAsync(organization, user, ct);

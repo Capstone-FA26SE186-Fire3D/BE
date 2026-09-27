@@ -38,11 +38,17 @@ public static class AuthenticationExtensions
         var redisOptions = configuration.GetSection(RedisOptions.SectionName).Get<RedisOptions>() ?? new RedisOptions();
         if (redisOptions.Enabled && !string.IsNullOrWhiteSpace(redisOptions.Configuration))
         {
-            services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(new ConfigurationOptions
+            services.AddSingleton<IConnectionMultiplexer>(_ =>
             {
-                EndPoints = { redisOptions.Configuration }, AbortOnConnectFail = false, ConnectRetry = 1,
-                ConnectTimeout = 2_000, SyncTimeout = 2_000
-            }));
+                var settings = ConfigurationOptions.Parse(redisOptions.Configuration);
+                settings.Password = redisOptions.Password;
+                settings.Ssl = redisOptions.Ssl;
+                settings.AbortOnConnectFail = false;
+                settings.ConnectRetry = 1;
+                settings.ConnectTimeout = 2_000;
+                settings.SyncTimeout = 2_000;
+                return ConnectionMultiplexer.Connect(settings);
+            });
         }
         services.AddSingleton<IEmailVerificationRateLimiter, RedisVerificationRateLimiter>();
         services.AddExceptionHandler<PasswordResetExceptionHandler>();

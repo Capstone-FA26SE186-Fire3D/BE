@@ -13,6 +13,8 @@ public sealed class RedisOptions
     public string? Configuration { get; set; }
     public string KeyPrefix { get; set; } = "fire3d";
     public string? KeyHashSecret { get; set; }
+    public string? Password { get; set; }
+    public bool Ssl { get; set; }
     public bool Enabled { get; set; } = true;
 }
 
@@ -20,11 +22,27 @@ public sealed class RedisOptions
 public sealed class RedisVerificationRateLimiter(IServiceProvider services,
     IOptions<RedisOptions> configured) : IEmailVerificationRateLimiter
 {
-    private const string Increment = """
-        local value = redis.call('INCR', KEYS[1])
-        if value == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
-        if value > tonumber(ARGV[2]) then return redis.call('TTL', KEYS[1]) end
-        return 0
+    private const string CheckAndIncrement = """
+        local blocked = redis.call('TTL', KEYS[7])
+        if blocked > 0 then return {2, blocked} end
+        for i=1,5 do
+          local value = tonumber(redis.call('GET', KEYS[i]) or '0')
+          local limit = tonumber(ARGV[(i - 1) * 2 + 2])
+          if value >= limit then
+            local rejected = redis.call('INCR', KEYS[6])
+            if rejected == 1 then redis.call('EXPIRE', KEYS[6], 300) end
+            if rejected >= 20 then
+              redis.call('SET', KEYS[7], '1', 'EX', 900)
+              return {2, 900}
+            end
+            return {1, redis.call('TTL', KEYS[i])}
+          end
+        end
+        for i=1,5 do
+          local value = redis.call('INCR', KEYS[i])
+          if value == 1 then redis.call('EXPIRE', KEYS[i], tonumber(ARGV[(i - 1) * 2 + 1])) end
+        end
+        return {0, 0}
         """;
     private readonly RedisOptions options = configured.Value;
 
@@ -44,20 +62,18 @@ public sealed class RedisVerificationRateLimiter(IServiceProvider services,
             var db = multiplexer.GetDatabase();
             var emailKey = Hash("email", email);
             var ipKey = Hash("ip", remoteIp);
-            var retry = 0L;
-            foreach (var (bucket, seconds, limit) in new[]
-            {
-                ("minute", 60, 1), ("hour", 3600, 3), ("day", 86400, 5)
-            })
-                retry = Math.Max(retry, (long)await db.ScriptEvaluateAsync(Increment,
-                    [Key(operation, bucket, emailKey)], [seconds, limit]));
-            foreach (var (bucket, seconds, limit) in new[]
-            {
-                ("minute", 60, 10), ("hour", 3600, 50)
-            })
-                retry = Math.Max(retry, (long)await db.ScriptEvaluateAsync(Increment,
-                    [Key(operation, bucket, ipKey)], [seconds, limit]));
-            return retry > 0 ? new(false, TimeSpan.FromSeconds(Math.Max(1, retry))) : new(true);
+            var scriptResult = await db.ScriptEvaluateAsync(CheckAndIncrement,
+                [
+                    Key(operation, "minute", emailKey), Key(operation, "hour", emailKey), Key(operation, "day", emailKey),
+                    Key(operation, "minute", ipKey), Key(operation, "hour", ipKey),
+                    Key(operation, "rejections", ipKey), Key(operation, "blocked", ipKey)
+                ],
+                [60, 1, 3600, 3, 86400, 5, 60, 10, 3600, 50]);
+            var result = scriptResult.IsNull ? null : (RedisResult[]?)scriptResult;
+            if (result is not { Length: 2 }) return new(false, Unavailable: true);
+            var outcome = (int)result[0];
+            var retry = Math.Max(1, (int)result[1]);
+            return outcome == 0 ? new(true) : new(false, TimeSpan.FromSeconds(retry));
         }
         catch (RedisException)
         {

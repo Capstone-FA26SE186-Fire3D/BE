@@ -45,9 +45,6 @@ public sealed class PendingRegistrationCleanupWorker(IServiceScopeFactory scopes
                  AND NOT EXISTS (SELECT 1 FROM public.sessions s WHERE s.trainee_user_id=u.id)
                ORDER BY u.registration_expires_at
                FOR UPDATE SKIP LOCKED LIMIT {BatchSize}
-            ), removed_audit AS (
-              DELETE FROM public.audit_logs a USING candidates c
-               WHERE a.user_id=c.id AND a.target_id=c.id AND a.target_entity='users' AND a.action='Create'
             ), removed_tokens AS (
               DELETE FROM public.email_verification_tokens t USING candidates c WHERE t.user_id=c.id
             ), removed_jobs AS (
@@ -56,19 +53,17 @@ public sealed class PendingRegistrationCleanupWorker(IServiceScopeFactory scopes
               DELETE FROM public.auth_refresh_tokens r USING candidates c WHERE r.user_id=c.id
             ), removed_devices AS (
               DELETE FROM public.user_devices d USING candidates c WHERE d.user_id=c.id
+            ), removed_users AS (
+              DELETE FROM public.users u USING candidates c
+               WHERE u.id=c.id
+              RETURNING u.id, u.organization_id
             )
-            DELETE FROM public.users u USING candidates c
-             WHERE u.id=c.id
-            """, ct);
-
-        // Only the organization created by the expired OrganizationUser is eligible. Existing
-        // organizations and any organization containing a second account are preserved.
-        await db.Database.ExecuteSqlRawAsync("""
             DELETE FROM public.organizations o
-             WHERE NOT EXISTS (SELECT 1 FROM public.users u WHERE u.organization_id=o.id)
+             USING removed_users u
+             WHERE o.id=u.organization_id
+               AND o.registration_owner_user_id=u.id
+               AND NOT EXISTS (SELECT 1 FROM public.users member WHERE member.organization_id=o.id)
                AND NOT EXISTS (SELECT 1 FROM public.buildings b WHERE b.organization_id=o.id)
-               AND o.slug LIKE 'org-%'
-               AND o.created_at <= now() - interval '2 hours';
             """, ct);
         await transaction.CommitAsync(ct);
         if (deleted > 0) logger.LogInformation("Deleted {Count} expired pending registrations.", deleted);

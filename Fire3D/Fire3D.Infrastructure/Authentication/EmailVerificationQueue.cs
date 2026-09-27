@@ -102,6 +102,8 @@ public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmai
     public async Task<string?> CreateLinkAsync(VerificationEmailJob job, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:verification-account:" + job.UserId}, 0))", ct);
         var ownsLease = await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM public.email_verification_jobs
               WHERE id={job.Id} AND user_id={job.UserId} AND status='Leased'
@@ -123,8 +125,16 @@ public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmai
             VALUES ({Guid.NewGuid()},{user.Id},{hash},LEAST({user.RegistrationExpiresAt!.Value}, now()+interval '15 minutes'))
             """, ct);
         await transaction.CommitAsync(ct);
-        return options.Value.FrontendUrl.TrimEnd('/') + "/verify-email#token=" + raw;
+        return options.Value.GetVerificationPageBaseUrl() + "/verify-email#token=" + raw;
     }
+
+    public Task<bool> CanDeliverAsync(VerificationEmailJob job, CancellationToken ct) =>
+        db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM public.email_verification_jobs
+              WHERE id={job.Id} AND user_id={job.UserId} AND status='Leased'
+                AND lease_token={job.LeaseToken} AND lease_until>now()
+                AND generation=(SELECT MAX(generation) FROM public.email_verification_jobs WHERE user_id={job.UserId})) AS "Value"
+            """).SingleAsync(ct);
 
     public async Task<bool> VerifyAsync(string token, CancellationToken ct)
     {

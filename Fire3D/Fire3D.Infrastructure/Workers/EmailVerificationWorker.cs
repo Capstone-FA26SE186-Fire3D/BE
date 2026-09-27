@@ -27,7 +27,7 @@ public sealed class EmailVerificationWorker(IServiceScopeFactory scopes, IOption
                 try
                 {
                     var link = await queue.CreateLinkAsync(job, timeout.Token);
-                    if (link is not null)
+                    if (link is not null && await queue.CanDeliverAsync(job, timeout.Token))
                     {
                         var verifyUrl = WebUtility.HtmlEncode(link);
                         var html = $"""

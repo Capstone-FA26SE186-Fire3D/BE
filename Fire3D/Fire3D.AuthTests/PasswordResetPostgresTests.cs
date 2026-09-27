@@ -45,9 +45,10 @@ public sealed class PasswordResetPostgresTests
                 CREATE TYPE audit_action_enum AS ENUM ('Update','Login');
                 CREATE TABLE users (
                   id uuid PRIMARY KEY, organization_id uuid, email text NOT NULL, firebase_uid text,
-                  full_name text, dob date, gender text, phone_number varchar(32), avatar_url varchar(2048), password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
+                  full_name text, username varchar(30), dob date, gender text, phone_number varchar(32), avatar_url varchar(2048), password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
                   last_login_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
-                  updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz);
+                  updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz,
+                  registration_expires_at timestamptz);
                 CREATE TABLE auth_refresh_tokens (
                   id uuid PRIMARY KEY,user_id uuid REFERENCES users(id),family_id uuid NOT NULL,
                   token_hash varchar(64) NOT NULL UNIQUE,created_at timestamptz NOT NULL,expires_at timestamptz NOT NULL,
@@ -60,6 +61,7 @@ public sealed class PasswordResetPostgresTests
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"002_password_reset_recovery.sql")));
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"003_local_password.sql")));
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"005_email_verification.sql")));
+            await db.Sql("ALTER TABLE email_verification_jobs ADD COLUMN user_id uuid, ADD COLUMN generation integer NOT NULL DEFAULT 1;");
             return db;
         }
         private DbContextOptions<Fire3DDbContext>? contextOptions;
@@ -95,7 +97,7 @@ public sealed class PasswordResetPostgresTests
         // Minimal test enum only needs the extra label for registration audit.
         await database.Sql("ALTER TYPE audit_action_enum ADD VALUE IF NOT EXISTS 'Create'");
         var register=new Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommandHandler(accounts,passwords,ResetProxy.For<Fire3D.Application.Authentication.IEmailVerificationQueue>((_,_)=>Task.CompletedTask),TimeProvider.System);
-        var created=await register.Handle(new(" USER@EXAMPLE.TEST ","OriginalPassword12!","Test User"),default);
+        var created=await register.Handle(new(" USER@EXAMPLE.TEST ","OriginalPassword12!","Test User","test-user","OriginalPassword12!"),default);
         Assert.True(created.IsSuccess,created.Error?.Message);
         var user=await accounts.FindUserByEmailAsync("user@example.test",default);
         Assert.NotNull(user);Assert.Null(user.FirebaseUid);Assert.NotEqual("OriginalPassword12!",user.PasswordHash);
@@ -103,6 +105,8 @@ public sealed class PasswordResetPostgresTests
         var tokens=new TokenService(Microsoft.Extensions.Options.Options.Create(new JwtOptions {
             Issuer="test",Audience="test",SigningKey=Convert.ToBase64String(new byte[64]) }));
         var login=new Fire3D.Application.Authentication.Commands.LoginWithPassword.LoginWithPasswordCommandHandler(accounts,passwords,tokens,TimeProvider.System);
+        Assert.Equal("EMAIL_NOT_VERIFIED", (await login.Handle(new("USER@example.test","OriginalPassword12!"),default)).Error?.Code);
+        await database.Sql("UPDATE users SET email_verified_at=now(), registration_expires_at=NULL WHERE id='" + user.Id + "'");
         Assert.True((await login.Handle(new("USER@example.test","OriginalPassword12!"),default)).IsSuccess);
         Assert.True((await login.Handle(new("user@example.test","OriginalPassword12!"),default)).IsSuccess);
         Assert.Equal(401,(await login.Handle(new("user@example.test","wrong"),default)).Error?.Status);
@@ -147,13 +151,13 @@ public sealed class PasswordResetPostgresTests
     {
         await using var database = await Database.Create();
         var userId = Guid.NewGuid();
-        await database.Sql($"INSERT INTO users(id,email,role) VALUES ('{userId}','verify@example.com','Trainee')");
+        await database.Sql($"INSERT INTO users(id,email,role,registration_expires_at) VALUES ('{userId}','verify@example.com','Trainee',now()+interval '2 hours')");
         var settings = Options.Create(new AuthEmailOptions { FrontendUrl = "https://app.example.test" });
 
         await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
         {
             await using var context = database.Context();
-            await new EmailVerificationQueue(context, settings).EnqueueAsync("verify@example.com", default);
+            await new EmailVerificationQueue(context, settings).EnqueueAsync(userId, "verify@example.com", default);
         }));
         Assert.Equal(1L, await database.Sql("SELECT count(*) FROM email_verification_jobs"));
 
@@ -169,7 +173,7 @@ public sealed class PasswordResetPostgresTests
         Assert.Null(await firstQueue.CreateLinkAsync(first, default));
 
         var link = await secondQueue.CreateLinkAsync(second, default);
-        var raw = System.Web.HttpUtility.ParseQueryString(new Uri(link!).Query)["token"]!;
+        var raw = new Uri(link!).Fragment["#token=".Length..];
         Assert.Equal(64, raw.Length);
         Assert.NotEqual(raw, await database.Sql("SELECT token_hash FROM email_verification_tokens LIMIT 1"));
 
