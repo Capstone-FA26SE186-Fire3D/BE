@@ -4,6 +4,9 @@ using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 namespace Fire3D.Infrastructure.Ifc;
 public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
 {
@@ -119,7 +122,9 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        var revision = await db.Revisions.Include(r => r.SourceDocument)
+        var revision = await db.Revisions
+            .Include(r => r.Building)
+            .Include(r => r.SourceDocument)
             .FirstOrDefaultAsync(r => r.Id == revisionId, ct);
             
         if (revision == null || (actorTenantId.HasValue && revision.OrganizationId != actorTenantId.Value))
@@ -127,6 +132,8 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
 
         if (revision.SourceDocument == null)
             return AuthResult<Guid>.Fail("VALIDATION_ERROR", "Revision does not have a source document to process.", 400);
+        if (!IsSha256(revision.SourceDocument.Sha256Hash))
+            return AuthResult<Guid>.Fail("VALIDATION_ERROR", "The source document must have a valid SHA-256 hash before processing.", 400);
 
         // Check if there is an existing job
         var existingJob = await db.ProcessingJobs.FirstOrDefaultAsync(j => j.RevisionId == revisionId, ct);
@@ -142,7 +149,7 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
             Kind = "ProcessIfc",
             JobKey = Guid.NewGuid(),
             Status = "Queued",
-            InputHash = revision.SourceDocument.Sha256Hash ?? "unknown_hash",
+            InputHash = revision.SourceDocument.Sha256Hash.ToLowerInvariant(),
             CreatedAt = DateTime.UtcNow
         };
         db.ProcessingJobs.Add(job);
@@ -151,7 +158,7 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         {
             Id = Guid.NewGuid(),
             UserId = actorId,
-            OrganizationId = revision.Building.OrganizationId,
+            OrganizationId = revision.OrganizationId,
             ActorType = "User",
             Action = Fire3D.Domain.Enums.AuditAction.Create,
             TargetEntity = "ProcessingJob",
@@ -165,11 +172,12 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         await db.SaveChangesAsync(ct);
 
         // Enqueue outbox event for Worker to pick up
-        var payload = $$"""{"job_id": "{{jobId}}", "revision_id": "{{revisionId}}", "source_url": "{{revision.SourceDocument.StorageUrl}}"}""";
+        var payload = JsonSerializer.Serialize(new ProcessingJobRequestedPayload(jobId, revisionId, revision.SourceDocument.StorageUrl));
+        var payloadHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
         await ScalarAsync("""
             INSERT INTO public.integration_outbox_events(idempotency_key, aggregate_type, aggregate_id, event_type, payload, status, schema_version, payload_hash, created_at)
-            VALUES (@id, 'ProcessingJob', @job, 'ProcessingJobRequested', @payload::jsonb, 'Pending', '1.0', 'hash', now())
-            """, ct, ("id", Guid.NewGuid()), ("job", jobId), ("payload", payload));
+            VALUES (@id, 'ProcessingJob', @job, 'ProcessingJobRequested', @payload::jsonb, 'Pending', '1.0', @payloadHash, now())
+            """, ct, ("id", Guid.NewGuid()), ("job", jobId), ("payload", payload), ("payloadHash", payloadHash));
 
         await transaction.CommitAsync(ct);
         return AuthResult<Guid>.Ok(jobId);
@@ -179,7 +187,7 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        var revision = await db.Revisions.FirstOrDefaultAsync(r => r.Id == revisionId, ct);
+        var revision = await db.Revisions.Include(r => r.Building).FirstOrDefaultAsync(r => r.Id == revisionId, ct);
         if (revision == null || (actorTenantId.HasValue && revision.OrganizationId != actorTenantId.Value))
             return AuthResult<bool>.Fail("NOT_FOUND", "Revision not found or access denied.", 404);
 
@@ -193,7 +201,7 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         {
             Id = Guid.NewGuid(),
             UserId = actorId,
-            OrganizationId = revision.Building.OrganizationId,
+            OrganizationId = revision.OrganizationId,
             ActorType = "User",
             Action = Fire3D.Domain.Enums.AuditAction.ConfirmForTraining,
             TargetEntity = "Revision",
@@ -210,6 +218,11 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         
         return AuthResult<bool>.Ok(true);
     }
+
+    private static bool IsSha256(string? value) => value is { Length: 64 }
+        && value.All(static character => (character is >= '0' and <= '9') || (character is >= 'a' and <= 'f') || (character is >= 'A' and <= 'F'));
+
+    private sealed record ProcessingJobRequestedPayload(Guid job_id, Guid revision_id, string source_url);
 }
 
 

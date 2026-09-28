@@ -20,7 +20,7 @@ public sealed class FinalizeIfcUploadHandler(IAuthStore accounts, IIfcWriteStore
         if (!scope.IsSuccess) return new(default, scope.Error);
 
         var request = command.Request;
-        if (request is null || string.IsNullOrWhiteSpace(request.ObjectKey) || request.FileSizeBytes <= 0 || string.IsNullOrWhiteSpace(request.Sha256Hash))
+        if (request is null || string.IsNullOrWhiteSpace(request.ObjectKey) || request.FileSizeBytes <= 0 || !IsSha256(request.Sha256Hash))
         {
             return AuthResult<bool>.Fail("VALIDATION_ERROR", "Invalid finalize parameters.", 400);
         }
@@ -35,4 +35,7 @@ public sealed class FinalizeIfcUploadHandler(IAuthStore accounts, IIfcWriteStore
         // Save SourceDocument
         return await store.FinalizeUploadAsync(command.ActorId, command.RevisionId, request, scope.Value!.OrganizationId, ct);
     }
+
+    private static bool IsSha256(string? value) => value is { Length: 64 }
+        && value.All(static character => (character is >= '0' and <= '9') || (character is >= 'a' and <= 'f') || (character is >= 'A' and <= 'F'));
 }
