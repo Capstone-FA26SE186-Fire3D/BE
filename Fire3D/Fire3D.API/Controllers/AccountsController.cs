@@ -6,7 +6,6 @@ using Fire3D.Application.Authentication;
 using Fire3D.Application.Authentication.Commands.CreateAccount;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 
 namespace Fire3D.API.Controllers;
 
@@ -17,7 +16,6 @@ public sealed class AccountsController(ISender sender) : AdministrationControlle
     /// Tạo mới một tài khoản (chỉ dành cho PlatformAdmin).
     /// </summary>
     [HttpPost]
-    [EnableRateLimiting("auth")]
     public async Task<ActionResult<AccountResponse>> Create(CreateAccountRequest request, CancellationToken ct)
     {
         var result = await sender.Send(new CreateAccountCommand(ActorId, request, NewCorrelationId()), ct);

@@ -17,7 +17,7 @@
 | Năng lực | Source hiện có | Khác biệt so với contract đích |
 |---|---|---|
 | Local registration | `POST /api/auth/register/trainee` tạo Trainee với username lowercase; `POST /api/auth/register/organization` tạo OrganizationUser và organization trong một transaction. `/api/auth/register` là alias Trainee cũ nhưng dùng cùng validation mới. Local self-registration phải xác minh email trong 2 giờ trước khi login. | Google onboarding/link và organization profile PATCH chưa hoàn tất |
-| Email verification | `POST /api/auth/resend-verification`, `POST /api/auth/verify-email`, email worker, trang `/verify-email/` và `/check-email/`; token dùng một lần, tối đa 15 phút; resend tạo delivery generation mới nhưng không hủy link đã phát hành; worker xóa đăng ký chưa xác minh sau 2 giờ. | Redis cần được cấu hình bắt buộc ngoài test; provider Mailgun production vẫn cần nghiệm thu riêng. |
+| Email verification | `POST /api/auth/resend-verification`, `POST /api/auth/verify-email`, email worker, trang `/verify-email/` và `/check-email/`; token dùng một lần, tối đa 15 phút; PostgreSQL giới hạn tạo delivery job resend một lần mỗi phút; worker xóa đăng ký chưa xác minh sau 2 giờ. | Provider Mailgun production vẫn cần nghiệm thu riêng. |
 | Local login/session | Login, refresh rotation, logout và `/api/auth/me` dùng Fire3D access/refresh token | Không đổi thành Firebase-only; rà response/client storage theo API guide |
 | Google | `POST /api/auth/login-firebase`; UID đã liên kết trả `Authenticated`, email local trùng trả `ACCOUNT_LINK_REQUIRED`, Google mới trả `OnboardingRequired` và không tự tạo tài khoản | Chưa có endpoint onboarding/link tường minh để hoàn tất chọn loại tài khoản |
 | Profile | `GET /api/auth/me` trả ETag từ `profileRevision`; `PATCH /api/auth/me`, avatar complete/delete và `POST /api/me/avatar/upload` yêu cầu `If-Match`. Route upload nhận multipart field `file`, stream ảnh hợp lệ trực tiếp lên S3 staging; PATCH chỉ sửa full name/username; avatar S3 copy theo source ETag và mỗi complete dùng final key riêng. | Chưa có organization profile PATCH, avatar decoder đầy đủ và orphan cleanup worker |
@@ -33,6 +33,8 @@ Chi tiết request/response hiện tại nằm ở [API guide](api-docs.md). Chi
 3. Giữ reset và change thành hai use case riêng nhưng dùng cùng chính sách transaction, token/session revoke và audit của Docs. Core transaction hiện có; đối chiếu mapping schema token và kiểm thử PostgreSQL trước khi coi luồng hoàn tất. Không dùng Firebase password reset cho local password.
 
 ## Quy tắc bảo mật
+
+Registration and profile validation return ProblemDetails 400 with a stable `code` of `VALIDATION_ERROR`, an `errors` map keyed by request field, and a `traceId`. Passwords, tokens, credentials and raw provider errors are never included in validation responses or logs.
 
 - Không lưu/trả password plaintext, password hash, reset token thô, Firebase Admin credential, access/refresh token trong log.
 - Không nhận role, organizationId, trạng thái hoặc actor tin cậy từ request của client.

@@ -10,8 +10,7 @@ using Npgsql;
 namespace Fire3D.Infrastructure.Authentication;
 
 /// <summary>
-/// PostgreSQL is the source of truth for verification work. Redis only limits requests and
-/// accelerates dispatch; a missing Redis connection must never cause this store to fabricate work.
+/// PostgreSQL is the source of truth for verification work and delivery recovery.
 /// </summary>
 public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmailOptions> options) : IEmailVerificationQueue
 {

@@ -21,7 +21,7 @@ chỉ cung cấp PostgreSQL; không dùng Supabase Auth. Firebase chỉ xác min
 Register chỉ tạo Trainee; client không chọn role/tenant. Email được trim/lowercase.
 Password mới 12–128 ký tự; fullName 1–200 ký tự. Sai mật khẩu/email không tồn tại
 cùng trả 401, tài khoản/organization bị khóa trả 403 sau khi xác minh mật khẩu.
-Các route anonymous có rate limit. Header Bearer sai không biến chúng thành route
+Các route anonymous không có rate limit BE riêng trong giai đoạn hiện tại. Header Bearer sai không biến chúng thành route
 bắt buộc đăng nhập; refresh vẫn yêu cầu refreshToken hợp lệ trong body.
 
 Google yêu cầu Firebase token xác minh được, chưa revoke, email_verified=true và
@@ -70,8 +70,6 @@ Các script SQL này cần chạy riêng, không được thay bằng EF EnsureC
 - `AuthEmail__FrontendUrl`: HTTPS base URL (localhost HTTP cho dev), không query/fragment.
 - `AuthEmail__VerificationUrl`: URL public phục vụ `/verify-email/`; nên đặt bằng origin API khi dùng trang xác minh do BE cung cấp. Nếu bỏ trống, hệ thống dùng `FrontendUrl` để tương thích cấu hình cũ.
 - `AuthEmail__WorkerEnabled`: true để gửi email, false khi test không cần worker.
-- `Redis__Configuration`: Redis endpoint hoặc connection string. Có thể chứa `password=` và `ssl=`; chỉ dùng `Redis__Password` hoặc `Redis__Ssl` khi muốn ghi đè riêng hai giá trị đó.
-- `ForwardedHeaders__KnownProxies__0`: IP của reverse proxy tin cậy. Cần cấu hình khi API chạy sau Nginx để rate limit dùng IP client thật; không tin header do client trực tiếp gửi.
 - `Mailgun__ApiKey`, `Mailgun__Domain`, `Mailgun__From`, `Mailgun__BaseUrl`: Mailgun.
 - Firebase Admin credential: chỉ cần cho Google; secret JSON, section hoặc file local.
   Email/password/reset local không cần Firebase Web API key hoặc lời gọi Firebase.

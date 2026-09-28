@@ -55,6 +55,23 @@ public sealed class SelfRegistrationTests
 
         Assert.Equal("VALIDATION_ERROR", result.Error?.Code);
         Assert.Equal(400, result.Error?.Status);
+        Assert.Equal("Mật khẩu xác nhận không khớp.", result.Error?.Errors?["confirmPassword"][0]);
+    }
+
+    [Fact]
+    public async Task Organization_registration_reports_each_invalid_field_before_persistence()
+    {
+        var store = ResetProxy.For<IAuthStore>((method, _) => throw new InvalidOperationException("Unexpected store operation: " + method));
+        var handler = new RegisterOrganizationCommandHandler(store, new PasswordService(), VerificationQueue(), TimeProvider.System);
+
+        var result = await handler.Handle(new("bad email", "short", "different", " ", " ", " ", "------"), default);
+
+        Assert.Equal("VALIDATION_ERROR", result.Error?.Code);
+        Assert.NotNull(result.Error?.Errors);
+        Assert.Contains("email", result.Error!.Errors!.Keys);
+        Assert.Contains("password", result.Error.Errors.Keys);
+        Assert.Contains("confirmPassword", result.Error.Errors.Keys);
+        Assert.Contains("organizationPhoneNumber", result.Error.Errors.Keys);
     }
 
     [Fact]
@@ -85,7 +102,7 @@ public sealed class SelfRegistrationTests
         Assert.NotNull(persistedOrganization);
         Assert.NotNull(persistedUser);
         Assert.Equal("1 Fire Street", persistedOrganization!.Address);
-        Assert.Equal("+84 123456789", persistedOrganization.PhoneNumber);
+        Assert.Equal("+84123456789", persistedOrganization.PhoneNumber);
         Assert.Equal(UserRole.OrganizationUser, persistedUser!.Role);
         Assert.Equal(persistedOrganization.Id, persistedUser.OrganizationId);
     }

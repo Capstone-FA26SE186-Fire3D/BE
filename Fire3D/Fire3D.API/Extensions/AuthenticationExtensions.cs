@@ -1,15 +1,14 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using Fire3D.API.Authorization;
 using System.Security.Claims;
-using System.Threading.RateLimiting;
 using Fire3D.Application.Authentication;
 using Fire3D.Application.Authentication.Queries.ValidateSession;
 using MediatR;
 using Fire3D.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using Microsoft.Extensions.Options;
-using StackExchange.Redis;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Fire3D.API.Extensions;
@@ -34,23 +33,6 @@ public static class AuthenticationExtensions
         services.AddScoped<IPasswordResetStore, PasswordResetStore>();
         services.AddScoped<IPasswordResetQueue, PasswordResetQueue>();
         services.AddScoped<IEmailVerificationQueue, EmailVerificationQueue>();
-        services.AddOptions<RedisOptions>().Bind(configuration.GetSection(RedisOptions.SectionName));
-        var redisOptions = configuration.GetSection(RedisOptions.SectionName).Get<RedisOptions>() ?? new RedisOptions();
-        if (redisOptions.Enabled && !string.IsNullOrWhiteSpace(redisOptions.Configuration))
-        {
-            services.AddSingleton<IConnectionMultiplexer>(_ =>
-            {
-                var settings = ConfigurationOptions.Parse(redisOptions.Configuration);
-                if (!string.IsNullOrWhiteSpace(redisOptions.Password)) settings.Password = redisOptions.Password;
-                if (redisOptions.Ssl.HasValue) settings.Ssl = redisOptions.Ssl.Value;
-                settings.AbortOnConnectFail = false;
-                settings.ConnectRetry = 1;
-                settings.ConnectTimeout = 2_000;
-                settings.SyncTimeout = 2_000;
-                return ConnectionMultiplexer.Connect(settings);
-            });
-        }
-        services.AddSingleton<IEmailVerificationRateLimiter, RedisVerificationRateLimiter>();
         services.AddExceptionHandler<PasswordResetExceptionHandler>();
         services.AddHttpClient<IPasswordResetProvider, FirebasePasswordResetProvider>(client => client.Timeout = TimeSpan.FromSeconds(15))
             .RemoveAllLoggers();
@@ -103,11 +85,6 @@ public static class AuthenticationExtensions
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true
-                }));
-            options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(
-                context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true
                 }));
         });
         return services;

@@ -18,11 +18,13 @@ public sealed record TokenResponse(string AccessToken, string RefreshToken, Acco
 public sealed record GoogleExchangeResponse(string Status, TokenResponse? Authentication = null);
 public sealed record ForgotPasswordRequest(string Email);
 public sealed record ResetPasswordRequest(Guid Token, string NewPassword);
-public sealed record AuthError(string Code, string Message, int Status);
+public sealed record AuthError(string Code, string Message, int Status,
+    IReadOnlyDictionary<string, string[]>? Errors = null);
 public sealed record AuthResult<T>(T? Value, AuthError? Error)
 {
     public bool IsSuccess => Error is null;
     public static AuthResult<T> Ok(T value) => new(value, null);
-    public static AuthResult<T> Fail(string code, string message, int status) =>
-        new(default, new(code, message, status));
+    public static AuthResult<T> Fail(string code, string message, int status,
+        IReadOnlyDictionary<string, string[]>? errors = null) =>
+        new(default, new(code, message, status, errors));
 }

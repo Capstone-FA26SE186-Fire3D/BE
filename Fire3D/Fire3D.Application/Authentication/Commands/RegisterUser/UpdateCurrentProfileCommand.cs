@@ -18,12 +18,18 @@ public sealed class UpdateCurrentProfileCommandHandler(IAuthStore store, TimePro
                 string.IsNullOrWhiteSpace(command.IfMatch) ? "Send the ETag from GET /api/auth/me in If-Match." : "If-Match must contain one quoted positive revision.",
                 string.IsNullOrWhiteSpace(command.IfMatch) ? 428 : 400);
 
-        var name = command.Request?.FullName?.Trim();
-        var username = command.Request?.Username is null ? null : SelfRegistrationValidation.NormalizeUsername(command.Request.Username);
-        if (command.UserId == Guid.Empty || command.Request is null || (name is null && command.Request.Username is null)
-            || (name is not null && (name.Length == 0 || name.Length > 200))
-            || (command.Request.Username is not null && username is null))
-            return AuthResult<AccountResponse>.Fail("VALIDATION_ERROR", "Provide a full name up to 200 characters and/or a valid username.", 400);
+        if (command.UserId == Guid.Empty || command.Request is null)
+            return AuthResult<AccountResponse>.Fail("VALIDATION_ERROR", "Dữ liệu hồ sơ không hợp lệ.", 400,
+                new Dictionary<string, string[]> { ["request"] = ["Cần gửi ít nhất một trường hồ sơ."] });
+
+        var name = command.Request.FullName?.Trim();
+        var username = command.Request.Username is null ? null : SelfRegistrationValidation.NormalizeUsername(command.Request.Username);
+        var errors = new Dictionary<string, string[]>();
+        if (name is null && command.Request.Username is null) errors["request"] = ["Cần gửi fullName hoặc username."];
+        if (command.Request.FullName is not null && (name is null || name.Length > 200)) errors["fullName"] = ["Họ tên không được rỗng và tối đa 200 ký tự."];
+        if (command.Request.Username is not null && username is null) errors["username"] = ["Username phải dài 3–30 ký tự, chỉ gồm a-z, số, dấu chấm, gạch dưới hoặc gạch ngang."];
+        if (errors.Count != 0)
+            return AuthResult<AccountResponse>.Fail("VALIDATION_ERROR", "Dữ liệu hồ sơ không hợp lệ.", 400, errors);
 
         await using var transaction = await store.BeginUserTransactionAsync(command.UserId, ct);
         var user = await store.FindUserAsync(command.UserId, ct);

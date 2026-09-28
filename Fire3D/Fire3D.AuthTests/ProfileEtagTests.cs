@@ -48,6 +48,17 @@ public sealed class ProfileEtagTests
         Assert.Equal(428, result.Error?.Status);
     }
 
+    [Fact]
+    public async Task Patch_profile_reports_invalid_username_by_field_before_accessing_the_store()
+    {
+        var store = ResetProxy.For<IAuthStore>((method, _) => throw new InvalidOperationException("Unexpected store operation: " + method));
+        var result = await new UpdateCurrentProfileCommandHandler(store, TimeProvider.System)
+            .Handle(new(Guid.NewGuid(), "\"1\"", new UpdateCurrentProfileRequest(null, "bad username")), default);
+
+        Assert.Equal("VALIDATION_ERROR", result.Error?.Code);
+        Assert.Equal("Username phải dài 3–30 ký tự, chỉ gồm a-z, số, dấu chấm, gạch dưới hoặc gạch ngang.", result.Error?.Errors?["username"][0]);
+    }
+
     private static Task<ProfileUpdateResult> AssertUpdate(object?[] args)
     {
         Assert.Equal(4L, args[1]);

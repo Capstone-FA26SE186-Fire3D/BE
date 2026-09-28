@@ -83,7 +83,7 @@ public class PasswordResetTests
         var sender=ResetProxy.For<ISender>((_,_)=>Task.FromResult(AuthResult<bool>.Fail("TEST","Test error",status)));
         var services=new ServiceCollection();services.AddLogging();services.AddControllers();
         using var sp=services.BuildServiceProvider();
-        var controller=new AuthController(sender, AllowVerification()){ControllerContext=new(){HttpContext=new DefaultHttpContext{RequestServices=sp}}};
+        var controller=new AuthController(sender){ControllerContext=new(){HttpContext=new DefaultHttpContext{RequestServices=sp}}};
         var result=reset?await controller.ResetPassword(new("code","LongPassword12!"),default):await controller.ForgotPassword(new("@"),default);
         var problem=Assert.IsType<ObjectResult>(result);Assert.Equal(status,problem.StatusCode);
         Assert.Equal("TEST",Assert.IsType<ProblemDetails>(problem.Value).Extensions["code"]);
@@ -92,14 +92,12 @@ public class PasswordResetTests
     public async Task Controllers_success_status(bool reset,int status)
     {
         var sender=ResetProxy.For<ISender>((_,_)=>Task.FromResult(AuthResult<bool>.Ok(true)));
-        var controller=new AuthController(sender, AllowVerification());
+        var controller=new AuthController(sender);
         var result=reset?await controller.ResetPassword(new("code","LongPassword12!"),default):await controller.ForgotPassword(new("a@example.test"),default);
         Assert.Equal(status,result is ObjectResult o?o.StatusCode:((StatusCodeResult)result).StatusCode);
     }
     private sealed class Transport(HttpStatusCode status,string body) : HttpMessageHandler
     { protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)=>Task.FromResult(new HttpResponseMessage(status){Content=new StringContent(body)}); }
-    private static IEmailVerificationRateLimiter AllowVerification() =>
-        ResetProxy.For<IEmailVerificationRateLimiter>((_, _) => Task.FromResult(new VerificationRateLimitDecision(true)));
     private static FirebasePasswordResetProvider Provider(HttpStatusCode status,string body) => new(new HttpClient(new Transport(status,body)),Unexpected<IAuthStore>(),
         Options.Create(new AuthEmailOptions{FirebaseApiKey="test",FrontendUrl="https://example.test"}),Unexpected<IFirebaseResetAdmin>());
     [Theory]

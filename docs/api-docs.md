@@ -21,7 +21,7 @@ Source hiện có **64 HTTP action** trong controller. Số lượng route khôn
 | `POST /api/auth/register` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/auth/register/trainee` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/auth/register/organization` | 201 AccountResponse | `/api/accounts/{id}` |
-| `POST /api/auth/resend-verification` | 202 Accepted | Generic response; 429 with `Retry-After`; 503 when Redis protection is unavailable |
+| `POST /api/auth/resend-verification` | 202 Accepted | Generic response; PostgreSQL cooldown prevents a new delivery job for one minute |
 | `POST /api/auth/verify-email` | 204 No Content | Token is single-use and expires after 15 minutes |
 | `POST /api/accounts` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/organizations` | 201 OrganizationResponse | `/api/organizations/{id}` |
@@ -70,7 +70,7 @@ Framework có thể thêm type/traceId/errors. Building CRUD, một số IFC com
 | 422 | Không xác minh được object upload |
 | 429 | Vượt rate limit |
 
-Policy auth: **10 request/phút/IP** cho sáu auth public endpoint và POST accounts. Policy administration: **120 request/phút/IP** cho administration và IFC commands; POST accounts dùng auth. Fixed window, không xếp hàng; không suy ra tất cả route đều dùng hai policy này.
+Policy administration: **120 request/phút/IP** cho administration và IFC commands. Auth không có rate-limit riêng trong BE hiện tại.
 
 Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. Search quản trị/building tối đa 200 ký tự. `Page<T>` bên dưới có dạng:
 
@@ -115,7 +115,7 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 
 BE hash password vào `users.password_hash`, không tạo tài khoản email/password trên Firebase. Trả **201 AccountResponse**, chưa đăng nhập; gọi login tiếp theo:
 
-Tài khoản tự đăng ký có 2 giờ để xác minh email. Trong thời gian chờ, login/refresh bị từ chối bằng `EMAIL_NOT_VERIFIED`; sau hạn dùng là `REGISTRATION_EXPIRED` và background worker xóa đăng ký chờ để có thể dùng lại email. `POST /api/auth/resend-verification` luôn trả 202 cho email hợp lệ để tránh dò tài khoản; Redis áp giới hạn theo email/IP và trả 429 cùng `Retry-After`, hoặc 503 khi Redis bắt buộc không hoạt động. Resend không gia hạn registration và không hủy token đã phát hành: mỗi token còn dùng được đến hạn riêng của nó, tối đa 15 phút. `POST /api/auth/verify-email` nhận `{ "token": "<64 hex>" }`, chỉ trả 204 khi token còn hạn và chưa dùng.
+Tài khoản tự đăng ký có 2 giờ để xác minh email. Trong thời gian chờ, login/refresh bị từ chối bằng `EMAIL_NOT_VERIFIED`; sau hạn dùng là `REGISTRATION_EXPIRED` và background worker xóa đăng ký chờ để có thể dùng lại email. `POST /api/auth/resend-verification` luôn trả 202 cho email hợp lệ để tránh dò tài khoản; PostgreSQL chỉ tạo delivery job mới khi chưa có job trong một phút. Resend không gia hạn registration và không hủy token đã phát hành: mỗi token còn dùng được đến hạn riêng của nó, tối đa 15 phút. `POST /api/auth/verify-email` nhận `{ "token": "<64 hex>" }`, chỉ trả 204 khi token còn hạn và chưa dùng.
 
 ```json
 {
