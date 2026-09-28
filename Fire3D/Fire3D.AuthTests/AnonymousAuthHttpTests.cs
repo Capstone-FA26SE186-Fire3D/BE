@@ -42,7 +42,6 @@ public class AnonymousAuthHttpTests
         });
         var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> {
             ["Jwt:Issuer"]="test",["Jwt:Audience"]="test",["Jwt:SigningKey"]=Convert.ToBase64String(new byte[64]),
-            ["Redis:Enabled"]="false"
         }).Build();
         using var host=await new HostBuilder().ConfigureWebHost(web=>web.UseTestServer().ConfigureServices(services=> {
             services.AddLogging();services.AddRouting();

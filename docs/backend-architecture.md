@@ -32,7 +32,7 @@ flowchart LR
     DB --> IFCWorker[IFC worker\nplanned consumer]
 ```
 
-The API is the only public entry point. Clients never receive database, Redis, S3, Firebase Admin, or Mailgun credentials. Authorization reloads role, organization and active state from PostgreSQL; it does not trust a tenant or role from the request body.
+The API is the only public entry point. Clients never receive database, S3, Firebase Admin, or Mailgun credentials. Authorization reloads role, organization and active state from PostgreSQL; it does not trust a tenant or role from the request body.
 
 ## Current IFC API path — partial implementation
 
@@ -73,7 +73,7 @@ flowchart LR
     Tx --> Aggregate[Business state + audit]
     Tx --> Outbox[(integration_outbox_events)]
     Outbox --> Dispatcher[Outbox dispatcher\nlease / retry]
-    Dispatcher --> Stream[Redis Stream or queue]
+    Dispatcher --> Queue[Durable queue]
     Stream --> Consumer[IFC / email / notification consumer]
     Consumer --> Gate[Backend-owned DB gate]
     Gate --> Effect[Business result + receipt in one transaction]

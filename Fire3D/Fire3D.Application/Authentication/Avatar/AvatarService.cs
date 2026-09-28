@@ -26,32 +26,71 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         return AuthResult<AvatarUploadIntentResponse>.Ok(new(intent.Id, url, intent.ExpiresAt));
     }
 
-    public async Task<AuthResult<AvatarResponse>> CompleteUploadAsync(Guid userId, CompleteAvatarUploadRequest request, CancellationToken ct)
+    public async Task<AuthResult<AvatarResponse>> UploadFileAsync(Guid userId, long expectedProfileRevision, string contentType, long contentLength, Stream content, CancellationToken ct)
     {
-        if (request is null || request.UploadId == Guid.Empty) return AuthResult<AvatarResponse>.Fail("VALIDATION_ERROR", "UploadId is required.", 400);
+        if (expectedProfileRevision < 1)
+            return AuthResult<AvatarResponse>.Fail("VALIDATION_ERROR", "A valid profile ETag is required.", 400);
+        if (content is null)
+            return AuthResult<AvatarResponse>.Fail("VALIDATION_ERROR", "Avatar file is required.", 400);
+
+        var intentResult = await CreateUploadIntentAsync(userId, new(contentType, contentLength), ct);
+        if (!intentResult.IsSuccess) return AuthResult<AvatarResponse>.Fail(intentResult.Error!.Code, intentResult.Error.Message, intentResult.Error.Status);
+
+        var intent = await avatarStore.FindUploadIntentAsync(intentResult.Value!.UploadId, userId, ct);
+        if (intent is null)
+            return AuthResult<AvatarResponse>.Fail("AVATAR_UPLOAD_UNAVAILABLE", "Avatar upload is unavailable.", 503);
+
+        try
+        {
+            await storage.UploadObjectAsync(intent.StagingObjectKey, content, contentLength, intent.ContentType, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            await TryDeleteAsync(intent.StagingObjectKey, ct);
+            return AuthResult<AvatarResponse>.Fail("AVATAR_UPLOAD_UNAVAILABLE", "Avatar upload failed. Try again.", 503);
+        }
+
+        var completed = await CompleteUploadAsync(userId, expectedProfileRevision, new(intent.Id), ct);
+        if (!completed.IsSuccess) await TryDeleteAsync(intent.StagingObjectKey, ct);
+        return completed;
+    }
+
+    public async Task<AuthResult<AvatarResponse>> CompleteUploadAsync(Guid userId, long expectedProfileRevision, CompleteAvatarUploadRequest request, CancellationToken ct)
+    {
+        if (request is null || request.UploadId == Guid.Empty || expectedProfileRevision < 1) return AuthResult<AvatarResponse>.Fail("VALIDATION_ERROR", "UploadId and a valid profile ETag are required.", 400);
         if (!await IsAvailableAsync(userId, ct)) return AuthResult<AvatarResponse>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
         var intent = await avatarStore.FindUploadIntentAsync(request.UploadId, userId, ct);
         var now = UtcNow();
         if (intent is null || intent.CompletedAt.HasValue || intent.ExpiresAt <= now)
             return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload is unavailable or expired.", 409);
         var metadata = await storage.GetObjectMetadataAsync(intent.StagingObjectKey, ct);
-        if (metadata is null || metadata.ContentLength != intent.ExpectedSizeBytes || !string.Equals(metadata.ContentType, intent.ContentType, StringComparison.OrdinalIgnoreCase))
+        if (metadata is null || string.IsNullOrWhiteSpace(metadata.ETag) || metadata.ContentLength != intent.ExpectedSizeBytes || !string.Equals(metadata.ContentType, intent.ContentType, StringComparison.OrdinalIgnoreCase))
             return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload metadata does not match the intent.", 400);
-        var prefix = await storage.ReadObjectPrefixAsync(intent.StagingObjectKey, 12, ct);
+        var prefix = await storage.ReadObjectPrefixAsync(intent.StagingObjectKey, 12, metadata.ETag, ct);
         var invalid = AvatarUploadRules.ValidateImageSignature(intent.ContentType, prefix ?? []);
         if (invalid is not null) return AuthResult<AvatarResponse>.Fail(invalid.Code, invalid.Message, 400);
-        var finalKey = $"avatars/users/{userId:N}/{intent.Id:N}";
-        await storage.CopyObjectAsync(intent.StagingObjectKey, finalKey, intent.ContentType, ct);
-        var finalized = await avatarStore.FinalizeUploadAsync(intent.Id, userId, finalKey, now, ct);
+        // A complete attempt must never share a destination key. A losing concurrent request can
+        // then remove only its own orphan without deleting the winner's stored avatar.
+        var finalKey = $"avatars/users/{userId:N}/{Guid.NewGuid():N}";
+        if (!await storage.CopyObjectIfUnchangedAsync(intent.StagingObjectKey, metadata.ETag, finalKey, intent.ContentType, ct))
+            return AuthResult<AvatarResponse>.Fail("AVATAR_UPLOAD_CHANGED", "Avatar upload changed before it could be completed. Upload again.", 409);
+        var completedAt = UtcNow();
+        var finalized = await avatarStore.FinalizeUploadAsync(intent.Id, userId, expectedProfileRevision, finalKey, completedAt, ct);
         if (!finalized.Finalized)
         {
             await TryDeleteAsync(finalKey, ct);
-            return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload is no longer available.", 409);
+            return finalized.Status == AvatarFinalizeStatus.PreconditionFailed
+                ? AuthResult<AvatarResponse>.Fail("PRECONDITION_FAILED", "The profile changed. Reload it and retry.", 412)
+                : AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload is no longer available.", 409);
         }
         await TryDeleteAsync(intent.StagingObjectKey, ct);
         if (!string.IsNullOrWhiteSpace(finalized.PreviousObjectKey)) await TryDeleteAsync(finalized.PreviousObjectKey, ct);
         var url = await storage.GeneratePresignedDownloadUrlAsync(finalKey, UrlLifetime, ct);
-        return AuthResult<AvatarResponse>.Ok(new(url, now.Add(UrlLifetime)));
+        return AuthResult<AvatarResponse>.Ok(new(url, completedAt.Add(UrlLifetime), expectedProfileRevision + 1));
     }
 
     public async Task<AuthResult<AvatarResponse>> GetAvatarAsync(Guid userId, CancellationToken ct)
@@ -61,13 +100,18 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         if (string.IsNullOrWhiteSpace(user.AvatarStorageKey)) return AuthResult<AvatarResponse>.Fail("AVATAR_NOT_FOUND", "Avatar is not set.", 404);
         var now = UtcNow();
         var url = await storage.GeneratePresignedDownloadUrlAsync(user.AvatarStorageKey, UrlLifetime, ct);
-        return AuthResult<AvatarResponse>.Ok(new(url, now.Add(UrlLifetime)));
+        return AuthResult<AvatarResponse>.Ok(new(url, now.Add(UrlLifetime), user.ProfileRevision));
     }
 
-    public async Task<AuthResult<object>> DeleteAvatarAsync(Guid userId, CancellationToken ct)
+    public async Task<AuthResult<object>> DeleteAvatarAsync(Guid userId, long expectedProfileRevision, CancellationToken ct)
     {
+        if (expectedProfileRevision < 1) return AuthResult<object>.Fail("VALIDATION_ERROR", "A valid profile ETag is required.", 400);
         if (!await IsAvailableAsync(userId, ct)) return AuthResult<object>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
-        var result = await avatarStore.DeleteAvatarAsync(userId, UtcNow(), ct);
+        var result = await avatarStore.DeleteAvatarAsync(userId, expectedProfileRevision, UtcNow(), ct);
+        if (result.Status == AvatarDeleteStatus.PreconditionFailed)
+            return AuthResult<object>.Fail("PRECONDITION_FAILED", "The profile changed. Reload it and retry.", 412);
+        if (result.Status == AvatarDeleteStatus.Unavailable)
+            return AuthResult<object>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
         if (result.Deleted && !string.IsNullOrWhiteSpace(result.PreviousObjectKey)) await TryDeleteAsync(result.PreviousObjectKey, ct);
         return AuthResult<object>.Ok(new { });
     }

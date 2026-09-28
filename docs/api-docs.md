@@ -21,7 +21,7 @@ Source hiện có **64 HTTP action** trong controller. Số lượng route khôn
 | `POST /api/auth/register` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/auth/register/trainee` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/auth/register/organization` | 201 AccountResponse | `/api/accounts/{id}` |
-| `POST /api/auth/resend-verification` | 202 Accepted | Generic response; 429 with `Retry-After`; 503 when Redis protection is unavailable |
+| `POST /api/auth/resend-verification` | 202 Accepted | Generic response; PostgreSQL cooldown prevents a new delivery job for one minute |
 | `POST /api/auth/verify-email` | 204 No Content | Token is single-use and expires after 15 minutes |
 | `POST /api/accounts` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/organizations` | 201 OrganizationResponse | `/api/organizations/{id}` |
@@ -70,7 +70,7 @@ Framework có thể thêm type/traceId/errors. Building CRUD, một số IFC com
 | 422 | Không xác minh được object upload |
 | 429 | Vượt rate limit |
 
-Policy auth: **10 request/phút/IP** cho sáu auth public endpoint và POST accounts. Policy administration: **120 request/phút/IP** cho administration và IFC commands; POST accounts dùng auth. Fixed window, không xếp hàng; không suy ra tất cả route đều dùng hai policy này.
+Policy administration: **120 request/phút/IP** cho administration và IFC commands. Auth không có rate-limit riêng trong BE hiện tại.
 
 Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. Search quản trị/building tối đa 200 ký tự. `Page<T>` bên dưới có dạng:
 
@@ -107,15 +107,18 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
   "username": "nguyen.van.a",
   "password": "Example-Password-2026!",
   "confirmPassword": "Example-Password-2026!",
-  "fullName": "Nguyen Van A"
+  "fullName": "Nguyen Van A",
+  "dob": "2000-01-02",
+  "gender": "PreferNotToSay",
+  "phoneNumber": "+84123456789"
 }
 ```
 
-`/api/auth/register/trainee` yêu cầu email hợp lệ tối đa 254 ký tự, username lowercase theo `[a-z0-9._-]{3,30}`, password 12–128 và confirmPassword trùng password; fullName tùy chọn, tối đa 200. Username unique không phân biệt hoa thường. Không gửi role/organizationId để cấp quyền.
+`/api/auth/register/trainee` yêu cầu email hợp lệ tối đa 254 ký tự, username lowercase theo `[a-z0-9._-]{3,30}`, password 12–128 và confirmPassword trùng password; fullName, dob, gender và phoneNumber là tùy chọn. Dob không được ở tương lai; gender là `Male`, `Female`, `Other` hoặc `PreferNotToSay`; phoneNumber có 6–15 chữ số, có thể bắt đầu bằng `+`. Username unique không phân biệt hoa thường. Không gửi role/organizationId để cấp quyền.
 
 BE hash password vào `users.password_hash`, không tạo tài khoản email/password trên Firebase. Trả **201 AccountResponse**, chưa đăng nhập; gọi login tiếp theo:
 
-Tài khoản tự đăng ký có 2 giờ để xác minh email. Trong thời gian chờ, login/refresh bị từ chối bằng `EMAIL_NOT_VERIFIED`; sau hạn dùng là `REGISTRATION_EXPIRED` và background worker xóa đăng ký chờ để có thể dùng lại email. `POST /api/auth/resend-verification` luôn trả 202 cho email hợp lệ để tránh dò tài khoản; Redis áp giới hạn theo email/IP và trả 429 cùng `Retry-After`, hoặc 503 khi Redis bắt buộc không hoạt động. Resend không gia hạn registration và không hủy token đã phát hành: mỗi token còn dùng được đến hạn riêng của nó, tối đa 15 phút. `POST /api/auth/verify-email` nhận `{ "token": "<64 hex>" }`, chỉ trả 204 khi token còn hạn và chưa dùng.
+Tài khoản tự đăng ký có 2 giờ để xác minh email. Trong thời gian chờ, login/refresh bị từ chối bằng `EMAIL_NOT_VERIFIED`; sau hạn dùng là `REGISTRATION_EXPIRED` và background worker xóa đăng ký chờ để có thể dùng lại email. `POST /api/auth/resend-verification` luôn trả 202 cho email hợp lệ để tránh dò tài khoản; PostgreSQL chỉ tạo delivery job mới khi chưa có job trong một phút. Resend không gia hạn registration và không hủy token đã phát hành: mỗi token còn dùng được đến hạn riêng của nó, tối đa 15 phút. `POST /api/auth/verify-email` nhận `{ "token": "<64 hex>" }`, chỉ trả 204 khi token còn hạn và chưa dùng.
 
 ```json
 {
@@ -130,7 +133,7 @@ Tài khoản tự đăng ký có 2 giờ để xác minh email. Trong thời gia
 
 Lỗi: 400 VALIDATION_ERROR, 409 EMAIL_EXISTS hoặc USERNAME_EXISTS. AccountResponse từ nguồn tạo khác có thể có fullName/username null.
 
-`POST /api/auth/register` là alias tương thích cho request Trainee cùng contract. `POST /api/auth/register/organization` nhận email/password/confirmPassword, fullName tùy chọn, organizationName, organizationAddress và organizationPhoneNumber; backend tạo owner `OrganizationUser` cùng organization trong một transaction.
+`POST /api/auth/register` là alias tương thích cho request Trainee cùng contract. `POST /api/auth/register/organization` nhận email/password/confirmPassword, organizationName, organizationAddress, organizationPhoneNumber và các trường hồ sơ tùy chọn fullName/dob/gender/phoneNumber; backend tạo owner `OrganizationUser` cùng organization trong một transaction.
 
 ### 2.2 Login local
 
@@ -203,7 +206,7 @@ Refresh không cần access token:
 
 Token không trống, tối đa 256. Thành công trả TokenResponse còn hai expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả 401 INVALID_REFRESH_TOKEN; replay token đã dùng có thể thu hồi cả family.
 
-Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại, không logout mọi thiết bị. `GET /api/auth/me` trả AccountResponse; `PATCH /api/auth/me` hiện sửa fullName cơ bản, không hỗ trợ username/ETag/avatar. `GET /api/organizations/me` đọc organization hiện tại; chưa có PATCH profile organization.
+Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại, không logout mọi thiết bị. `GET /api/auth/me` trả AccountResponse cùng `ETag: "<profileRevision>"`; `PATCH /api/auth/me` nhận header đó trong `If-Match`, sửa fullName và/hoặc username, rồi trả ETag mới. Avatar hỗ trợ `POST /api/me/avatar/upload` nhận `multipart/form-data` với field `file` (JPEG/PNG/WebP, tối đa 5 MiB) để test S3 qua BE; route bắt buộc `If-Match`, rồi stream lên private staging object và hoàn tất theo cùng luồng Avatar. `POST /api/me/avatar/complete` và `DELETE /api/me/avatar` cũng yêu cầu cùng If-Match; thiếu trả 428, ETag cũ trả 412. `GET /api/organizations/me` đọc organization hiện tại; chưa có PATCH profile organization.
 
 Devices upsert cho user hiện tại:
 
@@ -572,7 +575,7 @@ Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 40
 | Playtest prepare | Runtime hiện fail-closed 503 `ENTITLEMENT_UNAVAILABLE`; entitlement/trial, compatibility và launch grant chưa triển khai. Store legacy không được DI đăng ký. |
 | Playtest start | Runtime kiểm owner session trước khi delegate trạng thái/audit; chưa trả launch grant. |
 | Release/training | Đã có create-Built/read/revoke; runtime publish fail-closed 503 `PUBLISH_GATE_UNAVAILABLE` cho đến khi có gate. Còn thiếu package-build job và vòng đời Training/session. |
-| Auth | Local self-registration cho Trainee và OrganizationUser đã có username/confirm password/organization profile ban đầu; email verification đã có route, worker và thời hạn đăng ký chờ. Còn thiếu Google onboarding/link, profile ETag/avatar, organization PATCH và logout-all route riêng. Change Password và Forgot/Reset đã có route/handler. |
+| Auth | Local self-registration cho Trainee và OrganizationUser đã có username/confirm password/organization profile ban đầu; email verification đã có route, worker và thời hạn đăng ký chờ. `GET/PATCH /api/auth/me` và avatar complete/delete dùng profile ETag; avatar copy kiểm source ETag và final key riêng mỗi request. Còn thiếu Google onboarding/link, organization PATCH, avatar orphan cleanup/decoder và logout-all route riêng. Change Password và Forgot/Reset đã có route/handler. |
 | Token response | Login local, Firebase login và refresh đều không trả expiresAt |
 | Device | Validation và xử lý bool thất bại chưa đầy đủ; 200 không chứng minh FCM delivery |
 

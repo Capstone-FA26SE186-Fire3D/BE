@@ -21,7 +21,7 @@ public sealed class BearerSecuritySchemeTransformer : IOpenApiDocumentTransforme
         };
         foreach (var (path, item) in document.Paths)
         {
-            if (path is "/api/auth/login" or "/api/auth/login-firebase" or "/api/auth/register" or "/api/auth/refresh" or "/api/auth/forgot-password" or "/api/auth/reset-password") continue;
+            if (path is "/api/auth/login" or "/api/auth/login-firebase" or "/api/auth/register" or "/api/auth/register/trainee" or "/api/auth/register/organization" or "/api/auth/resend-verification" or "/api/auth/verify-email" or "/api/auth/refresh" or "/api/auth/forgot-password" or "/api/auth/reset-password") continue;
             if (item.Operations is null) continue;
             foreach (var operation in item.Operations.Values)
             {

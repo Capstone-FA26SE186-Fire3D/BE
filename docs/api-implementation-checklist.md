@@ -30,19 +30,19 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 ### AUTH-01 — P1 · PARTIAL · Đăng ký local
 
 - **Contract/current:** `POST /api/auth/register/trainee` và `/api/auth/register/organization` đã tạo đúng role/tenant server-owned. Migration `20260926085252_AddSelfRegistration` thêm username, organization address/phone, index unique lowercase và constraint cho Trainee mới. `/api/auth/register` vẫn là alias Trainee có validation username/confirm password.
-- **Còn thiếu:** Google onboarding/link, email verification, profile ETag và migration/backfill đầy đủ profile target không thuộc work item này.
+- **Còn thiếu:** Google onboarding/link và PATCH profile tổ chức. Email verification, `profile_revision`/ETag, đổi username và avatar intent/complete/delete đã có nhưng vẫn cần kiểm thử PostgreSQL/S3 thật.
 - **Nghiệm thu đã có:** HTTP/PostgreSQL disposable kiểm tra hai role, organization transaction và collision username khác hoa/thường. Còn cần test race concurrent cùng username và chuyển dữ liệu production trước khi đóng hoàn toàn.
 
 ### AUTH-02 — P0 · GAP · Google onboarding và link
 
-- **Contract/current:** [ExchangeFirebaseTokenCommand](../Fire3D/Fire3D.Application/Authentication/Commands/FirebaseLogin/ExchangeFirebaseTokenCommand.cs) xác minh Google nhưng tài khoản mới thành Trainee; chưa có onboarding chọn role hoặc link có chứng minh tài khoản local.
+- **Contract/current:** [ExchangeFirebaseTokenCommand](../Fire3D/Fire3D.Application/Authentication/Commands/FirebaseLogin/ExchangeFirebaseTokenCommand.cs) xác minh Google và trả `OnboardingRequired` cho identity mới; chưa có token/endpoint onboarding chọn role hoặc link có chứng minh tài khoản local.
 - **Sửa code:** Thêm onboarding token ngắn hạn, hoàn tất Trainee/OrganizationUser và link explicit sau khi xác thực local. Lưu hash/expiry và kết quả hoàn tất để retry cùng input trả kết quả đã commit.
 - **Nghiệm thu:** Kiểm tra UID mới/đã link, email local chưa link, token hết hạn, retry cùng/khác input và hai request đồng thời. Không tạo user/organization trùng hoặc đổi role/tenant tài khoản đã link.
 
-### AUTH-03 — P1 · GAP · Profile, ETag và avatar
+### AUTH-03 — P1 · PARTIAL · Profile, ETag và avatar
 
-- **Contract/current:** [UpdateCurrentProfileCommand](../Fire3D/Fire3D.Application/Authentication/Commands/RegisterUser/UpdateCurrentProfileCommand.cs) chỉ cập nhật full name; [OrganizationProfileController](../Fire3D/Fire3D.API/Controllers/OrganizationProfileController.cs) hiện chỉ GET. Docs yêu cầu profile revision/ETag.
-- **Sửa code:** Bổ sung GET/PATCH profile, username, avatar S3 intent/complete/delete và PATCH organization profile. GET trả ETag; cập nhật yêu cầu `If-Match`; ETag cũ bị từ chối. Chỉ nhận các trường profile được phép sửa.
+- **Contract/current:** `GET/PATCH /api/auth/me` trả/nhận ETag theo `profile_revision`; PATCH chỉ sửa full name/username. `/api/me/avatar` có intent/complete/GET/delete, complete copy theo S3 ETag và không dùng chung final key giữa các request. [OrganizationProfileController](../Fire3D/Fire3D.API/Controllers/OrganizationProfileController.cs) hiện chỉ GET.
+- **Còn thiếu:** PATCH organization profile, worker cleanup bền vững cho orphan S3 và kiểm tra giải mã ảnh thay vì chỉ magic bytes.
 - **Nghiệm thu:** Lưu thành công trả ETag mới; ETag cũ không ghi đè thay đổi; không sửa được role/email/tenant/status; username, organization scope và quyền sở hữu object S3 được kiểm tra.
 
 ### AUTH-04 — P1 · VERIFY · Reset và change password

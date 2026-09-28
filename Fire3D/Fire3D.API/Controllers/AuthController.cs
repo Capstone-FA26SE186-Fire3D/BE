@@ -6,14 +6,13 @@ using Fire3D.Application.Authentication.Queries.GetCurrentAccount;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 
 namespace Fire3D.API.Controllers;
 
 [ApiController]
 [Route("api/auth")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter verificationRateLimiter) : ControllerBase
+public sealed class AuthController(ISender sender) : ControllerBase
 {
     /// <summary>Đăng nhập email/password do BE quản lý. Không cần Bearer.</summary>
     /// <remarks>Body: email, password. BE kiểm tra hash trong PostgreSQL; không gọi Firebase.
@@ -21,12 +20,10 @@ public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter
     /// 403: tài khoản/tổ chức bị vô hiệu hóa; 429: vượt giới hạn yêu cầu.</remarks>
     [HttpPost("login")]
     [AllowAnonymous]
-    [EnableRateLimiting("auth")]
     [ProducesResponseType<LoginResponse>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]
-    [ProducesResponseType<ProblemDetails>(429)]
     public async Task<IActionResult> Login(
         [FromBody] Fire3D.Application.Authentication.Commands.LoginWithPassword.LoginWithPasswordCommand command,
         CancellationToken ct)
@@ -40,7 +37,6 @@ public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter
     /// </summary>
     [HttpPost("login-firebase")]
     [AllowAnonymous]
-    [EnableRateLimiting("auth")]
     public async Task<ActionResult> LoginFirebase([FromBody] string firebaseIdToken, CancellationToken ct)
     {
         var result = await sender.Send(new Fire3D.Application.Authentication.Commands.FirebaseLogin.ExchangeFirebaseTokenCommand(firebaseIdToken), ct);
@@ -53,66 +49,60 @@ public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter
 
     /// <summary>Deprecated Trainee registration alias. New clients should use /api/auth/register/trainee.</summary>
     [HttpPost("register")]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<AccountResponse>(201)]
     [AllowAnonymous]
-    [EnableRateLimiting("auth")]
     public Task<ActionResult<AccountResponse>> Register(
         [FromBody] Fire3D.Application.Authentication.Commands.SelfRegistration.RegisterTraineeCommand command,
         CancellationToken ct) => RegisterTrainee(command, ct);
 
     /// <summary>Registers a Trainee with a globally unique lowercase username.</summary>
     [HttpPost("register/trainee")]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<AccountResponse>(201)]
     [AllowAnonymous]
-    [EnableRateLimiting("auth")]
     public async Task<ActionResult<AccountResponse>> RegisterTrainee(
         [FromBody] Fire3D.Application.Authentication.Commands.SelfRegistration.RegisterTraineeCommand command,
         CancellationToken ct)
     {
-        var limited = await verificationRateLimiter.CheckRegistrationAsync(command.Email, RemoteIp(), ct);
-        if (!limited.Allowed) return VerificationRateLimitProblem(limited);
         var result = await sender.Send(command, ct);
         if (!result.IsSuccess)
         {
-            return Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+            return ResetProblem(result.Error!);
         }
         return Created($"/api/accounts/{result.Value!.Id}", result.Value);
     }
 
     /// <summary>Registers a new organization and its initial OrganizationUser owner atomically.</summary>
     [HttpPost("register/organization")]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<AccountResponse>(201)]
     [AllowAnonymous]
-    [EnableRateLimiting("auth")]
     public async Task<ActionResult<AccountResponse>> RegisterOrganization(
         [FromBody] Fire3D.Application.Authentication.Commands.SelfRegistration.RegisterOrganizationCommand command,
         CancellationToken ct)
     {
-        var limited = await verificationRateLimiter.CheckRegistrationAsync(command.Email, RemoteIp(), ct);
-        if (!limited.Allowed) return VerificationRateLimitProblem(limited);
         var result = await sender.Send(command, ct);
         if (!result.IsSuccess)
-            return Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+            return ResetProblem(result.Error!);
         return Created($"/api/accounts/{result.Value!.Id}", result.Value);
     }
 
     [HttpPost("resend-verification")]
     [AllowAnonymous]
-    [EnableRateLimiting("auth")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType<ProblemDetails>(400)]
     public async Task<IActionResult> ResendVerification([FromBody] Fire3D.Application.Authentication.ResendVerificationCommand command, CancellationToken ct)
     {
-        var limited = await verificationRateLimiter.CheckResendAsync(command.Email, RemoteIp(), ct);
-        if (!limited.Allowed) return VerificationRateLimitProblem(limited);
         var result = await sender.Send(command, ct);
         return result.IsSuccess ? Accepted() : ResetProblem(result.Error!);
     }
 
     [HttpPost("verify-email")]
     [AllowAnonymous]
-    [EnableRateLimiting("auth")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(400)]
     public async Task<IActionResult> VerifyEmail([FromBody] Fire3D.Application.Authentication.VerifyEmailCommand command, CancellationToken ct)
@@ -126,7 +116,6 @@ public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter
     /// </summary>
     [HttpPost("refresh")]
     [AllowAnonymous]
-    [EnableRateLimiting("auth")]
     public async Task<ActionResult<TokenResponse>> Refresh(RefreshRequest request, CancellationToken ct) =>
         Respond(await sender.Send(new RefreshTokenCommand(request.RefreshToken), ct));
 
@@ -149,7 +138,9 @@ public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter
     public async Task<ActionResult<AccountResponse>> Me(CancellationToken ct)
     {
         var account = await sender.Send(new GetCurrentAccountQuery(User.GetActorId()), ct);
-        return account is null ? Unauthorized() : Ok(account);
+        if (account is null) return Unauthorized();
+        Response.Headers.ETag = ProfileEtag.Format(account.ProfileRevision);
+        return Ok(account);
     }
 
     /// <summary>Updates the current account profile. Role, organization, identity provider and password are not mutable here.</summary>
@@ -159,11 +150,14 @@ public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(401)]
     public async Task<ActionResult<AccountResponse>> UpdateMe(
-        Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileRequest request, CancellationToken ct)
+        Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileRequest request,
+        [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
     {
         var result = await sender.Send(
-            new Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileCommand(User.GetActorId(), request), ct);
-        return result.IsSuccess ? Ok(result.Value) : ResetProblem(result.Error!);
+            new Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileCommand(User.GetActorId(), ifMatch, request), ct);
+        if (!result.IsSuccess) return ResetProblem(result.Error!);
+        Response.Headers.ETag = ProfileEtag.Format(result.Value!.ProfileRevision);
+        return Ok(result.Value);
     }
 
     /// <summary>
@@ -203,7 +197,6 @@ public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter
     /// qua link có thể đặt mật khẩu local, kể cả tài khoản trước đây chỉ dùng Firebase.</remarks>
     [HttpPost("forgot-password")]
     [AllowAnonymous]
-    [EnableRateLimiting("auth")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(429)]
@@ -223,7 +216,6 @@ public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter
     /// Không gửi mật khẩu/token vào log. Token Firebase oobCode cũ không dùng được.</remarks>
     [HttpPost("reset-password")]
     [AllowAnonymous]
-    [EnableRateLimiting("auth")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]
@@ -255,17 +247,11 @@ public sealed class AuthController(ISender sender, IEmailVerificationRateLimiter
             User.GetActorId(), request.CurrentPassword, request.NewPassword), ct);
         return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
     }
-    private ObjectResult ResetProblem(AuthError error) => Problem(statusCode:error.Status,title:error.Message,
-        extensions:new Dictionary<string,object?> { ["code"] = error.Code });
-
-    private string RemoteIp() => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-    private ObjectResult VerificationRateLimitProblem(VerificationRateLimitDecision decision)
+    private ObjectResult ResetProblem(AuthError error)
     {
-        if (decision.Unavailable)
-            return Problem(statusCode: StatusCodes.Status503ServiceUnavailable,
-                title: "Verification requests are temporarily unavailable.", extensions: new Dictionary<string, object?> { ["code"] = "VERIFICATION_RATE_LIMIT_UNAVAILABLE" });
-        Response.Headers["Retry-After"] = Math.Ceiling((decision.RetryAfter ?? TimeSpan.FromMinutes(1)).TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
-        return Problem(statusCode: StatusCodes.Status429TooManyRequests, title: "Too many verification requests.",
-            extensions: new Dictionary<string, object?> { ["code"] = "VERIFICATION_RATE_LIMITED" });
+        var extensions = new Dictionary<string, object?> { ["code"] = error.Code };
+        if (error.Errors is { Count: > 0 }) extensions["errors"] = error.Errors;
+        return Problem(statusCode: error.Status, title: error.Message,
+            detail: error.Errors is { Count: > 0 } ? "Kiểm tra các trường được liệt kê." : null, extensions: extensions);
     }
 }

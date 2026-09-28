@@ -19,6 +19,8 @@ public interface IAuthStore
     Task<bool> TryCreateUserAsync(User user, CancellationToken ct);
     Task<RegisterConflict> TryCreateTraineeAsync(User user, CancellationToken ct);
     Task UpdateUserAsync(User user, CancellationToken ct);
+    Task UpdatePasswordHashAsync(Guid userId, string passwordHash, DateTime now, CancellationToken ct);
+    Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username, DateTime now, CancellationToken ct);
     Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct);
     Task<bool> UpsertDeviceAsync(Guid userId, string deviceUuid, string? fcmToken, string? deviceModel, string? osVersion, CancellationToken ct);
     Task RevokeDeviceAsync(Guid userId, string deviceUuid, DateTime now, CancellationToken ct);
@@ -42,6 +44,7 @@ public interface IAuthStore
 }
 
 public enum RegisterConflict { None, SlugTaken, EmailTaken, UsernameTaken }
+public enum ProfileUpdateResult { Updated, PreconditionFailed, UsernameTaken }
 
 public interface IPasswordService
 {

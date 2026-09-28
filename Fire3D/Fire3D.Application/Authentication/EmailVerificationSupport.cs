@@ -18,14 +18,6 @@ public interface IEmailVerificationQueue
     Task<bool> VerifyAsync(string token, CancellationToken ct);
 }
 
-public sealed record VerificationRateLimitDecision(bool Allowed, TimeSpan? RetryAfter = null, bool Unavailable = false);
-
-public interface IEmailVerificationRateLimiter
-{
-    Task<VerificationRateLimitDecision> CheckRegistrationAsync(string email, string remoteIp, CancellationToken ct);
-    Task<VerificationRateLimitDecision> CheckResendAsync(string email, string remoteIp, CancellationToken ct);
-}
-
 public sealed record ResendVerificationCommand(string Email) : IRequest<AuthResult<bool>>;
 public sealed class ResendVerificationCommandHandler(IEmailVerificationQueue queue)
     : IRequestHandler<ResendVerificationCommand, AuthResult<bool>>

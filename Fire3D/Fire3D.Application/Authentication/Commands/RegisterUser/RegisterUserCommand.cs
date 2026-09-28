@@ -16,5 +16,5 @@ public sealed class RegisterUserCommandHandler(IAuthStore store, IPasswordServic
     public Task<AuthResult<AccountResponse>> Handle(RegisterUserCommand command, CancellationToken ct) =>
         new RegisterTraineeCommandHandler(store, passwords, verificationQueue, clock).Handle(
             new RegisterTraineeCommand(command.Email, command.Username ?? string.Empty, command.Password,
-                command.ConfirmPassword ?? string.Empty, command.FullName), ct);
+                command.ConfirmPassword ?? string.Empty, command.FullName, command.Dob, command.Gender, command.PhoneNumber), ct);
 }

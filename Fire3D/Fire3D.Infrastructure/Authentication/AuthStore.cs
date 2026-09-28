@@ -74,6 +74,30 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task UpdatePasswordHashAsync(Guid userId, string passwordHash, DateTime now, CancellationToken ct) =>
+        await db.Users.Where(x => x.Id == userId).ExecuteUpdateAsync(update => update
+            .SetProperty(x => x.PasswordHash, passwordHash)
+            .SetProperty(x => x.UpdatedAt, now), ct);
+
+    public async Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username, DateTime now, CancellationToken ct)
+    {
+        try
+        {
+            var changed = await db.Users
+                .Where(x => x.Id == userId && x.IsActive && x.DeletedAt == null && x.ProfileRevision == expectedProfileRevision)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(x => x.FullName, fullName)
+                    .SetProperty(x => x.Username, username)
+                    .SetProperty(x => x.ProfileRevision, x => x.ProfileRevision + 1)
+                    .SetProperty(x => x.UpdatedAt, now), ct);
+            return changed == 1 ? ProfileUpdateResult.Updated : ProfileUpdateResult.PreconditionFailed;
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation && ex.ConstraintName == "users_username_lower_key")
+        {
+            return ProfileUpdateResult.UsernameTaken;
+        }
+    }
+
     public async Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct) =>
         await db.Users.Where(x => x.Id == id).ExecuteUpdateAsync(update => update
             .SetProperty(x => x.LastLoginAt, now).SetProperty(x => x.UpdatedAt, now)

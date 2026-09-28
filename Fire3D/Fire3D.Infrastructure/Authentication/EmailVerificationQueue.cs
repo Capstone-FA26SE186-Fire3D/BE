@@ -10,8 +10,7 @@ using Npgsql;
 namespace Fire3D.Infrastructure.Authentication;
 
 /// <summary>
-/// PostgreSQL is the source of truth for verification work. Redis only limits requests and
-/// accelerates dispatch; a missing Redis connection must never cause this store to fabricate work.
+/// PostgreSQL is the source of truth for verification work and delivery recovery.
 /// </summary>
 public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmailOptions> options) : IEmailVerificationQueue
 {
@@ -150,9 +149,9 @@ public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmai
         await using var command = new NpgsqlCommand("""
             UPDATE public.email_verification_tokens t SET used_at=now()
               FROM public.users u
-             WHERE t.token_hash=@hash AND t.used_at IS NULL AND t.expires_at>now()
+             WHERE t.token_hash=@hash AND t.used_at IS NULL AND t.expires_at>clock_timestamp()
                AND t.user_id=u.id AND u.is_active AND u.deleted_at IS NULL
-               AND u.email_verified_at IS NULL AND u.registration_expires_at>now()
+                AND u.email_verified_at IS NULL AND u.registration_expires_at>clock_timestamp()
              RETURNING t.user_id
             """, (NpgsqlConnection)db.Database.GetDbConnection(), (NpgsqlTransaction)transaction.GetDbTransaction());
         command.Parameters.AddWithValue("hash", hash);
