@@ -226,7 +226,8 @@ public sealed class PasswordResetPostgresTests
             CREATE TABLE avatar_upload_intents (
               id uuid PRIMARY KEY, user_id uuid NOT NULL, staging_object_key text NOT NULL,
               content_type text NOT NULL, expected_size_bytes bigint NOT NULL,
-              expires_at timestamptz NOT NULL, completed_at timestamptz NULL, created_at timestamptz NOT NULL
+              expires_at timestamptz NOT NULL, completed_at timestamptz NULL, final_object_key text NULL,
+              created_at timestamptz NOT NULL
             )
             """);
         var userId = Guid.NewGuid();
@@ -268,6 +269,27 @@ public sealed class PasswordResetPostgresTests
 
         await using var verifyContext = database.Context();
         Assert.True(await new EmailVerificationQueue(verifyContext, settings).VerifyAsync(firstToken, default));
+    }
+
+    [ResetPostgresFact]
+    public async Task Resend_enforces_one_minute_account_wide_cooldown_then_creates_next_generation()
+    {
+        await using var database = await Database.Create();
+        var userId = Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role,registration_expires_at) VALUES ('{userId}','cooldown@example.com','Trainee',now()+interval '2 hours')");
+        var settings = Options.Create(new AuthEmailOptions { FrontendUrl = "https://app.example.test" });
+
+        await using (var initialContext = database.Context())
+            await new EmailVerificationQueue(initialContext, settings).EnqueueAsync(userId, "cooldown@example.com", default);
+        await using (var firstResendContext = database.Context())
+            await new EmailVerificationQueue(firstResendContext, settings).EnqueueAsync("cooldown@example.com", default);
+        Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM email_verification_jobs WHERE user_id='{userId}'"));
+
+        await database.Sql($"UPDATE email_verification_jobs SET created_at=now()-interval '61 seconds' WHERE user_id='{userId}'");
+        await using (var secondResendContext = database.Context())
+            await new EmailVerificationQueue(secondResendContext, settings).EnqueueAsync("cooldown@example.com", default);
+        Assert.Equal(2L, await database.Sql($"SELECT count(*) FROM email_verification_jobs WHERE user_id='{userId}'"));
+        Assert.Equal(2L, await database.Sql($"SELECT max(generation) FROM email_verification_jobs WHERE user_id='{userId}'"));
     }
 
     [ResetPostgresFact]

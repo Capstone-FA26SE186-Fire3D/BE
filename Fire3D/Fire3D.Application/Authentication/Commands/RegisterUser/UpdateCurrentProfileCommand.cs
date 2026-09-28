@@ -26,7 +26,7 @@ public sealed class UpdateCurrentProfileCommandHandler(IAuthStore store, TimePro
         var username = command.Request.Username is null ? null : SelfRegistrationValidation.NormalizeUsername(command.Request.Username);
         var errors = new Dictionary<string, string[]>();
         if (name is null && command.Request.Username is null) errors["request"] = ["Cần gửi fullName hoặc username."];
-        if (command.Request.FullName is not null && (name is null || name.Length > 200)) errors["fullName"] = ["Họ tên không được rỗng và tối đa 200 ký tự."];
+        if (command.Request.FullName is not null && (string.IsNullOrWhiteSpace(name) || name.Length > 200)) errors["fullName"] = ["Họ tên không được rỗng và tối đa 200 ký tự."];
         if (command.Request.Username is not null && username is null) errors["username"] = ["Username phải dài 3–30 ký tự, chỉ gồm a-z, số, dấu chấm, gạch dưới hoặc gạch ngang."];
         if (errors.Count != 0)
             return AuthResult<AccountResponse>.Fail("VALIDATION_ERROR", "Dữ liệu hồ sơ không hợp lệ.", 400, errors);

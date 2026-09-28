@@ -7,7 +7,11 @@ public sealed class ForgotPasswordCommandHandler(IAuthStore authStore) : IReques
     {
         var email = PasswordResetValidation.NormalizeEmail(request.Email);
         if (email is null) return AuthResult<bool>.Fail("INVALID_EMAIL", "Use a valid email address (maximum 254 characters).", 400);
-        await authStore.EnqueuePasswordResetAsync(email, ct);
+        var user = await authStore.FindUserByEmailAsync(email, ct);
+        // Keep the public response identical for every valid email, while never creating a
+        // local-password reset token for an account authenticated solely through Google.
+        if (user is { IsActive: true, DeletedAt: null } && !string.IsNullOrWhiteSpace(user.PasswordHash))
+            await authStore.EnqueuePasswordResetAsync(email, ct);
         return AuthResult<bool>.Ok(true);
     }
 }

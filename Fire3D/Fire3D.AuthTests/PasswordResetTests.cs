@@ -34,11 +34,24 @@ public class PasswordResetTests
         Assert.Equal(400,result.Error?.Status);
     }
     [Fact]
-    public async Task Email_normalized_without_account_lookup()
+    public async Task Email_normalized_and_local_account_is_enqueued()
     {
         var store=ResetProxy.For<IAuthStore>((method,args)=>{
-            Assert.Equal("EnqueuePasswordResetAsync",method);Assert.Equal("a@example.test",args[0]);return Task.CompletedTask;});
+            return method switch {
+                "FindUserByEmailAsync" => Task.FromResult<User?>(new User { IsActive = true, PasswordHash = "hash" }),
+                "EnqueuePasswordResetAsync" => Task.CompletedTask,
+                _ => throw new Exception("Unexpected: " + method)
+            };});
         Assert.True((await new ForgotPasswordCommandHandler(store).Handle(new(" A@EXAMPLE.TEST "),default)).IsSuccess);
+    }
+    [Fact]
+    public async Task Google_only_account_is_not_enqueued_for_local_password_reset()
+    {
+        var store=ResetProxy.For<IAuthStore>((method,_)=> method switch {
+            "FindUserByEmailAsync" => Task.FromResult<User?>(new User { IsActive = true }),
+            _ => throw new Exception("Unexpected: " + method)
+        });
+        Assert.True((await new ForgotPasswordCommandHandler(store).Handle(new("google@example.test"),default)).IsSuccess);
     }
     [Fact]
     public async Task Local_login_verifies_the_database_password_hash_without_firebase()

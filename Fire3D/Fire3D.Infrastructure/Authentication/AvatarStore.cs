@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fire3D.Infrastructure.Authentication;
 
-public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore
+public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore, IAvatarCleanupStore
 {
     public async Task SaveUploadIntentAsync(AvatarUploadIntent intent, CancellationToken ct)
     {
@@ -30,7 +30,9 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore
         // transaction. A stale request rolls back its claim, so an intent is consumed once.
         var claimed = await db.AvatarUploadIntents
             .Where(x => x.Id == intentId && x.UserId == userId && x.CompletedAt == null && x.ExpiresAt > completedAt)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.CompletedAt, completedAt), ct);
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.CompletedAt, completedAt)
+                .SetProperty(x => x.FinalObjectKey, objectKey), ct);
         if (claimed != 1) return new(AvatarFinalizeStatus.Unavailable, null);
 
         var changed = await db.Users
@@ -46,6 +48,7 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore
         }
         user.AvatarStorageKey = objectKey;
         user.ProfileRevision = expectedProfileRevision + 1;
+        if (!string.IsNullOrWhiteSpace(previous)) await QueueInCurrentTransactionAsync(previous, completedAt, ct);
         AddAudit(user, completedAt);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
@@ -73,11 +76,58 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore
         }
         user.AvatarStorageKey = null;
         user.ProfileRevision = expectedProfileRevision + 1;
+        if (!string.IsNullOrWhiteSpace(previous)) await QueueInCurrentTransactionAsync(previous, deletedAt, ct);
         AddAudit(user, deletedAt);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return new(AvatarDeleteStatus.Deleted, previous);
     }
+
+    public Task QueueAsync(string objectKey, CancellationToken ct) => QueueInCurrentTransactionAsync(objectKey, DateTime.UtcNow, ct);
+
+    public async Task<AvatarCleanupJob?> ClaimAsync(CancellationToken ct)
+    {
+        await db.Database.OpenConnectionAsync(ct);
+        await using var command = new Npgsql.NpgsqlCommand("""
+            WITH candidate AS (
+                SELECT id FROM public.avatar_object_cleanups
+                WHERE available_at<=now() AND (lease_until IS NULL OR lease_until<=now())
+                ORDER BY available_at,created_at FOR UPDATE SKIP LOCKED LIMIT 1)
+            UPDATE public.avatar_object_cleanups cleanup
+            SET lease_token=@lease,lease_until=now()+interval '2 minutes',attempts=attempts+1
+            FROM candidate WHERE cleanup.id=candidate.id
+            RETURNING cleanup.id,cleanup.object_key,cleanup.lease_token,cleanup.attempts
+            """, (Npgsql.NpgsqlConnection)db.Database.GetDbConnection());
+        command.Parameters.AddWithValue("lease", Guid.NewGuid());
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct)
+            ? new(reader.GetGuid(0), reader.GetString(1), reader.GetGuid(2), reader.GetInt32(3)) : null;
+    }
+
+    public Task<bool> IsReferencedAsync(string objectKey, CancellationToken ct) => db.Database.SqlQuery<bool>($"""
+        SELECT EXISTS(
+            SELECT 1 FROM public.users WHERE avatar_storage_key={objectKey}
+            UNION ALL SELECT 1 FROM public.avatar_upload_intents WHERE staging_object_key={objectKey} OR final_object_key={objectKey}) AS "Value"
+        """).SingleAsync(ct);
+
+    public Task CompleteAsync(AvatarCleanupJob job, CancellationToken ct) => db.Database.ExecuteSqlInterpolatedAsync($"""
+        DELETE FROM public.avatar_object_cleanups WHERE id={job.Id} AND lease_token={job.LeaseToken}
+        """, ct);
+
+    public Task FailAsync(AvatarCleanupJob job, CancellationToken ct)
+    {
+        var delay = TimeSpan.FromSeconds(Math.Min(900, Math.Pow(2, job.Attempt) * 15));
+        return db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE public.avatar_object_cleanups SET available_at=now()+{delay},lease_token=NULL,lease_until=NULL
+            WHERE id={job.Id} AND lease_token={job.LeaseToken}
+            """, ct);
+    }
+
+    private Task QueueInCurrentTransactionAsync(string objectKey, DateTime now, CancellationToken ct) =>
+        db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO public.avatar_object_cleanups(id,object_key,available_at,attempts,created_at)
+            VALUES ({Guid.NewGuid()},{objectKey},{now},0,{now}) ON CONFLICT (object_key) DO NOTHING
+            """, ct);
 
     private void AddAudit(User user, DateTime now) => db.AuditLogs.Add(new AuditLog
     {

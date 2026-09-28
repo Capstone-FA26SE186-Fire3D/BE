@@ -239,3 +239,22 @@ BEGIN
     RETURN 'Requeued';
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION enqueue_integration_outbox_event(
+    p_idempotency_key TEXT,
+    p_aggregate_type TEXT,
+    p_aggregate_id UUID,
+    p_event_type TEXT,
+    p_schema_version TEXT,
+    p_payload JSONB
+)
+RETURNS TEXT
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public
+AS $$
+BEGIN
+    RETURN public.enqueue_integration_outbox_event_internal(
+        p_idempotency_key, p_aggregate_type, p_aggregate_id,
+        p_event_type, p_schema_version, p_payload, false, false
+    );
+END;
+$$;

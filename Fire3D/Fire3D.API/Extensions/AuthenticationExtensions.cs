@@ -39,6 +39,7 @@ public static class AuthenticationExtensions
         services.AddHostedService<Fire3D.Infrastructure.Workers.PasswordResetWorker>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.EmailVerificationWorker>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.PendingRegistrationCleanupWorker>();
+        services.AddHostedService<Fire3D.Infrastructure.Workers.AvatarCleanupWorker>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)

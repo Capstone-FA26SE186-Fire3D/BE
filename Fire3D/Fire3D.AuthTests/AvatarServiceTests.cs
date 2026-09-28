@@ -2,6 +2,8 @@ using Fire3D.Application.Authentication;
 using Fire3D.Application.Authentication.Avatar;
 using Fire3D.Application.Storage;
 using Fire3D.Domain.Entities;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
 
 namespace Fire3D.AuthTests;
@@ -13,7 +15,7 @@ public sealed class AvatarServiceTests
     {
         var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
         var storage = new AvatarStorageFake();
-        var service = new AvatarService(new AvatarAuthStoreFake(user), new AvatarStoreFake(), storage,
+        var service = new AvatarService(new AvatarAuthStoreFake(user), new AvatarStoreFake(), new AvatarCleanupStoreFake(), storage,
             new FixedTimeProvider(new DateTimeOffset(2026, 9, 26, 10, 0, 0, TimeSpan.Zero)));
 
         var result = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
@@ -30,7 +32,7 @@ public sealed class AvatarServiceTests
         var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
         var avatarStore = new AvatarStoreFake();
         var storage = new AvatarStorageFake { Prefix = [0xFF, 0xD8, 0xFF] };
-        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, storage, TimeProvider.System);
+        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, new AvatarCleanupStoreFake(), storage, TimeProvider.System);
         var intent = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
 
         var result = await service.CompleteUploadAsync(user.Id, 1, new(intent.Value!.UploadId), default);
@@ -46,10 +48,9 @@ public sealed class AvatarServiceTests
         var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
         var avatarStore = new AvatarStoreFake();
         var storage = new AvatarStorageFake();
-        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, storage, TimeProvider.System);
+        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, new AvatarCleanupStoreFake(), storage, TimeProvider.System);
 
-        var image = new byte[1024];
-        new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }.CopyTo(image, 0);
+        var image = CreatePngBytes();
         await using var file = new MemoryStream(image);
         var result = await service.UploadFileAsync(user.Id, 1, "image/png", file.Length, file, default);
 
@@ -64,7 +65,7 @@ public sealed class AvatarServiceTests
         var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
         var avatarStore = new AvatarStoreFake();
         var storage = new AvatarStorageFake { ThrowOnDelete = true };
-        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, storage, TimeProvider.System);
+        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, new AvatarCleanupStoreFake(), storage, TimeProvider.System);
         var intent = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
 
         var result = await service.CompleteUploadAsync(user.Id, 1, new(intent.Value!.UploadId), default);
@@ -79,7 +80,7 @@ public sealed class AvatarServiceTests
         var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
         var avatarStore = new AvatarStoreFake();
         var storage = new AvatarStorageFake { CopySucceeds = false };
-        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, storage, TimeProvider.System);
+        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, new AvatarCleanupStoreFake(), storage, TimeProvider.System);
         var intent = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
 
         var result = await service.CompleteUploadAsync(user.Id, 1, new(intent.Value!.UploadId), default);
@@ -89,12 +90,34 @@ public sealed class AvatarServiceTests
     }
 
     [Fact]
+    public async Task Complete_replays_a_completed_upload_when_the_profile_still_points_to_its_final_object()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
+        var avatarStore = new AvatarStoreFake();
+        var storage = new AvatarStorageFake();
+        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, new AvatarCleanupStoreFake(), storage, TimeProvider.System);
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
+        var intent = Assert.IsType<AvatarUploadIntent>(avatarStore.LastIntent);
+        intent.CompletedAt = DateTime.UtcNow;
+        intent.FinalObjectKey = "avatars/users/replayed";
+        user.AvatarStorageKey = intent.FinalObjectKey;
+        user.ProfileRevision = 2;
+
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, result.Value!.ProfileRevision);
+        Assert.Empty(storage.CopiedKeys);
+    }
+
+    [Fact]
     public async Task Losing_complete_attempt_never_deletes_the_winning_final_object()
     {
         var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
         var avatarStore = new AvatarStoreFake { FinalizeStatuses = [AvatarFinalizeStatus.Finalized, AvatarFinalizeStatus.PreconditionFailed] };
         var storage = new AvatarStorageFake();
-        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, storage, TimeProvider.System);
+        var cleanup = new AvatarCleanupStoreFake();
+        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, cleanup, storage, TimeProvider.System);
         var intent = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
 
         Assert.True((await service.CompleteUploadAsync(user.Id, 1, new(intent.Value!.UploadId), default)).IsSuccess);
@@ -104,7 +127,7 @@ public sealed class AvatarServiceTests
         Assert.Equal(2, storage.CopiedKeys.Count);
         Assert.NotEqual(storage.CopiedKeys[0], storage.CopiedKeys[1]);
         Assert.DoesNotContain(storage.CopiedKeys[0], storage.DeletedKeys);
-        Assert.Contains(storage.CopiedKeys[1], storage.DeletedKeys);
+        Assert.Contains(storage.CopiedKeys[1], cleanup.QueuedKeys);
     }
 
     private sealed class AvatarAuthStoreFake(User user) : IAuthStore
@@ -144,8 +167,9 @@ public sealed class AvatarServiceTests
         private readonly Dictionary<Guid, AvatarUploadIntent> intents = [];
         private int finalizeCount;
         public bool Finalized { get; private set; }
+        public AvatarUploadIntent? LastIntent { get; private set; }
         public AvatarFinalizeStatus[] FinalizeStatuses { get; init; } = [AvatarFinalizeStatus.Finalized];
-        public Task SaveUploadIntentAsync(AvatarUploadIntent intent, CancellationToken ct) { intents.Add(intent.Id, intent); return Task.CompletedTask; }
+        public Task SaveUploadIntentAsync(AvatarUploadIntent intent, CancellationToken ct) { intents.Add(intent.Id, intent); LastIntent = intent; return Task.CompletedTask; }
         public Task<AvatarUploadIntent?> FindUploadIntentAsync(Guid id, Guid userId, CancellationToken ct) => Task.FromResult(intents.GetValueOrDefault(id) is { UserId: var owner } intent && owner == userId ? intent : null);
         public Task<AvatarFinalizeResult> FinalizeUploadAsync(Guid intentId, Guid userId, long expectedProfileRevision, string objectKey, DateTime completedAt, CancellationToken ct)
         {
@@ -164,6 +188,7 @@ public sealed class AvatarServiceTests
         public byte[] Prefix { get; init; } = [137, 80, 78, 71, 13, 10, 26, 10];
         public bool Copied { get; private set; }
         public bool UploadedDirectly { get; private set; }
+        public long UploadedLength { get; private set; }
         public bool ThrowOnDelete { get; init; }
         public bool CopySucceeds { get; init; } = true;
         public List<string> CopiedKeys { get; } = [];
@@ -171,14 +196,17 @@ public sealed class AvatarServiceTests
         public Task UploadObjectAsync(string objectKey, Stream content, long contentLength, string contentType, CancellationToken ct)
         {
             UploadedDirectly = true;
+            UploadedLength = contentLength;
             UploadedKey = objectKey;
             UploadContentType = contentType;
             return Task.CompletedTask;
         }
         public Task<string> GeneratePresignedUploadUrlAsync(string objectKey, string mimeType, TimeSpan expiration, CancellationToken ct) { UploadedKey = objectKey; UploadContentType = mimeType; UploadExpiration = expiration; return Task.FromResult("https://storage.test/upload"); }
         public Task<bool> VerifyObjectExistsAsync(string objectKey, long expectedSizeBytes, CancellationToken ct) => Task.FromResult(true);
-        public Task<StorageObjectMetadata?> GetObjectMetadataAsync(string objectKey, CancellationToken ct) => Task.FromResult<StorageObjectMetadata?>(new(1024, "image/png", "etag"));
+        public Task<StorageObjectMetadata?> GetObjectMetadataAsync(string objectKey, CancellationToken ct) => Task.FromResult<StorageObjectMetadata?>(new(UploadedLength == 0 ? 1024 : UploadedLength, "image/png", "etag"));
         public Task<byte[]?> ReadObjectPrefixAsync(string objectKey, int length, string expectedETag, CancellationToken ct) => Task.FromResult<byte[]?>(Prefix);
+        public Task<byte[]?> ReadObjectAsync(string objectKey, long maxBytes, string expectedETag, CancellationToken ct) =>
+            Task.FromResult<byte[]?>(CreatePngBytes());
         public Task<bool> CopyObjectIfUnchangedAsync(string sourceKey, string sourceETag, string destinationKey, string contentType, CancellationToken ct)
         {
             Copied = true;
@@ -193,8 +221,26 @@ public sealed class AvatarServiceTests
         public Task<string> GeneratePresignedDownloadUrlAsync(string objectKey, TimeSpan expiration, CancellationToken ct) => Task.FromResult("https://storage.test/download");
     }
 
+    private sealed class AvatarCleanupStoreFake : IAvatarCleanupStore
+    {
+        public List<string> QueuedKeys { get; } = [];
+        public Task QueueAsync(string objectKey, CancellationToken ct) { QueuedKeys.Add(objectKey); return Task.CompletedTask; }
+        public Task<AvatarCleanupJob?> ClaimAsync(CancellationToken ct) => Task.FromResult<AvatarCleanupJob?>(null);
+        public Task<bool> IsReferencedAsync(string objectKey, CancellationToken ct) => Task.FromResult(false);
+        public Task CompleteAsync(AvatarCleanupJob job, CancellationToken ct) => Task.CompletedTask;
+        public Task FailAsync(AvatarCleanupJob job, CancellationToken ct) => Task.CompletedTask;
+    }
+
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private static byte[] CreatePngBytes()
+    {
+        using var image = new Image<Rgba32>(1, 1);
+        using var output = new MemoryStream();
+        image.SaveAsPng(output);
+        return output.ToArray();
     }
 }

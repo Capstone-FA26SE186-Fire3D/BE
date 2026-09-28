@@ -109,6 +109,41 @@ public class IfcWriteSqlTests : IAsyncLifetime
         var auditCount = await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM audit_logs WHERE target_id={0}", FailedJobId).SingleAsync();
         Assert.Equal(1, auditCount);
     }
+
+    [Fact]
+    public async Task Process_revision_uses_the_tenant_outbox_gate_with_a_canonical_hash()
+    {
+        await using var db = Context();
+        var building = await db.Buildings.SingleAsync();
+        var revisionId = Guid.NewGuid();
+        var source = new Fire3D.Domain.Entities.SourceDocument
+        {
+            Id = Guid.NewGuid(), RevisionId = revisionId, UploadedBy = ActorId,
+            OriginalFilename = "new.ifc", StorageUrl = "test/new.ifc", MimeType = "application/x-step",
+            Sha256Hash = new string('b', 64), UsageRights = "owned", FileSizeBytes = 100, CreatedAt = DateTime.UtcNow
+        };
+        db.Revisions.Add(new Fire3D.Domain.Entities.Revision
+        {
+            Id = revisionId, BuildingId = building.Id, OrganizationId = OrgId, UploadedBy = ActorId,
+            VersionLabel = "2", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow, SourceDocument = source
+        });
+        await db.SaveChangesAsync();
+
+        var result = await new Fire3D.Infrastructure.Ifc.IfcWriteStore(db)
+            .ProcessRevisionAsync(ActorId, revisionId, OrgId, default);
+
+        Assert.True(result.IsSuccess, result.Error?.ToString());
+        var row = await db.Database.SqlQueryRaw<OutboxRow>("""
+            SELECT schema_version AS "SchemaVersion", organization_id AS "OrganizationId", payload_hash AS "PayloadHash",
+                   public.fet3d_jsonb_payload_hash(payload) AS "ExpectedHash"
+            FROM integration_outbox_events WHERE aggregate_id={0}
+            """, result.Value!).SingleAsync();
+        Assert.Equal("1", row.SchemaVersion);
+        Assert.Equal(OrgId, row.OrganizationId);
+        Assert.Equal(row.ExpectedHash, row.PayloadHash);
+    }
+
+    private sealed record OutboxRow(string SchemaVersion, Guid OrganizationId, string PayloadHash, string ExpectedHash);
 }
 
 

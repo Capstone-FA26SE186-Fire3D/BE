@@ -1,9 +1,11 @@
 using Fire3D.Application.Storage;
 using Fire3D.Domain.Entities;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
 
 namespace Fire3D.Application.Authentication.Avatar;
 
-public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore, IStorageService storage, TimeProvider clock) : IAvatarService
+public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore, IAvatarCleanupStore cleanup, IStorageService storage, TimeProvider clock) : IAvatarService
 {
     private static readonly TimeSpan UrlLifetime = TimeSpan.FromMinutes(5);
 
@@ -50,12 +52,12 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         }
         catch
         {
-            await TryDeleteAsync(intent.StagingObjectKey, ct);
+            await QueueCleanupAsync(intent.StagingObjectKey, ct);
             return AuthResult<AvatarResponse>.Fail("AVATAR_UPLOAD_UNAVAILABLE", "Avatar upload failed. Try again.", 503);
         }
 
         var completed = await CompleteUploadAsync(userId, expectedProfileRevision, new(intent.Id), ct);
-        if (!completed.IsSuccess) await TryDeleteAsync(intent.StagingObjectKey, ct);
+        if (!completed.IsSuccess) await QueueCleanupAsync(intent.StagingObjectKey, ct);
         return completed;
     }
 
@@ -65,14 +67,19 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         if (!await IsAvailableAsync(userId, ct)) return AuthResult<AvatarResponse>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
         var intent = await avatarStore.FindUploadIntentAsync(request.UploadId, userId, ct);
         var now = UtcNow();
-        if (intent is null || intent.CompletedAt.HasValue || intent.ExpiresAt <= now)
+        if (intent is null || intent.ExpiresAt <= now)
             return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload is unavailable or expired.", 409);
+        if (intent.CompletedAt.HasValue)
+            return await ReplayCompletedUploadAsync(userId, expectedProfileRevision, intent, ct);
         var metadata = await storage.GetObjectMetadataAsync(intent.StagingObjectKey, ct);
         if (metadata is null || string.IsNullOrWhiteSpace(metadata.ETag) || metadata.ContentLength != intent.ExpectedSizeBytes || !string.Equals(metadata.ContentType, intent.ContentType, StringComparison.OrdinalIgnoreCase))
             return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload metadata does not match the intent.", 400);
         var prefix = await storage.ReadObjectPrefixAsync(intent.StagingObjectKey, 12, metadata.ETag, ct);
         var invalid = AvatarUploadRules.ValidateImageSignature(intent.ContentType, prefix ?? []);
         if (invalid is not null) return AuthResult<AvatarResponse>.Fail(invalid.Code, invalid.Message, 400);
+        var imageBytes = await storage.ReadObjectAsync(intent.StagingObjectKey, AvatarUploadRules.MaxBytes, metadata.ETag, ct);
+        if (!IsSafeImage(imageBytes, intent.ContentType))
+            return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_CONTENT", "Avatar must be a valid, single-frame image no larger than 4096 by 4096 pixels.", 400);
         // A complete attempt must never share a destination key. A losing concurrent request can
         // then remove only its own orphan without deleting the winner's stored avatar.
         var finalKey = $"avatars/users/{userId:N}/{Guid.NewGuid():N}";
@@ -82,13 +89,12 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         var finalized = await avatarStore.FinalizeUploadAsync(intent.Id, userId, expectedProfileRevision, finalKey, completedAt, ct);
         if (!finalized.Finalized)
         {
-            await TryDeleteAsync(finalKey, ct);
+            await QueueCleanupAsync(finalKey, ct);
             return finalized.Status == AvatarFinalizeStatus.PreconditionFailed
                 ? AuthResult<AvatarResponse>.Fail("PRECONDITION_FAILED", "The profile changed. Reload it and retry.", 412)
                 : AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload is no longer available.", 409);
         }
-        await TryDeleteAsync(intent.StagingObjectKey, ct);
-        if (!string.IsNullOrWhiteSpace(finalized.PreviousObjectKey)) await TryDeleteAsync(finalized.PreviousObjectKey, ct);
+        await QueueCleanupAsync(intent.StagingObjectKey, ct);
         var url = await storage.GeneratePresignedDownloadUrlAsync(finalKey, UrlLifetime, ct);
         return AuthResult<AvatarResponse>.Ok(new(url, completedAt.Add(UrlLifetime), expectedProfileRevision + 1));
     }
@@ -112,7 +118,6 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
             return AuthResult<object>.Fail("PRECONDITION_FAILED", "The profile changed. Reload it and retry.", 412);
         if (result.Status == AvatarDeleteStatus.Unavailable)
             return AuthResult<object>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
-        if (result.Deleted && !string.IsNullOrWhiteSpace(result.PreviousObjectKey)) await TryDeleteAsync(result.PreviousObjectKey, ct);
         return AuthResult<object>.Ok(new { });
     }
 
@@ -124,9 +129,42 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         return user.OrganizationId is null || await authStore.OrganizationIsActiveAsync(user.OrganizationId.Value, ct) ? user : null;
     }
     private DateTime UtcNow() => clock.GetUtcNow().UtcDateTime;
-    private async Task TryDeleteAsync(string objectKey, CancellationToken ct)
+
+    private async Task<AuthResult<AvatarResponse>> ReplayCompletedUploadAsync(Guid userId, long expectedProfileRevision,
+        AvatarUploadIntent intent, CancellationToken ct)
     {
-        try { await storage.DeleteObjectAsync(objectKey, ct); }
-        catch { /* Database state is already committed; a later cleanup worker must reconcile this orphan. */ }
+        var user = await AvailableUserAsync(userId, ct);
+        if (user is null) return AuthResult<AvatarResponse>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
+        if (string.IsNullOrWhiteSpace(intent.FinalObjectKey) || user.AvatarStorageKey != intent.FinalObjectKey
+            || user.ProfileRevision != expectedProfileRevision + 1)
+            return AuthResult<AvatarResponse>.Fail("AVATAR_UPLOAD_SUPERSEDED", "This upload was replaced by a newer profile change.", 409);
+        var now = UtcNow();
+        var url = await storage.GeneratePresignedDownloadUrlAsync(intent.FinalObjectKey, UrlLifetime, ct);
+        return AuthResult<AvatarResponse>.Ok(new(url, now.Add(UrlLifetime), user.ProfileRevision));
+    }
+
+    private static bool IsSafeImage(byte[]? bytes, string contentType)
+    {
+        if (bytes is null) return false;
+        try
+        {
+            var format = Image.DetectFormat(bytes);
+            var info = Image.Identify(bytes);
+            // Static formats do not always expose a frame metadata item; more than one does
+            // identify an animation and is rejected before pixels are decoded.
+            if (info.Width is <= 0 or > 4096 || info.Height is <= 0 or > 4096 || info.FrameMetadataCollection.Count > 1)
+                return false;
+            using var image = Image.Load(new DecoderOptions { MaxFrames = 1 }, bytes);
+            return image.Frames.Count == 1
+                && string.Equals(format.DefaultMimeType, contentType, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (UnknownImageFormatException) { return false; }
+        catch (InvalidImageContentException) { return false; }
+    }
+    private async Task QueueCleanupAsync(string objectKey, CancellationToken ct)
+    {
+        try { await cleanup.QueueAsync(objectKey, ct); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch { /* The object remains private; scheduled reconciliation will retry persistence. */ }
     }
 }

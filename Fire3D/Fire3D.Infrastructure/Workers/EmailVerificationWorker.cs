@@ -40,14 +40,14 @@ public sealed class EmailVerificationWorker(IServiceScopeFactory scopes, IOption
                                   <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
                                     <!-- Header -->
                                     <tr><td style="background:#d32f2f;padding:28px 40px;text-align:center;">
-                                      <h1 style="margin:0;color:#ffffff;font-size:26px;letter-spacing:1px;">🔥 Fire3D</h1>
+                                      <h1 style="margin:0;color:#ffffff;font-size:26px;letter-spacing:1px;">🔥 FET3D</h1>
                                       <p style="margin:4px 0 0;color:#ffcdd2;font-size:13px;">Nền tảng huấn luyện PCCC thực tế ảo</p>
                                     </td></tr>
                                     <!-- Body -->
                                     <tr><td style="padding:36px 40px;">
                                       <h2 style="margin:0 0 12px;color:#1a1a1a;font-size:20px;">Xác minh địa chỉ email của bạn</h2>
                                       <p style="margin:0 0 24px;color:#555;font-size:15px;line-height:1.6;">
-                                        Cảm ơn bạn đã đăng ký tài khoản <strong>Fire3D</strong>.<br>
+                                        Cảm ơn bạn đã đăng ký tài khoản <strong>FET3D</strong>.<br>
                                         Vui lòng bấm vào nút bên dưới để xác minh địa chỉ email và kích hoạt tài khoản của bạn.
                                       </p>
                                       <!-- Button -->
@@ -68,7 +68,7 @@ public sealed class EmailVerificationWorker(IServiceScopeFactory scopes, IOption
                                     </td></tr>
                                     <!-- Footer -->
                                     <tr><td style="background:#f9f9f9;padding:16px 40px;text-align:center;">
-                                      <p style="margin:0;color:#bbb;font-size:12px;">© 2026 Fire3D · Hệ thống huấn luyện PCCC thực tế ảo</p>
+                                      <p style="margin:0;color:#bbb;font-size:12px;">© 2026 FET3D · Hệ thống huấn luyện PCCC thực tế ảo</p>
                                     </td></tr>
                                   </table>
                                 </td></tr>
@@ -77,7 +77,7 @@ public sealed class EmailVerificationWorker(IServiceScopeFactory scopes, IOption
                             </html>
                             """;
                         await scope.ServiceProvider.GetRequiredService<IEmailService>().SendAsync(
-                            job.Email, "[Fire3D] Xác minh địa chỉ email của bạn", html, timeout.Token);
+                            job.Email, "[FET3D] Xác minh địa chỉ email của bạn", html, timeout.Token);
                     }
                     await queue.CompleteAsync(job, stoppingToken);
                 }

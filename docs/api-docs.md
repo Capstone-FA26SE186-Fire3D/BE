@@ -170,7 +170,7 @@ Frontend đăng nhập Google bằng Firebase SDK, lấy Firebase ID token rồi
 BE kiểm token, trạng thái thu hồi, email đã xác minh và provider google.com. Input rỗng/quá 16384 ký tự: 400; token/provider sai: 401 INVALID_FIREBASE_TOKEN.
 
 - UID đã liên kết: dùng hồ sơ/role DB.
-- UID/email mới: tạo Trainee, organizationId null, password hash local null.
+- UID/email mới: trả `OnboardingRequired`, chưa tạo user hay organization cho tới khi luồng onboarding được triển khai.
 - Email thuộc tài khoản khác/chưa liên kết UID này: 409 ACCOUNT_LINK_REQUIRED; không tự ghép chỉ vì trùng email.
 - Xung đột tạo đồng thời có thể 409 ACCOUNT_EXISTS; tài khoản bị khóa 403 ACCOUNT_DISABLED.
 
@@ -246,7 +246,7 @@ Sai email: 400 INVALID_EMAIL. Email đúng định dạng có/không tồn tại
 
 Phải dùng token thật từ email: 64 ký tự hex, hạn 30 phút, một lần; DB chỉ lưu hash token. Password 12–128, không chỉ khoảng trắng. Sai/hết hạn/đã dùng token: 400 INVALID_RESET_CODE; password sai: 400 INVALID_PASSWORD; thành công 204.
 
-Reset đổi hash local, tiêu thụ token, vô hiệu token reset còn lại và thu hồi phiên Fire3D trong transaction. Phải login lại; không trả JWT mới. Chủ email tài khoản Google/Firebase cũ có thể thiết lập password local qua link và vẫn giữ UID. Không đổi password Google/Firebase; không nhận oobCode Firebase cũ. Không có endpoint đọc password/hash/reset token.
+Reset chỉ áp dụng cho tài khoản đã có password local. Backend đổi hash local, tiêu thụ token, vô hiệu token reset còn lại và thu hồi phiên Fire3D trong transaction. Phải login lại; không trả JWT mới. Tài khoản Google-only không nhận reset token và không thể dùng reset để thêm password local. Không đổi password Google/Firebase; không nhận oobCode Firebase cũ. Không có endpoint đọc password/hash/reset token.
 
 Chi tiết vận hành: [password-reset.md](password-reset.md).
 

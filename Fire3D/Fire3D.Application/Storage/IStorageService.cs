@@ -17,6 +17,8 @@ public interface IStorageService
 
     Task<StorageObjectMetadata?> GetObjectMetadataAsync(string objectKey, CancellationToken ct);
     Task<byte[]?> ReadObjectPrefixAsync(string objectKey, int length, string expectedETag, CancellationToken ct);
+    /// <summary>Reads an inspected object version with a strict size limit. Null means it changed or disappeared.</summary>
+    Task<byte[]?> ReadObjectAsync(string objectKey, long maxBytes, string expectedETag, CancellationToken ct);
     /// <summary>Copies only the object version that was inspected. False means the source changed.</summary>
     Task<bool> CopyObjectIfUnchangedAsync(string sourceKey, string sourceETag, string destinationKey, string contentType, CancellationToken ct);
     Task DeleteObjectAsync(string objectKey, CancellationToken ct);

@@ -9,5 +9,6 @@ public sealed class AvatarUploadIntent
     public long ExpectedSizeBytes { get; set; }
     public DateTime ExpiresAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public string? FinalObjectKey { get; set; }
     public DateTime CreatedAt { get; set; }
 }

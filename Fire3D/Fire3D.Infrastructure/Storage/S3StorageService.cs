@@ -2,10 +2,11 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using Fire3D.Application.Storage;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Fire3D.Infrastructure.Storage;
 
-public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration) : IStorageService
+public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration, ILogger<S3StorageService> logger) : IStorageService
 {
     private readonly string _bucketName = ResolveBucketName(configuration);
 
@@ -14,16 +15,27 @@ public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration) 
             ? Environment.GetEnvironmentVariable("S3_BUCKET_NAME") ?? "fire3d-uploads"
             : configuration["AWS:BucketName"]!;
 
-    public Task UploadObjectAsync(string objectKey, Stream content, long contentLength, string contentType, CancellationToken ct) =>
-        s3Client.PutObjectAsync(new PutObjectRequest
+    public async Task UploadObjectAsync(string objectKey, Stream content, long contentLength, string contentType, CancellationToken ct)
+    {
+        try
         {
-            BucketName = _bucketName,
-            Key = objectKey,
-            InputStream = content,
-            AutoCloseStream = false,
-            CannedACL = S3CannedACL.Private,
-            Headers = { ContentLength = contentLength, ContentType = contentType }
-        }, ct);
+            await s3Client.PutObjectAsync(new PutObjectRequest
+            {
+                BucketName = _bucketName,
+                Key = objectKey,
+                InputStream = content,
+                AutoCloseStream = false,
+                Headers = { ContentLength = contentLength, ContentType = contentType }
+            }, ct);
+        }
+        catch (AmazonS3Exception ex)
+        {
+            logger.LogError(ex,
+                "Avatar S3 PutObject failed. Status={StatusCode}, ErrorCode={ErrorCode}, RequestId={RequestId}, ObjectKey={ObjectKey}",
+                ex.StatusCode, ex.ErrorCode, ex.RequestId, objectKey);
+            throw;
+        }
+    }
 
     public async Task<string> GeneratePresignedUploadUrlAsync(string objectKey, string mimeType, TimeSpan expiration, CancellationToken ct)
     {
@@ -84,6 +96,22 @@ public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration) 
         catch (AmazonS3Exception ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed) { return null; }
     }
 
+    public async Task<byte[]?> ReadObjectAsync(string objectKey, long maxBytes, string expectedETag, CancellationToken ct)
+    {
+        try
+        {
+            using var response = await s3Client.GetObjectAsync(new GetObjectRequest
+            {
+                BucketName = _bucketName, Key = objectKey, EtagToMatch = expectedETag
+            }, ct);
+            if (response.ContentLength < 0 || response.ContentLength > maxBytes || response.ContentLength > int.MaxValue) return null;
+            await using var buffer = new MemoryStream((int)response.ContentLength);
+            await response.ResponseStream.CopyToAsync(buffer, ct);
+            return buffer.Length <= maxBytes ? buffer.ToArray() : null;
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed) { return null; }
+    }
+
     public async Task<bool> CopyObjectIfUnchangedAsync(string sourceKey, string sourceETag, string destinationKey, string contentType, CancellationToken ct)
     {
         try
@@ -92,7 +120,7 @@ public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration) 
             {
                 SourceBucket = _bucketName, SourceKey = sourceKey, ETagToMatch = sourceETag,
                 DestinationBucket = _bucketName, DestinationKey = destinationKey, MetadataDirective = S3MetadataDirective.REPLACE,
-                ContentType = contentType, CannedACL = S3CannedACL.Private
+                ContentType = contentType
             }, ct);
             return true;
         }
