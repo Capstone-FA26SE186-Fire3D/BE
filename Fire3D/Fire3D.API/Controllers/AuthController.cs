@@ -3,6 +3,7 @@ using Fire3D.Application.Authentication;
 using Fire3D.Application.Authentication.Commands.RefreshToken;
 using Fire3D.Application.Authentication.Commands.Logout;
 using Fire3D.Application.Authentication.Queries.GetCurrentAccount;
+using Fire3D.Application.Authentication.Avatar;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +13,7 @@ namespace Fire3D.API.Controllers;
 [ApiController]
 [Route("api/auth")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class AuthController(ISender sender) : ControllerBase
+public sealed class AuthController(ISender sender, IAvatarService? avatars = null) : ControllerBase
 {
     /// <summary>Đăng nhập email/password do BE quản lý. Không cần Bearer.</summary>
     /// <remarks>Body: email, password. BE kiểm tra hash trong PostgreSQL; không gọi Firebase.
@@ -139,6 +140,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     {
         var account = await sender.Send(new GetCurrentAccountQuery(User.GetActorId()), ct);
         if (account is null) return Unauthorized();
+        account = await EnrichAvatarAsync(User.GetActorId(), account, ct);
         Response.Headers.ETag = ProfileEtag.Format(account.ProfileRevision);
         return Ok(account);
     }
@@ -156,8 +158,9 @@ public sealed class AuthController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileCommand(User.GetActorId(), ifMatch, request), ct);
         if (!result.IsSuccess) return ResetProblem(result.Error!);
-        Response.Headers.ETag = ProfileEtag.Format(result.Value!.ProfileRevision);
-        return Ok(result.Value);
+        var account = await EnrichAvatarAsync(User.GetActorId(), result.Value!, ct);
+        Response.Headers.ETag = ProfileEtag.Format(account.ProfileRevision);
+        return Ok(account);
     }
 
     /// <summary>
@@ -188,6 +191,13 @@ public sealed class AuthController(ISender sender) : ControllerBase
     private ActionResult<TokenResponse> Respond(AuthResult<TokenResponse> result) =>
         result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+
+    private async Task<AccountResponse> EnrichAvatarAsync(Guid userId, AccountResponse account, CancellationToken ct)
+    {
+        if (avatars is null) return account;
+        var avatar = await avatars.GetAvatarAsync(userId, ct);
+        return avatar.IsSuccess ? account with { AvatarUrl = avatar.Value!.Url } : account;
+    }
 
     /// <summary>
     /// Gửi hướng dẫn đặt lại mật khẩu qua email. Không cần Bearer.

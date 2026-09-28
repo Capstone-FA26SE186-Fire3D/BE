@@ -59,6 +59,17 @@ public sealed class ProfileEtagTests
         Assert.Equal("Username phải dài 3–30 ký tự, chỉ gồm a-z, số, dấu chấm, gạch dưới hoặc gạch ngang.", result.Error?.Errors?["username"][0]);
     }
 
+    [Fact]
+    public async Task Patch_profile_rejects_a_whitespace_only_name_before_accessing_the_store()
+    {
+        var store = ResetProxy.For<IAuthStore>((method, _) => throw new InvalidOperationException("Unexpected store operation: " + method));
+        var result = await new UpdateCurrentProfileCommandHandler(store, TimeProvider.System)
+            .Handle(new(Guid.NewGuid(), "\"1\"", new UpdateCurrentProfileRequest("   ")), default);
+
+        Assert.Equal("VALIDATION_ERROR", result.Error?.Code);
+        Assert.Contains("fullName", result.Error?.Errors?.Keys ?? []);
+    }
+
     private static Task<ProfileUpdateResult> AssertUpdate(object?[] args)
     {
         Assert.Equal(4L, args[1]);
