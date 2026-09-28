@@ -4,8 +4,6 @@ using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 namespace Fire3D.Infrastructure.Ifc;
 public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
@@ -173,11 +171,10 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
 
         // Enqueue outbox event for Worker to pick up
         var payload = JsonSerializer.Serialize(new ProcessingJobRequestedPayload(jobId, revisionId, revision.SourceDocument.StorageUrl));
-        var payloadHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
         await ScalarAsync("""
-            INSERT INTO public.integration_outbox_events(idempotency_key, aggregate_type, aggregate_id, event_type, payload, status, schema_version, payload_hash, created_at)
-            VALUES (@id, 'ProcessingJob', @job, 'ProcessingJobRequested', @payload::jsonb, 'Pending', '1.0', @payloadHash, now())
-            """, ct, ("id", Guid.NewGuid()), ("job", jobId), ("payload", payload), ("payloadHash", payloadHash));
+            SELECT public.enqueue_integration_outbox_event(
+                @key, 'ProcessingJob', @job, 'ProcessingJobRequested', '1', @payload::jsonb)
+            """, ct, ("key", $"ifc-process:{jobId:N}"), ("job", jobId), ("payload", payload));
 
         await transaction.CommitAsync(ct);
         return AuthResult<Guid>.Ok(jobId);
