@@ -4,6 +4,8 @@ namespace Fire3D.Infrastructure.Storage;
 
 public class StubStorageService : IStorageService
 {
+    public Task UploadObjectAsync(string objectKey, Stream content, long contentLength, string contentType, CancellationToken ct) => Task.CompletedTask;
+
     public Task<string> GeneratePresignedUploadUrlAsync(string objectKey, string mimeType, TimeSpan expiration, CancellationToken ct)
     {
         // Stub implementation: returns a fake presigned URL

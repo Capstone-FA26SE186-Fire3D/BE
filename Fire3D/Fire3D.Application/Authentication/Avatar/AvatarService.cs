@@ -26,6 +26,39 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         return AuthResult<AvatarUploadIntentResponse>.Ok(new(intent.Id, url, intent.ExpiresAt));
     }
 
+    public async Task<AuthResult<AvatarResponse>> UploadFileAsync(Guid userId, long expectedProfileRevision, string contentType, long contentLength, Stream content, CancellationToken ct)
+    {
+        if (expectedProfileRevision < 1)
+            return AuthResult<AvatarResponse>.Fail("VALIDATION_ERROR", "A valid profile ETag is required.", 400);
+        if (content is null)
+            return AuthResult<AvatarResponse>.Fail("VALIDATION_ERROR", "Avatar file is required.", 400);
+
+        var intentResult = await CreateUploadIntentAsync(userId, new(contentType, contentLength), ct);
+        if (!intentResult.IsSuccess) return AuthResult<AvatarResponse>.Fail(intentResult.Error!.Code, intentResult.Error.Message, intentResult.Error.Status);
+
+        var intent = await avatarStore.FindUploadIntentAsync(intentResult.Value!.UploadId, userId, ct);
+        if (intent is null)
+            return AuthResult<AvatarResponse>.Fail("AVATAR_UPLOAD_UNAVAILABLE", "Avatar upload is unavailable.", 503);
+
+        try
+        {
+            await storage.UploadObjectAsync(intent.StagingObjectKey, content, contentLength, intent.ContentType, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            await TryDeleteAsync(intent.StagingObjectKey, ct);
+            return AuthResult<AvatarResponse>.Fail("AVATAR_UPLOAD_UNAVAILABLE", "Avatar upload failed. Try again.", 503);
+        }
+
+        var completed = await CompleteUploadAsync(userId, expectedProfileRevision, new(intent.Id), ct);
+        if (!completed.IsSuccess) await TryDeleteAsync(intent.StagingObjectKey, ct);
+        return completed;
+    }
+
     public async Task<AuthResult<AvatarResponse>> CompleteUploadAsync(Guid userId, long expectedProfileRevision, CompleteAvatarUploadRequest request, CancellationToken ct)
     {
         if (request is null || request.UploadId == Guid.Empty || expectedProfileRevision < 1) return AuthResult<AvatarResponse>.Fail("VALIDATION_ERROR", "UploadId and a valid profile ETag are required.", 400);

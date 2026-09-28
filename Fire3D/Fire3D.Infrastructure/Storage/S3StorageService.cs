@@ -14,6 +14,17 @@ public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration) 
             ? Environment.GetEnvironmentVariable("S3_BUCKET_NAME") ?? "fire3d-uploads"
             : configuration["AWS:BucketName"]!;
 
+    public Task UploadObjectAsync(string objectKey, Stream content, long contentLength, string contentType, CancellationToken ct) =>
+        s3Client.PutObjectAsync(new PutObjectRequest
+        {
+            BucketName = _bucketName,
+            Key = objectKey,
+            InputStream = content,
+            AutoCloseStream = false,
+            CannedACL = S3CannedACL.Private,
+            Headers = { ContentLength = contentLength, ContentType = contentType }
+        }, ct);
+
     public async Task<string> GeneratePresignedUploadUrlAsync(string objectKey, string mimeType, TimeSpan expiration, CancellationToken ct)
     {
         var request = new Amazon.S3.Model.GetPreSignedUrlRequest

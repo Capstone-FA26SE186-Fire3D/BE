@@ -2,6 +2,9 @@ namespace Fire3D.Application.Storage;
 
 public interface IStorageService
 {
+    /// <summary>Uploads a server-received stream as a private object.</summary>
+    Task UploadObjectAsync(string objectKey, Stream content, long contentLength, string contentType, CancellationToken ct);
+
     /// <summary>
     /// Generates a presigned URL for uploading a file directly to the storage provider.
     /// </summary>

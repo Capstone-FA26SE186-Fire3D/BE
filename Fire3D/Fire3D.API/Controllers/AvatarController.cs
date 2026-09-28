@@ -12,6 +12,24 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AvatarController(IAvatarService avatars) : ControllerBase
 {
+    [HttpPost("upload")]
+    [Consumes("multipart/form-data")]
+    [RequestFormLimits(MultipartBodyLengthLimit = AvatarUploadRules.MaxBytes + 64 * 1024)]
+    [ProducesResponseType<AvatarResponse>(200)]
+    public async Task<ActionResult<AvatarResponse>> Upload([FromForm] IFormFile? file,
+        [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
+    {
+        if (!ProfileEtag.TryParse(ifMatch, out var revision)) return EtagProblem(ifMatch);
+        if (file is null) return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Send an avatar file in the multipart field named file.",
+            extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR" });
+
+        await using var stream = file.OpenReadStream();
+        var result = await avatars.UploadFileAsync(User.GetActorId(), revision, file.ContentType, file.Length, stream, ct);
+        if (!result.IsSuccess) return ToProblem(result.Error!);
+        Response.Headers.ETag = ProfileEtag.Format(result.Value!.ProfileRevision);
+        return Ok(result.Value);
+    }
+
     [HttpPost("upload-intent")]
     [ProducesResponseType<AvatarUploadIntentResponse>(200)]
     public async Task<ActionResult<AvatarUploadIntentResponse>> CreateUploadIntent(AvatarUploadIntentRequest request, CancellationToken ct)

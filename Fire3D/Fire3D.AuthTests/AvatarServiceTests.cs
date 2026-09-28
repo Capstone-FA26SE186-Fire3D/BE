@@ -41,6 +41,24 @@ public sealed class AvatarServiceTests
     }
 
     [Fact]
+    public async Task Upload_file_streams_to_the_server_owned_staging_key_then_completes()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
+        var avatarStore = new AvatarStoreFake();
+        var storage = new AvatarStorageFake();
+        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, storage, TimeProvider.System);
+
+        var image = new byte[1024];
+        new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }.CopyTo(image, 0);
+        await using var file = new MemoryStream(image);
+        var result = await service.UploadFileAsync(user.Id, 1, "image/png", file.Length, file, default);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(storage.UploadedDirectly);
+        Assert.True(avatarStore.Finalized);
+    }
+
+    [Fact]
     public async Task Complete_succeeds_when_post_commit_staging_cleanup_is_temporarily_unavailable()
     {
         var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
@@ -145,10 +163,18 @@ public sealed class AvatarServiceTests
         public TimeSpan UploadExpiration { get; private set; }
         public byte[] Prefix { get; init; } = [137, 80, 78, 71, 13, 10, 26, 10];
         public bool Copied { get; private set; }
+        public bool UploadedDirectly { get; private set; }
         public bool ThrowOnDelete { get; init; }
         public bool CopySucceeds { get; init; } = true;
         public List<string> CopiedKeys { get; } = [];
         public List<string> DeletedKeys { get; } = [];
+        public Task UploadObjectAsync(string objectKey, Stream content, long contentLength, string contentType, CancellationToken ct)
+        {
+            UploadedDirectly = true;
+            UploadedKey = objectKey;
+            UploadContentType = contentType;
+            return Task.CompletedTask;
+        }
         public Task<string> GeneratePresignedUploadUrlAsync(string objectKey, string mimeType, TimeSpan expiration, CancellationToken ct) { UploadedKey = objectKey; UploadContentType = mimeType; UploadExpiration = expiration; return Task.FromResult("https://storage.test/upload"); }
         public Task<bool> VerifyObjectExistsAsync(string objectKey, long expectedSizeBytes, CancellationToken ct) => Task.FromResult(true);
         public Task<StorageObjectMetadata?> GetObjectMetadataAsync(string objectKey, CancellationToken ct) => Task.FromResult<StorageObjectMetadata?>(new(1024, "image/png", "etag"));
