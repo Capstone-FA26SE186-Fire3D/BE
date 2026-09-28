@@ -84,6 +84,22 @@ public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration) 
         catch (AmazonS3Exception ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed) { return null; }
     }
 
+    public async Task<byte[]?> ReadObjectAsync(string objectKey, long maxBytes, string expectedETag, CancellationToken ct)
+    {
+        try
+        {
+            using var response = await s3Client.GetObjectAsync(new GetObjectRequest
+            {
+                BucketName = _bucketName, Key = objectKey, EtagToMatch = expectedETag
+            }, ct);
+            if (response.ContentLength < 0 || response.ContentLength > maxBytes || response.ContentLength > int.MaxValue) return null;
+            await using var buffer = new MemoryStream((int)response.ContentLength);
+            await response.ResponseStream.CopyToAsync(buffer, ct);
+            return buffer.Length <= maxBytes ? buffer.ToArray() : null;
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed) { return null; }
+    }
+
     public async Task<bool> CopyObjectIfUnchangedAsync(string sourceKey, string sourceETag, string destinationKey, string contentType, CancellationToken ct)
     {
         try

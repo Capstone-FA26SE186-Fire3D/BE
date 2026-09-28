@@ -15,7 +15,9 @@ public static class ApplicationExtensions
     {
         services.AddSingleton(configuration);
         services.AddScoped<IAdministrationStore, AdministrationStore>();
-        services.AddScoped<IAvatarStore, AvatarStore>();
+        services.AddScoped<AvatarStore>();
+        services.AddScoped<IAvatarStore>(provider => provider.GetRequiredService<AvatarStore>());
+        services.AddScoped<IAvatarCleanupStore>(provider => provider.GetRequiredService<AvatarStore>());
         services.AddScoped<IAvatarService, AvatarService>();
         var awsOptions = configuration.GetAWSOptions();
         var accessKey = configuration["AWS:AccessKey"];

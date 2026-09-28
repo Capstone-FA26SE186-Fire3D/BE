@@ -16,6 +16,7 @@ public sealed record AvatarDeleteResult(AvatarDeleteStatus Status, string? Previ
 }
 public enum AvatarFinalizeStatus { Finalized, PreconditionFailed, Unavailable }
 public enum AvatarDeleteStatus { Deleted, PreconditionFailed, Unavailable }
+public sealed record AvatarCleanupJob(Guid Id, string ObjectKey, Guid LeaseToken, int Attempt);
 
 public interface IAvatarStore
 {
@@ -23,6 +24,15 @@ public interface IAvatarStore
     Task<AvatarUploadIntent?> FindUploadIntentAsync(Guid id, Guid userId, CancellationToken ct);
     Task<AvatarFinalizeResult> FinalizeUploadAsync(Guid intentId, Guid userId, long expectedProfileRevision, string objectKey, DateTime completedAt, CancellationToken ct);
     Task<AvatarDeleteResult> DeleteAvatarAsync(Guid userId, long expectedProfileRevision, DateTime deletedAt, CancellationToken ct);
+}
+
+public interface IAvatarCleanupStore
+{
+    Task QueueAsync(string objectKey, CancellationToken ct);
+    Task<AvatarCleanupJob?> ClaimAsync(CancellationToken ct);
+    Task<bool> IsReferencedAsync(string objectKey, CancellationToken ct);
+    Task CompleteAsync(AvatarCleanupJob job, CancellationToken ct);
+    Task FailAsync(AvatarCleanupJob job, CancellationToken ct);
 }
 
 public interface IAvatarService

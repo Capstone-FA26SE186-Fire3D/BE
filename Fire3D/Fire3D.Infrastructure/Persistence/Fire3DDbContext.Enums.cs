@@ -36,8 +36,24 @@ public partial class Fire3DDbContext
             entity.Property(x => x.ExpectedSizeBytes).HasColumnName("expected_size_bytes");
             entity.Property(x => x.ExpiresAt).HasColumnName("expires_at");
             entity.Property(x => x.CompletedAt).HasColumnName("completed_at");
+            entity.Property(x => x.FinalObjectKey).HasColumnName("final_object_key");
             entity.Property(x => x.CreatedAt).HasColumnName("created_at");
             entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AvatarObjectCleanup>(entity =>
+        {
+            entity.ToTable("avatar_object_cleanups");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.ObjectKey).IsUnique();
+            entity.HasIndex(x => new { x.AvailableAt, x.LeaseUntil });
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.ObjectKey).HasColumnName("object_key");
+            entity.Property(x => x.AvailableAt).HasColumnName("available_at");
+            entity.Property(x => x.LeaseToken).HasColumnName("lease_token");
+            entity.Property(x => x.LeaseUntil).HasColumnName("lease_until");
+            entity.Property(x => x.Attempts).HasColumnName("attempts");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
         });
 
         modelBuilder.Entity<Revision>(entity =>

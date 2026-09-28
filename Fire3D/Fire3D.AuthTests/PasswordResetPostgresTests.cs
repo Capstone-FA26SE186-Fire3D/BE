@@ -226,7 +226,8 @@ public sealed class PasswordResetPostgresTests
             CREATE TABLE avatar_upload_intents (
               id uuid PRIMARY KEY, user_id uuid NOT NULL, staging_object_key text NOT NULL,
               content_type text NOT NULL, expected_size_bytes bigint NOT NULL,
-              expires_at timestamptz NOT NULL, completed_at timestamptz NULL, created_at timestamptz NOT NULL
+              expires_at timestamptz NOT NULL, completed_at timestamptz NULL, final_object_key text NULL,
+              created_at timestamptz NOT NULL
             )
             """);
         var userId = Guid.NewGuid();
