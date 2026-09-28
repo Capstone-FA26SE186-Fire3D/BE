@@ -49,6 +49,17 @@ public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmai
             """).SingleAsync(ct);
         if (startNewGeneration)
         {
+            // Check the account-wide cooldown before advancing the generation. Checking the
+            // prospective generation would make every resend bypass the one-minute limit.
+            var hasRecentDelivery = await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS(SELECT 1 FROM public.email_verification_jobs
+                  WHERE user_id={userId} AND created_at > now() - interval '1 minute') AS "Value"
+                """).SingleAsync(ct);
+            if (hasRecentDelivery)
+            {
+                if (owned is not null) await owned.CommitAsync(ct);
+                return;
+            }
             generation++;
         }
         else if (generation == 0)
@@ -57,7 +68,8 @@ public sealed class EmailVerificationQueue(Fire3DDbContext db, IOptions<AuthEmai
         }
 
         // Initial registration is idempotent inside its transaction. Resend creates a new
-        // delivery generation, but already-issued links remain usable until their own expiry.
+        // delivery generation after the account-wide cooldown, while already-issued links
+        // remain usable until their own expiry.
         var exists = await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM public.email_verification_jobs
               WHERE user_id={userId} AND generation={generation}
