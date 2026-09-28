@@ -30,7 +30,8 @@ public sealed class SelfRegistrationTests
 
         var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), VerificationQueue(), TimeProvider.System);
         var result = await handler.Handle(
-            new RegisterTraineeCommand(" trainee@example.test ", "Fire.Drill", "StrongPassword12!", "StrongPassword12!", "Trainee"),
+            new RegisterTraineeCommand(" trainee@example.test ", "Fire.Drill", "StrongPassword12!", "StrongPassword12!", "Trainee",
+                new DateOnly(2000, 1, 2), UserGender.PreferNotToSay, "+84 123456789"),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -40,6 +41,9 @@ public sealed class SelfRegistrationTests
         Assert.Equal("fire.drill", persisted!.Username);
         Assert.Equal(UserRole.Trainee, persisted.Role);
         Assert.Null(persisted.OrganizationId);
+        Assert.Equal(new DateOnly(2000, 1, 2), persisted.Dob);
+        Assert.Equal(UserGender.PreferNotToSay, persisted.Gender);
+        Assert.Equal("+84123456789", persisted.PhoneNumber);
         Assert.NotEqual("StrongPassword12!", persisted.PasswordHash);
     }
 
@@ -94,7 +98,8 @@ public sealed class SelfRegistrationTests
 
         var handler = new RegisterOrganizationCommandHandler(store, new PasswordService(), VerificationQueue(), TimeProvider.System);
         var result = await handler.Handle(
-            new RegisterOrganizationCommand("owner@example.test", "StrongPassword12!", "StrongPassword12!", "Owner", "Fire3D Co", "1 Fire Street", "+84 123456789"),
+            new RegisterOrganizationCommand("owner@example.test", "StrongPassword12!", "StrongPassword12!", "Owner", "Fire3D Co", "1 Fire Street", "+84 123456789",
+                new DateOnly(1990, 1, 1), UserGender.Female, "090 123 4567"),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -105,6 +110,9 @@ public sealed class SelfRegistrationTests
         Assert.Equal("+84123456789", persistedOrganization.PhoneNumber);
         Assert.Equal(UserRole.OrganizationUser, persistedUser!.Role);
         Assert.Equal(persistedOrganization.Id, persistedUser.OrganizationId);
+        Assert.Equal(new DateOnly(1990, 1, 1), persistedUser.Dob);
+        Assert.Equal(UserGender.Female, persistedUser.Gender);
+        Assert.Equal("0901234567", persistedUser.PhoneNumber);
     }
 
     private static Task<RegisterConflict> CaptureTrainee(object?[] args, Action<User> capture)

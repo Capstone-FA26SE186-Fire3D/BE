@@ -107,11 +107,14 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
   "username": "nguyen.van.a",
   "password": "Example-Password-2026!",
   "confirmPassword": "Example-Password-2026!",
-  "fullName": "Nguyen Van A"
+  "fullName": "Nguyen Van A",
+  "dob": "2000-01-02",
+  "gender": "PreferNotToSay",
+  "phoneNumber": "+84123456789"
 }
 ```
 
-`/api/auth/register/trainee` yêu cầu email hợp lệ tối đa 254 ký tự, username lowercase theo `[a-z0-9._-]{3,30}`, password 12–128 và confirmPassword trùng password; fullName tùy chọn, tối đa 200. Username unique không phân biệt hoa thường. Không gửi role/organizationId để cấp quyền.
+`/api/auth/register/trainee` yêu cầu email hợp lệ tối đa 254 ký tự, username lowercase theo `[a-z0-9._-]{3,30}`, password 12–128 và confirmPassword trùng password; fullName, dob, gender và phoneNumber là tùy chọn. Dob không được ở tương lai; gender là `Male`, `Female`, `Other` hoặc `PreferNotToSay`; phoneNumber có 6–15 chữ số, có thể bắt đầu bằng `+`. Username unique không phân biệt hoa thường. Không gửi role/organizationId để cấp quyền.
 
 BE hash password vào `users.password_hash`, không tạo tài khoản email/password trên Firebase. Trả **201 AccountResponse**, chưa đăng nhập; gọi login tiếp theo:
 
@@ -130,7 +133,7 @@ Tài khoản tự đăng ký có 2 giờ để xác minh email. Trong thời gia
 
 Lỗi: 400 VALIDATION_ERROR, 409 EMAIL_EXISTS hoặc USERNAME_EXISTS. AccountResponse từ nguồn tạo khác có thể có fullName/username null.
 
-`POST /api/auth/register` là alias tương thích cho request Trainee cùng contract. `POST /api/auth/register/organization` nhận email/password/confirmPassword, fullName tùy chọn, organizationName, organizationAddress và organizationPhoneNumber; backend tạo owner `OrganizationUser` cùng organization trong một transaction.
+`POST /api/auth/register` là alias tương thích cho request Trainee cùng contract. `POST /api/auth/register/organization` nhận email/password/confirmPassword, organizationName, organizationAddress, organizationPhoneNumber và các trường hồ sơ tùy chọn fullName/dob/gender/phoneNumber; backend tạo owner `OrganizationUser` cùng organization trong một transaction.
 
 ### 2.2 Login local
 

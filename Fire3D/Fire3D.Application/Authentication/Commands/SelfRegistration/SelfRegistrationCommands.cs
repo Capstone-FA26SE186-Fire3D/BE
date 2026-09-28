@@ -6,12 +6,14 @@ using MediatR;
 
 namespace Fire3D.Application.Authentication.Commands.SelfRegistration;
 
-public sealed record RegisterTraineeCommand(string Email, string Username, string Password, string ConfirmPassword, string? FullName = null)
+public sealed record RegisterTraineeCommand(string Email, string Username, string Password, string ConfirmPassword,
+    string? FullName = null, DateOnly? Dob = null, UserGender? Gender = null, string? PhoneNumber = null)
     : IRequest<AuthResult<AccountResponse>>;
 
 public sealed record RegisterOrganizationCommand(
     string Email, string Password, string ConfirmPassword, string? FullName,
-    string OrganizationName, string OrganizationAddress, string OrganizationPhoneNumber)
+    string OrganizationName, string OrganizationAddress, string OrganizationPhoneNumber,
+    DateOnly? Dob = null, UserGender? Gender = null, string? PhoneNumber = null)
     : IRequest<AuthResult<AccountResponse>>;
 
 public sealed class RegisterTraineeCommandHandler(IAuthStore store, IPasswordService passwords,
@@ -23,13 +25,16 @@ public sealed class RegisterTraineeCommandHandler(IAuthStore store, IPasswordSer
         var email = PasswordResetValidation.NormalizeEmail(command.Email);
         var username = SelfRegistrationValidation.NormalizeUsername(command.Username);
         var fullName = SelfRegistrationValidation.NormalizeName(command.FullName);
-        var errors = SelfRegistrationValidation.ValidateTrainee(command, email, username, fullName);
+        var phoneNumber = command.PhoneNumber is null ? null : SelfRegistrationValidation.NormalizePhone(command.PhoneNumber);
+        var errors = SelfRegistrationValidation.ValidateTrainee(command, email, username, fullName, phoneNumber,
+            DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime));
         if (errors.Count != 0) return SelfRegistrationValidation.Invalid<AccountResponse>(errors);
 
         var now = AuthSupport.UtcNow(clock);
         var user = new User
         {
-            Id = Guid.NewGuid(), Email = email!, Username = username!, FullName = fullName,
+            Id = Guid.NewGuid(), Email = email!, Username = username!, FullName = fullName, Dob = command.Dob,
+            Gender = command.Gender, PhoneNumber = phoneNumber,
             Role = UserRole.Trainee, IsActive = true, CreatedAt = now, UpdatedAt = now,
             RegistrationExpiresAt = now.AddHours(2)
         };
@@ -54,20 +59,23 @@ public sealed class RegisterOrganizationCommandHandler(IAuthStore store, IPasswo
         var fullName = SelfRegistrationValidation.NormalizeName(command.FullName);
         var organizationName = SelfRegistrationValidation.NormalizeRequired(command.OrganizationName, 255);
         var address = SelfRegistrationValidation.NormalizeRequired(command.OrganizationAddress, 2_000);
-        var phone = SelfRegistrationValidation.NormalizePhone(command.OrganizationPhoneNumber);
-        var errors = SelfRegistrationValidation.ValidateOrganization(command, email, fullName, organizationName, address, phone);
+        var organizationPhone = SelfRegistrationValidation.NormalizePhone(command.OrganizationPhoneNumber);
+        var phoneNumber = command.PhoneNumber is null ? null : SelfRegistrationValidation.NormalizePhone(command.PhoneNumber);
+        var errors = SelfRegistrationValidation.ValidateOrganization(command, email, fullName, organizationName, address,
+            organizationPhone, phoneNumber, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime));
         if (errors.Count != 0) return SelfRegistrationValidation.Invalid<AccountResponse>(errors);
 
         var now = AuthSupport.UtcNow(clock);
         var organization = new Organization
         {
             Id = Guid.NewGuid(), Name = organizationName!, Slug = "org-" + Guid.NewGuid().ToString("N"),
-            Address = address!, PhoneNumber = phone!, Plan = "free", Metadata = "{}", IsActive = true,
+            Address = address!, PhoneNumber = organizationPhone!, Plan = "free", Metadata = "{}", IsActive = true,
             CreatedAt = now, UpdatedAt = now
         };
         var user = new User
         {
-            Id = Guid.NewGuid(), Email = email!, FullName = fullName, Role = UserRole.OrganizationUser,
+            Id = Guid.NewGuid(), Email = email!, FullName = fullName, Dob = command.Dob, Gender = command.Gender,
+            PhoneNumber = phoneNumber, Role = UserRole.OrganizationUser,
             OrganizationId = organization.Id, IsActive = true, CreatedAt = now, UpdatedAt = now,
             RegistrationExpiresAt = now.AddHours(2)
         };
@@ -114,7 +122,8 @@ internal static class SelfRegistrationValidation
     internal static bool PasswordsMatch(string? password, string? confirmation) =>
         PasswordResetValidation.ValidPassword(password) && string.Equals(password, confirmation, StringComparison.Ordinal);
 
-    internal static Dictionary<string, string[]> ValidateTrainee(RegisterTraineeCommand command, string? email, string? username, string? fullName)
+    internal static Dictionary<string, string[]> ValidateTrainee(RegisterTraineeCommand command, string? email, string? username,
+        string? fullName, string? phoneNumber, DateOnly today)
     {
         var errors = new Dictionary<string, string[]>();
         Add(errors, "email", email is null, "Email không hợp lệ hoặc vượt quá 254 ký tự.");
@@ -122,11 +131,12 @@ internal static class SelfRegistrationValidation
         Add(errors, "password", !PasswordResetValidation.ValidPassword(command.Password), "Mật khẩu phải dài 12–128 ký tự và không chỉ gồm khoảng trắng.");
         Add(errors, "confirmPassword", !string.Equals(command.Password, command.ConfirmPassword, StringComparison.Ordinal), "Mật khẩu xác nhận không khớp.");
         Add(errors, "fullName", command.FullName is not null && fullName is null, "Họ tên không được rỗng và tối đa 200 ký tự.");
+        AddPersonalProfileErrors(errors, command.Dob, command.Gender, command.PhoneNumber, phoneNumber, today);
         return errors;
     }
 
     internal static Dictionary<string, string[]> ValidateOrganization(RegisterOrganizationCommand command, string? email, string? fullName,
-        string? organizationName, string? address, string? phone)
+        string? organizationName, string? address, string? organizationPhone, string? phoneNumber, DateOnly today)
     {
         var errors = new Dictionary<string, string[]>();
         Add(errors, "email", email is null, "Email không hợp lệ hoặc vượt quá 254 ký tự.");
@@ -135,8 +145,18 @@ internal static class SelfRegistrationValidation
         Add(errors, "fullName", command.FullName is not null && fullName is null, "Họ tên không được rỗng và tối đa 200 ký tự.");
         Add(errors, "organizationName", organizationName is null, "Tên tổ chức không được rỗng và tối đa 255 ký tự.");
         Add(errors, "organizationAddress", address is null, "Địa chỉ tổ chức không được rỗng và tối đa 2000 ký tự.");
-        Add(errors, "organizationPhoneNumber", phone is null, "Số điện thoại phải có 6–15 chữ số; có thể bắt đầu bằng dấu +.");
+        Add(errors, "organizationPhoneNumber", organizationPhone is null, "Số điện thoại phải có 6–15 chữ số; có thể bắt đầu bằng dấu +.");
+        AddPersonalProfileErrors(errors, command.Dob, command.Gender, command.PhoneNumber, phoneNumber, today);
         return errors;
+    }
+
+    private static void AddPersonalProfileErrors(Dictionary<string, string[]> errors, DateOnly? dob, UserGender? gender,
+        string? submittedPhoneNumber, string? phoneNumber, DateOnly today)
+    {
+        Add(errors, "dob", dob is not null && dob > today, "Ngày sinh không được ở tương lai.");
+        Add(errors, "gender", gender is not null && !Enum.IsDefined(gender.Value), "Giới tính không hợp lệ.");
+        Add(errors, "phoneNumber", submittedPhoneNumber is not null && phoneNumber is null,
+            "Số điện thoại phải có 6–15 chữ số; có thể bắt đầu bằng dấu +.");
     }
 
     private static void Add(Dictionary<string, string[]> errors, string field, bool invalid, string message)
