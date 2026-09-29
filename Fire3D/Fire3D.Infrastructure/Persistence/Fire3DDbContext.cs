@@ -88,6 +88,8 @@ public partial class Fire3DDbContext : DbContext
 
     public virtual DbSet<UserDevice> UserDevices { get; set; }
 
+    public virtual DbSet<DeviceInstallation> DeviceInstallations { get; set; }
+
     public virtual DbSet<AvatarUploadIntent> AvatarUploadIntents { get; set; }
 
     public virtual DbSet<AvatarObjectCleanup> AvatarObjectCleanups { get; set; }
@@ -1768,8 +1770,12 @@ public partial class Fire3DDbContext : DbContext
             entity.Property(e => e.DeviceModel).HasColumnName("device_model");
             entity.Property(e => e.DeviceUuid).HasColumnName("device_uuid");
             entity.Property(e => e.FcmToken)
-                .HasMaxLength(255)
+                .HasMaxLength(4096)
                 .HasColumnName("fcm_token");
+            entity.Property(e => e.InstallationId).HasColumnName("installation_id");
+            entity.Property(e => e.NotificationsEnabled).HasColumnName("notifications_enabled");
+            entity.Property(e => e.FcmTokenGeneration).HasColumnName("fcm_token_generation");
+            entity.Property(e => e.RevokedAt).HasColumnName("revoked_at");
             entity.Property(e => e.LastSeenAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("last_seen_at");
@@ -1780,6 +1786,23 @@ public partial class Fire3DDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("user_devices_user_id_fkey");
+
+            entity.HasOne(d => d.Installation).WithMany(p => p.UserDevices)
+                .HasForeignKey(d => d.InstallationId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("user_devices_installation_id_fkey");
+        });
+
+        modelBuilder.Entity<DeviceInstallation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("device_installations_pkey");
+            entity.ToTable("device_installations");
+            entity.HasIndex(e => e.DeviceUuid).IsUnique().HasDatabaseName("device_installations_device_uuid_key");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.DeviceUuid).HasMaxLength(255).HasColumnName("device_uuid");
+            entity.Property(e => e.SecretHash).HasMaxLength(64).HasColumnName("secret_hash");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
         });
 
         modelBuilder.Entity<ValidationRun>(entity =>

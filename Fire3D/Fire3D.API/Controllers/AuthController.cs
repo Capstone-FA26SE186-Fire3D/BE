@@ -196,15 +196,21 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     }
 
     /// <summary>
-    /// Đăng ký thiết bị và FCM Token để nhận Push Notification.
+    /// Registers a credential-bound installation and its current FCM token.
     /// </summary>
     [HttpPut("devices")]
     [Authorize]
-    public async Task<IActionResult> RegisterDevice([FromBody] Fire3D.Application.Users.Commands.RegisterDevice.RegisterDeviceCommand request, CancellationToken ct)
+    [ProducesResponseType<Fire3D.Application.Users.Commands.RegisterDevice.DeviceRegistrationResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    public async Task<IActionResult> RegisterDevice(
+        [FromBody] Fire3D.Application.Users.Commands.RegisterDevice.RegisterDeviceRequest request,
+        [FromHeader(Name = "X-Installation-Key")] string? installationKey, CancellationToken ct)
     {
-        var userId = User.GetActorId();
-        await sender.Send(request with { UserId = userId }, ct);
-        return Ok();
+        var result = await sender.Send(new Fire3D.Application.Users.Commands.RegisterDevice.RegisterDeviceCommand(
+            User.GetActorId(), request.DeviceUuid, installationKey, request.FcmToken, request.DeviceModel, request.OsVersion, request.AppVersion), ct);
+        return result.IsSuccess ? Ok(result.Value) : ResetProblem(result.Error!);
     }
 
     /// <summary>Revokes push delivery for one installation owned by the current account.</summary>
