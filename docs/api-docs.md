@@ -114,7 +114,7 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 }
 ```
 
-`/api/auth/register/trainee` yêu cầu email hợp lệ tối đa 254 ký tự, username lowercase theo `[a-z0-9._-]{3,30}`, password 12–128 và confirmPassword trùng password; fullName, dob, gender và phoneNumber là tùy chọn. Dob không được ở tương lai; gender là `Male`, `Female`, `Other` hoặc `PreferNotToSay`; phoneNumber có 6–15 chữ số, có thể bắt đầu bằng `+`. Username unique không phân biệt hoa thường. Không gửi role/organizationId để cấp quyền.
+`/api/auth/register/trainee` yêu cầu email hợp lệ tối đa 254 ký tự, username lowercase theo `[a-z0-9._-]{3,30}`, password 6–128 và confirmPassword trùng password; fullName, dob, gender và phoneNumber là tùy chọn. Dob không được ở tương lai; gender là `Male`, `Female`, `Other` hoặc `PreferNotToSay`; phoneNumber có 6–15 chữ số, có thể bắt đầu bằng `+`. Username unique không phân biệt hoa thường. Không gửi role/organizationId để cấp quyền.
 
 BE hash password vào `users.password_hash`, không tạo tài khoản email/password trên Firebase. Trả **201 AccountResponse**, chưa đăng nhập; gọi login tiếp theo:
 
@@ -141,7 +141,7 @@ Lỗi: 400 VALIDATION_ERROR, 409 EMAIL_EXISTS hoặc USERNAME_EXISTS. AccountRes
 { "email": "trainee@example.com", "password": "Example-Password-2026!" }
 ```
 
-Email được chuẩn hóa; password login không rỗng, tối đa 128, không áp lại minimum 12 như lúc tạo/reset. Response:
+Email được chuẩn hóa; password login không rỗng, tối đa 128, không áp lại minimum 6 như lúc tạo/reset. Response:
 
 ```json
 {
@@ -244,7 +244,7 @@ Sai email: 400 INVALID_EMAIL. Email đúng định dạng có/không tồn tại
 }
 ```
 
-Phải dùng token thật từ email: 64 ký tự hex, hạn 30 phút, một lần; DB chỉ lưu hash token. Password 12–128, không chỉ khoảng trắng. Sai/hết hạn/đã dùng token: 400 INVALID_RESET_CODE; password sai: 400 INVALID_PASSWORD; thành công 204.
+Phải dùng token thật từ email: 64 ký tự hex, hạn 30 phút, một lần; DB chỉ lưu hash token. Password 6–128, không chỉ khoảng trắng. Sai/hết hạn/đã dùng token: 400 INVALID_RESET_CODE; password sai: 400 INVALID_PASSWORD; thành công 204.
 
 Reset chỉ áp dụng cho tài khoản đã có password local. Backend đổi hash local, tiêu thụ token, vô hiệu token reset còn lại và thu hồi phiên Fire3D trong transaction. Phải login lại; không trả JWT mới. Tài khoản Google-only không nhận reset token và không thể dùng reset để thêm password local. Không đổi password Google/Firebase; không nhận oobCode Firebase cũ. Không có endpoint đọc password/hash/reset token.
 
@@ -261,7 +261,7 @@ Endpoint cần `Authorization: Bearer <Fire3D accessToken>` và không nhận `a
 }
 ```
 
-`currentPassword` không rỗng và tối đa 128 ký tự. `newPassword` phải dài 12–128 ký tự, không chỉ khoảng trắng và phải khác mật khẩu hiện tại. Sai mật khẩu hiện tại: 400 `INVALID_CURRENT_PASSWORD`; mật khẩu mới không hợp lệ: 400 `INVALID_PASSWORD`; trùng mật khẩu hiện tại: 400 `PASSWORD_UNCHANGED`; tài khoản/organization không còn hoạt động: 401 `UNAUTHORIZED`.
+`currentPassword` không rỗng và tối đa 128 ký tự. `newPassword` phải dài 6–128 ký tự, không chỉ khoảng trắng và phải khác mật khẩu hiện tại. Sai mật khẩu hiện tại: 400 `INVALID_CURRENT_PASSWORD`; mật khẩu mới không hợp lệ: 400 `INVALID_PASSWORD`; trùng mật khẩu hiện tại: 400 `PASSWORD_UNCHANGED`; tài khoản/organization không còn hoạt động: 401 `UNAUTHORIZED`.
 
 Thành công trả 204. Trong cùng transaction khóa theo user, BE cập nhật `password_hash`, vô hiệu token reset chưa dùng, thu hồi toàn bộ refresh session và ghi audit. Access JWT hiện tại sẽ không còn được chấp nhận sau khi family session bị thu hồi; client phải đăng nhập lại. Endpoint không gửi email, không thay đổi password Google/Firebase và không nhận Firebase oobCode.
 
@@ -292,7 +292,7 @@ Tất cả cần Admin: thiếu JWT 401, sai role 403. Tạo/đổi trạng thá
 }
 ```
 
-Email tối đa 254 hợp lệ; password 12–128 không chỉ khoảng trắng; fullName tùy chọn tối đa 200; role bắt buộc. OrganizationUser phải có organizationId hoạt động; role khác phải null/không gửi. Admin tạo cũng hash password local. Lỗi 400 VALIDATION_ERROR/INVALID_ORGANIZATION, 409 EMAIL_EXISTS, 403 FORBIDDEN.
+Email tối đa 254 hợp lệ; password 6–128 không chỉ khoảng trắng; fullName tùy chọn tối đa 200; role bắt buộc. OrganizationUser phải có organizationId hoạt động; role khác phải null/không gửi. Admin tạo cũng hash password local. Lỗi 400 VALIDATION_ERROR/INVALID_ORGANIZATION, 409 EMAIL_EXISTS, 403 FORBIDDEN.
 
 POST trả AccountResponse; GET/PATCH trả ManagedAccountResponse: các field AccountResponse cộng isActive, lastLoginAt nullable, createdAt, updatedAt.
 

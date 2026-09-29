@@ -34,7 +34,7 @@ Use the returned organization id to provision an OrganizationUser:
 ```json
 {
   "email": "manager@example.com",
-  "password": "<a unique password of 12–128 characters>",
+  "password": "<a unique password of 6–128 characters>",
   "fullName": "Organization manager",
   "role": "OrganizationUser",
   "organizationId": "<organization id>"

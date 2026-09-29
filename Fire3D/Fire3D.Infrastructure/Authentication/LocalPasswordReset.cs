@@ -15,11 +15,6 @@ public sealed class LocalPasswordReset(Fire3DDbContext db, IAuthStore accounts,
     {
         var user = await accounts.FindUserByEmailAsync(email, ct);
         if (user is null || !user.IsActive || user.DeletedAt.HasValue || string.IsNullOrWhiteSpace(user.PasswordHash)) return null;
-        var url = options.Value.FrontendUrl;
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != "https" && !(uri.Scheme == "http" && uri.IsLoopback)) ||
-            !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) || !string.IsNullOrEmpty(uri.UserInfo))
-            throw new InvalidOperationException("Configure AuthEmail:FrontendUrl.");
         var raw = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
         var hash = Hash(raw);
         await using var tx = await accounts.BeginUserTransactionAsync(user.Id, ct);
@@ -30,7 +25,7 @@ public sealed class LocalPasswordReset(Fire3DDbContext db, IAuthStore accounts,
             VALUES ({Guid.NewGuid()},{user.Id},{hash},now()+interval '30 minutes')
             """,ct);
         await tx.CommitAsync(ct);
-        return url.TrimEnd('/') + "/reset-password?token=" + raw;
+        return options.Value.GetFrontendPageBaseUrl() + "/reset-password?token=" + raw;
     }
 
     public async Task<bool> ResetAsync(string token, string newPassword, CancellationToken ct)

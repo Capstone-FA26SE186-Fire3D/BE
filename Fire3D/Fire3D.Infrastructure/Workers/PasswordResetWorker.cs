@@ -42,10 +42,11 @@ public sealed class PasswordResetWorker(IServiceScopeFactory scopes, IOptions<Au
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
                 catch (Exception ex)
                 {
-                    await queue.FailAsync(job,ex is PasswordResetException { Permanent:true },stoppingToken);
+                    var delivery = ex as Fire3D.Infrastructure.Email.EmailDeliveryException;
+                    await queue.FailAsync(job, ex is PasswordResetException { Permanent:true } || delivery?.IsPermanent == true, stoppingToken);
                     // No provider response body, link, code or recipient in logs.
-                    logger.LogWarning("Password reset email job {JobId} failed on attempt {Attempt} ({ErrorType}).",
-                        job.Id,job.Attempt,ex.GetType().Name);
+                    logger.LogWarning("Password reset email job {JobId} failed on attempt {Attempt}. ErrorType={ErrorType}, ProviderStatusCode={ProviderStatusCode}, ProviderRequestId={ProviderRequestId}.",
+                        job.Id, job.Attempt, ex.GetType().Name, (int?)delivery?.StatusCode, delivery?.ProviderRequestId);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }

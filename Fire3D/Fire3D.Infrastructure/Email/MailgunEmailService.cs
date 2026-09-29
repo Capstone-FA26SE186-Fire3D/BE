@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Net;
 using System.Text;
 using Fire3D.Application.Email;
 using Microsoft.Extensions.Options;
@@ -42,7 +43,20 @@ public sealed class MailgunEmailService : IEmailService
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new HttpRequestException("Email delivery provider rejected the request.", null, response.StatusCode);
+            response.Headers.TryGetValues("X-Request-Id", out var requestIds);
+            throw new EmailDeliveryException(response.StatusCode, requestIds?.FirstOrDefault());
         }
     }
+}
+
+/// <summary>
+/// A provider response that can be safely summarized in a worker log. It deliberately does
+/// not retain recipient data, HTML, or the provider response body.
+/// </summary>
+public sealed class EmailDeliveryException(HttpStatusCode statusCode, string? providerRequestId) : Exception(
+    "Email delivery provider rejected the request.")
+{
+    public HttpStatusCode StatusCode { get; } = statusCode;
+    public string? ProviderRequestId { get; } = providerRequestId;
+    public bool IsPermanent => (int)StatusCode is >= 400 and < 500 && StatusCode is not HttpStatusCode.RequestTimeout and not (HttpStatusCode)429;
 }

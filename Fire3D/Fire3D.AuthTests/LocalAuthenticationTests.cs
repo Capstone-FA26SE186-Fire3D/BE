@@ -58,7 +58,7 @@ public class LocalAuthenticationTests
         Assert.False(service.Verify(user,"wrong",out _));
         Assert.DoesNotContain("PasswordHash",System.Text.Json.JsonSerializer.Serialize(user));
     }
-    [Theory] [InlineData(11)] [InlineData(129)]
+    [Theory] [InlineData(5)] [InlineData(129)]
     public async Task Bad_password_does_not_reach_reset_store(int length)
     {
         var store=ResetProxy.For<ILocalPasswordReset>((_,_)=>throw new Exception("Unexpected mutation"));

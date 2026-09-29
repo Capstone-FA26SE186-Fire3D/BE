@@ -1,3 +1,5 @@
+using System.Net.Mail;
+
 namespace Fire3D.Infrastructure.Email;
 
 /// <summary>Cấu hình Mailgun REST API. Bind từ appsettings section "Mailgun".</summary>
@@ -20,5 +22,8 @@ public sealed class MailgunOptions
     public bool IsValid() =>
         !string.IsNullOrWhiteSpace(ApiKey) &&
         !string.IsNullOrWhiteSpace(Domain) &&
-        !string.IsNullOrWhiteSpace(From);
+        MailAddress.TryCreate(From, out _) &&
+        Uri.TryCreate(BaseUrl, UriKind.Absolute, out var baseUri) &&
+        baseUri.Scheme == Uri.UriSchemeHttps && string.IsNullOrEmpty(baseUri.UserInfo) &&
+        string.IsNullOrEmpty(baseUri.Query) && string.IsNullOrEmpty(baseUri.Fragment);
 }

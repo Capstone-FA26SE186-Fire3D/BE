@@ -1,4 +1,3 @@
-using Fire3D.Application.Authentication;
 using Fire3D.Application.Administration;
 using Fire3D.Application.Email;
 using Fire3D.Infrastructure.Administration;
@@ -53,10 +52,6 @@ public static class ApplicationExtensions
             .Validate(o => o.IsValid(), "Mailgun: ApiKey, Domain và From là bắt buộc.")
             .ValidateOnStart();
         services.AddHttpClient<IEmailService, MailgunEmailService>();
-
-        // Auth email options (FrontendUrl cho link reset password)
-        services.AddOptions<AuthEmailOptions>()
-            .Bind(configuration.GetSection(AuthEmailOptions.SectionName));
 
         // FCM Notifications
         services.AddScoped<Fire3D.Application.Notifications.INotificationService, Fire3D.Infrastructure.Notifications.FcmNotificationService>();

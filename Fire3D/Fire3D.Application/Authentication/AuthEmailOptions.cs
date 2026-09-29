@@ -2,7 +2,11 @@
 public class AuthEmailOptions
 {
     public const string SectionName = "AuthEmail";
-    public string FrontendUrl { get; set; } = "http://localhost:3000";
+    /// <summary>
+    /// Public origin serving the FET3D frontend. It is used for password-reset links and
+    /// as the backwards-compatible verification-link origin.
+    /// </summary>
+    public string FrontendUrl { get; set; } = "https://fet3d.io.vn";
     /// <summary>
     /// Public base URL that serves the API's <c>/verify-email/</c> page. When omitted,
     /// <see cref="FrontendUrl"/> is retained for backwards-compatible deployments.
@@ -11,17 +15,31 @@ public class AuthEmailOptions
     public string FirebaseApiKey { get; set; } = string.Empty;
     public bool WorkerEnabled { get; set; } = true;
     public bool IsConfigured => !string.IsNullOrWhiteSpace(FirebaseApiKey) &&
-        Uri.TryCreate(FrontendUrl, UriKind.Absolute, out var uri) &&
-        (uri.Scheme == "https" || (uri.Scheme == "http" && uri.IsLoopback)) &&
-        string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment);
+        IsValidBaseUrl(FrontendUrl, allowLoopbackHttp: true);
 
-    public string GetVerificationPageBaseUrl()
+    /// <summary>
+    /// Validates public link origins during application startup. HTTP loopback addresses are
+    /// intentionally permitted only while developing locally.
+    /// </summary>
+    public bool IsValidForEnvironment(bool allowLoopbackHttp) =>
+        IsValidBaseUrl(FrontendUrl, allowLoopbackHttp) &&
+        (string.IsNullOrWhiteSpace(VerificationUrl) || IsValidBaseUrl(VerificationUrl, allowLoopbackHttp));
+
+    public string GetFrontendPageBaseUrl() => GetBaseUrl(FrontendUrl, "FrontendUrl");
+
+    public string GetVerificationPageBaseUrl() => GetBaseUrl(
+        string.IsNullOrWhiteSpace(VerificationUrl) ? FrontendUrl : VerificationUrl,
+        "VerificationUrl (or FrontendUrl)");
+
+    private static string GetBaseUrl(string? value, string settingName)
     {
-        var value = string.IsNullOrWhiteSpace(VerificationUrl) ? FrontendUrl : VerificationUrl;
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != "https" && !(uri.Scheme == "http" && uri.IsLoopback)) ||
-            !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
-            throw new InvalidOperationException("Configure AuthEmail:VerificationUrl (or AuthEmail:FrontendUrl) as an HTTPS public base URL without user info, query, or fragment.");
+        if (!IsValidBaseUrl(value, allowLoopbackHttp: true) || !Uri.TryCreate(value, UriKind.Absolute, out var uri))
+            throw new InvalidOperationException($"Configure AuthEmail:{settingName} as an HTTPS public base URL without user info, query, or fragment.");
         return uri.GetLeftPart(UriPartial.Authority) + uri.AbsolutePath.TrimEnd('/');
     }
+
+    private static bool IsValidBaseUrl(string? value, bool allowLoopbackHttp) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == "https" || (allowLoopbackHttp && uri.Scheme == "http" && uri.IsLoopback)) &&
+        string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment);
 }

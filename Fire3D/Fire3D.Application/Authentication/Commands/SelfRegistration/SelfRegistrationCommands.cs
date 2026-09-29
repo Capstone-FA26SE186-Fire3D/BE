@@ -102,6 +102,7 @@ internal static class SelfRegistrationValidation
     }
 
     internal static string? NormalizeName(string? input) => input is null ? null : NormalizeRequired(input, 200);
+
     internal static string? NormalizeRequired(string? input, int maximumLength)
     {
         var value = input?.Trim();
@@ -127,8 +128,8 @@ internal static class SelfRegistrationValidation
     {
         var errors = new Dictionary<string, string[]>();
         Add(errors, "email", email is null, "Email không hợp lệ hoặc vượt quá 254 ký tự.");
-        Add(errors, "username", username is null, "Username phải dài 3–30 ký tự, chỉ gồm a-z, số, dấu chấm, gạch dưới hoặc gạch ngang.");
-        Add(errors, "password", !PasswordResetValidation.ValidPassword(command.Password), "Mật khẩu phải dài 12–128 ký tự và không chỉ gồm khoảng trắng.");
+        Add(errors, "username", username is null, "Username phải dài 3-30 ký tự, chỉ gồm a-z, số, dấu chấm, gạch dưới hoặc gạch ngang.");
+        Add(errors, "password", !PasswordResetValidation.ValidPassword(command.Password), "Mật khẩu phải dài 6-128 ký tự và không chỉ gồm khoảng trắng.");
         Add(errors, "confirmPassword", !string.Equals(command.Password, command.ConfirmPassword, StringComparison.Ordinal), "Mật khẩu xác nhận không khớp.");
         Add(errors, "fullName", command.FullName is not null && fullName is null, "Họ tên không được rỗng và tối đa 200 ký tự.");
         AddPersonalProfileErrors(errors, command.Dob, command.Gender, command.PhoneNumber, phoneNumber, today);
@@ -140,12 +141,12 @@ internal static class SelfRegistrationValidation
     {
         var errors = new Dictionary<string, string[]>();
         Add(errors, "email", email is null, "Email không hợp lệ hoặc vượt quá 254 ký tự.");
-        Add(errors, "password", !PasswordResetValidation.ValidPassword(command.Password), "Mật khẩu phải dài 12–128 ký tự và không chỉ gồm khoảng trắng.");
+        Add(errors, "password", !PasswordResetValidation.ValidPassword(command.Password), "Mật khẩu phải dài 6-128 ký tự và không chỉ gồm khoảng trắng.");
         Add(errors, "confirmPassword", !string.Equals(command.Password, command.ConfirmPassword, StringComparison.Ordinal), "Mật khẩu xác nhận không khớp.");
         Add(errors, "fullName", command.FullName is not null && fullName is null, "Họ tên không được rỗng và tối đa 200 ký tự.");
         Add(errors, "organizationName", organizationName is null, "Tên tổ chức không được rỗng và tối đa 255 ký tự.");
         Add(errors, "organizationAddress", address is null, "Địa chỉ tổ chức không được rỗng và tối đa 2000 ký tự.");
-        Add(errors, "organizationPhoneNumber", organizationPhone is null, "Số điện thoại phải có 6–15 chữ số; có thể bắt đầu bằng dấu +.");
+        Add(errors, "organizationPhoneNumber", organizationPhone is null, "Số điện thoại phải có 6-15 chữ số; có thể bắt đầu bằng dấu +.");
         AddPersonalProfileErrors(errors, command.Dob, command.Gender, command.PhoneNumber, phoneNumber, today);
         return errors;
     }
@@ -156,7 +157,7 @@ internal static class SelfRegistrationValidation
         Add(errors, "dob", dob is not null && dob > today, "Ngày sinh không được ở tương lai.");
         Add(errors, "gender", gender is not null && !Enum.IsDefined(gender.Value), "Giới tính không hợp lệ.");
         Add(errors, "phoneNumber", submittedPhoneNumber is not null && phoneNumber is null,
-            "Số điện thoại phải có 6–15 chữ số; có thể bắt đầu bằng dấu +.");
+            "Số điện thoại phải có 6-15 chữ số; có thể bắt đầu bằng dấu +.");
     }
 
     private static void Add(Dictionary<string, string[]> errors, string field, bool invalid, string message)
@@ -166,6 +167,7 @@ internal static class SelfRegistrationValidation
 
     internal static AuthResult<T> Invalid<T>(IReadOnlyDictionary<string, string[]> errors) =>
         AuthResult<T>.Fail("VALIDATION_ERROR", "Dữ liệu đăng ký không hợp lệ.", 400, errors);
+
     internal static AuthResult<T> Conflict<T>(RegisterConflict conflict) => conflict switch
     {
         RegisterConflict.UsernameTaken => AuthResult<T>.Fail("USERNAME_EXISTS", "Username is already registered.", 409),

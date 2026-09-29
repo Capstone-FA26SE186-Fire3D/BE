@@ -9,7 +9,7 @@ public static class PasswordResetValidation
         return value is not null && value.Length <= 254 && MailAddress.TryCreate(value, out var parsed)
             && parsed.Address == value && value.Contains('@') && !value.Any(char.IsWhiteSpace) ? value : null;
     }
-    public static bool ValidPassword(string? password) => !string.IsNullOrWhiteSpace(password) && password.Length is >= 12 and <= 128;
+    public static bool ValidPassword(string? password) => !string.IsNullOrWhiteSpace(password) && password.Length is >= 6 and <= 128;
 }
 
 public sealed class PasswordResetException(string code, string message, int status, bool permanent = false) : Exception(message)

@@ -15,7 +15,8 @@ namespace Fire3D.API.Extensions;
 
 public static class AuthenticationExtensions
 {
-    public static IServiceCollection AddAccountAuthentication(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddAccountAuthentication(this IServiceCollection services, IConfiguration configuration,
+        bool allowLoopbackEmailUrls = false)
     {
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName))
             .Validate(x => x.IsValid(), "Configure Jwt issuer, audience, a base64 signing key of at least 32 random bytes, and valid token lifetimes.")
@@ -28,7 +29,11 @@ public static class AuthenticationExtensions
         services.AddScoped<Fire3D.Application.Authentication.Services.Fire3DSessionIssuer>();
         services.AddHttpClient<Fire3D.Application.Authentication.Abstractions.IIdentityProvider, FirebaseIdentityProvider>(
             client => client.Timeout = TimeSpan.FromSeconds(15)).RemoveAllLoggers();
-        services.AddOptions<AuthEmailOptions>().Bind(configuration.GetSection("AuthEmail")).ValidateDataAnnotations();
+        services.AddOptions<AuthEmailOptions>()
+            .Bind(configuration.GetSection(AuthEmailOptions.SectionName))
+            .Validate(options => options.IsValidForEnvironment(allowLoopbackEmailUrls),
+                "Configure AuthEmail:FrontendUrl and AuthEmail:VerificationUrl as HTTPS public base URLs. HTTP loopback URLs are allowed only in Development.")
+            .ValidateOnStart();
         services.AddSingleton<IFirebaseResetAdmin, FirebaseResetAdmin>();
         services.AddScoped<IPasswordResetStore, PasswordResetStore>();
         services.AddScoped<IPasswordResetQueue, PasswordResetQueue>();
