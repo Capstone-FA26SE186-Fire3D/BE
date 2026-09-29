@@ -84,8 +84,10 @@ public sealed class EmailVerificationWorker(IServiceScopeFactory scopes, IOption
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
                 catch (Exception exception)
                 {
-                    await queue.FailAsync(job, false, stoppingToken);
-                    logger.LogWarning("Email verification job {JobId} failed on attempt {Attempt} ({ErrorType}).", job.Id, job.Attempt, exception.GetType().Name);
+                    var delivery = exception as Fire3D.Infrastructure.Email.EmailDeliveryException;
+                    await queue.FailAsync(job, delivery?.IsPermanent == true, stoppingToken);
+                    logger.LogWarning("Email verification job {JobId} failed on attempt {Attempt}. ErrorType={ErrorType}, ProviderStatusCode={ProviderStatusCode}, ProviderRequestId={ProviderRequestId}.",
+                        job.Id, job.Attempt, exception.GetType().Name, (int?)delivery?.StatusCode, delivery?.ProviderRequestId);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }

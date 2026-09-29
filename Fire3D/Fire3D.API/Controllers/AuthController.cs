@@ -221,7 +221,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     }
 
     /// <summary>Đổi mật khẩu local bằng token email và thu hồi tất cả phiên Fire3D.</summary>
-    /// <remarks>Không cần Bearer. Body: token (64 ký tự hex), newPassword (12–128 ký tự).
+    /// <remarks>Không cần Bearer. Body: token (64 ký tự hex), newPassword (6–128 ký tự).
     /// Token hết hạn sau 30 phút, chỉ dùng một lần. 400: token/mật khẩu sai; 204: thành công.
     /// Không gửi mật khẩu/token vào log. Token Firebase oobCode cũ không dùng được.</remarks>
     [HttpPost("reset-password")]
@@ -240,7 +240,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
 
     /// <summary>Changes the signed-in user's local password and revokes every Fire3D refresh session.</summary>
     /// <remarks>
-    /// Requires Bearer authentication. Body requires currentPassword and newPassword (12–128 characters).
+    /// Requires Bearer authentication. Body requires currentPassword and newPassword (6–128 characters).
     /// The update, invalidation of unused reset tokens, refresh-session revocation, and audit record commit together.
     /// Successful callers must sign in again. This endpoint does not send email and does not accept a Firebase oobCode.
     /// </remarks>

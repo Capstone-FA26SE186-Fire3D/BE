@@ -52,7 +52,7 @@ public sealed class FirebasePasswordResetProvider(HttpClient http, IAuthStore ac
         var code = System.Web.HttpUtility.ParseQueryString(firebaseLink.Query)["oobCode"];
         if (string.IsNullOrEmpty(code)) throw PasswordResetException.Unavailable();
         // Send users to our handler, not Firebase's hosted page which would bypass Fire3D session revocation.
-        return options.FrontendUrl.TrimEnd('/')+"/reset-password?mode=resetPassword&oobCode="+Uri.EscapeDataString(code);
+        return options.GetFrontendPageBaseUrl()+"/reset-password?mode=resetPassword&oobCode="+Uri.EscapeDataString(code);
     }
     public async Task<VerifiedResetIdentity> VerifyResetCodeAsync(string oobCode, CancellationToken ct)
     {

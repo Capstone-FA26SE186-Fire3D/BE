@@ -19,7 +19,7 @@ chỉ cung cấp PostgreSQL; không dùng Supabase Auth. Firebase chỉ xác min
 | GET /api/auth/me | — | 200, AccountResponse | Có |
 
 Register chỉ tạo Trainee; client không chọn role/tenant. Email được trim/lowercase.
-Password mới 12–128 ký tự; fullName 1–200 ký tự. Sai mật khẩu/email không tồn tại
+Password mới 6–128 ký tự; fullName 1–200 ký tự. Sai mật khẩu/email không tồn tại
 cùng trả 401, tài khoản/organization bị khóa trả 403 sau khi xác minh mật khẩu.
 Các route anonymous không có rate limit BE riêng trong giai đoạn hiện tại. Header Bearer sai không biến chúng thành route
 bắt buộc đăng nhập; refresh vẫn yêu cầu refreshToken hợp lệ trong body.
@@ -67,8 +67,8 @@ Các script SQL này cần chạy riêng, không được thay bằng EF EnsureC
 
 - `ConnectionStrings__DefaultConnection`: PostgreSQL backend connection.
 - `Jwt__Issuer`, `Jwt__Audience`, `Jwt__SigningKey`: JWT Fire3D; signing key base64 đủ độ dài.
-- `AuthEmail__FrontendUrl`: HTTPS base URL (localhost HTTP cho dev), không query/fragment.
-- `AuthEmail__VerificationUrl`: URL public phục vụ `/verify-email/`; nên đặt bằng origin API khi dùng trang xác minh do BE cung cấp. Nếu bỏ trống, hệ thống dùng `FrontendUrl` để tương thích cấu hình cũ.
+- `AuthEmail__FrontendUrl`: HTTPS base URL của FET3D (ví dụ `https://fet3d.io.vn`), không query/fragment. HTTP loopback chỉ hợp lệ ở Development; Production từ chối cấu hình loopback khi khởi động.
+- `AuthEmail__VerificationUrl`: URL public phục vụ `/verify-email/`. Với deployment FET3D hiện tại đặt `https://fet3d.io.vn`; nếu bỏ trống, hệ thống dùng `FrontendUrl` để tương thích cấu hình cũ.
 - `AuthEmail__WorkerEnabled`: true để gửi email, false khi test không cần worker.
 - `Mailgun__ApiKey`, `Mailgun__Domain`, `Mailgun__From`, `Mailgun__BaseUrl`: Mailgun.
 - Firebase Admin credential: chỉ cần cho Google; secret JSON, section hoặc file local.
@@ -86,3 +86,5 @@ nhưng controller reset và worker hiện dùng ILocalPasswordReset.
 integration SQL. Tests tạo/xóa DB riêng, không dùng Supabase. HTTP anonymous tests
 dùng middleware thật với handler giả; PostgreSQL flow test dùng handler/store thật.
 Chưa xác nhận Google/Mailgun thật bằng kết quả mock tests.
+
+Checklist triển khai Mailgun/Azure và mẫu biến môi trường không có secret: [azure-mailgun-deployment.md](azure-mailgun-deployment.md).

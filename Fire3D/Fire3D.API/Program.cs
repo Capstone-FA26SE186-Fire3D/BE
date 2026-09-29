@@ -1,8 +1,10 @@
 using Fire3D.API.Extensions;
 using Fire3D.API.Configuration;
 using Fire3D.Application.Authentication.Commands.BootstrapAdmin;
+using Fire3D.Application.Authentication;
 using MediatR;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Options;
 using System.Net;
 using System.Text.Json.Serialization;
 
@@ -12,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddApplication(builder.Configuration);
-builder.Services.AddAccountAuthentication(builder.Configuration);
+builder.Services.AddAccountAuthentication(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -64,6 +66,13 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+var authEmail = app.Services.GetRequiredService<IOptions<AuthEmailOptions>>().Value;
+var verificationHost = new Uri(authEmail.GetVerificationPageBaseUrl()).Authority;
+app.Logger.LogInformation(
+    "FET3D startup configuration: Version={Version}, Environment={Environment}, VerificationHost={VerificationHost}, EmailWorkerEnabled={EmailWorkerEnabled}.",
+    builder.Configuration["APP_VERSION"] ?? "unknown", builder.Environment.EnvironmentName,
+    verificationHost, authEmail.WorkerEnabled);
 
 if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
 {
