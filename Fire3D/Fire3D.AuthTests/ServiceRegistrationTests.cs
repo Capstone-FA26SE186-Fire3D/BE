@@ -1,4 +1,5 @@
 using Fire3D.API.Extensions;
+using Fire3D.Application.Authentication;
 using Fire3D.Application.Authentication.Abstractions;
 using Fire3D.Application.Authentication.Services;
 using Microsoft.Extensions.Configuration;
@@ -106,5 +107,7 @@ public class ServiceRegistrationTests
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IIdentityProvider>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<Fire3DSessionIssuer>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRegistrationOtpService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRegistrationOtpDeliveryQueue>());
     }
 }

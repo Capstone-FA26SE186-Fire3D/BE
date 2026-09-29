@@ -16,6 +16,48 @@ public sealed class SelfRegistrationTests
     }
 
     [Fact]
+    public async Task Trainee_registration_consumes_verified_email_proof_before_creating_the_account()
+    {
+        var proofConsumed = false;
+        User? persisted = null;
+        var store = ResetProxy.For<IAuthStore>((method, args) => method switch
+        {
+            "BeginUserTransactionAsync" => Task.FromResult<IAuthTransaction>(new Transaction(() => { })),
+            "TryCreateTraineeAsync" => CaptureTrainee(args, user => persisted = user),
+            "WriteAuditAsync" => Task.CompletedTask,
+            _ => throw new InvalidOperationException("Unexpected store operation: " + method)
+        });
+        var proof = ResetProxy.For<IRegistrationOtpService>((method, args) => method switch
+        {
+            "ConsumeRegistrationTokenAsync" => ConsumeProof(args, () => proofConsumed = true),
+            _ => throw new InvalidOperationException("Unexpected OTP operation: " + method)
+        });
+        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), proof, TimeProvider.System);
+
+        var result = await handler.Handle(new RegisterTraineeCommand(
+            "trainee@example.test", "trainee", "StrongPassword12!", "StrongPassword12!", RegistrationToken: "proof"), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(proofConsumed);
+        Assert.NotNull(persisted);
+        Assert.NotNull(persisted!.EmailVerifiedAt);
+        Assert.Null(persisted.RegistrationExpiresAt);
+    }
+
+    [Fact]
+    public async Task Trainee_registration_does_not_create_an_account_without_verified_email_proof()
+    {
+        var store = ResetProxy.For<IAuthStore>((method, _) => throw new InvalidOperationException("Store must not be called: " + method));
+        var proof = ResetProxy.For<IRegistrationOtpService>((method, _) => throw new InvalidOperationException("Proof must not be consumed without a token."));
+        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), proof, TimeProvider.System);
+
+        var result = await handler.Handle(new RegisterTraineeCommand(
+            "trainee@example.test", "trainee", "StrongPassword12!", "StrongPassword12!"), default);
+
+        Assert.Equal("EMAIL_VERIFICATION_REQUIRED", result.Error?.Code);
+    }
+
+    [Fact]
     public async Task Trainee_registration_normalizes_username_and_assigns_only_trainee_role()
     {
         User? persisted = null;
@@ -28,10 +70,10 @@ public sealed class SelfRegistrationTests
             _ => throw new InvalidOperationException("Unexpected store operation: " + method)
         });
 
-        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), VerificationQueue(), TimeProvider.System);
+        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), VerifiedProof(), TimeProvider.System);
         var result = await handler.Handle(
             new RegisterTraineeCommand(" trainee@example.test ", "Fire.Drill", "StrongPassword12!", "StrongPassword12!", "Trainee",
-                new DateOnly(2000, 1, 2), UserGender.PreferNotToSay, "+84 123456789"),
+                new DateOnly(2000, 1, 2), UserGender.PreferNotToSay, "+84 123456789", "proof"),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -51,10 +93,10 @@ public sealed class SelfRegistrationTests
     public async Task Trainee_registration_rejects_password_confirmation_mismatch_before_persistence()
     {
         var store = ResetProxy.For<IAuthStore>((method, _) => throw new InvalidOperationException("Unexpected store operation: " + method));
-        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), VerificationQueue(), TimeProvider.System);
+        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), VerifiedProof(), TimeProvider.System);
 
         var result = await handler.Handle(
-            new RegisterTraineeCommand("trainee@example.test", "trainee", "StrongPassword12!", "DifferentPassword12!", "Trainee"),
+            new RegisterTraineeCommand("trainee@example.test", "trainee", "StrongPassword12!", "DifferentPassword12!", "Trainee", RegistrationToken: "proof"),
             CancellationToken.None);
 
         Assert.Equal("VALIDATION_ERROR", result.Error?.Code);
@@ -66,7 +108,7 @@ public sealed class SelfRegistrationTests
     public async Task Organization_registration_reports_each_invalid_field_before_persistence()
     {
         var store = ResetProxy.For<IAuthStore>((method, _) => throw new InvalidOperationException("Unexpected store operation: " + method));
-        var handler = new RegisterOrganizationCommandHandler(store, new PasswordService(), VerificationQueue(), TimeProvider.System);
+        var handler = new RegisterOrganizationCommandHandler(store, new PasswordService(), VerifiedProof(), TimeProvider.System);
 
         var result = await handler.Handle(new("bad email", "short", "different", " ", " ", " ", "------"), default);
 
@@ -96,10 +138,10 @@ public sealed class SelfRegistrationTests
             _ => throw new InvalidOperationException("Unexpected store operation: " + method)
         });
 
-        var handler = new RegisterOrganizationCommandHandler(store, new PasswordService(), VerificationQueue(), TimeProvider.System);
+        var handler = new RegisterOrganizationCommandHandler(store, new PasswordService(), VerifiedProof(), TimeProvider.System);
         var result = await handler.Handle(
             new RegisterOrganizationCommand("owner@example.test", "StrongPassword12!", "StrongPassword12!", "Owner", "Fire3D Co", "1 Fire Street", "+84 123456789",
-                new DateOnly(1990, 1, 1), UserGender.Female, "090 123 4567"),
+                new DateOnly(1990, 1, 1), UserGender.Female, "090 123 4567", "proof"),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -121,8 +163,18 @@ public sealed class SelfRegistrationTests
         return Task.FromResult(RegisterConflict.None);
     }
 
-    private static IEmailVerificationQueue VerificationQueue() =>
-        ResetProxy.For<IEmailVerificationQueue>((method, _) => method == "EnqueueAsync" ? Task.CompletedTask : throw new InvalidOperationException("Unexpected queue operation"));
+    private static IRegistrationOtpService VerifiedProof() =>
+        ResetProxy.For<IRegistrationOtpService>((method, _) => method == "ConsumeRegistrationTokenAsync"
+            ? Task.FromResult(AuthResult<bool>.Ok(true))
+            : throw new InvalidOperationException("Unexpected OTP operation"));
+
+    private static Task<AuthResult<bool>> ConsumeProof(object?[] args, Action consumed)
+    {
+        Assert.Equal("trainee@example.test", args[0]);
+        Assert.Equal("proof", args[1]);
+        consumed();
+        return Task.FromResult(AuthResult<bool>.Ok(true));
+    }
 
     private static Task<RegisterConflict> CaptureOrganization(object?[] args, Action<Organization, User> capture)
     {

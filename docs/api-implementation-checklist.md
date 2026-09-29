@@ -29,9 +29,9 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 
 ### AUTH-01 — P1 · PARTIAL · Đăng ký local
 
-- **Contract/current:** `POST /api/auth/register/trainee` và `/api/auth/register/organization` đã tạo đúng role/tenant server-owned. Migration `20260926085252_AddSelfRegistration` thêm username, organization address/phone, index unique lowercase và constraint cho Trainee mới. `/api/auth/register` vẫn là alias Trainee có validation username/confirm password.
+- **Contract/current:** `POST /api/auth/registration/request-otp` tạo challenge/job gửi mã nhưng không tạo identity; `POST /api/auth/registration/verify-otp` trả proof một lần, rồi ba route register consume proof trong transaction tạo role/tenant server-owned. Migration `20260929120000_AddPreRegistrationOtp` thêm challenge/job OTP; `20260926085252_AddSelfRegistration` thêm username, organization address/phone, index unique lowercase và constraint cho Trainee mới. `/api/auth/register` vẫn là alias Trainee có validation username/confirm password/proof.
 - **Còn thiếu:** Google onboarding/link và PATCH profile tổ chức. Email verification, `profile_revision`/ETag, đổi username và avatar intent/complete/delete đã có nhưng vẫn cần kiểm thử PostgreSQL/S3 thật.
-- **Nghiệm thu đã có:** HTTP/PostgreSQL disposable kiểm tra hai role, organization transaction và collision username khác hoa/thường. Còn cần test race concurrent cùng username và chuyển dữ liệu production trước khi đóng hoàn toàn.
+- **Nghiệm thu cần chạy:** HTTP/PostgreSQL disposable kiểm tra proof không tạo user trước verify, proof chỉ dùng một lần, hai role, organization transaction và collision username khác hoa/thường. Còn cần test race concurrent cùng username và chuyển dữ liệu production trước khi đóng hoàn toàn.
 
 ### AUTH-02 — P0 · GAP · Google onboarding và link
 

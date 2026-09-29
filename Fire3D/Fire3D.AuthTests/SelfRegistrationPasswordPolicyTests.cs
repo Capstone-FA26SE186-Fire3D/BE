@@ -13,8 +13,8 @@ public sealed class SelfRegistrationPasswordPolicyTests
     public async Task Trainee_registration_rejects_invalid_password_before_any_persistence(string password)
     {
         var store = ResetProxy.For<IAuthStore>((method, _) => throw new InvalidOperationException("Unexpected store operation: " + method));
-        var queue = ResetProxy.For<IEmailVerificationQueue>((method, _) => throw new InvalidOperationException("Unexpected queue operation: " + method));
-        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), queue, TimeProvider.System);
+        var proof = ResetProxy.For<IRegistrationOtpService>((method, _) => throw new InvalidOperationException("Unexpected OTP operation: " + method));
+        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), proof, TimeProvider.System);
 
         var result = await handler.Handle(new RegisterTraineeCommand("test@example.test", "test-user", password, password), default);
 
@@ -38,11 +38,11 @@ public sealed class SelfRegistrationPasswordPolicyTests
             "WriteAuditAsync" => Task.CompletedTask,
             _ => throw new InvalidOperationException("Unexpected store operation: " + method)
         });
-        var queue = ResetProxy.For<IEmailVerificationQueue>((method, _) => method == "EnqueueAsync"
-            ? Task.CompletedTask : throw new InvalidOperationException("Unexpected queue operation: " + method));
-        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), queue, TimeProvider.System);
+        var proof = ResetProxy.For<IRegistrationOtpService>((method, _) => method == "ConsumeRegistrationTokenAsync"
+            ? Task.FromResult(AuthResult<bool>.Ok(true)) : throw new InvalidOperationException("Unexpected OTP operation: " + method));
+        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), proof, TimeProvider.System);
 
-        var result = await handler.Handle(new RegisterTraineeCommand("test@example.test", "test-user", "123456", "123456"), default);
+        var result = await handler.Handle(new RegisterTraineeCommand("test@example.test", "test-user", "123456", "123456", RegistrationToken: "proof"), default);
 
         Assert.True(result.IsSuccess);
     }
@@ -51,8 +51,8 @@ public sealed class SelfRegistrationPasswordPolicyTests
     public async Task Trainee_registration_requires_an_exact_password_confirmation()
     {
         var store = ResetProxy.For<IAuthStore>((method, _) => throw new InvalidOperationException("Unexpected store operation: " + method));
-        var queue = ResetProxy.For<IEmailVerificationQueue>((method, _) => throw new InvalidOperationException("Unexpected queue operation: " + method));
-        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), queue, TimeProvider.System);
+        var proof = ResetProxy.For<IRegistrationOtpService>((method, _) => throw new InvalidOperationException("Unexpected OTP operation: " + method));
+        var handler = new RegisterTraineeCommandHandler(store, new PasswordService(), proof, TimeProvider.System);
 
         var result = await handler.Handle(new RegisterTraineeCommand("test@example.test", "test-user", "123456", "123457"), default);
 
