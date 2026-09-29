@@ -1,4 +1,5 @@
 using Fire3D.Domain.Entities;
+using Fire3D.Domain.Enums;
 
 namespace Fire3D.Application.Authentication;
 
@@ -20,7 +21,8 @@ public interface IAuthStore
     Task<RegisterConflict> TryCreateTraineeAsync(User user, CancellationToken ct);
     Task UpdateUserAsync(User user, CancellationToken ct);
     Task UpdatePasswordHashAsync(Guid userId, string passwordHash, DateTime now, CancellationToken ct);
-    Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username, DateTime now, CancellationToken ct);
+    Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username,
+        DateOnly? dob, UserGender? gender, string? phoneNumber, DateTime now, CancellationToken ct);
     Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct);
     Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, string installationKeyHash, string? fcmToken, string? deviceModel, string? osVersion, string? appVersion, DateTime now, CancellationToken ct);
     Task RevokeDeviceAsync(Guid userId, string deviceUuid, DateTime now, CancellationToken ct);

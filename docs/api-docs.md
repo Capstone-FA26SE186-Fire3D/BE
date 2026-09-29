@@ -95,9 +95,10 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 | POST | `/api/auth/login-firebase` | Public | 200 TokenResponse |
 | POST | `/api/auth/refresh` | Public | 200 TokenResponse |
 | POST | `/api/auth/logout` | User | 204 |
+| POST | `/api/auth/logout-all` | User | 204 |
 | GET | `/api/auth/me` | User | 200 AccountResponse |
 | PATCH | `/api/auth/me` | User | 200 AccountResponse |
-| PUT | `/api/auth/devices` | User | 200 rỗng |
+| PUT | `/api/auth/devices` | User + `X-Installation-Key` | 200 DeviceRegistrationResponse |
 | DELETE | `/api/auth/devices/{deviceUuid}` | User | 204 |
 | POST | `/api/auth/forgot-password` | Public | 202 với message chung |
 | POST | `/api/auth/reset-password` | Public | 204 |
@@ -203,6 +204,12 @@ Response hiện là TokenResponse, **vẫn có expiresAt**:
 Thời gian ví dụ không thay cấu hình môi trường. Chưa có API liên kết Google vào tài khoản local có sẵn.
 
 ### 2.4 Refresh, logout, me, devices
+
+`POST /api/auth/logout-all` requires Bearer authentication and revokes all refresh-token families for the current user, disables every current push binding, writes an audit record, and returns `204`. A valid access token is rejected after the transaction commits.
+
+`PATCH /api/auth/me` requires `If-Match` from `GET /api/auth/me`. It can patch `fullName`, `username`, `dob` (`yyyy-MM-dd`), `gender`, and `phoneNumber`. For `dob`, `gender`, and `phoneNumber`, omitting a field preserves it while sending `null` clears it. Future dates and malformed phone numbers are rejected with field-level `VALIDATION_ERROR`.
+
+`PUT /api/auth/devices` requires the authenticated user plus `X-Installation-Key`, a base64url-encoded 32-byte client secret. The server stores only its SHA-256 hash. Request body uses `deviceUuid`, optional `fcmToken`, `deviceModel`, `osVersion`, and `appVersion`; it rejects whitespace/control characters and values over their documented limits. A FCM token already actively bound to another user returns `409`.
 
 Refresh không cần access token:
 

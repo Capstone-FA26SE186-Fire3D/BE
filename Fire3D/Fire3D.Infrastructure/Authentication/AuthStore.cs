@@ -80,7 +80,8 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
             .SetProperty(x => x.PasswordHash, passwordHash)
             .SetProperty(x => x.UpdatedAt, now), ct);
 
-    public async Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username, DateTime now, CancellationToken ct)
+    public async Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username,
+        DateOnly? dob, UserGender? gender, string? phoneNumber, DateTime now, CancellationToken ct)
     {
         try
         {
@@ -89,6 +90,9 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(x => x.FullName, fullName)
                     .SetProperty(x => x.Username, username)
+                    .SetProperty(x => x.Dob, dob)
+                    .SetProperty(x => x.Gender, gender)
+                    .SetProperty(x => x.PhoneNumber, phoneNumber)
                     .SetProperty(x => x.ProfileRevision, x => x.ProfileRevision + 1)
                     .SetProperty(x => x.UpdatedAt, now), ct);
             return changed == 1 ? ProfileUpdateResult.Updated : ProfileUpdateResult.PreconditionFailed;
