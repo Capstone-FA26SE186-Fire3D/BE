@@ -124,7 +124,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
             return DeviceRegistrationResult.InstallationKeyMismatch;
         }
 
-        if (fcmToken is not null && await db.UserDevices.AnyAsync(x => x.FcmToken == fcmToken && x.NotificationsEnabled && x.RevokedAt == null && x.UserId != userId, ct))
+        if (fcmToken is not null && await db.UserDevices.AnyAsync(x => x.FcmToken == fcmToken && x.NotificationsEnabled && x.RevokedAt == null && x.DeviceUuid != deviceUuid, ct))
             return DeviceRegistrationResult.TokenAlreadyBound;
 
         var device = await db.UserDevices.FirstOrDefaultAsync(x => x.UserId == userId && x.DeviceUuid == deviceUuid, ct);

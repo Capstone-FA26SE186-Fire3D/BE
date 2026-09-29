@@ -8,7 +8,7 @@ using System.Text;
 namespace Fire3D.Application.Users.Commands.RegisterDevice;
 
 public sealed record RegisterDeviceRequest(string DeviceUuid, string? FcmToken, string? DeviceModel, string? OsVersion, string? AppVersion);
-public sealed record DeviceRegistrationResponse(string DeviceUuid, bool NotificationsEnabled, int TokenGeneration);
+public sealed record DeviceRegistrationResponse(string DeviceUuid, bool NotificationsEnabled);
 public record RegisterDeviceCommand(Guid UserId, string DeviceUuid, string? InstallationKey, string? FcmToken, string? DeviceModel, string? OsVersion, string? AppVersion)
     : IRequest<AuthResult<DeviceRegistrationResponse>>;
 
@@ -35,7 +35,7 @@ public sealed class RegisterDeviceCommandHandler(IAuthStore store, TimeProvider 
             return AuthResult<DeviceRegistrationResponse>.Fail("FCM_TOKEN_ALREADY_BOUND", "This push token is registered to another active installation.", 409);
 
         await transaction.CommitAsync(ct);
-        return AuthResult<DeviceRegistrationResponse>.Ok(new(request.DeviceUuid, !string.IsNullOrWhiteSpace(request.FcmToken), 1));
+        return AuthResult<DeviceRegistrationResponse>.Ok(new(request.DeviceUuid, !string.IsNullOrWhiteSpace(request.FcmToken)));
     }
 }
 internal static class DeviceRegistrationValidation
