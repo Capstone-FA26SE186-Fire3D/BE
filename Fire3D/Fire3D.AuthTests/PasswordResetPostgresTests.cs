@@ -51,7 +51,7 @@ public sealed class PasswordResetPostgresTests
                   full_name text, username varchar(30), dob date, gender text, phone_number varchar(32), avatar_url varchar(2048), avatar_storage_key text, profile_revision bigint NOT NULL DEFAULT 1, password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
                   last_login_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
                   updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz,
-                  registration_expires_at timestamptz);
+                  registration_expires_at timestamptz, email_verified_at timestamptz);
                 CREATE TABLE organizations (
                   id uuid PRIMARY KEY, registration_owner_user_id uuid NULL);
                 CREATE TABLE buildings (id uuid PRIMARY KEY, organization_id uuid NOT NULL);
@@ -104,8 +104,10 @@ public sealed class PasswordResetPostgresTests
         var accounts=new AuthStore(db);var passwords=new PasswordService();
         // Minimal test enum only needs the extra label for registration audit.
         await database.Sql("ALTER TYPE audit_action_enum ADD VALUE IF NOT EXISTS 'Create'");
-        var register=new Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommandHandler(accounts,passwords,ResetProxy.For<Fire3D.Application.Authentication.IEmailVerificationQueue>((_,_)=>Task.CompletedTask),TimeProvider.System);
-        var created=await register.Handle(new(" USER@EXAMPLE.TEST ","OriginalPassword12!","Test User","test-user","OriginalPassword12!"),default);
+        var register=new Fire3D.Application.Authentication.Commands.RegisterUser.RegisterUserCommandHandler(accounts,passwords,
+            ResetProxy.For<Fire3D.Application.Authentication.IRegistrationOtpService>((method,_) => method == "ConsumeRegistrationTokenAsync"
+                ? Task.FromResult(Fire3D.Application.Authentication.AuthResult<bool>.Ok(true)) : throw new InvalidOperationException()),TimeProvider.System);
+        var created=await register.Handle(new(" USER@EXAMPLE.TEST ","OriginalPassword12!","Test User","test-user","OriginalPassword12!", RegistrationToken: "proof"),default);
         Assert.True(created.IsSuccess,created.Error?.Message);
         var user=await accounts.FindUserByEmailAsync("user@example.test",default);
         Assert.NotNull(user);Assert.Null(user.FirebaseUid);Assert.NotEqual("OriginalPassword12!",user.PasswordHash);
@@ -113,8 +115,6 @@ public sealed class PasswordResetPostgresTests
         var tokens=new TokenService(Microsoft.Extensions.Options.Options.Create(new JwtOptions {
             Issuer="test",Audience="test",SigningKey=Convert.ToBase64String(new byte[64]) }));
         var login=new Fire3D.Application.Authentication.Commands.LoginWithPassword.LoginWithPasswordCommandHandler(accounts,passwords,tokens,TimeProvider.System);
-        Assert.Equal("EMAIL_NOT_VERIFIED", (await login.Handle(new("USER@example.test","OriginalPassword12!"),default)).Error?.Code);
-        await database.Sql("UPDATE users SET email_verified_at=now(), registration_expires_at=NULL WHERE id='" + user.Id + "'");
         Assert.True((await login.Handle(new("USER@example.test","OriginalPassword12!"),default)).IsSuccess);
         Assert.True((await login.Handle(new("user@example.test","OriginalPassword12!"),default)).IsSuccess);
         Assert.Equal(401,(await login.Handle(new("user@example.test","wrong"),default)).Error?.Status);

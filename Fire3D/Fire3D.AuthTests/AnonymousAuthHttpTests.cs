@@ -26,6 +26,8 @@ public class AnonymousAuthHttpTests
     [InlineData("reset-password",false,204)] [InlineData("reset-password",true,204)]
     [InlineData("resend-verification",false,202)] [InlineData("resend-verification",true,202)]
     [InlineData("verify-email",false,204)] [InlineData("verify-email",true,204)]
+    [InlineData("registration/request-otp",false,202)] [InlineData("registration/request-otp",true,202)]
+    [InlineData("registration/verify-otp",false,200)] [InlineData("registration/verify-otp",true,200)]
     [InlineData("login-firebase",false,200)] [InlineData("login-firebase",true,200)]
     public async Task Public_auth_routes_reach_handler_without_valid_bearer(string route,bool badBearer,int status)
     {
@@ -37,6 +39,7 @@ public class AnonymousAuthHttpTests
                 "login" => (object)Task.FromResult(AuthResult<LoginResponse>.Ok(new("access","refresh",account))),
                 "register" => Task.FromResult(AuthResult<AccountResponse>.Ok(account)),
                 "login-firebase" => Task.FromResult(AuthResult<GoogleExchangeResponse>.Ok(new("Authenticated",new("access","refresh",account)))),
+                "registration/verify-otp" => Task.FromResult(AuthResult<RegistrationOtpVerificationResponse>.Ok(new("registration-proof", DateTime.UtcNow.AddMinutes(15)))),
                 _ => Task.FromResult(AuthResult<bool>.Ok(true))
             };
         });
@@ -56,7 +59,7 @@ public class AnonymousAuthHttpTests
         using var client=host.GetTestClient();
         if(badBearer)client.DefaultRequestHeaders.Authorization=new AuthenticationHeaderValue("Bearer","invalid-expired-token");
         object body=route=="login-firebase" ? "firebase-id-token" : new {
-            email="user@example.test",username="test-user",password="StrongPassword12!",confirmPassword="StrongPassword12!",fullName="Test",token=new string('a',64),newPassword="Replacement12!"
+            email="user@example.test",username="test-user",password="StrongPassword12!",confirmPassword="StrongPassword12!",fullName="Test",token=new string('a',64),otp="123456",newPassword="Replacement12!"
         };
         var response=await client.PostAsJsonAsync("/api/auth/"+route,body);
         Assert.Equal(status,(int)response.StatusCode);Assert.Equal(1,calls);

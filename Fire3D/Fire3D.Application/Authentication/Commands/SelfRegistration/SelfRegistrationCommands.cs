@@ -7,17 +7,18 @@ using MediatR;
 namespace Fire3D.Application.Authentication.Commands.SelfRegistration;
 
 public sealed record RegisterTraineeCommand(string Email, string Username, string Password, string ConfirmPassword,
-    string? FullName = null, DateOnly? Dob = null, UserGender? Gender = null, string? PhoneNumber = null)
+    string? FullName = null, DateOnly? Dob = null, UserGender? Gender = null, string? PhoneNumber = null,
+    string? RegistrationToken = null)
     : IRequest<AuthResult<AccountResponse>>;
 
 public sealed record RegisterOrganizationCommand(
     string Email, string Password, string ConfirmPassword, string? FullName,
     string OrganizationName, string OrganizationAddress, string OrganizationPhoneNumber,
-    DateOnly? Dob = null, UserGender? Gender = null, string? PhoneNumber = null)
+    DateOnly? Dob = null, UserGender? Gender = null, string? PhoneNumber = null, string? RegistrationToken = null)
     : IRequest<AuthResult<AccountResponse>>;
 
 public sealed class RegisterTraineeCommandHandler(IAuthStore store, IPasswordService passwords,
-    IEmailVerificationQueue verificationQueue, TimeProvider clock)
+    IRegistrationOtpService registrationOtp, TimeProvider clock)
     : IRequestHandler<RegisterTraineeCommand, AuthResult<AccountResponse>>
 {
     public async Task<AuthResult<AccountResponse>> Handle(RegisterTraineeCommand command, CancellationToken ct)
@@ -29,6 +30,8 @@ public sealed class RegisterTraineeCommandHandler(IAuthStore store, IPasswordSer
         var errors = SelfRegistrationValidation.ValidateTrainee(command, email, username, fullName, phoneNumber,
             DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime));
         if (errors.Count != 0) return SelfRegistrationValidation.Invalid<AccountResponse>(errors);
+        if (string.IsNullOrWhiteSpace(command.RegistrationToken))
+            return AuthResult<AccountResponse>.Fail("EMAIL_VERIFICATION_REQUIRED", "Verify your email before creating an account.", 400);
 
         var now = AuthSupport.UtcNow(clock);
         var user = new User
@@ -36,13 +39,14 @@ public sealed class RegisterTraineeCommandHandler(IAuthStore store, IPasswordSer
             Id = Guid.NewGuid(), Email = email!, Username = username!, FullName = fullName, Dob = command.Dob,
             Gender = command.Gender, PhoneNumber = phoneNumber,
             Role = UserRole.Trainee, IsActive = true, CreatedAt = now, UpdatedAt = now,
-            RegistrationExpiresAt = now.AddHours(2)
+            EmailVerifiedAt = now, RegistrationExpiresAt = null
         };
         user.PasswordHash = passwords.Hash(user, command.Password);
         await using var transaction = await store.BeginUserTransactionAsync(user.Id, ct);
+        var proof = await registrationOtp.ConsumeRegistrationTokenAsync(user.Email, command.RegistrationToken, ct);
+        if (!proof.IsSuccess) return AuthResult<AccountResponse>.Fail(proof.Error!.Code, proof.Error.Message, proof.Error.Status, proof.Error.Errors);
         var conflict = await store.TryCreateTraineeAsync(user, ct);
         if (conflict != RegisterConflict.None) return SelfRegistrationValidation.Conflict<AccountResponse>(conflict);
-        await verificationQueue.EnqueueAsync(user.Id, user.Email, ct);
         await store.WriteAuditAsync(user, "Create", user.Id, now, ct);
         await transaction.CommitAsync(ct);
         return AuthResult<AccountResponse>.Ok(AuthSupport.ToAccount(user));
@@ -50,7 +54,7 @@ public sealed class RegisterTraineeCommandHandler(IAuthStore store, IPasswordSer
 }
 
 public sealed class RegisterOrganizationCommandHandler(IAuthStore store, IPasswordService passwords,
-    IEmailVerificationQueue verificationQueue, TimeProvider clock)
+    IRegistrationOtpService registrationOtp, TimeProvider clock)
     : IRequestHandler<RegisterOrganizationCommand, AuthResult<AccountResponse>>
 {
     public async Task<AuthResult<AccountResponse>> Handle(RegisterOrganizationCommand command, CancellationToken ct)
@@ -64,6 +68,8 @@ public sealed class RegisterOrganizationCommandHandler(IAuthStore store, IPasswo
         var errors = SelfRegistrationValidation.ValidateOrganization(command, email, fullName, organizationName, address,
             organizationPhone, phoneNumber, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime));
         if (errors.Count != 0) return SelfRegistrationValidation.Invalid<AccountResponse>(errors);
+        if (string.IsNullOrWhiteSpace(command.RegistrationToken))
+            return AuthResult<AccountResponse>.Fail("EMAIL_VERIFICATION_REQUIRED", "Verify your email before creating an account.", 400);
 
         var now = AuthSupport.UtcNow(clock);
         var organization = new Organization
@@ -77,14 +83,15 @@ public sealed class RegisterOrganizationCommandHandler(IAuthStore store, IPasswo
             Id = Guid.NewGuid(), Email = email!, FullName = fullName, Dob = command.Dob, Gender = command.Gender,
             PhoneNumber = phoneNumber, Role = UserRole.OrganizationUser,
             OrganizationId = organization.Id, IsActive = true, CreatedAt = now, UpdatedAt = now,
-            RegistrationExpiresAt = now.AddHours(2)
+            EmailVerifiedAt = now, RegistrationExpiresAt = null
         };
         organization.RegistrationOwnerUserId = user.Id;
         user.PasswordHash = passwords.Hash(user, command.Password);
         await using var transaction = await store.BeginUserTransactionAsync(user.Id, ct);
+        var proof = await registrationOtp.ConsumeRegistrationTokenAsync(user.Email, command.RegistrationToken, ct);
+        if (!proof.IsSuccess) return AuthResult<AccountResponse>.Fail(proof.Error!.Code, proof.Error.Message, proof.Error.Status, proof.Error.Errors);
         var conflict = await store.TryCreateOrganizationWithUserAsync(organization, user, ct);
         if (conflict != RegisterConflict.None) return SelfRegistrationValidation.Conflict<AccountResponse>(conflict);
-        await verificationQueue.EnqueueAsync(user.Id, user.Email, ct);
         await store.WriteAuditAsync(user, "Create", user.Id, now, ct);
         await transaction.CommitAsync(ct);
         return AuthResult<AccountResponse>.Ok(AuthSupport.ToAccount(user));

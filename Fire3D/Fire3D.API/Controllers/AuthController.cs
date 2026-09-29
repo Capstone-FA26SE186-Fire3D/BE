@@ -112,6 +112,38 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
         return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
     }
 
+    /// <summary>Requests a six-digit email code before a new account is created.</summary>
+    /// <remarks>
+    /// This endpoint never creates a user or organization. It returns 202 for accepted requests so a caller cannot
+    /// determine whether an address is already registered. Codes expire after ten minutes.
+    /// </remarks>
+    [HttpPost("registration/request-otp")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(429)]
+    public async Task<IActionResult> RequestRegistrationOtp(
+        [FromBody] Fire3D.Application.Authentication.RequestRegistrationOtpRequest request,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new Fire3D.Application.Authentication.RequestRegistrationOtpCommand(
+            request.Email, HttpContext.Connection.RemoteIpAddress?.ToString()), ct);
+        return result.IsSuccess ? Accepted() : ResetProblem(result.Error!);
+    }
+
+    /// <summary>Verifies a six-digit registration code and returns a short-lived registration proof.</summary>
+    [HttpPost("registration/verify-otp")]
+    [AllowAnonymous]
+    [ProducesResponseType<RegistrationOtpVerificationResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<ActionResult<RegistrationOtpVerificationResponse>> VerifyRegistrationOtp(
+        [FromBody] Fire3D.Application.Authentication.VerifyRegistrationOtpCommand command,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(command, ct);
+        return result.IsSuccess ? Ok(result.Value) : ResetProblem(result.Error!);
+    }
+
     /// <summary>
     /// Cấp lại Access Token mới dựa vào Refresh Token hợp lệ.
     /// </summary>
