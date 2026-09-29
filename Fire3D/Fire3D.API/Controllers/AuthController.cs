@@ -163,6 +163,17 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
         return NoContent();
     }
 
+    /// <summary>Revokes every refresh-token family and disables push delivery for the current account.</summary>
+    [HttpPost("logout-all")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    public async Task<IActionResult> LogoutAll(CancellationToken ct)
+    {
+        var result = await sender.Send(new LogoutAllCommand(User.GetActorId()), ct);
+        return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
+    }
+
     /// <summary>
     /// Lấy thông tin tài khoản của phiên đăng nhập hiện tại.
     /// </summary>
