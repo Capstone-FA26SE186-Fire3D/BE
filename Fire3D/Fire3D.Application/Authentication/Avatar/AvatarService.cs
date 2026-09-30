@@ -67,10 +67,16 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         if (!await IsAvailableAsync(userId, ct)) return AuthResult<AvatarResponse>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
         var intent = await avatarStore.FindUploadIntentAsync(request.UploadId, userId, ct);
         var now = UtcNow();
-        if (intent is null || intent.ExpiresAt <= now)
+        if (intent is null)
             return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload is unavailable or expired.", 409);
         if (intent.CompletedAt.HasValue)
+        {
+            if (intent.CompletedAt.Value < now.AddHours(-24))
+                return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload replay window has expired.", 409);
             return await ReplayCompletedUploadAsync(userId, expectedProfileRevision, intent, ct);
+        }
+        if (intent.ExpiresAt <= now)
+            return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload is unavailable or expired.", 409);
         var metadata = await storage.GetObjectMetadataAsync(intent.StagingObjectKey, ct);
         if (metadata is null || string.IsNullOrWhiteSpace(metadata.ETag) || metadata.ContentLength != intent.ExpectedSizeBytes || !string.Equals(metadata.ContentType, intent.ContentType, StringComparison.OrdinalIgnoreCase))
             return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload metadata does not match the intent.", 400);
@@ -135,8 +141,7 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
     {
         var user = await AvailableUserAsync(userId, ct);
         if (user is null) return AuthResult<AvatarResponse>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
-        if (string.IsNullOrWhiteSpace(intent.FinalObjectKey) || user.AvatarStorageKey != intent.FinalObjectKey
-            || user.ProfileRevision != expectedProfileRevision + 1)
+        if (string.IsNullOrWhiteSpace(intent.FinalObjectKey) || user.AvatarStorageKey != intent.FinalObjectKey)
             return AuthResult<AvatarResponse>.Fail("AVATAR_UPLOAD_SUPERSEDED", "This upload was replaced by a newer profile change.", 409);
         var now = UtcNow();
         var url = await storage.GeneratePresignedDownloadUrlAsync(intent.FinalObjectKey, UrlLifetime, ct);

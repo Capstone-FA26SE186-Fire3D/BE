@@ -21,8 +21,13 @@ public sealed class AvatarCleanupWorker(IServiceScopeFactory scopes, ILogger<Ava
                 if (job is null) { await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken); continue; }
                 try
                 {
-                    if (!await cleanup.IsReferencedAsync(job.ObjectKey, stoppingToken))
-                        await scope.ServiceProvider.GetRequiredService<IStorageService>().DeleteObjectAsync(job.ObjectKey, stoppingToken);
+                    if (await cleanup.IsReferencedAsync(job.ObjectKey, stoppingToken))
+                    {
+                        // The job remains durable until the active profile/intent stops referencing it.
+                        await cleanup.FailAsync(job, stoppingToken);
+                        continue;
+                    }
+                    await scope.ServiceProvider.GetRequiredService<IStorageService>().DeleteObjectAsync(job.ObjectKey, stoppingToken);
                     await cleanup.CompleteAsync(job, stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }

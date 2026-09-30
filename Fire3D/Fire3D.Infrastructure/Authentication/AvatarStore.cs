@@ -107,7 +107,8 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore, IAvatarClean
     public Task<bool> IsReferencedAsync(string objectKey, CancellationToken ct) => db.Database.SqlQuery<bool>($"""
         SELECT EXISTS(
             SELECT 1 FROM public.users WHERE avatar_storage_key={objectKey}
-            UNION ALL SELECT 1 FROM public.avatar_upload_intents WHERE staging_object_key={objectKey} OR final_object_key={objectKey}) AS "Value"
+            UNION ALL SELECT 1 FROM public.avatar_upload_intents
+                WHERE staging_object_key={objectKey} AND completed_at IS NULL AND expires_at > now()) AS "Value"
         """).SingleAsync(ct);
 
     public Task CompleteAsync(AvatarCleanupJob job, CancellationToken ct) => db.Database.ExecuteSqlInterpolatedAsync($"""

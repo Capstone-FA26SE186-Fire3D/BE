@@ -112,6 +112,26 @@ public sealed class AvatarServiceTests
     }
 
     [Fact]
+    public async Task Complete_replays_after_the_upload_url_expires_when_the_avatar_is_still_current()
+    {
+        var now = new DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
+        var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true, ProfileRevision = 9 };
+        var avatarStore = new AvatarStoreFake();
+        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, new AvatarCleanupStoreFake(), new AvatarStorageFake(), new FixedTimeProvider(now));
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
+        var intent = Assert.IsType<AvatarUploadIntent>(avatarStore.LastIntent);
+        intent.ExpiresAt = now.UtcDateTime.AddMinutes(-1);
+        intent.CompletedAt = now.UtcDateTime.AddMinutes(-10);
+        intent.FinalObjectKey = "avatars/users/replayed-after-expiry";
+        user.AvatarStorageKey = intent.FinalObjectKey;
+
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(9, result.Value!.ProfileRevision);
+    }
+
+    [Fact]
     public async Task Losing_complete_attempt_never_deletes_the_winning_final_object()
     {
         var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
