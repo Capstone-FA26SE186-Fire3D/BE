@@ -1,10 +1,13 @@
 using Fire3D.Application.Authentication;
+using Fire3D.Application.Users.Commands.RegisterDevice;
 using Fire3D.Domain.Entities;
 using Fire3D.Domain.Enums;
 using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Fire3D.Infrastructure.Authentication;
 
@@ -79,7 +82,8 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
             .SetProperty(x => x.PasswordHash, passwordHash)
             .SetProperty(x => x.UpdatedAt, now), ct);
 
-    public async Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username, DateTime now, CancellationToken ct)
+    public async Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username,
+        DateOnly? dob, UserGender? gender, string? phoneNumber, DateTime now, CancellationToken ct)
     {
         try
         {
@@ -88,6 +92,9 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(x => x.FullName, fullName)
                     .SetProperty(x => x.Username, username)
+                    .SetProperty(x => x.Dob, dob)
+                    .SetProperty(x => x.Gender, gender)
+                    .SetProperty(x => x.PhoneNumber, phoneNumber)
                     .SetProperty(x => x.ProfileRevision, x => x.ProfileRevision + 1)
                     .SetProperty(x => x.UpdatedAt, now), ct);
             return changed == 1 ? ProfileUpdateResult.Updated : ProfileUpdateResult.PreconditionFailed;
@@ -103,8 +110,36 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
             .SetProperty(x => x.LastLoginAt, now).SetProperty(x => x.UpdatedAt, now)
             , ct);
 
-    public async Task<bool> UpsertDeviceAsync(Guid userId, string deviceUuid, string? fcmToken, string? deviceModel, string? osVersion, CancellationToken ct)
+    public async Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, DeviceInstallationProof installationProof,
+        string? fcmToken, string? deviceModel, string? osVersion, string? appVersion, DateTime now, CancellationToken ct)
     {
+        // This lock is independent from the user lock. It serializes an installation moving between accounts.
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:installation:" + deviceUuid}, 0))", ct);
+        if (fcmToken is not null)
+        {
+            var tokenDigest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fcmToken))).ToLowerInvariant();
+            await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:fcm-token:" + tokenDigest}, 0))", ct);
+        }
+        var installation = await db.DeviceInstallations.SingleOrDefaultAsync(x => x.DeviceUuid == deviceUuid, ct);
+        if (installation is null)
+        {
+            installation = new DeviceInstallation { Id = Guid.NewGuid(), DeviceUuid = deviceUuid, SecretHash = installationProof.CurrentHash, SecretHashScheme = DeviceInstallationProof.CurrentHashScheme, CreatedAt = now, UpdatedAt = now };
+            db.DeviceInstallations.Add(installation);
+        }
+        else if (!installationProof.Matches(installation.SecretHash, installation.SecretHashScheme))
+        {
+            return DeviceRegistrationResult.InstallationKeyMismatch;
+        }
+        else if (installation.SecretHashScheme != DeviceInstallationProof.CurrentHashScheme || installation.SecretHash != installationProof.CurrentHash)
+        {
+            installation.SecretHash = installationProof.CurrentHash;
+            installation.SecretHashScheme = DeviceInstallationProof.CurrentHashScheme;
+            installation.UpdatedAt = now;
+        }
+
+        if (fcmToken is not null && await db.UserDevices.AnyAsync(x => x.FcmToken == fcmToken && x.NotificationsEnabled && x.RevokedAt == null && x.DeviceUuid != deviceUuid, ct))
+            return DeviceRegistrationResult.TokenAlreadyBound;
+
         var device = await db.UserDevices.FirstOrDefaultAsync(x => x.UserId == userId && x.DeviceUuid == deviceUuid, ct);
         if (device == null)
         {
@@ -116,28 +151,71 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
                 FcmToken = fcmToken,
                 DeviceModel = deviceModel,
                 OsVersion = osVersion,
-                LastSeenAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow
+                AppVersion = appVersion,
+                InstallationId = installation.Id,
+                NotificationsEnabled = fcmToken is not null,
+                FcmTokenGeneration = 1,
+                LastSeenAt = now,
+                CreatedAt = now
             };
             db.UserDevices.Add(device);
         }
         else
         {
-            device.FcmToken = fcmToken ?? device.FcmToken;
+            device.InstallationId = installation.Id;
+            device.FcmToken = fcmToken;
+            device.NotificationsEnabled = fcmToken is not null;
+            device.RevokedAt = null;
+            if (fcmToken is not null) device.FcmTokenGeneration++;
             device.DeviceModel = deviceModel ?? device.DeviceModel;
             device.OsVersion = osVersion ?? device.OsVersion;
-            device.LastSeenAt = DateTime.UtcNow;
+            device.AppVersion = appVersion ?? device.AppVersion;
+            device.LastSeenAt = now;
             db.UserDevices.Update(device);
         }
-        await db.SaveChangesAsync(ct);
-        return true;
+        // A device may move accounts, but its previous push binding must be disabled first.
+        await db.UserDevices.Where(x => x.InstallationId == installation.Id && x.UserId != userId && x.NotificationsEnabled)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.NotificationsEnabled, false)
+                .SetProperty(x => x.FcmToken, (string?)null).SetProperty(x => x.RevokedAt, now).SetProperty(x => x.LastSeenAt, now), ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return DeviceRegistrationResult.Registered;
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation
+            && ex.ConstraintName == "ux_user_devices_active_fcm_token")
+        {
+            return DeviceRegistrationResult.TokenAlreadyBound;
+        }
     }
 
-    public async Task RevokeDeviceAsync(Guid userId, string deviceUuid, DateTime now, CancellationToken ct) =>
-        await db.UserDevices.Where(x => x.UserId == userId && x.DeviceUuid == deviceUuid)
+    public async Task<DeviceRevokeResult> RevokeDeviceAsync(Guid userId, string deviceUuid, DeviceInstallationProof installationProof, DateTime now, CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:installation:" + deviceUuid}, 0))", ct);
+        var installation = await db.DeviceInstallations.SingleOrDefaultAsync(x => x.DeviceUuid == deviceUuid, ct);
+        if (installation is null)
+            return DeviceRevokeResult.Revoked;
+        if (!installationProof.Matches(installation.SecretHash, installation.SecretHashScheme))
+            return DeviceRevokeResult.InstallationKeyMismatch;
+        if (installation.SecretHashScheme != DeviceInstallationProof.CurrentHashScheme || installation.SecretHash != installationProof.CurrentHash)
+        {
+            installation.SecretHash = installationProof.CurrentHash;
+            installation.SecretHashScheme = DeviceInstallationProof.CurrentHashScheme;
+            installation.UpdatedAt = now;
+        }
+        await db.UserDevices.Where(x => x.UserId == userId && x.DeviceUuid == deviceUuid && x.InstallationId == installation.Id)
             .ExecuteUpdateAsync(update => update
                 .SetProperty(x => x.FcmToken, (string?)null)
+                .SetProperty(x => x.NotificationsEnabled, false)
+                .SetProperty(x => x.RevokedAt, now)
                 .SetProperty(x => x.LastSeenAt, now), ct);
+        return DeviceRevokeResult.Revoked;
+    }
+
+    public Task DisableUserPushDevicesAsync(Guid userId, DateTime now, CancellationToken ct) =>
+        db.UserDevices.Where(x => x.UserId == userId && x.NotificationsEnabled)
+            .ExecuteUpdateAsync(update => update.SetProperty(x => x.FcmToken, (string?)null)
+                .SetProperty(x => x.NotificationsEnabled, false).SetProperty(x => x.RevokedAt, now).SetProperty(x => x.LastSeenAt, now), ct);
 
     public Task<RefreshToken?> FindRefreshTokenAsync(string hash, CancellationToken ct) =>
         db.Set<RefreshToken>().AsNoTracking().SingleOrDefaultAsync(x => x.TokenHash == hash, ct);

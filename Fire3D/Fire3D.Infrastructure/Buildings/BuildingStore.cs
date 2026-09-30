@@ -47,6 +47,20 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
         return true;
     }
 
+    public async Task<bool> CreateBuildingWithAuditAsync(Building building, BuildingLocation? location, BuildingContact? contact, Guid actorId, DateTime now, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TakeMutationLocksAsync(building.Id, ct);
+        if (!await CanMutateAsync(actorId, building.OrganizationId, ct)) return false;
+        db.Buildings.Add(building);
+        if (location is not null) db.Set<BuildingLocation>().Add(location);
+        if (contact is not null) db.Set<BuildingContact>().Add(contact);
+        AddAudit(actorId, building.OrganizationId, building.Id, "Create", now);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return true;
+    }
+
     public async Task UpdateBuildingAsync(Building building, BuildingLocation? location, BuildingContact? contact, CancellationToken ct)
     {
         var existing = await db.Buildings
@@ -99,6 +113,31 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task<bool> UpdateBuildingWithAuditAsync(Building building, BuildingLocation? location, BuildingContact? contact, Guid actorId, DateTime now, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TakeMutationLocksAsync(building.Id, ct);
+        if (!await CanMutateAsync(actorId, building.OrganizationId, ct)) return false;
+        var existing = await db.Buildings.Include(x => x.BuildingLocation).Include(x => x.BuildingContact)
+            .SingleOrDefaultAsync(x => x.Id == building.Id && x.OrganizationId == building.OrganizationId && x.DeletedAt == null, ct);
+        if (existing is null) return false;
+        existing.Name = building.Name; existing.BuildingType = building.BuildingType; existing.TotalFloors = building.TotalFloors; existing.UpdatedAt = now;
+        if (location is not null)
+        {
+            if (existing.BuildingLocation is null) existing.BuildingLocation = location;
+            else { existing.BuildingLocation.Address = location.Address; existing.BuildingLocation.City = location.City; existing.BuildingLocation.District = location.District; existing.BuildingLocation.Latitude = location.Latitude; existing.BuildingLocation.Longitude = location.Longitude; existing.BuildingLocation.Geojson = location.Geojson; existing.BuildingLocation.UpdatedAt = now; }
+        }
+        if (contact is not null)
+        {
+            if (existing.BuildingContact is null) existing.BuildingContact = contact;
+            else { existing.BuildingContact.ContactName = contact.ContactName; existing.BuildingContact.ContactRole = contact.ContactRole; existing.BuildingContact.Phone = contact.Phone; existing.BuildingContact.Email = contact.Email; existing.BuildingContact.IsPrimary = contact.IsPrimary; existing.BuildingContact.UpdatedAt = now; }
+        }
+        AddAudit(actorId, existing.OrganizationId, existing.Id, "Update", now);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return true;
+    }
+
     public async Task SetBuildingActiveAsync(Guid id, Guid organizationId, bool active, DateTime now, CancellationToken ct)
     {
         await db.Buildings
@@ -106,6 +145,20 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
             .ExecuteUpdateAsync(update => update
                 .SetProperty(x => x.IsActive, active)
                 .SetProperty(x => x.UpdatedAt, now), ct);
+    }
+
+    public async Task<bool> SetBuildingActiveWithAuditAsync(Guid id, Guid organizationId, bool active, Guid actorId, DateTime now, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TakeMutationLocksAsync(id, ct);
+        if (!await CanMutateAsync(actorId, organizationId, ct)) return false;
+        var changed = await db.Buildings.Where(x => x.Id == id && x.OrganizationId == organizationId && x.DeletedAt == null && x.IsActive != active)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, active).SetProperty(x => x.UpdatedAt, now), ct);
+        if (changed != 1) return false;
+        AddAudit(actorId, organizationId, id, "Update", now);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return true;
     }
 
     public async Task<bool> TryCreateRevisionAsync(Revision revision, SourceDocument document, ProcessingJob job, CancellationToken ct)
@@ -171,5 +224,24 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
             CreatedAt = now
         });
         await db.SaveChangesAsync(ct);
+    }
+
+    private void AddAudit(Guid actorId, Guid organizationId, Guid buildingId, string action, DateTime now) => db.AuditLogs.Add(new AuditLog
+    {
+        Id = Guid.NewGuid(), UserId = actorId, OrganizationId = organizationId, ActorType = "User", Action = Enum.Parse<AuditAction>(action),
+        TargetEntity = "buildings", TargetId = buildingId, CorrelationId = Guid.NewGuid(), CreatedAt = now
+    });
+
+    private Task<bool> CanMutateAsync(Guid actorId, Guid organizationId, CancellationToken ct) => db.Users.AnyAsync(user =>
+        user.Id == actorId && user.IsActive && user.DeletedAt == null &&
+        (user.Role == UserRole.PlatformAdmin || (user.Role == UserRole.OrganizationUser && user.OrganizationId == organizationId)) &&
+        db.Organizations.Any(org => org.Id == organizationId && org.IsActive && org.DeletedAt == null), ct);
+
+    private async Task TakeMutationLocksAsync(Guid buildingId, CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlRawAsync(
+            "SELECT pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management', 0))", ct);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:building:" + buildingId}, 0))", ct);
     }
 }

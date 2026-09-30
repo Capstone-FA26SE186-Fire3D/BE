@@ -44,4 +44,19 @@ public sealed class PasswordAndEmailConfigurationTests
         Assert.Equal("https://fet3d.io.vn", options.GetFrontendPageBaseUrl());
         Assert.Equal("https://fet3d.io.vn", options.GetVerificationPageBaseUrl());
     }
+
+    [Fact]
+    public void Refresh_token_cleanup_has_safe_defaults()
+    {
+        var optionsType = typeof(AuthEmailOptions).Assembly.GetType(
+            "Fire3D.Application.Authentication.AuthTokenCleanupOptions");
+
+        Assert.NotNull(optionsType);
+        var options = Activator.CreateInstance(optionsType!);
+        Assert.True((bool)optionsType.GetProperty("Enabled")!.GetValue(options)!);
+        Assert.Equal(60, (int)optionsType.GetProperty("IntervalMinutes")!.GetValue(options)!);
+        Assert.Equal(7, (int)optionsType.GetProperty("RetentionDays")!.GetValue(options)!);
+        Assert.Equal(500, (int)optionsType.GetProperty("BatchSize")!.GetValue(options)!);
+        Assert.Equal(10, (int)optionsType.GetProperty("MaxBatchesPerRun")!.GetValue(options)!);
+    }
 }

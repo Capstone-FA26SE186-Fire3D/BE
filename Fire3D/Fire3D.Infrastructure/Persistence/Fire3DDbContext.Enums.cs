@@ -37,6 +37,11 @@ public partial class Fire3DDbContext
             entity.Property(x => x.ExpiresAt).HasColumnName("expires_at");
             entity.Property(x => x.CompletedAt).HasColumnName("completed_at");
             entity.Property(x => x.FinalObjectKey).HasColumnName("final_object_key");
+            entity.Property(x => x.ExpectedProfileRevision).HasColumnName("expected_profile_revision");
+            entity.Property(x => x.CandidateAttemptId).HasColumnName("candidate_attempt_id");
+            entity.Property(x => x.CandidateObjectKey).HasColumnName("candidate_object_key");
+            entity.Property(x => x.CandidateSourceEtag).HasColumnName("candidate_source_etag");
+            entity.Property(x => x.CandidateLeaseUntil).HasColumnName("candidate_lease_until");
             entity.Property(x => x.CreatedAt).HasColumnName("created_at");
             entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });

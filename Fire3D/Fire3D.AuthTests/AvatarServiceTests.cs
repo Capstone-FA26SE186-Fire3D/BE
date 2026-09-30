@@ -2,6 +2,7 @@ using Fire3D.Application.Authentication;
 using Fire3D.Application.Authentication.Avatar;
 using Fire3D.Application.Storage;
 using Fire3D.Domain.Entities;
+using Fire3D.Domain.Enums;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
@@ -100,6 +101,7 @@ public sealed class AvatarServiceTests
         var intent = Assert.IsType<AvatarUploadIntent>(avatarStore.LastIntent);
         intent.CompletedAt = DateTime.UtcNow;
         intent.FinalObjectKey = "avatars/users/replayed";
+        intent.ExpectedProfileRevision = 1;
         user.AvatarStorageKey = intent.FinalObjectKey;
         user.ProfileRevision = 2;
 
@@ -108,6 +110,45 @@ public sealed class AvatarServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal(2, result.Value!.ProfileRevision);
         Assert.Empty(storage.CopiedKeys);
+    }
+
+    [Fact]
+    public async Task Complete_replays_after_the_upload_url_expires_when_the_avatar_is_still_current()
+    {
+        var now = new DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
+        var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true, ProfileRevision = 9 };
+        var avatarStore = new AvatarStoreFake();
+        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, new AvatarCleanupStoreFake(), new AvatarStorageFake(), new FixedTimeProvider(now));
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
+        var intent = Assert.IsType<AvatarUploadIntent>(avatarStore.LastIntent);
+        intent.ExpiresAt = now.UtcDateTime.AddMinutes(-1);
+        intent.CompletedAt = now.UtcDateTime.AddMinutes(-10);
+        intent.FinalObjectKey = "avatars/users/replayed-after-expiry";
+        intent.ExpectedProfileRevision = 1;
+        user.AvatarStorageKey = intent.FinalObjectKey;
+
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(9, result.Value!.ProfileRevision);
+    }
+
+    [Fact]
+    public async Task Complete_replay_requires_the_original_profile_revision()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true, ProfileRevision = 2 };
+        var avatarStore = new AvatarStoreFake();
+        var service = new AvatarService(new AvatarAuthStoreFake(user), avatarStore, new AvatarCleanupStoreFake(), new AvatarStorageFake(), TimeProvider.System);
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
+        var intent = Assert.IsType<AvatarUploadIntent>(avatarStore.LastIntent);
+        intent.CompletedAt = DateTime.UtcNow;
+        intent.FinalObjectKey = "avatars/users/replayed";
+        intent.ExpectedProfileRevision = 1;
+        user.AvatarStorageKey = intent.FinalObjectKey;
+
+        var result = await service.CompleteUploadAsync(user.Id, 2, new(upload.Value!.UploadId), default);
+
+        Assert.Equal("PRECONDITION_FAILED", result.Error?.Code);
     }
 
     [Fact]
@@ -125,9 +166,9 @@ public sealed class AvatarServiceTests
 
         Assert.Equal("PRECONDITION_FAILED", loser.Error?.Code);
         Assert.Equal(2, storage.CopiedKeys.Count);
-        Assert.NotEqual(storage.CopiedKeys[0], storage.CopiedKeys[1]);
+        Assert.Equal(storage.CopiedKeys[0], storage.CopiedKeys[1]);
         Assert.DoesNotContain(storage.CopiedKeys[0], storage.DeletedKeys);
-        Assert.Contains(storage.CopiedKeys[1], cleanup.QueuedKeys);
+        Assert.Empty(cleanup.QueuedKeys);
     }
 
     private sealed class AvatarAuthStoreFake(User user) : IAuthStore
@@ -143,10 +184,11 @@ public sealed class AvatarServiceTests
         public Task<RegisterConflict> TryCreateTraineeAsync(User user, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateUserAsync(User user, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdatePasswordHashAsync(Guid userId, string passwordHash, DateTime now, CancellationToken ct) => throw new NotSupportedException();
-        public Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username, DateTime now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username, DateOnly? dob, UserGender? gender, string? phoneNumber, DateTime now, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct) => throw new NotSupportedException();
-        public Task<bool> UpsertDeviceAsync(Guid userId, string deviceUuid, string? fcmToken, string? deviceModel, string? osVersion, CancellationToken ct) => throw new NotSupportedException();
-        public Task RevokeDeviceAsync(Guid userId, string deviceUuid, DateTime now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, Fire3D.Application.Users.Commands.RegisterDevice.DeviceInstallationProof installationProof, string? fcmToken, string? deviceModel, string? osVersion, string? appVersion, DateTime now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<DeviceRevokeResult> RevokeDeviceAsync(Guid userId, string deviceUuid, Fire3D.Application.Users.Commands.RegisterDevice.DeviceInstallationProof installationProof, DateTime now, CancellationToken ct) => throw new NotSupportedException();
+        public Task DisableUserPushDevicesAsync(Guid userId, DateTime now, CancellationToken ct) => throw new NotSupportedException();
         public Task<RefreshToken?> FindRefreshTokenAsync(string hash, CancellationToken ct) => throw new NotSupportedException();
         public Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct) => throw new NotSupportedException();
         public Task ConsumeRefreshTokenAsync(Guid id, DateTime now, CancellationToken ct) => throw new NotSupportedException();
@@ -171,7 +213,21 @@ public sealed class AvatarServiceTests
         public AvatarFinalizeStatus[] FinalizeStatuses { get; init; } = [AvatarFinalizeStatus.Finalized];
         public Task SaveUploadIntentAsync(AvatarUploadIntent intent, CancellationToken ct) { intents.Add(intent.Id, intent); LastIntent = intent; return Task.CompletedTask; }
         public Task<AvatarUploadIntent?> FindUploadIntentAsync(Guid id, Guid userId, CancellationToken ct) => Task.FromResult(intents.GetValueOrDefault(id) is { UserId: var owner } intent && owner == userId ? intent : null);
-        public Task<AvatarFinalizeResult> FinalizeUploadAsync(Guid intentId, Guid userId, long expectedProfileRevision, string objectKey, DateTime completedAt, CancellationToken ct)
+        public Task<AvatarCandidateReservation> ReserveCopyCandidateAsync(Guid intentId, Guid userId, long expectedProfileRevision, string sourceEtag, DateTime now, CancellationToken ct)
+        {
+            var intent = intents[intentId];
+            if (intent.CandidateAttemptId.HasValue)
+                return Task.FromResult(new AvatarCandidateReservation(AvatarCandidateReservationStatus.Reserved,
+                    new(intent.CandidateAttemptId.Value, intent.CandidateObjectKey!, intent.CandidateSourceEtag!, intent.CandidateLeaseUntil!.Value)));
+            intent.ExpectedProfileRevision = expectedProfileRevision;
+            intent.CandidateAttemptId = Guid.NewGuid();
+            intent.CandidateObjectKey = "avatars/users/candidate-" + intent.CandidateAttemptId.Value.ToString("N");
+            intent.CandidateSourceEtag = sourceEtag;
+            intent.CandidateLeaseUntil = now.AddMinutes(15);
+            return Task.FromResult(new AvatarCandidateReservation(AvatarCandidateReservationStatus.Reserved,
+                new(intent.CandidateAttemptId.Value, intent.CandidateObjectKey, intent.CandidateSourceEtag, intent.CandidateLeaseUntil.Value)));
+        }
+        public Task<AvatarFinalizeResult> FinalizeUploadAsync(Guid intentId, Guid userId, Guid attemptId, long expectedProfileRevision, string objectKey, DateTime completedAt, CancellationToken ct)
         {
             var status = FinalizeStatuses[Math.Min(finalizeCount++, FinalizeStatuses.Length - 1)];
             Finalized |= status == AvatarFinalizeStatus.Finalized;
@@ -224,7 +280,7 @@ public sealed class AvatarServiceTests
     private sealed class AvatarCleanupStoreFake : IAvatarCleanupStore
     {
         public List<string> QueuedKeys { get; } = [];
-        public Task QueueAsync(string objectKey, CancellationToken ct) { QueuedKeys.Add(objectKey); return Task.CompletedTask; }
+        public Task QueueAsync(string objectKey, DateTime availableAt, CancellationToken ct) { QueuedKeys.Add(objectKey); return Task.CompletedTask; }
         public Task<AvatarCleanupJob?> ClaimAsync(CancellationToken ct) => Task.FromResult<AvatarCleanupJob?>(null);
         public Task<bool> IsReferencedAsync(string objectKey, CancellationToken ct) => Task.FromResult(false);
         public Task CompleteAsync(AvatarCleanupJob job, CancellationToken ct) => Task.CompletedTask;

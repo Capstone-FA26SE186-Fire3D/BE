@@ -4,7 +4,7 @@ using MediatR;
 
 namespace Fire3D.Application.Buildings.Commands.UpdateBuilding;
 
-internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, TimeProvider clock)
+internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, IAuthStore accounts, TimeProvider clock)
     : IRequestHandler<UpdateBuildingCommand, AuthResult<BuildingResponse>>
 {
     public async Task<AuthResult<BuildingResponse>> Handle(UpdateBuildingCommand command, CancellationToken ct)
@@ -12,8 +12,10 @@ internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, TimePro
         var request = command.Request;
         var name = request.Name?.Trim();
         
-        if (string.IsNullOrEmpty(name) || name.Length > 200 || request.TotalFloors < 1)
+        if (string.IsNullOrEmpty(name) || name.Length > 200 || request.TotalFloors < 1 || (request.Contact is not null && string.IsNullOrWhiteSpace(request.Contact.ContactName)))
             return AuthResult<BuildingResponse>.Fail("VALIDATION_ERROR", "Name is required (max 200) and TotalFloors must be >= 1.", 400);
+        if (!await BuildingAuthorization.CanMutateAsync(accounts, command.ActorId, command.OrganizationId, ct))
+            return AuthResult<BuildingResponse>.Fail("FORBIDDEN", "An active organization scope is required.", 403);
 
         var building = await store.FindBuildingAsync(command.BuildingId, command.OrganizationId, ct);
         if (building == null)
@@ -51,7 +53,7 @@ internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, TimePro
             {
                 Id = Guid.NewGuid(),
                 BuildingId = building.Id,
-                ContactName = request.Contact.ContactName.Trim(),
+                ContactName = request.Contact.ContactName?.Trim() ?? string.Empty,
                 ContactRole = request.Contact.ContactRole?.Trim(),
                 Phone = request.Contact.Phone?.Trim(),
                 Email = request.Contact.Email?.Trim(),
@@ -61,8 +63,8 @@ internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, TimePro
             };
         }
 
-        await store.UpdateBuildingAsync(building, location, contact, ct);
-        await store.WriteAuditAsync(command.ActorId, command.OrganizationId, "buildings", building.Id, "Update", now, ct);
+        if (!await store.UpdateBuildingWithAuditAsync(building, location, contact, command.ActorId, now, ct))
+            return AuthResult<BuildingResponse>.Fail("BUILDING_MUTATION_FAILED", "Building could not be updated.", 409);
 
         // Fetch again to get the updated nested entities with their actual IDs
         var updatedBuilding = await store.FindBuildingAsync(command.BuildingId, command.OrganizationId, ct);

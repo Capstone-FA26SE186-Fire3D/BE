@@ -15,6 +15,8 @@ public partial class Organization
 
     public string? PhoneNumber { get; set; }
 
+    public long ProfileRevision { get; set; } = 1;
+
     public string Plan { get; set; } = null!;
 
     public bool IsActive { get; set; }

@@ -109,5 +109,8 @@ public class ServiceRegistrationTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<Fire3DSessionIssuer>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRegistrationOtpService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRegistrationOtpDeliveryQueue>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRefreshTokenCleanupStore>());
+        Assert.Contains(provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>(),
+            service => service is Fire3D.Infrastructure.Workers.RefreshTokenCleanupWorker);
     }
 }

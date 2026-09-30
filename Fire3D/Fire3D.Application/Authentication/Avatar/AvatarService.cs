@@ -7,6 +7,8 @@ namespace Fire3D.Application.Authentication.Avatar;
 
 public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore, IAvatarCleanupStore cleanup, IStorageService storage, TimeProvider clock) : IAvatarService
 {
+    // Kept in the constructor to preserve the DI boundary: AvatarStore owns the durable reconciliation queue.
+    private readonly IAvatarCleanupStore cleanupStore = cleanup;
     private static readonly TimeSpan UrlLifetime = TimeSpan.FromMinutes(5);
 
     public async Task<AuthResult<AvatarUploadIntentResponse>> CreateUploadIntentAsync(Guid userId, AvatarUploadIntentRequest request, CancellationToken ct)
@@ -52,12 +54,10 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         }
         catch
         {
-            await QueueCleanupAsync(intent.StagingObjectKey, ct);
             return AuthResult<AvatarResponse>.Fail("AVATAR_UPLOAD_UNAVAILABLE", "Avatar upload failed. Try again.", 503);
         }
 
         var completed = await CompleteUploadAsync(userId, expectedProfileRevision, new(intent.Id), ct);
-        if (!completed.IsSuccess) await QueueCleanupAsync(intent.StagingObjectKey, ct);
         return completed;
     }
 
@@ -67,10 +67,16 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         if (!await IsAvailableAsync(userId, ct)) return AuthResult<AvatarResponse>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
         var intent = await avatarStore.FindUploadIntentAsync(request.UploadId, userId, ct);
         var now = UtcNow();
-        if (intent is null || intent.ExpiresAt <= now)
+        if (intent is null)
             return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload is unavailable or expired.", 409);
         if (intent.CompletedAt.HasValue)
+        {
+            if (intent.CompletedAt.Value < now.AddHours(-24))
+                return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload replay window has expired.", 409);
             return await ReplayCompletedUploadAsync(userId, expectedProfileRevision, intent, ct);
+        }
+        if (intent.ExpiresAt <= now)
+            return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload is unavailable or expired.", 409);
         var metadata = await storage.GetObjectMetadataAsync(intent.StagingObjectKey, ct);
         if (metadata is null || string.IsNullOrWhiteSpace(metadata.ETag) || metadata.ContentLength != intent.ExpectedSizeBytes || !string.Equals(metadata.ContentType, intent.ContentType, StringComparison.OrdinalIgnoreCase))
             return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload metadata does not match the intent.", 400);
@@ -80,22 +86,23 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         var imageBytes = await storage.ReadObjectAsync(intent.StagingObjectKey, AvatarUploadRules.MaxBytes, metadata.ETag, ct);
         if (!IsSafeImage(imageBytes, intent.ContentType))
             return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_CONTENT", "Avatar must be a valid, single-frame image no larger than 4096 by 4096 pixels.", 400);
-        // A complete attempt must never share a destination key. A losing concurrent request can
-        // then remove only its own orphan without deleting the winner's stored avatar.
-        var finalKey = $"avatars/users/{userId:N}/{Guid.NewGuid():N}";
-        if (!await storage.CopyObjectIfUnchangedAsync(intent.StagingObjectKey, metadata.ETag, finalKey, intent.ContentType, ct))
+        var reservation = await avatarStore.ReserveCopyCandidateAsync(intent.Id, userId, expectedProfileRevision, metadata.ETag, now, ct);
+        if (reservation.Status == AvatarCandidateReservationStatus.PreconditionFailed)
+            return AuthResult<AvatarResponse>.Fail("PRECONDITION_FAILED", "The profile changed. Reload it and retry.", 412);
+        if (!reservation.Reserved)
+            return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload is no longer available.", 409);
+        var candidate = reservation.Candidate!;
+        if (!await storage.CopyObjectIfUnchangedAsync(intent.StagingObjectKey, candidate.SourceEtag, candidate.ObjectKey, intent.ContentType, ct))
             return AuthResult<AvatarResponse>.Fail("AVATAR_UPLOAD_CHANGED", "Avatar upload changed before it could be completed. Upload again.", 409);
         var completedAt = UtcNow();
-        var finalized = await avatarStore.FinalizeUploadAsync(intent.Id, userId, expectedProfileRevision, finalKey, completedAt, ct);
+        var finalized = await avatarStore.FinalizeUploadAsync(intent.Id, userId, candidate.AttemptId, expectedProfileRevision, candidate.ObjectKey, completedAt, ct);
         if (!finalized.Finalized)
         {
-            await QueueCleanupAsync(finalKey, ct);
             return finalized.Status == AvatarFinalizeStatus.PreconditionFailed
                 ? AuthResult<AvatarResponse>.Fail("PRECONDITION_FAILED", "The profile changed. Reload it and retry.", 412)
                 : AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_UPLOAD", "Avatar upload is no longer available.", 409);
         }
-        await QueueCleanupAsync(intent.StagingObjectKey, ct);
-        var url = await storage.GeneratePresignedDownloadUrlAsync(finalKey, UrlLifetime, ct);
+        var url = await storage.GeneratePresignedDownloadUrlAsync(candidate.ObjectKey, UrlLifetime, ct);
         return AuthResult<AvatarResponse>.Ok(new(url, completedAt.Add(UrlLifetime), expectedProfileRevision + 1));
     }
 
@@ -135,8 +142,9 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
     {
         var user = await AvailableUserAsync(userId, ct);
         if (user is null) return AuthResult<AvatarResponse>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
-        if (string.IsNullOrWhiteSpace(intent.FinalObjectKey) || user.AvatarStorageKey != intent.FinalObjectKey
-            || user.ProfileRevision != expectedProfileRevision + 1)
+        if (intent.ExpectedProfileRevision != expectedProfileRevision)
+            return AuthResult<AvatarResponse>.Fail("PRECONDITION_FAILED", "The profile changed. Reload it and retry.", 412);
+        if (string.IsNullOrWhiteSpace(intent.FinalObjectKey) || user.AvatarStorageKey != intent.FinalObjectKey)
             return AuthResult<AvatarResponse>.Fail("AVATAR_UPLOAD_SUPERSEDED", "This upload was replaced by a newer profile change.", 409);
         var now = UtcNow();
         var url = await storage.GeneratePresignedDownloadUrlAsync(intent.FinalObjectKey, UrlLifetime, ct);
@@ -160,11 +168,5 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         }
         catch (UnknownImageFormatException) { return false; }
         catch (InvalidImageContentException) { return false; }
-    }
-    private async Task QueueCleanupAsync(string objectKey, CancellationToken ct)
-    {
-        try { await cleanup.QueueAsync(objectKey, ct); }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-        catch { /* The object remains private; scheduled reconciliation will retry persistence. */ }
     }
 }

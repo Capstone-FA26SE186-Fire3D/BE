@@ -16,19 +16,26 @@ public sealed record AvatarDeleteResult(AvatarDeleteStatus Status, string? Previ
 }
 public enum AvatarFinalizeStatus { Finalized, PreconditionFailed, Unavailable }
 public enum AvatarDeleteStatus { Deleted, PreconditionFailed, Unavailable }
+public sealed record AvatarCopyCandidate(Guid AttemptId, string ObjectKey, string SourceEtag, DateTime LeaseUntil);
+public sealed record AvatarCandidateReservation(AvatarCandidateReservationStatus Status, AvatarCopyCandidate? Candidate)
+{
+    public bool Reserved => Status == AvatarCandidateReservationStatus.Reserved && Candidate is not null;
+}
+public enum AvatarCandidateReservationStatus { Reserved, PreconditionFailed, Unavailable }
 public sealed record AvatarCleanupJob(Guid Id, string ObjectKey, Guid LeaseToken, int Attempt);
 
 public interface IAvatarStore
 {
     Task SaveUploadIntentAsync(AvatarUploadIntent intent, CancellationToken ct);
     Task<AvatarUploadIntent?> FindUploadIntentAsync(Guid id, Guid userId, CancellationToken ct);
-    Task<AvatarFinalizeResult> FinalizeUploadAsync(Guid intentId, Guid userId, long expectedProfileRevision, string objectKey, DateTime completedAt, CancellationToken ct);
+    Task<AvatarCandidateReservation> ReserveCopyCandidateAsync(Guid intentId, Guid userId, long expectedProfileRevision, string sourceEtag, DateTime now, CancellationToken ct);
+    Task<AvatarFinalizeResult> FinalizeUploadAsync(Guid intentId, Guid userId, Guid attemptId, long expectedProfileRevision, string objectKey, DateTime completedAt, CancellationToken ct);
     Task<AvatarDeleteResult> DeleteAvatarAsync(Guid userId, long expectedProfileRevision, DateTime deletedAt, CancellationToken ct);
 }
 
 public interface IAvatarCleanupStore
 {
-    Task QueueAsync(string objectKey, CancellationToken ct);
+    Task QueueAsync(string objectKey, DateTime availableAt, CancellationToken ct);
     Task<AvatarCleanupJob?> ClaimAsync(CancellationToken ct);
     Task<bool> IsReferencedAsync(string objectKey, CancellationToken ct);
     Task CompleteAsync(AvatarCleanupJob job, CancellationToken ct);

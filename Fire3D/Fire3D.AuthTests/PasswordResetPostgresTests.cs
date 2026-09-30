@@ -227,6 +227,8 @@ public sealed class PasswordResetPostgresTests
               id uuid PRIMARY KEY, user_id uuid NOT NULL, staging_object_key text NOT NULL,
               content_type text NOT NULL, expected_size_bytes bigint NOT NULL,
               expires_at timestamptz NOT NULL, completed_at timestamptz NULL, final_object_key text NULL,
+              expected_profile_revision bigint NULL, candidate_attempt_id uuid NULL, candidate_object_key text NULL,
+              candidate_source_etag text NULL, candidate_lease_until timestamptz NULL,
               created_at timestamptz NOT NULL
             )
             """);
@@ -238,8 +240,10 @@ public sealed class PasswordResetPostgresTests
         var outcomes = await Task.WhenAll(Enumerable.Range(0, 2).Select(async attempt =>
         {
             await using var context = database.Context();
-            return await new AvatarStore(context).FinalizeUploadAsync(intentId, userId, 1,
-                "avatars/users/" + attempt, DateTime.UtcNow, default);
+            var store = new AvatarStore(context);
+            var reservation = await store.ReserveCopyCandidateAsync(intentId, userId, 1, "etag", DateTime.UtcNow, default);
+            return await store.FinalizeUploadAsync(intentId, userId, reservation.Candidate!.AttemptId, 1,
+                reservation.Candidate.ObjectKey, DateTime.UtcNow, default);
         }));
 
         Assert.Equal(1, outcomes.Count(result => result.Status == Fire3D.Application.Authentication.Avatar.AvatarFinalizeStatus.Finalized));
@@ -395,5 +399,33 @@ public sealed class PasswordResetPostgresTests
         Assert.Equal(1L,await db.Sql("SELECT count(*) FROM auth_refresh_tokens WHERE revoked_at IS NOT NULL"));
         await using var fresh=db.Context();
         await Assert.ThrowsAsync<PasswordResetException>(()=>new AuthStore(fresh).AddRefreshTokenAsync(Token(user),default));
+    }
+
+    [ResetPostgresFact]
+    public async Task Refresh_token_cleanup_removes_only_families_past_the_retention_window()
+    {
+        await using var database = await Database.Create();
+        var userId = Guid.NewGuid();
+        var removableFamily = Guid.NewGuid();
+        var recentFamily = Guid.NewGuid();
+        var mixedFamily = Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role) VALUES ('{userId}','cleanup@example.test','Trainee')");
+        await database.Sql($"""
+            INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at,consumed_at)
+            VALUES
+              ('{Guid.NewGuid()}','{userId}','{removableFamily}','{Guid.NewGuid():N}',now()-interval '20 days',now()-interval '8 days',now()-interval '19 days'),
+              ('{Guid.NewGuid()}','{userId}','{removableFamily}','{Guid.NewGuid():N}',now()-interval '19 days',now()-interval '8 days',NULL),
+              ('{Guid.NewGuid()}','{userId}','{recentFamily}','{Guid.NewGuid():N}',now()-interval '8 days',now()-interval '6 days',NULL),
+              ('{Guid.NewGuid()}','{userId}','{mixedFamily}','{Guid.NewGuid():N}',now()-interval '20 days',now()-interval '8 days',now()-interval '19 days'),
+              ('{Guid.NewGuid()}','{userId}','{mixedFamily}','{Guid.NewGuid():N}',now()-interval '8 days',now()-interval '6 days',NULL)
+            """);
+
+        await using var context = database.Context();
+        var cleanup = new RefreshTokenCleanupStore(context);
+
+        Assert.Equal(2, await cleanup.DeleteExpiredFamiliesAsync(retentionDays: 7, batchSize: 20, ct: default));
+        Assert.Equal(0L, await database.Sql($"SELECT count(*) FROM auth_refresh_tokens WHERE family_id='{removableFamily}'"));
+        Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM auth_refresh_tokens WHERE family_id='{recentFamily}'"));
+        Assert.Equal(2L, await database.Sql($"SELECT count(*) FROM auth_refresh_tokens WHERE family_id='{mixedFamily}'"));
     }
 }

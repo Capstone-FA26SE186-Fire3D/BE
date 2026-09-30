@@ -70,6 +70,8 @@ Các script SQL này cần chạy riêng, không được thay bằng EF EnsureC
 - `AuthEmail__FrontendUrl`: HTTPS base URL của FET3D (ví dụ `https://fet3d.io.vn`), không query/fragment. HTTP loopback chỉ hợp lệ ở Development; Production từ chối cấu hình loopback khi khởi động.
 - `AuthEmail__VerificationUrl`: URL public phục vụ `/verify-email/`. Với deployment FET3D hiện tại đặt `https://fet3d.io.vn`; nếu bỏ trống, hệ thống dùng `FrontendUrl` để tương thích cấu hình cũ.
 - `AuthEmail__WorkerEnabled`: true để gửi email, false khi test không cần worker.
+- `AuthTokenCleanup__Enabled`: bật/tắt worker dọn refresh token; mặc định `true`.
+- `AuthTokenCleanup__IntervalMinutes`, `AuthTokenCleanup__RetentionDays`, `AuthTokenCleanup__BatchSize`, `AuthTokenCleanup__MaxBatchesPerRun`: mặc định là `60`, `7`, `500`, `10`. Worker chỉ xóa family khi mọi refresh token trong family đã hết hạn ít nhất `RetentionDays`; access JWT không lưu trong database.
 - `Mailgun__ApiKey`, `Mailgun__Domain`, `Mailgun__From`, `Mailgun__BaseUrl`: Mailgun.
 - Firebase Admin credential: chỉ cần cho Google; secret JSON, section hoặc file local.
   Email/password/reset local không cần Firebase Web API key hoặc lời gọi Firebase.

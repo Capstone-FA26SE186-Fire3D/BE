@@ -163,6 +163,17 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
         return NoContent();
     }
 
+    /// <summary>Revokes every refresh-token family and disables push delivery for the current account.</summary>
+    [HttpPost("logout-all")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    public async Task<IActionResult> LogoutAll(CancellationToken ct)
+    {
+        var result = await sender.Send(new LogoutAllCommand(User.GetActorId(), User.GetSessionFamilyId()), ct);
+        return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
+    }
+
     /// <summary>
     /// Lấy thông tin tài khoản của phiên đăng nhập hiện tại.
     /// </summary>
@@ -196,15 +207,21 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     }
 
     /// <summary>
-    /// Đăng ký thiết bị và FCM Token để nhận Push Notification.
+    /// Registers a credential-bound installation and its current FCM token.
     /// </summary>
     [HttpPut("devices")]
     [Authorize]
-    public async Task<IActionResult> RegisterDevice([FromBody] Fire3D.Application.Users.Commands.RegisterDevice.RegisterDeviceCommand request, CancellationToken ct)
+    [ProducesResponseType<Fire3D.Application.Users.Commands.RegisterDevice.DeviceRegistrationResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    public async Task<IActionResult> RegisterDevice(
+        [FromBody] Fire3D.Application.Users.Commands.RegisterDevice.RegisterDeviceRequest request,
+        [FromHeader(Name = "X-Installation-Key")] string? installationKey, CancellationToken ct)
     {
-        var userId = User.GetActorId();
-        await sender.Send(request with { UserId = userId }, ct);
-        return Ok();
+        var result = await sender.Send(new Fire3D.Application.Users.Commands.RegisterDevice.RegisterDeviceCommand(
+            User.GetActorId(), User.GetSessionFamilyId(), request.DeviceUuid, installationKey, request.FcmToken, request.DeviceModel, request.OsVersion, request.AppVersion), ct);
+        return result.IsSuccess ? Ok(result.Value) : ResetProblem(result.Error!);
     }
 
     /// <summary>Revokes push delivery for one installation owned by the current account.</summary>
@@ -216,7 +233,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     public async Task<IActionResult> RevokeDevice(string deviceUuid, CancellationToken ct)
     {
         var result = await sender.Send(
-            new Fire3D.Application.Users.Commands.RegisterDevice.RevokeDeviceCommand(User.GetActorId(), deviceUuid), ct);
+        new Fire3D.Application.Users.Commands.RegisterDevice.RevokeDeviceCommand(User.GetActorId(), User.GetSessionFamilyId(), deviceUuid, Request.Headers["X-Installation-Key"].FirstOrDefault()), ct);
         return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
     }
 

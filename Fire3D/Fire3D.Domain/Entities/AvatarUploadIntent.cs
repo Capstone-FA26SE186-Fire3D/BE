@@ -10,5 +10,10 @@ public sealed class AvatarUploadIntent
     public DateTime ExpiresAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public string? FinalObjectKey { get; set; }
+    public long? ExpectedProfileRevision { get; set; }
+    public Guid? CandidateAttemptId { get; set; }
+    public string? CandidateObjectKey { get; set; }
+    public string? CandidateSourceEtag { get; set; }
+    public DateTime? CandidateLeaseUntil { get; set; }
     public DateTime CreatedAt { get; set; }
 }

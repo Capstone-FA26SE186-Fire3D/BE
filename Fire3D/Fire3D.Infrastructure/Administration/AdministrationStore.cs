@@ -33,6 +33,18 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
     public Task<Organization?> FindOrganizationAsync(Guid id, CancellationToken ct) =>
         db.Organizations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
 
+    public async Task<OrganizationProfileUpdateResult> UpdateOrganizationProfileAsync(Guid organizationId, long revision,
+        string name, string? address, string? phoneNumber, DateTime now, CancellationToken ct)
+    {
+        var changed = await db.Organizations.Where(x => x.Id == organizationId && x.IsActive && x.DeletedAt == null && x.ProfileRevision == revision)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, name).SetProperty(x => x.Address, address)
+                .SetProperty(x => x.PhoneNumber, phoneNumber).SetProperty(x => x.ProfileRevision, x => x.ProfileRevision + 1)
+                .SetProperty(x => x.UpdatedAt, now), ct);
+        return changed == 1 ? OrganizationProfileUpdateResult.Updated
+            : await db.Organizations.AnyAsync(x => x.Id == organizationId && x.IsActive && x.DeletedAt == null, ct)
+                ? OrganizationProfileUpdateResult.PreconditionFailed : OrganizationProfileUpdateResult.Unavailable;
+    }
+
     public async Task<bool> TryCreateOrganizationAsync(Organization organization, CancellationToken ct)
     {
         db.Organizations.Add(organization);
@@ -92,8 +104,8 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
 
     public async Task SetOrganizationActiveAsync(Guid id, bool active, DateTime now, CancellationToken ct)
     {
-        await db.Organizations.Where(x => x.Id == id).ExecuteUpdateAsync(update =>
-            update.SetProperty(x => x.IsActive, active).SetProperty(x => x.UpdatedAt, now), ct);
+        await db.Organizations.Where(x => x.Id == id && x.IsActive != active).ExecuteUpdateAsync(update =>
+            update.SetProperty(x => x.IsActive, active).SetProperty(x => x.ProfileRevision, x => x.ProfileRevision + 1).SetProperty(x => x.UpdatedAt, now), ct);
         if (!active)
             await db.Set<RefreshToken>()
                 .Where(x => x.RevokedAt == null && db.Users.Any(u => u.Id == x.UserId && u.OrganizationId == id))
@@ -110,6 +122,20 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
             TargetEntity = targetEntity, TargetId = targetId, CorrelationId = correlationId,
             OldValues = previousActive.HasValue ? JsonSerializer.Serialize(new { isActive = previousActive.Value }) : null,
             NewValues = JsonSerializer.Serialize(new { isActive = active }), CreatedAt = now
+        });
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task WriteOrganizationProfileAuditAsync(OrganizationProfileAuditChange change, CancellationToken ct)
+    {
+        db.AuditLogs.Add(new AuditLog
+        {
+            Id = Guid.NewGuid(), UserId = change.ActorId, OrganizationId = change.OrganizationId, ActorType = "User",
+            Action = AuditAction.Update, TargetEntity = "organizations", TargetId = change.OrganizationId,
+            CorrelationId = change.CorrelationId,
+            OldValues = JsonSerializer.Serialize(new { name = change.OldName, address = change.OldAddress, phoneNumber = change.OldPhoneNumber }),
+            NewValues = JsonSerializer.Serialize(new { name = change.NewName, address = change.NewAddress, phoneNumber = change.NewPhoneNumber }),
+            CreatedAt = change.CreatedAt
         });
         await db.SaveChangesAsync(ct);
     }
