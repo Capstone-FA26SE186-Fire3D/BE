@@ -41,8 +41,8 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 
 ### AUTH-03 — P1 · PARTIAL · Profile, ETag và avatar
 
-- **Contract/current:** `GET/PATCH /api/auth/me` trả/nhận ETag theo `profile_revision`; PATCH chỉ sửa full name/username. `/api/me/avatar` có intent/complete/GET/delete, complete copy theo S3 ETag và không dùng chung final key giữa các request. [OrganizationProfileController](../Fire3D/Fire3D.API/Controllers/OrganizationProfileController.cs) hiện chỉ GET.
-- **Còn thiếu:** PATCH organization profile, worker cleanup bền vững cho orphan S3 và kiểm tra giải mã ảnh thay vì chỉ magic bytes.
+- **Contract/current:** `GET/PATCH /api/auth/me` trả/nhận ETag theo `profile_revision`; PATCH hỗ trợ full name, username, dob, gender và phone. `/api/me/avatar` có intent/complete/GET/delete, complete copy theo S3 ETag và không dùng chung final key giữa các request. `GET/PATCH /api/organizations/me` trả ETag và PATCH chỉ thay đổi field được gửi.
+- **Còn thiếu:** Persist candidate final Avatar trước S3 copy để recovery khi tiến trình dừng giữa copy và DB finalize; kiểm chứng cleanup trên PostgreSQL/S3 cô lập.
 - **Nghiệm thu:** Lưu thành công trả ETag mới; ETag cũ không ghi đè thay đổi; không sửa được role/email/tenant/status; username, organization scope và quyền sở hữu object S3 được kiểm tra.
 
 ### AUTH-04 — P1 · VERIFY · Reset và change password
@@ -121,10 +121,10 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 - **Sửa code:** Thêm post/version/situation/source/bookmark; public chỉ đọc Published; Hidden không public nhưng được phép RAG, Deleted bị loại; validate provider URL; audit/idempotency và cache invalidation qua outbox.
 - **Nghiệm thu:** Draft không public; version Published bất biến; Hidden/Deleted không trả public, Deleted không vào RAG; bookmark chỉ thuộc Trainee; không thêm approve route ngoài contract.
 
-### REPORT-01 — P2 · LATER · Analytics/support/audit views
+### REPORT-01 — P2 · PARTIAL · Analytics/support/audit views
 
-- **Contract/current:** Analytics/support/audit views chưa được xác nhận hoàn chỉnh theo từng requirement.
-- **Sửa code:** Triển khai sau capability nguồn; định nghĩa plays, active sessions và Building usage theo Docs; áp tenant scope, pagination, retention và redaction.
+- **Contract/current:** Có feedback/ticket/message cho user và admin, audit metadata admin-only, cùng operations analytics cho platform/organization. Operations analytics không phải learner analytics; chỉ số plays, active sessions, completion/duration chưa có nguồn session chuẩn.
+- **Còn thiếu:** Idempotency receipt/ETag cho support mutation, pagination/filter support và PostgreSQL integration tests cho tenant/race. Learner analytics chỉ được thêm sau start/heartbeat/result chuẩn.
 - **Nghiệm thu:** Playtest/preparation không tính learner play; dashboard/API dùng chung định nghĩa; người dùng không đọc tenant khác; dữ liệu nhạy cảm được che.
 
 ## E. Thứ tự phụ thuộc và cách hoàn tất task
