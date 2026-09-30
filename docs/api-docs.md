@@ -99,12 +99,19 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 | GET | `/api/auth/me` | User | 200 AccountResponse |
 | PATCH | `/api/auth/me` | User | 200 AccountResponse |
 | PUT | `/api/auth/devices` | User + `X-Installation-Key` | 200 DeviceRegistrationResponse |
-| DELETE | `/api/auth/devices/{deviceUuid}` | User | 204 |
-| GET | `/api/organizations/me` | OrganizationUser | 200 OrganizationResponse |
+| DELETE | `/api/auth/devices/{deviceUuid}` | User + `X-Installation-Key` | 204 |
+| GET | `/api/organizations/me` | OrganizationUser | 200 OrganizationProfileResponse + ETag |
 | PATCH | `/api/organizations/me` | OrganizationUser + `If-Match` | 200 OrganizationProfileResponse |
 | POST/GET | `/api/feedback` | User | 201/200 |
 | POST/GET | `/api/support/tickets` | User | 201/200 |
 | GET | `/api/support/tickets/{id}` | Ticket owner | 200 |
+| POST | `/api/support/tickets/{id}/messages` | Ticket owner | 201 |
+| GET | `/api/admin/feedback` | PlatformAdmin | 200 |
+| PATCH | `/api/admin/feedback/{id}/status` | PlatformAdmin | 200 |
+| GET | `/api/admin/support/tickets` | PlatformAdmin | 200 |
+| GET | `/api/admin/support/tickets/{id}` | PlatformAdmin | 200 |
+| POST | `/api/admin/support/tickets/{id}/messages` | PlatformAdmin | 201 |
+| PATCH | `/api/admin/support/tickets/{id}` | PlatformAdmin | 200 |
 | GET | `/api/admin/audit-logs` | PlatformAdmin | 200 paged metadata |
 | GET | `/api/admin/audit-logs/{id}` | PlatformAdmin | 200 metadata |
 | GET | `/api/admin/analytics/operations` | PlatformAdmin | 200 aggregate snapshot |
@@ -228,7 +235,7 @@ Refresh không cần access token:
 
 Token không trống, tối đa 256. Thành công trả TokenResponse còn hai expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả 401 INVALID_REFRESH_TOKEN; replay token đã dùng có thể thu hồi cả family.
 
-Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại, không logout mọi thiết bị. `GET /api/auth/me` trả AccountResponse cùng `ETag: "<profileRevision>"`; `PATCH /api/auth/me` nhận header đó trong `If-Match`, sửa fullName và/hoặc username, rồi trả ETag mới. Avatar hỗ trợ `POST /api/me/avatar/upload` nhận `multipart/form-data` với field `file` (JPEG/PNG/WebP, tối đa 5 MiB) để test S3 qua BE; route bắt buộc `If-Match`, rồi stream lên private staging object và hoàn tất theo cùng luồng Avatar. `POST /api/me/avatar/complete` và `DELETE /api/me/avatar` cũng yêu cầu cùng If-Match; thiếu trả 428, ETag cũ trả 412. `GET /api/organizations/me` đọc organization hiện tại; chưa có PATCH profile organization.
+Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại; `/api/auth/logout-all` thu hồi toàn bộ family và vô hiệu push bindings. `GET /api/auth/me` trả AccountResponse cùng `ETag: "<profileRevision>"`; `PATCH /api/auth/me` nhận header đó trong `If-Match`, sửa fullName/username/dob/gender/phoneNumber, rồi trả ETag mới. Avatar hỗ trợ `POST /api/me/avatar/upload` nhận `multipart/form-data` với field `file` (JPEG/PNG/WebP, tối đa 5 MiB) để test S3 qua BE; route bắt buộc `If-Match`, rồi stream lên private staging object và hoàn tất theo cùng luồng Avatar. `POST /api/me/avatar/complete` và `DELETE /api/me/avatar` cũng yêu cầu cùng If-Match; thiếu trả 428, ETag cũ trả 412. `GET /api/organizations/me` trả OrganizationProfileResponse và ETag; PATCH chỉ sửa field được gửi, cần `If-Match`.
 
 Devices upsert cho user hiện tại:
 
@@ -597,9 +604,9 @@ Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 40
 | Playtest prepare | Runtime hiện fail-closed 503 `ENTITLEMENT_UNAVAILABLE`; entitlement/trial, compatibility và launch grant chưa triển khai. Store legacy không được DI đăng ký. |
 | Playtest start | Runtime kiểm owner session trước khi delegate trạng thái/audit; chưa trả launch grant. |
 | Release/training | Đã có create-Built/read/revoke; runtime publish fail-closed 503 `PUBLISH_GATE_UNAVAILABLE` cho đến khi có gate. Còn thiếu package-build job và vòng đời Training/session. |
-| Auth | Local self-registration cho Trainee và OrganizationUser đã có username/confirm password/organization profile ban đầu; email verification đã có route, worker và thời hạn đăng ký chờ. `GET/PATCH /api/auth/me` và avatar complete/delete dùng profile ETag; avatar copy kiểm source ETag và final key riêng mỗi request. Còn thiếu Google onboarding/link, organization PATCH, avatar orphan cleanup/decoder và logout-all route riêng. Change Password và Forgot/Reset đã có route/handler. |
+| Auth | Local self-registration cho Trainee và OrganizationUser đã có username/confirm password/organization profile ban đầu; email verification đã có route, worker và thời hạn đăng ký chờ. `GET/PATCH /api/auth/me`, organization profile PATCH và avatar complete/delete dùng ETag; logout-all đã có. Google onboarding/link còn thiếu. Avatar recovery còn thiếu candidate-final persistence trước S3 copy. Change Password và Forgot/Reset đã có route/handler. |
 | Token response | Login local, Firebase login và refresh đều không trả expiresAt |
-| Device | Validation và xử lý bool thất bại chưa đầy đủ; 200 không chứng minh FCM delivery |
+| Device | Installation proof và family session được kiểm khi bind/revoke; FCM send chỉ dùng binding active. Không coi test mock là bằng chứng FCM production delivery. |
 
 Số endpoint không phản ánh mức độ hoàn thiện luồng. Cập nhật tài liệu không thay source, chạy migration hoặc xác nhận kết nối dịch vụ thực tế.
 

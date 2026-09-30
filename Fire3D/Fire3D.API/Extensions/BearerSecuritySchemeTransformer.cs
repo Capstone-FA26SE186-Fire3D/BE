@@ -21,11 +21,15 @@ public sealed class BearerSecuritySchemeTransformer : IOpenApiDocumentTransforme
         };
         foreach (var (path, item) in document.Paths)
         {
-            if (path is "/api/auth/login" or "/api/auth/login-firebase" or "/api/auth/register" or "/api/auth/register/trainee" or "/api/auth/register/organization" or "/api/auth/resend-verification" or "/api/auth/verify-email" or "/api/auth/refresh" or "/api/auth/forgot-password" or "/api/auth/reset-password") continue;
+            if (path is "/api/auth/login" or "/api/auth/login-firebase" or "/api/auth/register" or "/api/auth/register/trainee" or "/api/auth/register/organization" or "/api/auth/resend-verification" or "/api/auth/verify-email" or "/api/auth/refresh" or "/api/auth/forgot-password" or "/api/auth/reset-password" or "/api/auth/registration/request-otp" or "/api/auth/registration/verify-otp") continue;
             if (item.Operations is null) continue;
             foreach (var operation in item.Operations.Values)
             {
-                if (path.StartsWith("/api/accounts", StringComparison.Ordinal)
+                if (path == "/api/organizations/me")
+                {
+                    operation.Description = "OrganizationUser hiện hoạt chỉ đọc hoặc cập nhật hồ sơ organization của chính mình. PATCH yêu cầu If-Match lấy từ ETag của GET.";
+                }
+                else if (path.StartsWith("/api/accounts", StringComparison.Ordinal)
                     || path.StartsWith("/api/organizations", StringComparison.Ordinal))
                 {
                     operation.Description = "Chỉ PlatformAdmin. Quản trị xuyên tổ chức bằng danh tính admin hiện tại; "

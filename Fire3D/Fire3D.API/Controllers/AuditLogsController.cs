@@ -18,8 +18,9 @@ public sealed class AuditLogsController(Fire3DDbContext db) : ControllerBase
         DateTime? from, DateTime? to, int page = 1, int pageSize = 20, CancellationToken ct = default)
     {
         if (!await IsAdmin(ct)) return Forbid();
-        if (page is < 1 or > 100000 || pageSize is < 1 or > 100 || (from.HasValue && to.HasValue && (to <= from || to > from.Value.AddDays(90)))) return Problem(statusCode: 400, title: "Invalid audit filters.", extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR" });
+        if (page is < 1 or > 100000 || pageSize is < 1 or > 100) return Problem(statusCode: 400, title: "Invalid audit filters.", extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR" });
         var lower = from ?? DateTime.UtcNow.AddDays(-30); var upper = to ?? DateTime.UtcNow;
+        if (upper <= lower || upper > lower.AddDays(90) || (action is not null && !Enum.TryParse<AuditAction>(action, true, out _))) return Problem(statusCode: 400, title: "Invalid audit filters.", extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR" });
         var query = db.AuditLogs.AsNoTracking().Where(x => x.CreatedAt >= lower && x.CreatedAt < upper);
         if (actorId.HasValue) query = query.Where(x => x.UserId == actorId); if (organizationId.HasValue) query = query.Where(x => x.OrganizationId == organizationId); if (targetId.HasValue) query = query.Where(x => x.TargetId == targetId); if (correlationId.HasValue) query = query.Where(x => x.CorrelationId == correlationId); if (Enum.TryParse<AuditAction>(action, true, out var parsed)) query = query.Where(x => x.Action == parsed);
         var total = await query.CountAsync(ct);
