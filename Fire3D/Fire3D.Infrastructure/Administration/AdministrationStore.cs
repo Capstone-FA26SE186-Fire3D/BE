@@ -104,8 +104,8 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
 
     public async Task SetOrganizationActiveAsync(Guid id, bool active, DateTime now, CancellationToken ct)
     {
-        await db.Organizations.Where(x => x.Id == id).ExecuteUpdateAsync(update =>
-            update.SetProperty(x => x.IsActive, active).SetProperty(x => x.UpdatedAt, now), ct);
+        await db.Organizations.Where(x => x.Id == id && x.IsActive != active).ExecuteUpdateAsync(update =>
+            update.SetProperty(x => x.IsActive, active).SetProperty(x => x.ProfileRevision, x => x.ProfileRevision + 1).SetProperty(x => x.UpdatedAt, now), ct);
         if (!active)
             await db.Set<RefreshToken>()
                 .Where(x => x.RevokedAt == null && db.Users.Any(u => u.Id == x.UserId && u.OrganizationId == id))

@@ -5,23 +5,23 @@ using MediatR;
 
 namespace Fire3D.Application.Administration.Queries.GetMyOrganization;
 
-public sealed record GetMyOrganizationQuery(Guid ActorId) : IRequest<AuthResult<OrganizationResponse>>;
+public sealed record GetMyOrganizationQuery(Guid ActorId) : IRequest<AuthResult<OrganizationProfileResponse>>;
 
 public sealed class GetMyOrganizationQueryHandler(IAuthStore accounts, IAdministrationStore organizations)
-    : IRequestHandler<GetMyOrganizationQuery, AuthResult<OrganizationResponse>>
+    : IRequestHandler<GetMyOrganizationQuery, AuthResult<OrganizationProfileResponse>>
 {
-    public async Task<AuthResult<OrganizationResponse>> Handle(GetMyOrganizationQuery request, CancellationToken ct)
+    public async Task<AuthResult<OrganizationProfileResponse>> Handle(GetMyOrganizationQuery request, CancellationToken ct)
     {
         var actor = await accounts.FindUserAsync(request.ActorId, ct);
         if (actor is null || !await AuthSupport.IsActiveAsync(accounts, actor, ct))
-            return AuthResult<OrganizationResponse>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
+            return AuthResult<OrganizationProfileResponse>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
         if (actor.Role != UserRole.OrganizationUser || !actor.OrganizationId.HasValue)
-            return AuthResult<OrganizationResponse>.Fail("FORBIDDEN", "Organization membership is required.", 403);
+            return AuthResult<OrganizationProfileResponse>.Fail("FORBIDDEN", "Organization membership is required.", 403);
 
         var organization = await organizations.FindOrganizationAsync(actor.OrganizationId.Value, ct);
         return organization is null || !organization.IsActive || organization.DeletedAt.HasValue
-            ? AuthResult<OrganizationResponse>.Fail("UNAUTHORIZED", "Organization is unavailable.", 401)
-            : AuthResult<OrganizationResponse>.Ok(new OrganizationResponse(organization.Id, organization.Name,
-                organization.Slug, organization.IsActive, organization.CreatedAt, organization.UpdatedAt));
+            ? AuthResult<OrganizationProfileResponse>.Fail("UNAUTHORIZED", "Organization is unavailable.", 401)
+            : AuthResult<OrganizationProfileResponse>.Ok(new OrganizationProfileResponse(organization.Id, organization.Name,
+                organization.Slug, organization.Address, organization.PhoneNumber, organization.IsActive, organization.ProfileRevision, organization.CreatedAt, organization.UpdatedAt));
     }
 }

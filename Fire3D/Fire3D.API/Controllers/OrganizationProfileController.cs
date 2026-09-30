@@ -19,14 +19,16 @@ public sealed class OrganizationProfileController(ISender sender) : ControllerBa
 {
     /// <summary>Returns the current OrganizationUser's organization without exposing the platform organization list.</summary>
     [HttpGet]
-    [ProducesResponseType<OrganizationResponse>(200)]
+    [ProducesResponseType<OrganizationProfileResponse>(200)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]
-    public async Task<ActionResult<OrganizationResponse>> Get(CancellationToken ct)
+    public async Task<ActionResult<OrganizationProfileResponse>> Get(CancellationToken ct)
     {
         var result = await sender.Send(new GetMyOrganizationQuery(User.GetActorId()), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+        if (!result.IsSuccess) return Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+        Response.Headers.ETag = ProfileEtag.Format(result.Value!.ProfileRevision);
+        return Ok(result.Value);
     }
 
     [HttpPatch]

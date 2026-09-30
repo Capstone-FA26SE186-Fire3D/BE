@@ -19,11 +19,8 @@ public sealed class UpdateMyOrganizationCommandHandler(IAuthStore accounts, IAdm
             return AuthResult<OrganizationProfileResponse>.Fail(string.IsNullOrWhiteSpace(command.IfMatch) ? "PRECONDITION_REQUIRED" : "VALIDATION_ERROR", "Send the organization ETag in If-Match.", string.IsNullOrWhiteSpace(command.IfMatch) ? 428 : 400);
         if (command.Request is null)
             return AuthResult<OrganizationProfileResponse>.Fail("VALIDATION_ERROR", "Organization profile request is required.", 400);
-        var name = command.Request.Name?.Trim();
-        var address = command.Request.Address?.Trim();
-        var phone = command.Request.PhoneNumber is null ? null : SelfRegistrationValidation.NormalizePhone(command.Request.PhoneNumber);
-        if (string.IsNullOrWhiteSpace(name) || name.Length > 255 || (command.Request.Address is not null && string.IsNullOrWhiteSpace(address)) || address?.Length > 2000 || (command.Request.PhoneNumber is not null && phone is null))
-            return AuthResult<OrganizationProfileResponse>.Fail("VALIDATION_ERROR", "Name, address, or phone number is invalid.", 400);
+        if (!command.Request.NameSpecified && !command.Request.AddressSpecified && !command.Request.PhoneNumberSpecified)
+            return AuthResult<OrganizationProfileResponse>.Fail("VALIDATION_ERROR", "Send at least one organization profile field.", 400);
 
         await using var transaction = await organizations.BeginManagementTransactionAsync(ct);
         var actor = await accounts.FindUserAsync(command.ActorId, ct);
@@ -32,13 +29,20 @@ public sealed class UpdateMyOrganizationCommandHandler(IAuthStore accounts, IAdm
         var organization = await organizations.FindOrganizationAsync(organizationId, ct);
         if (organization is null || !organization.IsActive || organization.DeletedAt.HasValue)
             return AuthResult<OrganizationProfileResponse>.Fail("UNAUTHORIZED", "Organization is unavailable.", 401);
+        var name = command.Request.NameSpecified ? command.Request.Name?.Trim() : organization.Name;
+        var address = command.Request.AddressSpecified ? command.Request.Address?.Trim() : organization.Address;
+        var phone = command.Request.PhoneNumberSpecified
+            ? command.Request.PhoneNumber is null ? null : SelfRegistrationValidation.NormalizePhone(command.Request.PhoneNumber)
+            : organization.PhoneNumber;
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 255 || (command.Request.AddressSpecified && command.Request.Address is not null && string.IsNullOrWhiteSpace(address)) || address?.Length > 2000 || (command.Request.PhoneNumberSpecified && command.Request.PhoneNumber is not null && phone is null))
+            return AuthResult<OrganizationProfileResponse>.Fail("VALIDATION_ERROR", "Name, address, or phone number is invalid.", 400);
         var now = AuthSupport.UtcNow(clock);
         var result = await organizations.UpdateOrganizationProfileAsync(organizationId, revision, name, address, phone, now, ct);
         if (result == OrganizationProfileUpdateResult.PreconditionFailed)
             return AuthResult<OrganizationProfileResponse>.Fail("PRECONDITION_FAILED", "The organization profile changed. Reload it and retry.", 412);
         if (result == OrganizationProfileUpdateResult.Unavailable)
             return AuthResult<OrganizationProfileResponse>.Fail("UNAUTHORIZED", "Organization is unavailable.", 401);
-        await organizations.WriteAuditAsync(actor.Id, organizationId, "organizations", organizationId, null, true, Guid.NewGuid(), now, ct);
+        await organizations.WriteAuditAsync(actor.Id, organizationId, "organizations", organizationId, organization.IsActive, organization.IsActive, Guid.NewGuid(), now, ct);
         await transaction.CommitAsync(ct);
         return AuthResult<OrganizationProfileResponse>.Ok(new(organizationId, name, organization.Slug, address, phone, true, revision + 1, organization.CreatedAt, now));
     }
