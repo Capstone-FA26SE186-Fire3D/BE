@@ -15,6 +15,8 @@ public sealed class SupportController(Fire3DDbContext db) : ControllerBase
 {
     public sealed record CreateFeedbackRequest(string Category, string Message, int? Rating = null);
     public sealed record CreateTicketRequest(string Subject, string Description, Guid? FeedbackId = null);
+    public sealed record MessageRequest(string Message);
+    public sealed record AdminTicketUpdateRequest(SupportTicketStatus Status, SupportPriority Priority, Guid? AssignedTo);
 
     [HttpPost("api/feedback")]
     public async Task<IActionResult> CreateFeedback(CreateFeedbackRequest request, CancellationToken ct)
@@ -47,6 +49,18 @@ public sealed class SupportController(Fire3DDbContext db) : ControllerBase
     public async Task<IActionResult> GetTicket(Guid id, CancellationToken ct)
     { var actor = await ActiveActor(ct); if (actor is null) return Unauthorized(); var item = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.CreatedBy == actor.Id, ct); return item is null ? NotFound() : Ok(item); }
 
+    [HttpPost("api/support/tickets/{id:guid}/messages")]
+    public async Task<IActionResult> AddMessage(Guid id, MessageRequest request, CancellationToken ct)
+    { var actor = await ActiveActor(ct); if (actor is null) return Unauthorized(); var ticket = await db.SupportTickets.SingleOrDefaultAsync(x => x.Id == id && x.CreatedBy == actor.Id, ct); if (ticket is null) return NotFound(); if (ticket.Status == SupportTicketStatus.Closed) return Problem(statusCode:409,title:"Ticket is closed."); if (string.IsNullOrWhiteSpace(request.Message)||request.Message.Length>10000) return Problem(statusCode:400,title:"Message is invalid."); db.SupportTicketMessages.Add(new(){Id=Guid.NewGuid(),TicketId=id,AuthorId=actor.Id,Message=request.Message.Trim(),CreatedAt=DateTime.UtcNow}); await db.SaveChangesAsync(ct); return StatusCode(201); }
+
+    [HttpGet("api/admin/support/tickets")]
+    public async Task<IActionResult> AdminTickets(CancellationToken ct) { if (!await IsAdmin(ct)) return Forbid(); return Ok(await db.SupportTickets.AsNoTracking().OrderByDescending(x=>x.CreatedAt).ToListAsync(ct)); }
+    [HttpPost("api/admin/support/tickets/{id:guid}/messages")]
+    public async Task<IActionResult> AdminMessage(Guid id, MessageRequest request, CancellationToken ct) { var admin=await ActiveActor(ct); if (admin is null||admin.Role!=UserRole.PlatformAdmin) return Forbid(); if(string.IsNullOrWhiteSpace(request.Message)||request.Message.Length>10000)return Problem(statusCode:400,title:"Message is invalid."); var ticket=await db.SupportTickets.SingleOrDefaultAsync(x=>x.Id==id,ct);if(ticket is null)return NotFound(); if(ticket.Status==SupportTicketStatus.Closed)return Problem(statusCode:409,title:"Ticket is closed."); db.SupportTicketMessages.Add(new(){Id=Guid.NewGuid(),TicketId=id,AuthorId=admin.Id,Message=request.Message.Trim(),CreatedAt=DateTime.UtcNow});await db.SaveChangesAsync(ct);return StatusCode(201); }
+    [HttpPatch("api/admin/support/tickets/{id:guid}")]
+    public async Task<IActionResult> AdminUpdate(Guid id, AdminTicketUpdateRequest request, CancellationToken ct) { var admin=await ActiveActor(ct);if(admin is null||admin.Role!=UserRole.PlatformAdmin)return Forbid();var ticket=await db.SupportTickets.SingleOrDefaultAsync(x=>x.Id==id,ct);if(ticket is null)return NotFound();if(request.AssignedTo.HasValue&&!await db.Users.AnyAsync(x=>x.Id==request.AssignedTo&&x.Role==UserRole.PlatformAdmin&&x.IsActive&&!x.DeletedAt.HasValue,ct))return Problem(statusCode:400,title:"Assignee is invalid.");ticket.Status=request.Status;ticket.Priority=request.Priority;ticket.AssignedTo=request.AssignedTo;ticket.ResolvedAt=request.Status is SupportTicketStatus.Resolved or SupportTicketStatus.Closed?DateTime.UtcNow:null;ticket.UpdatedAt=DateTime.UtcNow;Audit(admin,"support_tickets",ticket.Id,"Update",ticket.UpdatedAt);await db.SaveChangesAsync(ct);return Ok(ticket); }
+
     private async Task<User?> ActiveActor(CancellationToken ct) => await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == User.GetActorId() && x.IsActive && x.DeletedAt == null, ct);
+    private async Task<bool> IsAdmin(CancellationToken ct) => (await ActiveActor(ct))?.Role == UserRole.PlatformAdmin;
     private void Audit(User actor, string entity, Guid targetId, string action, DateTime now) => db.AuditLogs.Add(new() { Id = Guid.NewGuid(), UserId = actor.Id, OrganizationId = actor.OrganizationId, ActorType = "User", Action = Enum.Parse<AuditAction>(action), TargetEntity = entity, TargetId = targetId, CorrelationId = Guid.NewGuid(), CreatedAt = now });
 }

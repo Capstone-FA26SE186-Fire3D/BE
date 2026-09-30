@@ -81,6 +81,7 @@ public partial class Fire3DDbContext : DbContext
     public virtual DbSet<SourceDocument> SourceDocuments { get; set; }
 
     public virtual DbSet<SupportTicket> SupportTickets { get; set; }
+    public virtual DbSet<SupportTicketMessage> SupportTicketMessages { get; set; }
 
     public virtual DbSet<Training> Trainings { get; set; }
 
@@ -1663,6 +1664,14 @@ public partial class Fire3DDbContext : DbContext
                 .HasForeignKey(d => d.SessionId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("support_tickets_session_id_fkey");
+        });
+
+        modelBuilder.Entity<SupportTicketMessage>(entity =>
+        {
+            entity.ToTable("support_ticket_messages"); entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id"); entity.Property(x => x.TicketId).HasColumnName("ticket_id");
+            entity.Property(x => x.AuthorId).HasColumnName("author_id"); entity.Property(x => x.Message).HasColumnName("message"); entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            entity.HasIndex(x => new { x.TicketId, x.CreatedAt });
         });
 
         modelBuilder.Entity<Training>(entity =>
