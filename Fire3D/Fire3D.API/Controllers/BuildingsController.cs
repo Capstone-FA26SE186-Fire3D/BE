@@ -22,9 +22,9 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     private Guid? OrganizationId => User.GetOrganizationId();
 
     [HttpPost]
-    public async Task<ActionResult<BuildingResponse>> CreateBuilding(CreateBuildingRequest request, CancellationToken ct)
+    public async Task<ActionResult<BuildingResponse>> CreateBuilding(CreateBuildingRequest request, [FromQuery] Guid? organizationId, CancellationToken ct)
     {
-        var result = await sender.Send(new CreateBuildingCommand(ActorId, (OrganizationId ?? Guid.Empty), request), ct);
+        var result = await sender.Send(new CreateBuildingCommand(ActorId, organizationId ?? OrganizationId ?? Guid.Empty, request), ct);
         return result.IsSuccess ? Created($"/api/buildings/{result.Value!.Id}", result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
     }
 
@@ -43,16 +43,16 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    public async Task<ActionResult<BuildingResponse>> UpdateBuilding(Guid id, UpdateBuildingRequest request, CancellationToken ct)
+    public async Task<ActionResult<BuildingResponse>> UpdateBuilding(Guid id, UpdateBuildingRequest request, [FromQuery] Guid? organizationId, CancellationToken ct)
     {
-        var result = await sender.Send(new UpdateBuildingCommand(ActorId, (OrganizationId ?? Guid.Empty), id, request), ct);
+        var result = await sender.Send(new UpdateBuildingCommand(ActorId, organizationId ?? OrganizationId ?? Guid.Empty, id, request), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<ActionResult<BuildingSummaryResponse>> DeleteBuilding(Guid id, CancellationToken ct)
+    public async Task<ActionResult<BuildingSummaryResponse>> DeleteBuilding(Guid id, [FromQuery] Guid? organizationId, CancellationToken ct)
     {
-        var result = await sender.Send(new SetBuildingActiveCommand(ActorId, (OrganizationId ?? Guid.Empty), id, false), ct);
+        var result = await sender.Send(new SetBuildingActiveCommand(ActorId, organizationId ?? OrganizationId ?? Guid.Empty, id, false), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
     }
 

@@ -4,7 +4,7 @@ using MediatR;
 
 namespace Fire3D.Application.Buildings.Commands.CreateBuilding;
 
-internal sealed class CreateBuildingCommandHandler(IBuildingStore store, TimeProvider clock)
+internal sealed class CreateBuildingCommandHandler(IBuildingStore store, IAuthStore accounts, TimeProvider clock)
     : IRequestHandler<CreateBuildingCommand, AuthResult<BuildingResponse>>
 {
     public async Task<AuthResult<BuildingResponse>> Handle(CreateBuildingCommand command, CancellationToken ct)
@@ -12,8 +12,10 @@ internal sealed class CreateBuildingCommandHandler(IBuildingStore store, TimePro
         var request = command.Request;
         var name = request.Name?.Trim();
         
-        if (string.IsNullOrEmpty(name) || name.Length > 200 || request.TotalFloors < 1)
+        if (string.IsNullOrEmpty(name) || name.Length > 200 || request.TotalFloors < 1 || (request.Contact is not null && string.IsNullOrWhiteSpace(request.Contact.ContactName)))
             return AuthResult<BuildingResponse>.Fail("VALIDATION_ERROR", "Name is required (max 200) and TotalFloors must be >= 1.", 400);
+        if (!await BuildingAuthorization.CanMutateAsync(accounts, command.ActorId, command.OrganizationId, ct))
+            return AuthResult<BuildingResponse>.Fail("FORBIDDEN", "An active organization scope is required.", 403);
 
         var now = clock.GetUtcNow().UtcDateTime;
         var buildingId = Guid.NewGuid();
@@ -56,7 +58,7 @@ internal sealed class CreateBuildingCommandHandler(IBuildingStore store, TimePro
             {
                 Id = Guid.NewGuid(),
                 BuildingId = buildingId,
-                ContactName = request.Contact.ContactName.Trim(),
+                ContactName = request.Contact.ContactName?.Trim() ?? string.Empty,
                 ContactRole = request.Contact.ContactRole?.Trim(),
                 Phone = request.Contact.Phone?.Trim(),
                 Email = request.Contact.Email?.Trim(),
@@ -66,8 +68,6 @@ internal sealed class CreateBuildingCommandHandler(IBuildingStore store, TimePro
             };
         }
 
-        if (command.OrganizationId == Guid.Empty)
-            return AuthResult<BuildingResponse>.Fail("FORBIDDEN", "An organization scope is required.", 403);
         if (!await store.CreateBuildingWithAuditAsync(building, location, contact, command.ActorId, now, ct))
             return AuthResult<BuildingResponse>.Fail("BUILDING_MUTATION_FAILED", "Building could not be created.", 409);
 

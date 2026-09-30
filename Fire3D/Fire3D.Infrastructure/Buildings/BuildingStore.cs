@@ -50,6 +50,7 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
     public async Task<bool> CreateBuildingWithAuditAsync(Building building, BuildingLocation? location, BuildingContact? contact, Guid actorId, DateTime now, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        if (!await CanMutateAsync(actorId, building.OrganizationId, ct)) return false;
         db.Buildings.Add(building);
         if (location is not null) db.Set<BuildingLocation>().Add(location);
         if (contact is not null) db.Set<BuildingContact>().Add(contact);
@@ -114,6 +115,7 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
     public async Task<bool> UpdateBuildingWithAuditAsync(Building building, BuildingLocation? location, BuildingContact? contact, Guid actorId, DateTime now, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        if (!await CanMutateAsync(actorId, building.OrganizationId, ct)) return false;
         var existing = await db.Buildings.Include(x => x.BuildingLocation).Include(x => x.BuildingContact)
             .SingleOrDefaultAsync(x => x.Id == building.Id && x.OrganizationId == building.OrganizationId && x.DeletedAt == null, ct);
         if (existing is null) return false;
@@ -146,6 +148,7 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
     public async Task<bool> SetBuildingActiveWithAuditAsync(Guid id, Guid organizationId, bool active, Guid actorId, DateTime now, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        if (!await CanMutateAsync(actorId, organizationId, ct)) return false;
         var changed = await db.Buildings.Where(x => x.Id == id && x.OrganizationId == organizationId && x.DeletedAt == null && x.IsActive != active)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, active).SetProperty(x => x.UpdatedAt, now), ct);
         if (changed != 1) return false;
@@ -225,4 +228,9 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
         Id = Guid.NewGuid(), UserId = actorId, OrganizationId = organizationId, ActorType = "User", Action = Enum.Parse<AuditAction>(action),
         TargetEntity = "buildings", TargetId = buildingId, CorrelationId = Guid.NewGuid(), CreatedAt = now
     });
+
+    private Task<bool> CanMutateAsync(Guid actorId, Guid organizationId, CancellationToken ct) => db.Users.AnyAsync(user =>
+        user.Id == actorId && user.IsActive && user.DeletedAt == null &&
+        (user.Role == UserRole.PlatformAdmin || (user.Role == UserRole.OrganizationUser && user.OrganizationId == organizationId)) &&
+        db.Organizations.Any(org => org.Id == organizationId && org.IsActive && org.DeletedAt == null), ct);
 }
