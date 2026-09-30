@@ -33,6 +33,18 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
     public Task<Organization?> FindOrganizationAsync(Guid id, CancellationToken ct) =>
         db.Organizations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
 
+    public async Task<OrganizationProfileUpdateResult> UpdateOrganizationProfileAsync(Guid organizationId, long revision,
+        string name, string? address, string? phoneNumber, DateTime now, CancellationToken ct)
+    {
+        var changed = await db.Organizations.Where(x => x.Id == organizationId && x.IsActive && x.DeletedAt == null && x.ProfileRevision == revision)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, name).SetProperty(x => x.Address, address)
+                .SetProperty(x => x.PhoneNumber, phoneNumber).SetProperty(x => x.ProfileRevision, x => x.ProfileRevision + 1)
+                .SetProperty(x => x.UpdatedAt, now), ct);
+        return changed == 1 ? OrganizationProfileUpdateResult.Updated
+            : await db.Organizations.AnyAsync(x => x.Id == organizationId && x.IsActive && x.DeletedAt == null, ct)
+                ? OrganizationProfileUpdateResult.PreconditionFailed : OrganizationProfileUpdateResult.Unavailable;
+    }
+
     public async Task<bool> TryCreateOrganizationAsync(Organization organization, CancellationToken ct)
     {
         db.Organizations.Add(organization);

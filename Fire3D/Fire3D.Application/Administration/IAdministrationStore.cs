@@ -7,6 +7,7 @@ public interface IAdministrationStore
 {
     Task<IAuthTransaction> BeginManagementTransactionAsync(CancellationToken ct);
     Task<Organization?> FindOrganizationAsync(Guid id, CancellationToken ct);
+    Task<OrganizationProfileUpdateResult> UpdateOrganizationProfileAsync(Guid organizationId, long revision, string name, string? address, string? phoneNumber, DateTime now, CancellationToken ct);
     Task<bool> TryCreateOrganizationAsync(Organization organization, CancellationToken ct);
     Task<PageResponse<OrganizationResponse>> ListOrganizationsAsync(OrganizationFilter filter, CancellationToken ct);
     Task<PageResponse<ManagedAccountResponse>> ListAccountsAsync(AccountFilter filter, CancellationToken ct);

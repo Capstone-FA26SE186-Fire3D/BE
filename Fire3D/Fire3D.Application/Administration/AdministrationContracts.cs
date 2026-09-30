@@ -6,6 +6,10 @@ public sealed record CreateOrganizationRequest(string Name, string Slug);
 public sealed record SetActiveRequest(bool? IsActive);
 public sealed record OrganizationResponse(Guid Id, string Name, string Slug, bool IsActive,
     DateTime CreatedAt, DateTime UpdatedAt);
+public sealed record OrganizationProfileResponse(Guid Id, string Name, string Slug, string? Address, string? PhoneNumber,
+    bool IsActive, long ProfileRevision, DateTime CreatedAt, DateTime UpdatedAt);
+public sealed record UpdateOrganizationProfileRequest(string? Name, string? Address, string? PhoneNumber);
+public enum OrganizationProfileUpdateResult { Updated, PreconditionFailed, Unavailable }
 public sealed record ManagedAccountResponse(Guid Id, string Email, string? FullName, UserRole Role,
     Guid? OrganizationId, bool IsActive, DateTime? LastLoginAt, DateTime CreatedAt, DateTime UpdatedAt);
 public sealed record PageResponse<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
