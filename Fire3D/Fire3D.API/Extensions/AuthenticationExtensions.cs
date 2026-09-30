@@ -21,10 +21,14 @@ public static class AuthenticationExtensions
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName))
             .Validate(x => x.IsValid(), "Configure Jwt issuer, audience, a base64 signing key of at least 32 random bytes, and valid token lifetimes.")
             .ValidateOnStart();
+        services.AddOptions<AuthTokenCleanupOptions>().Bind(configuration.GetSection(AuthTokenCleanupOptions.SectionName))
+            .Validate(x => x.IsValid(), "Configure AuthTokenCleanup with valid interval, retention, batch size, and batch count values.")
+            .ValidateOnStart();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IPasswordService, PasswordService>();
         services.AddSingleton<ITokenService, TokenService>();
         services.AddScoped<IAuthStore, AuthStore>();
+        services.AddScoped<IRefreshTokenCleanupStore, RefreshTokenCleanupStore>();
         services.AddScoped<ILocalPasswordReset, LocalPasswordReset>();
         services.AddScoped<Fire3D.Application.Authentication.Services.Fire3DSessionIssuer>();
         services.AddHttpClient<Fire3D.Application.Authentication.Abstractions.IIdentityProvider, FirebaseIdentityProvider>(
@@ -49,6 +53,7 @@ public static class AuthenticationExtensions
         services.AddHostedService<Fire3D.Infrastructure.Workers.RegistrationOtpEmailWorker>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.PendingRegistrationCleanupWorker>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.AvatarCleanupWorker>();
+        services.AddHostedService<Fire3D.Infrastructure.Workers.RefreshTokenCleanupWorker>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)

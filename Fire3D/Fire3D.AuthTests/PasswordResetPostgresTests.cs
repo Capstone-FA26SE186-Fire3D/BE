@@ -400,4 +400,32 @@ public sealed class PasswordResetPostgresTests
         await using var fresh=db.Context();
         await Assert.ThrowsAsync<PasswordResetException>(()=>new AuthStore(fresh).AddRefreshTokenAsync(Token(user),default));
     }
+
+    [ResetPostgresFact]
+    public async Task Refresh_token_cleanup_removes_only_families_past_the_retention_window()
+    {
+        await using var database = await Database.Create();
+        var userId = Guid.NewGuid();
+        var removableFamily = Guid.NewGuid();
+        var recentFamily = Guid.NewGuid();
+        var mixedFamily = Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role) VALUES ('{userId}','cleanup@example.test','Trainee')");
+        await database.Sql($"""
+            INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at,consumed_at)
+            VALUES
+              ('{Guid.NewGuid()}','{userId}','{removableFamily}','{Guid.NewGuid():N}',now()-interval '20 days',now()-interval '8 days',now()-interval '19 days'),
+              ('{Guid.NewGuid()}','{userId}','{removableFamily}','{Guid.NewGuid():N}',now()-interval '19 days',now()-interval '8 days',NULL),
+              ('{Guid.NewGuid()}','{userId}','{recentFamily}','{Guid.NewGuid():N}',now()-interval '8 days',now()-interval '6 days',NULL),
+              ('{Guid.NewGuid()}','{userId}','{mixedFamily}','{Guid.NewGuid():N}',now()-interval '20 days',now()-interval '8 days',now()-interval '19 days'),
+              ('{Guid.NewGuid()}','{userId}','{mixedFamily}','{Guid.NewGuid():N}',now()-interval '8 days',now()-interval '6 days',NULL)
+            """);
+
+        await using var context = database.Context();
+        var cleanup = new RefreshTokenCleanupStore(context);
+
+        Assert.Equal(2, await cleanup.DeleteExpiredFamiliesAsync(retentionDays: 7, batchSize: 20, ct: default));
+        Assert.Equal(0L, await database.Sql($"SELECT count(*) FROM auth_refresh_tokens WHERE family_id='{removableFamily}'"));
+        Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM auth_refresh_tokens WHERE family_id='{recentFamily}'"));
+        Assert.Equal(2L, await database.Sql($"SELECT count(*) FROM auth_refresh_tokens WHERE family_id='{mixedFamily}'"));
+    }
 }
