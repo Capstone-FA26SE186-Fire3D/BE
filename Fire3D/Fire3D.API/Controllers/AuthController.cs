@@ -220,7 +220,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
         [FromHeader(Name = "X-Installation-Key")] string? installationKey, CancellationToken ct)
     {
         var result = await sender.Send(new Fire3D.Application.Users.Commands.RegisterDevice.RegisterDeviceCommand(
-            User.GetActorId(), request.DeviceUuid, installationKey, request.FcmToken, request.DeviceModel, request.OsVersion, request.AppVersion), ct);
+            User.GetActorId(), User.GetSessionFamilyId(), request.DeviceUuid, installationKey, request.FcmToken, request.DeviceModel, request.OsVersion, request.AppVersion), ct);
         return result.IsSuccess ? Ok(result.Value) : ResetProblem(result.Error!);
     }
 
@@ -233,7 +233,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     public async Task<IActionResult> RevokeDevice(string deviceUuid, CancellationToken ct)
     {
         var result = await sender.Send(
-            new Fire3D.Application.Users.Commands.RegisterDevice.RevokeDeviceCommand(User.GetActorId(), deviceUuid), ct);
+        new Fire3D.Application.Users.Commands.RegisterDevice.RevokeDeviceCommand(User.GetActorId(), User.GetSessionFamilyId(), deviceUuid, Request.Headers["X-Installation-Key"].FirstOrDefault()), ct);
         return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
     }
 

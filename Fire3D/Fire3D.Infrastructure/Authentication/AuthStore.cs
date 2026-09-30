@@ -168,13 +168,19 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         return DeviceRegistrationResult.Registered;
     }
 
-    public async Task RevokeDeviceAsync(Guid userId, string deviceUuid, DateTime now, CancellationToken ct) =>
-        await db.UserDevices.Where(x => x.UserId == userId && x.DeviceUuid == deviceUuid)
+    public async Task<DeviceRevokeResult> RevokeDeviceAsync(Guid userId, string deviceUuid, string installationKeyHash, DateTime now, CancellationToken ct)
+    {
+        var installation = await db.DeviceInstallations.SingleOrDefaultAsync(x => x.DeviceUuid == deviceUuid, ct);
+        if (installation is not null && !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(installation.SecretHash), Convert.FromHexString(installationKeyHash)))
+            return DeviceRevokeResult.InstallationKeyMismatch;
+        await db.UserDevices.Where(x => x.UserId == userId && x.DeviceUuid == deviceUuid && (installation == null || x.InstallationId == installation.Id))
             .ExecuteUpdateAsync(update => update
                 .SetProperty(x => x.FcmToken, (string?)null)
                 .SetProperty(x => x.NotificationsEnabled, false)
                 .SetProperty(x => x.RevokedAt, now)
                 .SetProperty(x => x.LastSeenAt, now), ct);
+        return DeviceRevokeResult.Revoked;
+    }
 
     public Task DisableUserPushDevicesAsync(Guid userId, DateTime now, CancellationToken ct) =>
         db.UserDevices.Where(x => x.UserId == userId && x.NotificationsEnabled)

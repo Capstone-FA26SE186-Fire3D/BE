@@ -25,7 +25,7 @@ public interface IAuthStore
         DateOnly? dob, UserGender? gender, string? phoneNumber, DateTime now, CancellationToken ct);
     Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct);
     Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, string installationKeyHash, string? fcmToken, string? deviceModel, string? osVersion, string? appVersion, DateTime now, CancellationToken ct);
-    Task RevokeDeviceAsync(Guid userId, string deviceUuid, DateTime now, CancellationToken ct);
+    Task<DeviceRevokeResult> RevokeDeviceAsync(Guid userId, string deviceUuid, string installationKeyHash, DateTime now, CancellationToken ct);
     Task DisableUserPushDevicesAsync(Guid userId, DateTime now, CancellationToken ct);
     Task<RefreshToken?> FindRefreshTokenAsync(string hash, CancellationToken ct);
     Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct);
@@ -49,6 +49,7 @@ public interface IAuthStore
 public enum RegisterConflict { None, SlugTaken, EmailTaken, UsernameTaken }
 public enum ProfileUpdateResult { Updated, PreconditionFailed, UsernameTaken }
 public enum DeviceRegistrationResult { Registered, InstallationKeyMismatch, TokenAlreadyBound }
+public enum DeviceRevokeResult { Revoked, InstallationKeyMismatch }
 
 public interface IPasswordService
 {
