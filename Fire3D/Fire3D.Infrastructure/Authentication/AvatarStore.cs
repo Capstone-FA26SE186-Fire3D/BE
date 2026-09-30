@@ -10,14 +10,43 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore, IAvatarClean
 {
     public async Task SaveUploadIntentAsync(AvatarUploadIntent intent, CancellationToken ct)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         db.AvatarUploadIntents.Add(intent);
         await db.SaveChangesAsync(ct);
+        await QueueInCurrentTransactionAsync(intent.StagingObjectKey, intent.ExpiresAt, ct);
+        await transaction.CommitAsync(ct);
     }
 
     public Task<AvatarUploadIntent?> FindUploadIntentAsync(Guid id, Guid userId, CancellationToken ct) =>
         db.AvatarUploadIntents.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
 
-    public async Task<AvatarFinalizeResult> FinalizeUploadAsync(Guid intentId, Guid userId, long expectedProfileRevision, string objectKey, DateTime completedAt, CancellationToken ct)
+    public async Task<AvatarCandidateReservation> ReserveCopyCandidateAsync(Guid intentId, Guid userId, long expectedProfileRevision,
+        string sourceEtag, DateTime now, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:avatar-intent:" + intentId}, 0))", ct);
+        var intent = await db.AvatarUploadIntents.SingleOrDefaultAsync(x => x.Id == intentId && x.UserId == userId, ct);
+        if (intent is null || intent.CompletedAt.HasValue || intent.ExpiresAt <= now)
+            return new(AvatarCandidateReservationStatus.Unavailable, null);
+        if (intent.CandidateAttemptId.HasValue)
+        {
+            if (intent.ExpectedProfileRevision != expectedProfileRevision || !string.Equals(intent.CandidateSourceEtag, sourceEtag, StringComparison.Ordinal))
+                return new(AvatarCandidateReservationStatus.PreconditionFailed, null);
+            await transaction.CommitAsync(ct);
+            return new(AvatarCandidateReservationStatus.Reserved, new(intent.CandidateAttemptId.Value, intent.CandidateObjectKey!, intent.CandidateSourceEtag!, intent.CandidateLeaseUntil!.Value));
+        }
+        var candidate = new AvatarCopyCandidate(Guid.NewGuid(), $"avatars/users/{userId:N}/{Guid.NewGuid():N}", sourceEtag, now.AddMinutes(15));
+        intent.ExpectedProfileRevision = expectedProfileRevision;
+        intent.CandidateAttemptId = candidate.AttemptId;
+        intent.CandidateObjectKey = candidate.ObjectKey;
+        intent.CandidateSourceEtag = candidate.SourceEtag;
+        intent.CandidateLeaseUntil = candidate.LeaseUntil;
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return new(AvatarCandidateReservationStatus.Reserved, candidate);
+    }
+
+    public async Task<AvatarFinalizeResult> FinalizeUploadAsync(Guid intentId, Guid userId, Guid attemptId, long expectedProfileRevision, string objectKey, DateTime completedAt, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await TakeIdentityReadLockAsync(ct);
@@ -29,7 +58,8 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore, IAvatarClean
         // Claiming the intent and advancing profile_revision are conditional writes in one
         // transaction. A stale request rolls back its claim, so an intent is consumed once.
         var claimed = await db.AvatarUploadIntents
-            .Where(x => x.Id == intentId && x.UserId == userId && x.CompletedAt == null && x.ExpiresAt > completedAt)
+            .Where(x => x.Id == intentId && x.UserId == userId && x.CompletedAt == null && x.ExpiresAt > completedAt
+                && x.CandidateAttemptId == attemptId && x.CandidateObjectKey == objectKey && x.ExpectedProfileRevision == expectedProfileRevision)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.CompletedAt, completedAt)
                 .SetProperty(x => x.FinalObjectKey, objectKey), ct);
@@ -83,11 +113,19 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore, IAvatarClean
         return new(AvatarDeleteStatus.Deleted, previous);
     }
 
-    public Task QueueAsync(string objectKey, CancellationToken ct) => QueueInCurrentTransactionAsync(objectKey, DateTime.UtcNow, ct);
+    public Task QueueAsync(string objectKey, DateTime availableAt, CancellationToken ct) => QueueInCurrentTransactionAsync(objectKey, availableAt, ct);
 
     public async Task<AvatarCleanupJob?> ClaimAsync(CancellationToken ct)
     {
         await db.Database.OpenConnectionAsync(ct);
+        await db.Database.ExecuteSqlRawAsync("""
+            INSERT INTO public.avatar_object_cleanups(id,object_key,available_at,attempts,created_at)
+            SELECT gen_random_uuid(), candidate_object_key, now(), 0, now()
+            FROM public.avatar_upload_intents
+            WHERE completed_at IS NULL AND candidate_object_key IS NOT NULL
+              AND candidate_lease_until <= now() - interval '1 hour'
+            ON CONFLICT (object_key) DO NOTHING;
+            """, ct);
         await using var command = new Npgsql.NpgsqlCommand("""
             WITH candidate AS (
                 SELECT id FROM public.avatar_object_cleanups
@@ -108,7 +146,10 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore, IAvatarClean
         SELECT EXISTS(
             SELECT 1 FROM public.users WHERE avatar_storage_key={objectKey}
             UNION ALL SELECT 1 FROM public.avatar_upload_intents
-                WHERE staging_object_key={objectKey} AND completed_at IS NULL AND expires_at > now()) AS "Value"
+                WHERE staging_object_key={objectKey} AND completed_at IS NULL AND expires_at > now()
+            UNION ALL SELECT 1 FROM public.avatar_upload_intents
+                WHERE candidate_object_key={objectKey} AND completed_at IS NULL
+                  AND candidate_lease_until > now() - interval '1 hour') AS "Value"
         """).SingleAsync(ct);
 
     public Task CompleteAsync(AvatarCleanupJob job, CancellationToken ct) => db.Database.ExecuteSqlInterpolatedAsync($"""

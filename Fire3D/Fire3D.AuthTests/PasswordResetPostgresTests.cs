@@ -227,6 +227,8 @@ public sealed class PasswordResetPostgresTests
               id uuid PRIMARY KEY, user_id uuid NOT NULL, staging_object_key text NOT NULL,
               content_type text NOT NULL, expected_size_bytes bigint NOT NULL,
               expires_at timestamptz NOT NULL, completed_at timestamptz NULL, final_object_key text NULL,
+              expected_profile_revision bigint NULL, candidate_attempt_id uuid NULL, candidate_object_key text NULL,
+              candidate_source_etag text NULL, candidate_lease_until timestamptz NULL,
               created_at timestamptz NOT NULL
             )
             """);
@@ -238,8 +240,10 @@ public sealed class PasswordResetPostgresTests
         var outcomes = await Task.WhenAll(Enumerable.Range(0, 2).Select(async attempt =>
         {
             await using var context = database.Context();
-            return await new AvatarStore(context).FinalizeUploadAsync(intentId, userId, 1,
-                "avatars/users/" + attempt, DateTime.UtcNow, default);
+            var store = new AvatarStore(context);
+            var reservation = await store.ReserveCopyCandidateAsync(intentId, userId, 1, "etag", DateTime.UtcNow, default);
+            return await store.FinalizeUploadAsync(intentId, userId, reservation.Candidate!.AttemptId, 1,
+                reservation.Candidate.ObjectKey, DateTime.UtcNow, default);
         }));
 
         Assert.Equal(1, outcomes.Count(result => result.Status == Fire3D.Application.Authentication.Avatar.AvatarFinalizeStatus.Finalized));
