@@ -50,6 +50,7 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
     public async Task<bool> CreateBuildingWithAuditAsync(Building building, BuildingLocation? location, BuildingContact? contact, Guid actorId, DateTime now, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TakeMutationLocksAsync(building.Id, ct);
         if (!await CanMutateAsync(actorId, building.OrganizationId, ct)) return false;
         db.Buildings.Add(building);
         if (location is not null) db.Set<BuildingLocation>().Add(location);
@@ -115,6 +116,7 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
     public async Task<bool> UpdateBuildingWithAuditAsync(Building building, BuildingLocation? location, BuildingContact? contact, Guid actorId, DateTime now, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TakeMutationLocksAsync(building.Id, ct);
         if (!await CanMutateAsync(actorId, building.OrganizationId, ct)) return false;
         var existing = await db.Buildings.Include(x => x.BuildingLocation).Include(x => x.BuildingContact)
             .SingleOrDefaultAsync(x => x.Id == building.Id && x.OrganizationId == building.OrganizationId && x.DeletedAt == null, ct);
@@ -148,6 +150,7 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
     public async Task<bool> SetBuildingActiveWithAuditAsync(Guid id, Guid organizationId, bool active, Guid actorId, DateTime now, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TakeMutationLocksAsync(id, ct);
         if (!await CanMutateAsync(actorId, organizationId, ct)) return false;
         var changed = await db.Buildings.Where(x => x.Id == id && x.OrganizationId == organizationId && x.DeletedAt == null && x.IsActive != active)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, active).SetProperty(x => x.UpdatedAt, now), ct);
@@ -233,4 +236,12 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
         user.Id == actorId && user.IsActive && user.DeletedAt == null &&
         (user.Role == UserRole.PlatformAdmin || (user.Role == UserRole.OrganizationUser && user.OrganizationId == organizationId)) &&
         db.Organizations.Any(org => org.Id == organizationId && org.IsActive && org.DeletedAt == null), ct);
+
+    private async Task TakeMutationLocksAsync(Guid buildingId, CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlRawAsync(
+            "SELECT pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management', 0))", ct);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:building:" + buildingId}, 0))", ct);
+    }
 }
