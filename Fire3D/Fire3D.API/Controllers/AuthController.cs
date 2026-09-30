@@ -170,7 +170,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     [ProducesResponseType<ProblemDetails>(401)]
     public async Task<IActionResult> LogoutAll(CancellationToken ct)
     {
-        var result = await sender.Send(new LogoutAllCommand(User.GetActorId()), ct);
+        var result = await sender.Send(new LogoutAllCommand(User.GetActorId(), User.GetSessionFamilyId()), ct);
         return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
     }
 
