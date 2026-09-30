@@ -15,8 +15,8 @@ internal sealed class SetBuildingActiveCommandHandler(IBuildingStore store, Time
         if (building.IsActive != command.IsActive)
         {
             var now = clock.GetUtcNow().UtcDateTime;
-            await store.SetBuildingActiveAsync(command.BuildingId, command.OrganizationId, command.IsActive, now, ct);
-            await store.WriteAuditAsync(command.ActorId, command.OrganizationId, "buildings", building.Id, "Update", now, ct);
+            if (!await store.SetBuildingActiveWithAuditAsync(command.BuildingId, command.OrganizationId, command.IsActive, command.ActorId, now, ct))
+                return AuthResult<BuildingSummaryResponse>.Fail("BUILDING_MUTATION_FAILED", "Building could not be archived.", 409);
             
             building.IsActive = command.IsActive;
             building.UpdatedAt = now;

@@ -8,8 +8,11 @@ public interface IBuildingStore
     Task<Building?> FindBuildingAsync(Guid id, Guid organizationId, CancellationToken ct);
     Task<PageResponse<BuildingSummaryResponse>> ListBuildingsAsync(Guid organizationId, BuildingFilter filter, CancellationToken ct);
     Task<bool> TryCreateBuildingAsync(Building building, BuildingLocation? location, BuildingContact? contact, CancellationToken ct);
+    Task<bool> CreateBuildingWithAuditAsync(Building building, BuildingLocation? location, BuildingContact? contact, Guid actorId, DateTime now, CancellationToken ct);
     Task UpdateBuildingAsync(Building building, BuildingLocation? location, BuildingContact? contact, CancellationToken ct);
+    Task<bool> UpdateBuildingWithAuditAsync(Building building, BuildingLocation? location, BuildingContact? contact, Guid actorId, DateTime now, CancellationToken ct);
     Task SetBuildingActiveAsync(Guid id, Guid organizationId, bool active, DateTime now, CancellationToken ct);
+    Task<bool> SetBuildingActiveWithAuditAsync(Guid id, Guid organizationId, bool active, Guid actorId, DateTime now, CancellationToken ct);
     Task<bool> TryCreateRevisionAsync(Revision revision, SourceDocument document, ProcessingJob job, CancellationToken ct);
     Task<bool> RevisionBuildingExistsAsync(Guid buildingId, Guid? organizationId, CancellationToken ct);
     Task<PageResponse<RevisionResponse>> ListRevisionsAsync(Guid buildingId, Guid? organizationId, int page, int pageSize, CancellationToken ct);

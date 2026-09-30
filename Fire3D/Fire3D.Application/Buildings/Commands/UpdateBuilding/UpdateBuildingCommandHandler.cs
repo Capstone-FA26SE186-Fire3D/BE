@@ -61,8 +61,8 @@ internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, TimePro
             };
         }
 
-        await store.UpdateBuildingAsync(building, location, contact, ct);
-        await store.WriteAuditAsync(command.ActorId, command.OrganizationId, "buildings", building.Id, "Update", now, ct);
+        if (!await store.UpdateBuildingWithAuditAsync(building, location, contact, command.ActorId, now, ct))
+            return AuthResult<BuildingResponse>.Fail("BUILDING_MUTATION_FAILED", "Building could not be updated.", 409);
 
         // Fetch again to get the updated nested entities with their actual IDs
         var updatedBuilding = await store.FindBuildingAsync(command.BuildingId, command.OrganizationId, ct);

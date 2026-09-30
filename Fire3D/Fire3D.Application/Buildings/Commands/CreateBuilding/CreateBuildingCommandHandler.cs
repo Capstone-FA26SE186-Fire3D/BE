@@ -66,8 +66,10 @@ internal sealed class CreateBuildingCommandHandler(IBuildingStore store, TimePro
             };
         }
 
-        await store.TryCreateBuildingAsync(building, location, contact, ct);
-        await store.WriteAuditAsync(command.ActorId, command.OrganizationId, "buildings", building.Id, "Create", now, ct);
+        if (command.OrganizationId == Guid.Empty)
+            return AuthResult<BuildingResponse>.Fail("FORBIDDEN", "An organization scope is required.", 403);
+        if (!await store.CreateBuildingWithAuditAsync(building, location, contact, command.ActorId, now, ct))
+            return AuthResult<BuildingResponse>.Fail("BUILDING_MUTATION_FAILED", "Building could not be created.", 409);
 
         BuildingLocationResponse? locationResponse = location != null ? new BuildingLocationResponse(location.Id, location.Address, location.City, location.District, location.Latitude, location.Longitude, location.Geojson) : null;
         BuildingContactResponse? contactResponse = contact != null ? new BuildingContactResponse(contact.Id, contact.ContactName, contact.ContactRole, contact.Phone, contact.Email, contact.IsPrimary) : null;
