@@ -1811,6 +1811,7 @@ public partial class Fire3DDbContext : DbContext
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.DeviceUuid).HasMaxLength(255).HasColumnName("device_uuid");
             entity.Property(e => e.SecretHash).HasMaxLength(64).HasColumnName("secret_hash");
+            entity.Property(e => e.SecretHashScheme).HasMaxLength(32).HasColumnName("secret_hash_scheme");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
         });

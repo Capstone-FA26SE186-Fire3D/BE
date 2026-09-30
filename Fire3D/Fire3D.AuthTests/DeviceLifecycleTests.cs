@@ -8,6 +8,22 @@ namespace Fire3D.AuthTests;
 
 public sealed class DeviceLifecycleTests
 {
+    [Fact]
+    public void Installation_proof_keeps_legacy_hash_for_a_safe_one_time_upgrade()
+    {
+        var key = Convert.ToBase64String(Enumerable.Range(0, 32).Select(i => (byte)i).ToArray())
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+        var proof = DeviceInstallationProof.Create(key);
+
+        Assert.Equal("630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd", proof.CurrentHash);
+        Assert.Equal("ea866a757e4c38babfa8127cbe9a409d3e1f93a00ff1488ff735fcf917afffd0", proof.LegacyHash);
+        Assert.NotEqual(proof.CurrentHash, proof.LegacyHash);
+        Assert.True(proof.Matches(proof.LegacyHash, null));
+        Assert.True(proof.Matches(proof.CurrentHash, DeviceInstallationProof.CurrentHashScheme));
+        Assert.False(proof.Matches(proof.LegacyHash, DeviceInstallationProof.CurrentHashScheme));
+    }
+
     [Theory]
     [InlineData("not-a-uuid", "AQID")]
     [InlineData("93d1c906-a8ff-4322-a3e8-dfd415c65593", "short")]

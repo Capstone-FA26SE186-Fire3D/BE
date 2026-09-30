@@ -1,4 +1,5 @@
 using Fire3D.Application.Authentication;
+using Fire3D.Application.Users.Commands.RegisterDevice;
 using Fire3D.Domain.Entities;
 using Fire3D.Domain.Enums;
 using Fire3D.Infrastructure.Persistence;
@@ -6,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Fire3D.Infrastructure.Authentication;
 
@@ -108,20 +110,31 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
             .SetProperty(x => x.LastLoginAt, now).SetProperty(x => x.UpdatedAt, now)
             , ct);
 
-    public async Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, string installationKeyHash,
+    public async Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, DeviceInstallationProof installationProof,
         string? fcmToken, string? deviceModel, string? osVersion, string? appVersion, DateTime now, CancellationToken ct)
     {
         // This lock is independent from the user lock. It serializes an installation moving between accounts.
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:installation:" + deviceUuid}, 0))", ct);
+        if (fcmToken is not null)
+        {
+            var tokenDigest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fcmToken))).ToLowerInvariant();
+            await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:fcm-token:" + tokenDigest}, 0))", ct);
+        }
         var installation = await db.DeviceInstallations.SingleOrDefaultAsync(x => x.DeviceUuid == deviceUuid, ct);
         if (installation is null)
         {
-            installation = new DeviceInstallation { Id = Guid.NewGuid(), DeviceUuid = deviceUuid, SecretHash = installationKeyHash, CreatedAt = now, UpdatedAt = now };
+            installation = new DeviceInstallation { Id = Guid.NewGuid(), DeviceUuid = deviceUuid, SecretHash = installationProof.CurrentHash, SecretHashScheme = DeviceInstallationProof.CurrentHashScheme, CreatedAt = now, UpdatedAt = now };
             db.DeviceInstallations.Add(installation);
         }
-        else if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(installation.SecretHash), Convert.FromHexString(installationKeyHash)))
+        else if (!installationProof.Matches(installation.SecretHash, installation.SecretHashScheme))
         {
             return DeviceRegistrationResult.InstallationKeyMismatch;
+        }
+        else if (installation.SecretHashScheme != DeviceInstallationProof.CurrentHashScheme || installation.SecretHash != installationProof.CurrentHash)
+        {
+            installation.SecretHash = installationProof.CurrentHash;
+            installation.SecretHashScheme = DeviceInstallationProof.CurrentHashScheme;
+            installation.UpdatedAt = now;
         }
 
         if (fcmToken is not null && await db.UserDevices.AnyAsync(x => x.FcmToken == fcmToken && x.NotificationsEnabled && x.RevokedAt == null && x.DeviceUuid != deviceUuid, ct))
@@ -164,16 +177,33 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         await db.UserDevices.Where(x => x.InstallationId == installation.Id && x.UserId != userId && x.NotificationsEnabled)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.NotificationsEnabled, false)
                 .SetProperty(x => x.FcmToken, (string?)null).SetProperty(x => x.RevokedAt, now).SetProperty(x => x.LastSeenAt, now), ct);
-        await db.SaveChangesAsync(ct);
-        return DeviceRegistrationResult.Registered;
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return DeviceRegistrationResult.Registered;
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation
+            && ex.ConstraintName == "ux_user_devices_active_fcm_token")
+        {
+            return DeviceRegistrationResult.TokenAlreadyBound;
+        }
     }
 
-    public async Task<DeviceRevokeResult> RevokeDeviceAsync(Guid userId, string deviceUuid, string installationKeyHash, DateTime now, CancellationToken ct)
+    public async Task<DeviceRevokeResult> RevokeDeviceAsync(Guid userId, string deviceUuid, DeviceInstallationProof installationProof, DateTime now, CancellationToken ct)
     {
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:installation:" + deviceUuid}, 0))", ct);
         var installation = await db.DeviceInstallations.SingleOrDefaultAsync(x => x.DeviceUuid == deviceUuid, ct);
-        if (installation is not null && !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(installation.SecretHash), Convert.FromHexString(installationKeyHash)))
+        if (installation is null)
+            return DeviceRevokeResult.Revoked;
+        if (!installationProof.Matches(installation.SecretHash, installation.SecretHashScheme))
             return DeviceRevokeResult.InstallationKeyMismatch;
-        await db.UserDevices.Where(x => x.UserId == userId && x.DeviceUuid == deviceUuid && (installation == null || x.InstallationId == installation.Id))
+        if (installation.SecretHashScheme != DeviceInstallationProof.CurrentHashScheme || installation.SecretHash != installationProof.CurrentHash)
+        {
+            installation.SecretHash = installationProof.CurrentHash;
+            installation.SecretHashScheme = DeviceInstallationProof.CurrentHashScheme;
+            installation.UpdatedAt = now;
+        }
+        await db.UserDevices.Where(x => x.UserId == userId && x.DeviceUuid == deviceUuid && x.InstallationId == installation.Id)
             .ExecuteUpdateAsync(update => update
                 .SetProperty(x => x.FcmToken, (string?)null)
                 .SetProperty(x => x.NotificationsEnabled, false)

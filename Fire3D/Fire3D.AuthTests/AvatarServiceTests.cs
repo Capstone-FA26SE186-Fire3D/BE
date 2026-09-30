@@ -166,8 +166,8 @@ public sealed class AvatarServiceTests
         public Task UpdatePasswordHashAsync(Guid userId, string passwordHash, DateTime now, CancellationToken ct) => throw new NotSupportedException();
         public Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username, DateOnly? dob, UserGender? gender, string? phoneNumber, DateTime now, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct) => throw new NotSupportedException();
-        public Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, string installationKeyHash, string? fcmToken, string? deviceModel, string? osVersion, string? appVersion, DateTime now, CancellationToken ct) => throw new NotSupportedException();
-        public Task<DeviceRevokeResult> RevokeDeviceAsync(Guid userId, string deviceUuid, string installationKeyHash, DateTime now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, Fire3D.Application.Users.Commands.RegisterDevice.DeviceInstallationProof installationProof, string? fcmToken, string? deviceModel, string? osVersion, string? appVersion, DateTime now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<DeviceRevokeResult> RevokeDeviceAsync(Guid userId, string deviceUuid, Fire3D.Application.Users.Commands.RegisterDevice.DeviceInstallationProof installationProof, DateTime now, CancellationToken ct) => throw new NotSupportedException();
         public Task DisableUserPushDevicesAsync(Guid userId, DateTime now, CancellationToken ct) => throw new NotSupportedException();
         public Task<RefreshToken?> FindRefreshTokenAsync(string hash, CancellationToken ct) => throw new NotSupportedException();
         public Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct) => throw new NotSupportedException();

@@ -6,6 +6,7 @@ public sealed class DeviceInstallation
     public Guid Id { get; set; }
     public string DeviceUuid { get; set; } = null!;
     public string SecretHash { get; set; } = null!;
+    public string? SecretHashScheme { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public ICollection<UserDevice> UserDevices { get; set; } = new List<UserDevice>();

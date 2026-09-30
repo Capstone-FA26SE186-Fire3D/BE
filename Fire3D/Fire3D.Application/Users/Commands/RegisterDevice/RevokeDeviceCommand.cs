@@ -15,12 +15,12 @@ public sealed class RevokeDeviceCommandHandler(IAuthStore store, TimeProvider cl
             return AuthResult<bool>.Fail("VALIDATION_ERROR", "A valid device UUID and X-Installation-Key are required.", 400);
 
         var canonicalDeviceUuid = Guid.Parse(request.DeviceUuid).ToString("D");
-        var now = clock.GetUtcNow().UtcDateTime;
         await using var transaction = await store.BeginUserTransactionAsync(request.UserId, ct);
         var user = await store.FindUserAsync(request.UserId, ct);
+        var now = clock.GetUtcNow().UtcDateTime;
         if (user is null || !await AuthSupport.IsActiveAsync(store, user, ct) || !await store.FamilyIsActiveAsync(user.Id, request.SessionFamilyId, now, ct))
             return AuthResult<bool>.Fail("UNAUTHORIZED", "Session is unavailable.", 401);
-        var result = await store.RevokeDeviceAsync(request.UserId, canonicalDeviceUuid, DeviceRegistrationValidation.HashInstallationKey(request.InstallationKey!), now, ct);
+        var result = await store.RevokeDeviceAsync(request.UserId, canonicalDeviceUuid, DeviceInstallationProof.Create(request.InstallationKey!), now, ct);
         if (result == DeviceRevokeResult.InstallationKeyMismatch)
             return AuthResult<bool>.Fail("INSTALLATION_KEY_INVALID", "The installation key does not match this device.", 403);
         await transaction.CommitAsync(ct);
