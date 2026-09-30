@@ -100,6 +100,15 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 | PATCH | `/api/auth/me` | User | 200 AccountResponse |
 | PUT | `/api/auth/devices` | User + `X-Installation-Key` | 200 DeviceRegistrationResponse |
 | DELETE | `/api/auth/devices/{deviceUuid}` | User | 204 |
+| GET | `/api/organizations/me` | OrganizationUser | 200 OrganizationResponse |
+| PATCH | `/api/organizations/me` | OrganizationUser + `If-Match` | 200 OrganizationProfileResponse |
+| POST/GET | `/api/feedback` | User | 201/200 |
+| POST/GET | `/api/support/tickets` | User | 201/200 |
+| GET | `/api/support/tickets/{id}` | Ticket owner | 200 |
+| GET | `/api/admin/audit-logs` | PlatformAdmin | 200 paged metadata |
+| GET | `/api/admin/audit-logs/{id}` | PlatformAdmin | 200 metadata |
+| GET | `/api/admin/analytics/operations` | PlatformAdmin | 200 aggregate snapshot |
+| GET | `/api/organizations/me/analytics/operations` | OrganizationUser | 200 tenant aggregate snapshot |
 | POST | `/api/auth/forgot-password` | Public | 202 với message chung |
 | POST | `/api/auth/reset-password` | Public | 204 |
 | POST | `/api/auth/change-password` | User | 204 |
