@@ -16,6 +16,7 @@ public sealed class OrganizationProfileTests
         var id = Guid.NewGuid();
         var actor = new User { Id = Guid.NewGuid(), OrganizationId = id, Role = UserRole.OrganizationUser, IsActive = true };
         var organization = new Organization { Id = id, Name = "Before", Slug = "before", IsActive = true, ProfileRevision = 2, CreatedAt = DateTime.UtcNow };
+        OrganizationProfileAuditChange? audit = null;
         var tx = ResetProxy.For<IAuthTransaction>((method, _) => method switch { "CommitAsync" => Task.CompletedTask, "DisposeAsync" => ValueTask.CompletedTask, _ => throw new InvalidOperationException(method) });
         var accounts = ResetProxy.For<IAuthStore>((method, _) => method switch { "FindUserAsync" => Task.FromResult<User?>(actor), "OrganizationIsActiveAsync" => Task.FromResult(true), _ => throw new InvalidOperationException(method) });
         var store = ResetProxy.For<IAdministrationStore>((method, args) => method switch
@@ -23,7 +24,7 @@ public sealed class OrganizationProfileTests
             "BeginManagementTransactionAsync" => Task.FromResult(tx),
             "FindOrganizationAsync" => Task.FromResult<Organization?>(organization),
             "UpdateOrganizationProfileAsync" => Task.FromResult(OrganizationProfileUpdateResult.Updated),
-            "WriteAuditAsync" => Task.CompletedTask,
+            "WriteOrganizationProfileAuditAsync" => Task.Run(() => audit = args![0] as OrganizationProfileAuditChange),
             _ => throw new InvalidOperationException(method)
         });
 
@@ -33,6 +34,9 @@ public sealed class OrganizationProfileTests
         Assert.True(result.IsSuccess);
         Assert.Equal("After", result.Value!.Name);
         Assert.Equal(3, result.Value.ProfileRevision);
+        Assert.NotNull(audit);
+        Assert.Equal("Before", audit!.OldName);
+        Assert.Equal("After", audit.NewName);
     }
 
     [Fact]
@@ -49,7 +53,7 @@ public sealed class OrganizationProfileTests
             "BeginManagementTransactionAsync" => Task.FromResult(tx),
             "FindOrganizationAsync" => Task.FromResult<Organization?>(organization),
             "UpdateOrganizationProfileAsync" => CaptureUpdate(args!, out savedName, out savedAddress, out savedPhone),
-            "WriteAuditAsync" => Task.CompletedTask,
+            "WriteOrganizationProfileAuditAsync" => Task.CompletedTask,
             _ => throw new InvalidOperationException(method)
         });
         var request = JsonSerializer.Deserialize<UpdateOrganizationProfileRequest>("{\"address\":\"New address\"}")!;
@@ -61,6 +65,30 @@ public sealed class OrganizationProfileTests
         Assert.Equal("Before", savedName);
         Assert.Equal("New address", savedAddress);
         Assert.Equal("+84123456789", savedPhone);
+    }
+
+    [Theory]
+    [InlineData("{\"name\":null}")]
+    [InlineData("{\"address\":null}")]
+    [InlineData("{\"phoneNumber\":null}")]
+    public async Task Organization_patch_rejects_a_submitted_null_required_field(string body)
+    {
+        var id = Guid.NewGuid();
+        var actor = new User { Id = Guid.NewGuid(), OrganizationId = id, Role = UserRole.OrganizationUser, IsActive = true };
+        var organization = new Organization { Id = id, Name = "Before", Slug = "before", Address = "Old address", PhoneNumber = "+84123456789", IsActive = true, ProfileRevision = 2, CreatedAt = DateTime.UtcNow };
+        var tx = ResetProxy.For<IAuthTransaction>((method, _) => method switch { "DisposeAsync" => ValueTask.CompletedTask, _ => throw new InvalidOperationException(method) });
+        var accounts = ResetProxy.For<IAuthStore>((method, _) => method switch { "FindUserAsync" => Task.FromResult<User?>(actor), "OrganizationIsActiveAsync" => Task.FromResult(true), _ => throw new InvalidOperationException(method) });
+        var store = ResetProxy.For<IAdministrationStore>((method, _) => method switch
+        {
+            "BeginManagementTransactionAsync" => Task.FromResult(tx),
+            "FindOrganizationAsync" => Task.FromResult<Organization?>(organization),
+            _ => throw new InvalidOperationException("Unexpected organization operation: " + method)
+        });
+
+        var result = await new UpdateMyOrganizationCommandHandler(accounts, store, TimeProvider.System)
+            .Handle(new(actor.Id, "\"2\"", JsonSerializer.Deserialize<UpdateOrganizationProfileRequest>(body)!), default);
+
+        Assert.Equal("VALIDATION_ERROR", result.Error?.Code);
     }
 
     private static Task<OrganizationProfileUpdateResult> CaptureUpdate(object?[] args, out string? name, out string? address, out string? phone)

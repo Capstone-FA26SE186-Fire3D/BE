@@ -34,7 +34,9 @@ public sealed class UpdateMyOrganizationCommandHandler(IAuthStore accounts, IAdm
         var phone = command.Request.PhoneNumberSpecified
             ? command.Request.PhoneNumber is null ? null : SelfRegistrationValidation.NormalizePhone(command.Request.PhoneNumber)
             : organization.PhoneNumber;
-        if (string.IsNullOrWhiteSpace(name) || name.Length > 255 || (command.Request.AddressSpecified && command.Request.Address is not null && string.IsNullOrWhiteSpace(address)) || address?.Length > 2000 || (command.Request.PhoneNumberSpecified && command.Request.PhoneNumber is not null && phone is null))
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 255
+            || (command.Request.AddressSpecified && (string.IsNullOrWhiteSpace(address) || address.Length > 2000))
+            || (command.Request.PhoneNumberSpecified && (command.Request.PhoneNumber is null || phone is null)))
             return AuthResult<OrganizationProfileResponse>.Fail("VALIDATION_ERROR", "Name, address, or phone number is invalid.", 400);
         var now = AuthSupport.UtcNow(clock);
         var result = await organizations.UpdateOrganizationProfileAsync(organizationId, revision, name, address, phone, now, ct);
@@ -42,7 +44,8 @@ public sealed class UpdateMyOrganizationCommandHandler(IAuthStore accounts, IAdm
             return AuthResult<OrganizationProfileResponse>.Fail("PRECONDITION_FAILED", "The organization profile changed. Reload it and retry.", 412);
         if (result == OrganizationProfileUpdateResult.Unavailable)
             return AuthResult<OrganizationProfileResponse>.Fail("UNAUTHORIZED", "Organization is unavailable.", 401);
-        await organizations.WriteAuditAsync(actor.Id, organizationId, "organizations", organizationId, organization.IsActive, organization.IsActive, Guid.NewGuid(), now, ct);
+        await organizations.WriteOrganizationProfileAuditAsync(new(actor.Id, organizationId, Guid.NewGuid(),
+            organization.Name, organization.Address, organization.PhoneNumber, name, address, phone, now), ct);
         await transaction.CommitAsync(ct);
         return AuthResult<OrganizationProfileResponse>.Ok(new(organizationId, name, organization.Slug, address, phone, true, revision + 1, organization.CreatedAt, now));
     }

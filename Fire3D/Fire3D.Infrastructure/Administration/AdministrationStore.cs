@@ -126,6 +126,20 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task WriteOrganizationProfileAuditAsync(OrganizationProfileAuditChange change, CancellationToken ct)
+    {
+        db.AuditLogs.Add(new AuditLog
+        {
+            Id = Guid.NewGuid(), UserId = change.ActorId, OrganizationId = change.OrganizationId, ActorType = "User",
+            Action = AuditAction.Update, TargetEntity = "organizations", TargetId = change.OrganizationId,
+            CorrelationId = change.CorrelationId,
+            OldValues = JsonSerializer.Serialize(new { name = change.OldName, address = change.OldAddress, phoneNumber = change.OldPhoneNumber }),
+            NewValues = JsonSerializer.Serialize(new { name = change.NewName, address = change.NewAddress, phoneNumber = change.NewPhoneNumber }),
+            CreatedAt = change.CreatedAt
+        });
+        await db.SaveChangesAsync(ct);
+    }
+
     private sealed class ManagementTransaction(IDbContextTransaction transaction) : IAuthTransaction
     {
         public Task CommitAsync(CancellationToken ct) => transaction.CommitAsync(ct);

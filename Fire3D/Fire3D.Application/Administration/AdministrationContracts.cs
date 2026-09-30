@@ -10,6 +10,9 @@ public sealed record OrganizationResponse(Guid Id, string Name, string Slug, boo
     DateTime CreatedAt, DateTime UpdatedAt);
 public sealed record OrganizationProfileResponse(Guid Id, string Name, string Slug, string? Address, string? PhoneNumber,
     bool IsActive, long ProfileRevision, DateTime CreatedAt, DateTime UpdatedAt);
+public sealed record OrganizationProfileAuditChange(Guid ActorId, Guid OrganizationId, Guid CorrelationId,
+    string OldName, string? OldAddress, string? OldPhoneNumber,
+    string NewName, string? NewAddress, string? NewPhoneNumber, DateTime CreatedAt);
 [JsonConverter(typeof(UpdateOrganizationProfileRequestJsonConverter))]
 public sealed class UpdateOrganizationProfileRequest
 {

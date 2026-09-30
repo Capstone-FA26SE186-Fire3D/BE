@@ -15,4 +15,5 @@ public interface IAdministrationStore
     Task SetAccountActiveAsync(Guid id, bool active, DateTime now, CancellationToken ct);
     Task WriteAuditAsync(Guid actorId, Guid? organizationId, string targetEntity, Guid targetId,
         bool? previousActive, bool active, Guid correlationId, DateTime now, CancellationToken ct);
+    Task WriteOrganizationProfileAuditAsync(OrganizationProfileAuditChange change, CancellationToken ct);
 }
