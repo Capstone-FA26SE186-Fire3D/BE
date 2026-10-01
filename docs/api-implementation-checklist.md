@@ -99,7 +99,7 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 
 ### BILLING-01 — P1 · LATER · PayOS và entitlement Building
 
-- **Contract/current:** Chưa có API/persistence PayOS và entitlement Building production. Docs yêu cầu quotation nhiều Building, snapshot và provisioning theo từng dòng.
+- **Contract/current:** Đã có migration additive cho quotation lines/discount, entitlement/provisioning và recovery storage; chưa có checkout/webhook runtime hoặc provider production. Xem [billing.md](billing.md). Docs yêu cầu snapshot và provisioning từng Building; storage không chứng minh payment hoạt động.
 - **Sửa code:** Thêm quotation/item, discount/terms snapshot, payment request và webhook đã xác minh; cấp/gia hạn entitlement từng Building bằng idempotency key; reconcile nếu provision một phần lỗi.
 - **Nghiệm thu:** Không cấp quyền từ return URL; webhook lặp/đến trễ/sai amount không ghi trùng; retry từng dòng không nhân đôi; kỳ từng Building độc lập.
 

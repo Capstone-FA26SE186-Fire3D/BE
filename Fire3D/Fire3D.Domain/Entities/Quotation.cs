@@ -9,7 +9,8 @@ public partial class Quotation
 
     public Guid OrganizationId { get; set; }
 
-    public Guid ServicePackageId { get; set; }
+    // Legacy header FK retained for existing rows. New quotes derive package scope from their lines.
+    public Guid? ServicePackageId { get; set; }
 
     public Guid RequestedBy { get; set; }
 
@@ -51,5 +52,12 @@ public partial class Quotation
 
     public virtual User RequestedByNavigation { get; set; } = null!;
 
-    public virtual ServicePackage ServicePackage { get; set; } = null!;
+    public virtual ServicePackage? ServicePackage { get; set; }
+
+    public string BillingPurpose { get; set; } = "BuildingService";
+    public Guid? DiscountRuleId { get; set; }
+    public string DiscountSnapshot { get; set; } = "{}";
+    public string PriceSnapshot { get; set; } = "{}";
+    public string TermsSnapshot { get; set; } = "{}";
+    public long Revision { get; set; } = 1;
 }

@@ -12,6 +12,7 @@
 
 
 	<ItemGroup>
+        <EmbeddedResource Include="Billing/Schema.sql" LogicalName="Fire3D.Infrastructure.Billing.Schema.sql" />
 		<PackageReference Include="AWSSDK.Core" Version="*" />
 		<PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="*" />
 		<PackageReference Include="AWSSDK.S3" Version="*" />
