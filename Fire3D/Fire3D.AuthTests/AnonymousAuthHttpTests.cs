@@ -8,6 +8,8 @@ using Fire3D.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +21,24 @@ namespace Fire3D.AuthTests;
 
 public class AnonymousAuthHttpTests
 {
+    [Fact]
+    public async Task Registration_otp_rate_limit_returns_a_positive_retry_after_header()
+    {
+        var sender = ResetProxy.For<ISender>((_, _) =>
+            Task.FromResult(AuthResult<bool>.Fail("OTP_RATE_LIMITED", "Too many verification requests.", 429)));
+        var http = new DefaultHttpContext();
+        var controller = new AuthController(sender)
+        {
+            ControllerContext = new ControllerContext { HttpContext = http }
+        };
+
+        var result = await controller.RequestRegistrationOtp(new RequestRegistrationOtpRequest("user@example.test"), default);
+
+        Assert.IsType<ObjectResult>(result);
+        Assert.True(int.TryParse(http.Response.Headers.RetryAfter.ToString(), out var seconds));
+        Assert.True(seconds > 0);
+    }
+
     [Theory]
     [InlineData("login",false,200)] [InlineData("login",true,200)]
     [InlineData("register",false,201)] [InlineData("register",true,201)]

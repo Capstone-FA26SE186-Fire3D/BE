@@ -26,6 +26,21 @@ public sealed class EmailVerificationPageTests
         Assert.DoesNotContain("href=\"/check-email/\"", html, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Check_email_page_uses_the_registration_otp_contract()
+    {
+        var repository = FindRepositoryRoot();
+        var pageDirectory = Path.Combine(repository, "Fire3D.API", "wwwroot", "check-email");
+        var html = File.ReadAllText(Path.Combine(pageDirectory, "index.html"));
+        var script = File.ReadAllText(Path.Combine(pageDirectory, "app.js"));
+
+        Assert.Contains("id=\"otp\"", html, StringComparison.Ordinal);
+        Assert.Contains("Gửi lại mã", html, StringComparison.Ordinal);
+        Assert.Contains("../api/auth/registration/request-otp", script, StringComparison.Ordinal);
+        Assert.Contains("../api/auth/registration/verify-otp", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("resend-verification", script, StringComparison.Ordinal);
+    }
+
     private static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(Directory.GetCurrentDirectory()); directory is not null; directory = directory.Parent)
