@@ -38,7 +38,7 @@ public sealed class EmailVerificationPageTests
         Assert.Contains("Gửi lại mã", html, StringComparison.Ordinal);
         Assert.Contains("../api/auth/registration/request-otp", script, StringComparison.Ordinal);
         Assert.Contains("../api/auth/registration/verify-otp", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("resend-verification", script, StringComparison.Ordinal);
+        Assert.Contains("../api/auth/resend-verification", script, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryRoot()

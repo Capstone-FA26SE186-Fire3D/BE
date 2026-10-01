@@ -10,6 +10,7 @@
   let cooldownTimer;
 
   const requestOtpUrl = new URL('../api/auth/registration/request-otp', location.href);
+  const resendOtpUrl = new URL('../api/auth/resend-verification', location.href);
   const verifyOtpUrl = new URL('../api/auth/registration/verify-otp', location.href);
   const jsonHeaders = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
   const normalizedEmail = () => email.value.trim();
@@ -31,8 +32,8 @@
     }, 1000);
   }
 
-  async function requestOtp() {
-    const response = await fetch(requestOtpUrl, {
+  async function requestOtp(url) {
+    const response = await fetch(url, {
       method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: normalizedEmail() })
     });
     if (response.status === 429) {
@@ -50,7 +51,7 @@
     event.preventDefault();
     requestButton.disabled = true;
     try {
-      await requestOtp();
+      await requestOtp(requestOtpUrl);
       status.textContent = 'Nếu email có thể đăng ký, mã xác minh đã được gửi. Kiểm tra hộp thư của bạn.';
     } catch (error) {
       status.textContent = error.message === 'rate-limited'
@@ -64,7 +65,7 @@
   resendButton.addEventListener('click', async () => {
     resendButton.disabled = true;
     try {
-      await requestOtp();
+      await requestOtp(resendOtpUrl);
       status.textContent = 'Nếu email có thể đăng ký, mã mới đã được gửi. Mã cũ không còn hiệu lực.';
     } catch (error) {
       status.textContent = error.message === 'rate-limited'

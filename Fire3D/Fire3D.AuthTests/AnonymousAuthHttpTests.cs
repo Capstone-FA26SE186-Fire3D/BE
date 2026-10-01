@@ -22,6 +22,29 @@ namespace Fire3D.AuthTests;
 public class AnonymousAuthHttpTests
 {
     [Fact]
+    public async Task Resend_verification_dispatches_a_registration_otp_request()
+    {
+        RequestRegistrationOtpCommand? dispatched = null;
+        var sender = ResetProxy.For<ISender>((_, args) =>
+        {
+            dispatched = args.OfType<RequestRegistrationOtpCommand>().SingleOrDefault();
+            return dispatched is null
+                ? throw new InvalidOperationException("Resend must dispatch the registration OTP command.")
+                : Task.FromResult(AuthResult<bool>.Ok(true));
+        });
+        var controller = new AuthController(sender)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+
+        var result = await controller.ResendVerification(new RequestRegistrationOtpRequest("user@example.test"), default);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.NotNull(dispatched);
+        Assert.Equal("user@example.test", dispatched.Email);
+    }
+
+    [Fact]
     public async Task Registration_otp_rate_limit_returns_a_positive_retry_after_header()
     {
         var sender = ResetProxy.For<ISender>((_, _) =>

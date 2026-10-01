@@ -92,20 +92,23 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
         return Created($"/api/accounts/{result.Value!.Id}", result.Value);
     }
 
-    /// <summary>Resends a legacy account-verification link.</summary>
+    /// <summary>Resends a six-digit registration OTP.</summary>
     /// <remarks>
-    /// Deprecated for new registrations. New clients must use
-    /// <c>POST /api/auth/registration/request-otp</c> to send or resend a six-digit registration code.
+    /// After the one-minute cooldown, this invalidates the previous registration OTP and registration proof for
+    /// the email. New registrations use <c>registration/request-otp</c> for the first code.
     /// </remarks>
-    [Obsolete("New registrations must use /api/auth/registration/request-otp.")]
     [HttpPost("resend-verification")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType<ProblemDetails>(400)]
-    public async Task<IActionResult> ResendVerification([FromBody] Fire3D.Application.Authentication.ResendVerificationCommand command, CancellationToken ct)
+    [ProducesResponseType<ProblemDetails>(429)]
+    public async Task<IActionResult> ResendVerification(
+        [FromBody] Fire3D.Application.Authentication.RequestRegistrationOtpRequest request,
+        CancellationToken ct)
     {
-        var result = await sender.Send(command, ct);
-        return result.IsSuccess ? Accepted() : ResetProblem(result.Error!);
+        var result = await sender.Send(new Fire3D.Application.Authentication.RequestRegistrationOtpCommand(
+            request.Email, HttpContext.Connection.RemoteIpAddress?.ToString()), ct);
+        return RespondToRegistrationOtpRequest(result);
     }
 
     /// <summary>Verifies a legacy account-verification link.</summary>
@@ -137,9 +140,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     {
         var result = await sender.Send(new Fire3D.Application.Authentication.RequestRegistrationOtpCommand(
             request.Email, HttpContext.Connection.RemoteIpAddress?.ToString()), ct);
-        if (!result.IsSuccess && result.Error!.Code == "OTP_RATE_LIMITED")
-            Response.Headers.RetryAfter = "3600";
-        return result.IsSuccess ? Accepted() : ResetProblem(result.Error!);
+        return RespondToRegistrationOtpRequest(result);
     }
 
     /// <summary>Verifies a six-digit registration code and returns a short-lived registration proof.</summary>
@@ -251,6 +252,13 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     private ActionResult<TokenResponse> Respond(AuthResult<TokenResponse> result) =>
         result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+
+    private IActionResult RespondToRegistrationOtpRequest(AuthResult<bool> result)
+    {
+        if (!result.IsSuccess && result.Error!.Code == "OTP_RATE_LIMITED")
+            Response.Headers.RetryAfter = "3600";
+        return result.IsSuccess ? Accepted() : ResetProblem(result.Error!);
+    }
 
     private async Task<AccountResponse> EnrichAvatarAsync(Guid userId, AccountResponse account, CancellationToken ct)
     {
