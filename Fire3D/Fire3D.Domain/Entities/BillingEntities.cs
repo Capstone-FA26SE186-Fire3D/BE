@@ -147,6 +147,7 @@ public sealed class QuotationBuildingItem
 [Table("service_package_discount_rules")]
 public sealed class ServicePackageDiscountRule
 {
+    [Column("revision")] public long Revision { get; set; } = 1;
     [Column("id")]
     public Guid Id { get; set; }
     [Column("service_package_id")]

@@ -5,6 +5,7 @@ namespace Fire3D.Domain.Entities;
 
 public partial class ServicePackage
 {
+    public long Revision { get; set; } = 1;
     public Guid Id { get; set; }
 
     public string Code { get; set; } = null!;

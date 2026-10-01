@@ -13,6 +13,8 @@ public static class ApplicationExtensions
     public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton(configuration);
+        services.AddScoped<Fire3D.Application.Billing.IBillingService,Fire3D.Infrastructure.Billing.BillingService>();
+        services.AddExceptionHandler<BillingExceptionHandler>();
         services.AddOptions<Fire3D.Application.Billing.PayosOptions>()
             .Bind(configuration.GetSection(Fire3D.Application.Billing.PayosOptions.Section))
             .Validate(options => !options.Enabled, "PayOS checkout is not implemented yet. Keep PayOS:Enabled=false until the checkout/webhook task is deployed.")

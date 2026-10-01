@@ -52,6 +52,7 @@ public sealed class BillingSchemaTests
         Assert.Equal(false, await fixture.Scalar("SELECT has_table_privilege('fet3d_payos_webhook_executor','payment_transactions','UPDATE')"));
         Assert.Equal(true, await fixture.Scalar("SELECT has_function_privilege('fet3d_payos_request_executor','create_pending_payos_payment_request(uuid,uuid,text,bigint,text,text,text,timestamptz)','EXECUTE')"));
         Assert.Equal(false, await fixture.Scalar("SELECT rolcanlogin FROM pg_roles WHERE rolname='fet3d_payos_ledger_owner'"));
+        Assert.Equal(1L,await fixture.Scalar("SELECT count(*) FROM pg_constraint WHERE conname='fk_billing_quotation_discount' AND conrelid='quotations'::regclass"));
         var denied = await Assert.ThrowsAsync<PostgresException>(() => fixture.Sql("SET ROLE fet3d_payos_request_executor; INSERT INTO payos_payment_requests(id) VALUES (gen_random_uuid())"));
         Assert.Equal("42501",denied.SqlState);
     }
@@ -73,5 +74,30 @@ public sealed class BillingSchemaTests
               'New',1,100,0,100,100,'VND','{}','{}','{}',now(),now());
             """));
         Assert.Contains("organization", error.MessageText);
+        var moved=await Assert.ThrowsAsync<PostgresException>(()=>fixture.Sql($"UPDATE quotations SET organization_id='{BillingDatabase.Org}' WHERE quotation_number='Q-1'"));
+        Assert.Contains("identity",moved.MessageText);
+    }
+
+    [BillingPostgresFact]
+    public async Task Migration_revokes_legacy_public_access_and_payos_rejects_non_vnd_or_fractional_quotes()
+    {
+        await using var fixture=await BillingDatabase.Create(false);
+        await fixture.Sql("GRANT SELECT ON quotations TO PUBLIC");await fixture.ApplyBilling();
+        Assert.Equal(false,await fixture.Scalar("SELECT EXISTS(SELECT 1 FROM information_schema.table_privileges WHERE table_name='quotations' AND grantee='PUBLIC')"));
+        foreach(var (currency,amount) in new[]{("USD","100"),("VND","100.50")})
+        {
+            var quote=Guid.NewGuid();
+            await fixture.Sql($$"""
+                INSERT INTO quotations(id,organization_id,requested_by,quotation_number,billing_purpose,quantity,unit_price,subtotal_amount,tax_amount,discount_amount,total_amount,currency,valid_until,created_at,updated_at)
+                VALUES('{{quote}}','{{BillingDatabase.Org}}','{{BillingDatabase.Owner}}','{{quote}}','AIUsage',1,{{amount}},{{amount}},0,0,{{amount}},'{{currency}}',now()+interval '1 day',now(),now());
+                UPDATE quotations SET status='Issued',issued_by='{{BillingDatabase.Admin}}',issued_at=now() WHERE id='{{quote}}';
+                UPDATE quotations SET status='Accepted' WHERE id='{{quote}}';
+                """);
+            await Assert.ThrowsAsync<PostgresException>(()=>fixture.Sql($$"""
+                SET ROLE fet3d_payos_request_executor;
+                SELECT create_pending_payos_payment_request('{{quote}}','{{BillingDatabase.Owner}}','invalid',765432,'https://pay.payos.vn/invalid','https://fet3d.io.vn/return','https://fet3d.io.vn/cancel',now()+interval '1 hour');
+                """));
+        }
+        Assert.Equal(0L,await fixture.Scalar("SELECT count(*) FROM payos_payment_requests"));
     }
 }

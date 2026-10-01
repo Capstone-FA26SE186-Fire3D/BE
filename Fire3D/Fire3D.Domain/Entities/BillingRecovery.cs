@@ -12,6 +12,7 @@ public sealed class BillingCommandReceipt
     [Column("idempotency_key")] [MaxLength(128)] public string IdempotencyKey { get; set; } = "";
     [Column("input_hash")] [MaxLength(64)] public string InputHash { get; set; } = "";
     [Column("resource_id")] public Guid ResourceId { get; set; }
+    [Column("response",TypeName="jsonb")] public string? Response { get; set; }
     [Column("created_at")] public DateTime CreatedAt { get; set; }
 }
 

@@ -7,6 +7,8 @@ public partial class Fire3DDbContext
 {
     private static void ConfigureBilling(ModelBuilder model)
     {
+        model.Entity<ServicePackage>().Property(x=>x.Revision).HasColumnName("revision").HasDefaultValue(1L).IsConcurrencyToken();
+        model.Entity<ServicePackageDiscountRule>().Property(x=>x.Revision).HasDefaultValue(1L).IsConcurrencyToken();
         model.Entity<Quotation>(e =>
         {
             e.Property(x=>x.BillingPurpose).HasColumnName("billing_purpose").HasMaxLength(30).HasDefaultValue("BuildingService");

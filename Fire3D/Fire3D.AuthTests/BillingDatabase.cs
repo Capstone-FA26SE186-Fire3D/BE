@@ -79,6 +79,8 @@ internal sealed class BillingDatabase : IAsyncDisposable
         var migration = new Fire3D.Infrastructure.Migrations.AddBuildingBilling();
         foreach (var operation in migration.UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
             await Sql(operation.Sql);
+        foreach (var operation in new Fire3D.Infrastructure.Migrations.AddBillingCatalogRevisions().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
+            await Sql(operation.Sql);
     }
     public async Task Sql(string sql)
     {

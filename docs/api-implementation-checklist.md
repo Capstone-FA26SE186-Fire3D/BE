@@ -99,8 +99,9 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 
 ### BILLING-01 — P1 · LATER · PayOS và entitlement Building
 
-- **Contract/current:** Đã có migration additive cho quotation lines/discount, entitlement/provisioning và recovery storage; chưa có checkout/webhook runtime hoặc provider production. Xem [billing.md](billing.md). Docs yêu cầu snapshot và provisioning từng Building; storage không chứng minh payment hoạt động.
-- **Sửa code:** Thêm quotation/item, discount/terms snapshot, payment request và webhook đã xác minh; cấp/gia hạn entitlement từng Building bằng idempotency key; reconcile nếu provision một phần lỗi.
+- **✅ Có code:** Migration additive, catalog package/discount, quotation nhiều Building Draft → Issued → Accepted với immutable snapshot, ETag, receipt và audit atomic; enterprise contact request. SQL payment gate/grants và recovery storage là nền tảng, chưa phải luồng provider. Contract/test tay tại [billing.md](billing.md).
+- **Kiểm chứng:** HTTP với authentication fixture + PostgreSQL cô lập: tenant/quyền, create/accept cạnh tranh, snapshot, discount/rounding, replay và rollback. Không chứng minh toàn chuỗi migration lịch sử, JWT deployment hoặc provider production.
+- **❌ Còn thiếu:** Checkout/verified-webhook adapter runtime, cấp/gia hạn entitlement từng Building, reconcile provisioning từng dòng và reminder. Chưa áp Supabase; chưa tick publish/playtest chỉ vì có storage.
 - **Nghiệm thu:** Không cấp quyền từ return URL; webhook lặp/đến trễ/sai amount không ghi trùng; retry từng dòng không nhân đôi; kỳ từng Building độc lập.
 
 ### NOTIFY-01 — P1 · LATER · Nhắc hết hạn

@@ -12,8 +12,63 @@ Dedicated NOLOGIN request/webhook executors receive only EXECUTE on their respec
 
 The PayOS options section has `Enabled`, `ClientId`, `ApiKey`, `ChecksumKey`, `ReturnUrl`, `CancelUrl`. It remains disabled; enabling before the checkout/webhook task fails startup. Real credentials stay in ignored local appsettings/User Secrets or deployment secret storage. No payment adapter, provider request, entitlement worker or Supabase migration is implied by this foundation.
 
+## Task 2: catalog và báo giá Building
+
+`20261002100000_AddBillingCatalogRevisions` thêm revision catalog, response receipt và SQL hardening: FK discount, tenant/requester/purpose bất biến từ Draft, thu hồi PUBLIC quotation grants, PayOS gate chỉ nhận số nguyên VND và kiểm tổ chức hoạt động. Migration từ chối role PayOS có login/quyền quản trị hoặc executor kế thừa ledger owner/direct payment DML; cần sửa cấu hình quyền trước khi áp, không tự cấp backend membership. `20261002100100_SyncBillingCatalogModel` chỉ đồng bộ metadata EF. Không cần reset dữ liệu. Chưa áp các migration này lên Supabase.
+
+| Method / route | Quyền | Header bắt buộc |
+| --- | --- | --- |
+| GET `/api/billing/service-packages` và `/{id}` | OrganizationUser: chỉ active; PlatformAdmin: cả inactive | Bearer |
+| POST `/api/admin/service-packages` | PlatformAdmin | Bearer |
+| PATCH `/api/admin/service-packages/{id}` | PlatformAdmin | Bearer, If-Match |
+| GET `/api/admin/discount-rules` và `/{id}` | PlatformAdmin | Bearer |
+| POST `/api/admin/discount-rules` | PlatformAdmin | Bearer |
+| PATCH `/api/admin/discount-rules/{id}` | PlatformAdmin | Bearer, If-Match |
+| POST `/api/billing/quotations` | OrganizationUser, Building của tenant hiện hành | Bearer, Idempotency-Key |
+| GET `/api/billing/quotations` và `/{id}` | OrganizationUser: tenant mình; PlatformAdmin: xuyên tenant | Bearer |
+| PATCH `/api/billing/quotations/{id}` | Chủ tenant hoặc PlatformAdmin, chỉ Draft | Bearer, If-Match |
+| POST `/api/admin/quotations/{id}/issue` | PlatformAdmin | Bearer, If-Match |
+| POST `/api/billing/quotations/{id}/accept` | OrganizationUser của tenant báo giá | Bearer, If-Match |
+| POST `/api/billing/enterprise-quote-requests` | OrganizationUser | Bearer, Idempotency-Key |
+| GET `/api/billing/enterprise-quote-requests` | OrganizationUser: tenant mình; PlatformAdmin: toàn nền tảng | Bearer |
+| GET `/api/admin/enterprise-quote-requests` | PlatformAdmin | Bearer |
+
+Catalog PATCH nhận **đầy đủ** các field editable, không phải JSON Merge Patch. Package: `code`, `name`, `unitPrice`, `durationMonths`, `isActive` (mặc định true), `description` (tùy chọn). Server gán VND; `unitPrice` là giá **mỗi Building mỗi tháng**. Code package uppercase, 1–50 chữ/số/underscore/hyphen; name tối đa 255. Giá không âm, số nguyên VND, tối đa 999.999.999.999; duration phải dương. Giá một dòng = unitPrice × durationMonths. Package 0 đồng có thể lưu nhưng báo giá tổng 0 bị từ chối khi issue (`409 ZERO_AMOUNT_NOT_SUPPORTED`); chưa có flow cấp quyền miễn phí.
+
+Discount: `code`, `discountKind` (`Percent` hoặc `Fixed`), `discountValue`, `minimumBuildings`, `validFrom`; tùy chọn `validUntil`, `servicePackageId`, `minimumDurationMonths`, `isActive`. Percent 0–100, tối đa hai số lẻ; Fixed là VND nguyên. Ngày phải là ISO 8601 có `Z` hoặc offset. Xét số **dòng đủ điều kiện** theo package/duration và hiệu lực. Chọn một rule giảm tiền lớn nhất, bằng nhau chọn rule ID ổn định. Không cộng dồn; clamp theo subtotal hợp lệ, percent làm tròn VND AwayFromZero, phân bổ theo tỷ lệ lấy floor, số dư 1 VND theo line ID. Không áp rule cho dòng ngoài scope. Snapshot giữ rule/value/amount, danh sách dòng eligible và quy tắc rounding.
+
+Draft có 1–100 Building khác nhau, cùng tổ chức, active, có tên và địa chỉ. `New` dành cho Building chưa có lịch sử dịch vụ đã trả tiền; `Renewal` cần lịch sử entitlement paid (trial không tính). Body không nhận giá, tenant hoặc người tạo từ client:
+
+```json
+{
+  "items": [
+    { "buildingId": "<Building UUID>", "servicePackageId": "<Package UUID>", "purchaseAction": "New" }
+  ]
+}
+```
+
+POST trả `201`, Location, body và ETag. Cùng actor/operation/Idempotency-Key/input chuẩn hóa trả lại **response tạo ban đầu**, kể cả resource đã đổi trạng thái sau đó; dùng GET để lấy trạng thái hiện tại. Input khác trả `409 IDEMPOTENCY_KEY_CONFLICT`. Key 1–128 ASCII printable, không space. Receipt/audit/resource cùng transaction; quyền account/tenant kiểm lại từ database dưới khóa lifecycle.
+
+GET detail trả ETag dạng `"billing-<id dạng N>-<revision>"`. PATCH/issue/accept: thiếu If-Match `428`, sai định dạng `400`, cũ `412`; chỉ một request cùng revision được commit. Issued snapshots không bị sửa khi catalog hoặc Building thay đổi. List quotations/enterprise phân trang mặc định 20, tối đa 100, thứ tự createdAt giảm rồi id; header/line và count/page đọc cùng snapshot PostgreSQL.
+
+Admin issue đọc lại giá/catalog hiện hành và chốt snapshot tên/địa chỉ Building, package/duration/price/discount/terms. Body bắt buộc `taxAmount` nguyên VND không âm, `terms` plain text 1–10.000 ký tự và `validUntil` tương lai có timezone. Tax được admin cung cấp rõ ràng, chưa tự suy thuế suất. Draft hết hạn hiển thị sau 7 ngày; admin issue quyết định expiry cuối. Issue không charge. Accept chỉ `Issued` còn hạn, ghi acceptedAt một lần, không cấp entitlement hoặc tạo payment. Legacy quotation thiếu Building lines được giữ nhưng không thể issue; tạo báo giá mới thay vì suy scope từ header legacy.
+
+Enterprise request có `requestedBuildingCount` dương, `requestedDurationMonths` tùy chọn dương, `contactName` (1–255), `contactEmail` hợp lệ; `contactPhone` (1–50) và `notes` (1–10.000) tùy chọn. Trả `201`, lưu trạng thái New, audit và receipt. Chưa có workflow admin chuyển enterprise request thành quotation. Không tạo charge/entitlement từ thông tin liên hệ.
+
+Lỗi nghiệp vụ dùng ProblemDetails với `code`, `errors` theo field nếu có và `traceId`; lỗi JSON/model binding theo format validation ASP.NET hiện hành. Resource ngoài tenant trả 404. Giới hạn đã chốt: chưa checkout, adapter ký/xác minh webhook, provisioning, reconcile hoặc reminder runtime; publish/playtest gate không được đánh dấu hoàn tất từ bảng entitlement mới.
+
+## Test tay bằng Swagger
+
+1. Admin tạo package: `{"code":"MONTH","name":"Building 1 tháng","unitPrice":100000,"durationMonths":1,"isActive":true}`.
+2. OrganizationUser dùng Building đã tạo của mình và package ID vừa nhận để POST quotation; nhập một Idempotency-Key. Lưu quotation ID và ETag.
+3. Admin issue với ETag: `{"taxAmount":0,"terms":"Dịch vụ Building trong một tháng","validUntil":"<timestamp tương lai có Z>"}`. Lưu ETag mới.
+4. OrganizationUser accept với ETag mới, rồi GET để kiểm tra Accepted và acceptedAt. **Chưa có bước thanh toán trong hai task này.**
+5. Thử create lại cùng key/body: cùng quotation và response ban đầu. Đổi Building/package nhưng giữ key phải trả 409. Thử accept bằng ETag cũ phải trả 412. Tài khoản tổ chức khác không đọc được quotation này.
+
 ## Verification
 
 Billing tests opt in through `FET3D_BILLING_TEST_ADMIN`, accept only a loopback PostgreSQL host and the `postgres` admin database, and create/drop a dedicated `fet3d_billing_test_*` database for each test. They never read application settings or User Secrets. Tests execute the real additive migration on a model-created relational baseline; this does not certify the full historical migration chain or production grants.
 
 Example: `FET3D_BILLING_TEST_ADMIN=Host=127.0.0.1;Port=<disposable-port>;Database=postgres;Username=<test-admin>` followed by `dotnet test Fire3D/Fire3D.AuthTests --filter FullyQualifiedName~Billing`.
+
+HTTP fixture thay authentication bằng danh tính test và vô hiệu toàn bộ hosted workers; vẫn kiểm role/tenant/account từ DB. Test này không chứng minh JWT production hoặc S3/FCM/Mailgun/PayOS thật đã hoạt động. Có test cạnh tranh create/accept, giá nhiều dòng/làm tròn, bất biến snapshot, idempotency conflict, quyền tenant, rollback audit và metadata OpenAPI/header. Chưa chứng minh deployment hoặc tiền thật.
