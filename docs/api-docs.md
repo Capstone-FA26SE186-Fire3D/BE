@@ -23,8 +23,8 @@ Source hiện có **64 HTTP action** trong controller. Số lượng route khôn
 | `POST /api/auth/register/organization` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/auth/registration/request-otp` | 202 Accepted | Không tạo account; phản hồi chung cho email đã có/chưa có |
 | `POST /api/auth/registration/verify-otp` | 200 RegistrationOtpVerificationResponse | Trả registrationToken 15 phút, dùng một lần |
-| `POST /api/auth/resend-verification` | 202 Accepted | Generic response; PostgreSQL cooldown prevents a new delivery job for one minute |
-| `POST /api/auth/verify-email` | 204 No Content | Token is single-use and expires after 15 minutes |
+| `POST /api/auth/resend-verification` | 202 Accepted | **Deprecated**. Chỉ hỗ trợ account pending từ luồng link legacy; client đăng ký mới dùng `registration/request-otp` |
+| `POST /api/auth/verify-email` | 204 No Content | **Deprecated**. Chỉ xác minh token link legacy, single-use và hết hạn sau 15 phút |
 | `POST /api/accounts` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/organizations` | 201 OrganizationResponse | `/api/organizations/{id}` |
 | `POST /api/buildings` | 201 BuildingResponse | `/api/buildings/{id}` |
@@ -89,8 +89,8 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 | POST | `/api/auth/register/organization` | Public | 201 AccountResponse |
 | POST | `/api/auth/registration/request-otp` | Public | 202 Accepted |
 | POST | `/api/auth/registration/verify-otp` | Public | 200 RegistrationOtpVerificationResponse |
-| POST | `/api/auth/resend-verification` | Public | 202 Accepted |
-| POST | `/api/auth/verify-email` | Public | 204 No Content |
+| POST | `/api/auth/resend-verification` | Public, deprecated | 202 Accepted |
+| POST | `/api/auth/verify-email` | Public, deprecated | 204 No Content |
 | POST | `/api/auth/login` | Public | 200 LoginResponse |
 | POST | `/api/auth/login-firebase` | Public | 200 TokenResponse |
 | POST | `/api/auth/refresh` | Public | 200 TokenResponse |
@@ -135,13 +135,13 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 }
 ```
 
-Trước khi gọi một trong ba route register, client phải gọi `POST /api/auth/registration/request-otp` với `{ "email": "..." }`, nhận mã sáu chữ số từ email, rồi gọi `POST /api/auth/registration/verify-otp` với `{ "email": "...", "otp": "123456" }`. Kết quả thành công trả `{ "registrationToken": "...", "expiresAt": "..." }`; token hết hạn sau 15 phút, gắn với email và chỉ dùng một lần. Request OTP hết hạn sau 10 phút, resend thay OTP cũ, giới hạn một lần/phút, 5 lần/email/giờ và 20 lần/IP/giờ. Hai API này không tạo `users` hay `organizations`; job gửi OTP chạy tách khỏi worker link xác minh cũ.
+Trước khi gọi một trong ba route register, client phải gọi `POST /api/auth/registration/request-otp` với `{ "email": "..." }`, nhận mã sáu chữ số từ email, rồi gọi `POST /api/auth/registration/verify-otp` với `{ "email": "...", "otp": "123456" }`. Kết quả thành công trả `{ "registrationToken": "...", "expiresAt": "..." }`; token hết hạn sau 15 phút, gắn với email và chỉ dùng một lần. `request-otp` cũng là API **duy nhất** để gửi lại OTP: sau 60 giây, request mới thay mã/proof cũ; mã có hạn 10 phút. Giới hạn là 5 lần/email/giờ và 20 lần/IP/giờ; khi vượt giới hạn trả `429 OTP_RATE_LIMITED` cùng header `Retry-After`. Hai API này không tạo `users` hay `organizations`; job gửi OTP chạy tách khỏi worker link xác minh cũ.
 
 `/api/auth/register/trainee` yêu cầu email hợp lệ tối đa 254 ký tự, username lowercase theo `[a-z0-9._-]{3,30}`, password 6–128, confirmPassword trùng password và `registrationToken` còn hiệu lực. fullName, dob, gender và phoneNumber là tùy chọn. Dob không được ở tương lai; gender là `Male`, `Female`, `Other` hoặc `PreferNotToSay`; phoneNumber có 6–15 chữ số, có thể bắt đầu bằng `+`. Username unique không phân biệt hoa thường. Không gửi role/organizationId để cấp quyền.
 
 BE hash password vào `users.password_hash`, không tạo tài khoản email/password trên Firebase. Trả **201 AccountResponse**, chưa đăng nhập; gọi login tiếp theo:
 
-Tài khoản tự đăng ký chỉ được ghi sau khi token OTP được consume; user mới đã có `email_verified_at`, vì vậy login không phải chờ worker xác minh. `POST /api/auth/resend-verification` và `POST /api/auth/verify-email` được giữ để hỗ trợ các account pending tạo bởi luồng cũ; client mới dùng hai route OTP ở trên.
+Tài khoản tự đăng ký chỉ được ghi sau khi token OTP được consume; user mới đã có `email_verified_at`, vì vậy login không phải chờ worker xác minh. Trang `/check-email/` gọi hai route OTP, hiển thị ô sáu số và chỉ lưu `registrationToken` trong `sessionStorage` của cùng origin cho tới khi client gửi nó kèm request register. `POST /api/auth/resend-verification` và `POST /api/auth/verify-email` được giữ, đánh dấu deprecated, để hỗ trợ các account pending tạo bởi luồng link cũ; client mới không gọi chúng.
 
 ```json
 {

@@ -92,6 +92,12 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
         return Created($"/api/accounts/{result.Value!.Id}", result.Value);
     }
 
+    /// <summary>Resends a legacy account-verification link.</summary>
+    /// <remarks>
+    /// Deprecated for new registrations. New clients must use
+    /// <c>POST /api/auth/registration/request-otp</c> to send or resend a six-digit registration code.
+    /// </remarks>
+    [Obsolete("New registrations must use /api/auth/registration/request-otp.")]
     [HttpPost("resend-verification")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
@@ -102,6 +108,9 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
         return result.IsSuccess ? Accepted() : ResetProblem(result.Error!);
     }
 
+    /// <summary>Verifies a legacy account-verification link.</summary>
+    /// <remarks>Deprecated for new registrations, which verify an OTP before an account is created.</remarks>
+    [Obsolete("New registrations must use /api/auth/registration/verify-otp.")]
     [HttpPost("verify-email")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -128,6 +137,8 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     {
         var result = await sender.Send(new Fire3D.Application.Authentication.RequestRegistrationOtpCommand(
             request.Email, HttpContext.Connection.RemoteIpAddress?.ToString()), ct);
+        if (!result.IsSuccess && result.Error!.Code == "OTP_RATE_LIMITED")
+            Response.Headers.RetryAfter = "3600";
         return result.IsSuccess ? Accepted() : ResetProblem(result.Error!);
     }
 
