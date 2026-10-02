@@ -61,7 +61,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(frontendUrls)
               .AllowAnyMethod()
               .AllowAnyHeader()
-              .WithExposedHeaders("ETag")
+              .WithExposedHeaders("ETag", "Retry-After")
               .AllowCredentials();
     });
 });
@@ -117,8 +117,8 @@ app.UseSwaggerUI(options =>
 // Azure App Service handles SSL termination - no need for HTTPS redirect
 // app.UseHttpsRedirection();
 
-app.UseRateLimiter();
 app.UseCors("AllowFrontend");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

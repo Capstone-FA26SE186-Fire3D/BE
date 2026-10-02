@@ -72,7 +72,7 @@ Framework có thể thêm type/traceId/errors. Building CRUD, một số IFC com
 | 422 | Không xác minh được object upload |
 | 429 | Vượt rate limit |
 
-Policy administration: **120 request/phút/IP** cho administration và IFC commands. `POST /api/auth/refresh` có policy riêng **10 request/phút/IP**, fixed window trong bộ nhớ mỗi instance, không Redis. Vượt quota trả `429 AUTH_REFRESH_RATE_LIMITED`, ProblemDetails có `traceId` và header `Retry-After` (giây). Trong quota, refresh token sai vẫn trả `401`; header IP client tự gửi không thay thế connection IP do middleware xử lý. Nhiều instance không chia sẻ quota này.
+Policy administration: **120 request/phút/IP** cho administration và IFC commands. `POST /api/auth/refresh` có policy riêng **10 request/phút/IP**, fixed window trong bộ nhớ mỗi instance, không Redis. Vượt quota trả `429 AUTH_REFRESH_RATE_LIMITED`, ProblemDetails có `traceId` và header `Retry-After` (giây). Trong quota, refresh token sai vẫn trả `401`; header IP client tự gửi không thay thế connection IP do middleware xử lý. CORS chạy trước rate limiter và expose `Retry-After` cho origin frontend được cho phép; preflight không tiêu thụ quota. Nhiều instance không chia sẻ quota này.
 
 Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. Search quản trị/building tối đa 200 ký tự. `Page<T>` bên dưới có dạng:
 
