@@ -54,7 +54,7 @@ SELECT has_table_privilege(current_user,'public.payos_payment_requests','INSERT,
 | GET `/api/billing/entitlements` | OrganizationUser tenant mình; Admin filter organizationId/buildingId; page=1, pageSize=20 (max100) |
 | POST `/api/admin/payments/payos/checkouts/{id}/reconcile` | PlatformAdmin; chỉ enqueue retry record cũ |
 
-Create trả 201 khi link Ready lần đầu, replay 200; đang tạo/chưa rõ kết quả 202 với Location checkout. Giữ checkoutId và paymentRequestId riêng biệt, không dùng Building ID hoặc quotation ID làm request ID. Idempotency-Key 1–128 ASCII printable không space; input khác cùng key →409. Lỗi dùng code/traceId và errors theo field khi có. Cancel chưa được provider xác nhận trả202; thành công trả200. Payment race có thể thắng cancel, vì tiền đã nhận vẫn phải được ghi nhận.
+Create trả 201 khi link Ready lần đầu, replay 200; đang tạo/chưa rõ kết quả 202 với Location checkout. Giữ checkoutId và paymentRequestId riêng biệt, không dùng Building ID hoặc quotation ID làm request ID. Idempotency-Key 1–128 ASCII printable không space; input khác cùng key →409. Lỗi dùng code/traceId và errors theo field khi có. Cancel lần đầu chưa được provider xác nhận trả202. Replay cùng key/input chỉ đọc operation, không gọi provider hoặc tạo audit: terminal trả200, đang xử lý trả202. `200` không đồng nghĩa đã hủy: đọc `checkoutStatus`, có thể là Completed nếu webhook Paid đến trễ thắng cancel. Cancel mới cho payment đã Paid trả409 PAYMENT_ALREADY_PAID. Tiền đã nhận không bị xóa hoặc cấp entitlement lại do replay.
 
 ## Test tay sau deploy
 

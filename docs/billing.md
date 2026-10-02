@@ -86,6 +86,8 @@ POST /api/payments/payos/create requires an active OrganizationUser session, Acc
 
 ### Verified webhook (Task 3)
 
+Cancel replay contract: the original actor/key/input observes current checkout state under lock, with no provider call, audit or mutation. Terminal (Cancelled/Expired/Completed/Failed) returns200, nonterminal returns202. A late verified payment can make a previous cancellation Completed; clients must inspect checkoutStatus, not interpret200 as cancellation. A new cancellation after Paid is409 PAYMENT_ALREADY_PAID; changed input for the same key remains409 IDEMPOTENCY_KEY_CONFLICT.
+
 POST /api/payments/payos/webhook is JWT-anonymous and SDK-signature protected. It persists only normalized signed payment identity, amount and reference, omitting bank/customer payload; response 200 follows inbox commit. Replays match all normalized input; reference/hash conflicts return409. Valid unknown/probe orders are ACKed and quarantined for investigation, never granted service.
 
 The EXECUTE-only process_payos_inbox gate atomically records Received→Verified→Applied or Rejected, marks Paid, closes checkout, inserts per-line provisioning and audit. Legacy apply primitive is revoked from runtime executors. Mismatched VND/amount/payment-link ID and a second reference on an already Paid quotation are recorded Rejected; accepted money for a previously Cancelled/Expired request can still become Paid through this gate. An unbound webhook stays NeedsReconcile until checkout binding recovers. Ledger/provisioning rollback together on audit failure.
@@ -113,13 +115,15 @@ Final validation on this worktree:
 | Check | Result / limit |
 |---|---|
 | `dotnet build Fire3D/Fire3D.slnx --no-restore` | Pass, 0 warning / 0 error |
-| Auth full suite, all configured test databases disposable loopback | 202 passed / 3 failed / 0 skipped, 205 total; Billing/PayOS tests passed |
+| Auth full suite, all configured test databases disposable loopback | After review fixes: 213 passed / 0 failed / 0 skipped, including Billing/PayOS; run independently of IFC |
 | IFC filtered regression | 104 passed / 0 failed / 0 skipped; Docker classes below excluded |
-| EF `has-pending-model-changes --no-build` | None |
-| EF runtime idempotent script generation | Pass; six additive migration records since SyncBillingCatalogModel, not applied to Supabase |
-| Non-superuser runtime migration | Pass with dedicated schema-owner migration identity; preserves existing user/quotation data and restores temporary schema CREATE grants |
+| EF `has-pending-model-changes --no-build` (Task 5 evidence before follow-up fixes) | None; follow-up fixes add no migration or model changes |
+| EF runtime idempotent script generation (Task 5 evidence) | Pass; six additive migration records since SyncBillingCatalogModel, not applied to Supabase |
+| Non-superuser runtime migration (Task 5 evidence) | Pass with dedicated schema-owner migration identity; preserves existing user/quotation data and restores temporary schema CREATE grants |
 
-The three full Auth failures were independently reproduced on detached baseline `f68c20e`, with unchanged source/test files: `Swagger_documents_bearer_and_auth_requests_are_rate_limited` expects429 where existing refresh behavior returns401; resend cooldown assertion compares Int64 with the database Int32 generation; refresh cleanup uses unsupported PostgreSQL `min(uuid)`. They remain separate backlog, so the full regression is **not green**. The user's root `AuthIntegrationTests.cs` modification is untouched.
+The earlier Task 5 run had 202 passed / 3 failed / 0 skipped (205 total). Those failures were independently reproduced on detached baseline `f68c20e`: missing refresh rate limiting, Int64 assertion against Int32 generation, and unsupported PostgreSQL `min(uuid)`. The follow-up fixes resolve all three and add cancellation replay coverage. The final Auth/Billing/PayOS run passes all 213 tests; the user's root `AuthIntegrationTests.cs` modification remains untouched.
+
+Follow-up verification: cleanup ordering/retention/lock recheck (4 PostgreSQL tests), resend cooldown/concurrent generation/stale job and OTP proof behavior (7 tests), refresh HTTP/security/anonymous regression (23 tests), cancellation/checkout/webhook regression (9 tests). Each targeted run passed before the full suite. Native disposable PostgreSQL 17 replaced unavailable Docker; no test connection was read from User Secrets. A first full Auth run overlapping IFC passed212/failed1 during test database disposal (`DROP DATABASE ... WITH (FORCE)` read timeout); rerunning Auth alone passed213/failed0/skipped0 without weakening assertions or changing fixtures.
 
 IFC `IfcWriteSqlTests`, `ScenarioStoreTests` and `PlaytestEntitlementContainmentTests` require Docker unavailable in this run. An earlier broader command had two Docker setup failures, not a source assertion failure. Other IFC tests used loopback disposable PostgreSQL where required. Billing fixtures execute real runtime SQL on a model-created baseline; Auth PostgreSQL fixtures also apply the historical EF migration chain to disposable databases. Neither proves production grants/provider behavior.
 

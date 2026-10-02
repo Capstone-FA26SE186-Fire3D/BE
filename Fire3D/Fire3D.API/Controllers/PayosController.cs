@@ -18,7 +18,9 @@ public sealed class PayosController(IPayosPayments payments) : ControllerBase
     [HttpGet("api/payments/payos/checkouts/{id:guid}")]
     public async Task<PayosCheckoutResponse> Checkout(Guid id,CancellationToken ct)=>await payments.Checkout(User.GetActorId(),id,ct);
     /// <summary>OrganizationUser requests provider cancellation. Requires Idempotency-Key; payment confirmation wins a concurrent cancel.</summary>
+    /// <remarks>Same key/input returns current checkoutStatus without provider calls or mutation. Terminal replay returns200, including Completed after a late payment; otherwise202. Read checkoutStatus:200 alone does not mean Cancelled. A new cancellation of Paid returns409.</remarks>
     [Authorize(Roles="OrganizationUser")][HttpPost("api/payments/payos/requests/{id:guid}/cancel")]
+    [ProducesResponseType(typeof(PayosCheckoutResponse),200)][ProducesResponseType(typeof(PayosCheckoutResponse),202)]
     public async Task<IActionResult> Cancel(Guid id,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)
     {var result=await payments.Cancel(User.GetActorId(),User.GetSessionFamilyId(),id,key,ct);return StatusCode(result.HttpStatus,result.Value);}
     /// <summary>Anonymous JWT endpoint, authenticated by official PayOS signature. ACK only after durable inbox commit; navigation never marks Paid.</summary>

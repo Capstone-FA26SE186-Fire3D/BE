@@ -10,7 +10,10 @@ public sealed class FakePayos : IPayosProvider
 {
     public ConcurrentDictionary<long,PayosLink> Links {get;}=new();
     public int Creates;
+    public int Gets;
+    public int Cancels;
     public bool LoseCreateResponse;
+    public bool LoseCancelResponse;
     public Func<Task>? BeforeCreate;
     public async Task<PayosLink> Create(PayosCreateInput input,CancellationToken ct)
     {
@@ -18,8 +21,12 @@ public sealed class FakePayos : IPayosProvider
         var link=new PayosLink(input.OrderCode,input.Amount,"VND","link"+input.OrderCode,"Pending","https://pay.payos.vn/web/link"+input.OrderCode,"test-qr");
         Links[input.OrderCode]=link;if(LoseCreateResponse){LoseCreateResponse=false;throw new TimeoutException();}return link;
     }
-    public Task<PayosLink?> Get(long order,CancellationToken ct)=>Task.FromResult(Links.TryGetValue(order,out var link)?link:null);
-    public Task<PayosLink> Cancel(long order,CancellationToken ct){var link=Links[order] with {Status="Cancelled"};Links[order]=link;return Task.FromResult(link);}
+    public Task<PayosLink?> Get(long order,CancellationToken ct){Interlocked.Increment(ref Gets);return Task.FromResult(Links.TryGetValue(order,out var link)?link:null);}
+    public Task<PayosLink> Cancel(long order,CancellationToken ct)
+    {
+        Interlocked.Increment(ref Cancels);var link=Links[order] with {Status="Cancelled"};Links[order]=link;
+        if(LoseCancelResponse){LoseCancelResponse=false;throw new TimeoutException();}return Task.FromResult(link);
+    }
     public Task<VerifiedPayosEvent> Verify(JsonElement body,CancellationToken ct)
     {
         if(body.TryGetProperty("invalidSignature",out _))throw new BillingException(400,"PAYOS_SIGNATURE_INVALID","Invalid test signature.");

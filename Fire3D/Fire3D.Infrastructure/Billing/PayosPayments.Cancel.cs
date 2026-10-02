@@ -17,6 +17,13 @@ public sealed partial class PayosPayments
             if(receipt is not null&&receipt.InputHash!=hash)throw Conflict("IDEMPOTENCY_KEY_CONFLICT","The key was used for different input.");
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM billing_checkout_operations WHERE payment_request_id={id} FOR UPDATE",ct);
             op=await db.Set<BillingCheckoutOperation>().SingleAsync(x=>x.PaymentRequestId==id,ct);
+            if(receipt is not null)
+            {
+                // Replay observes the committed operation even if a late payment won cancellation.
+                // The worker owns retries; repeat requests must not re-call the provider or alter leases.
+                await tx.CommitAsync(ct);
+                return new(View(op),op.Status is "Cancelled" or "Expired" or "Completed" or "Failed"?200:202);
+            }
             if(op.Status=="Completed")throw Conflict("PAYMENT_ALREADY_PAID","A paid payment cannot be cancelled.");
             if(receipt is null)
             {

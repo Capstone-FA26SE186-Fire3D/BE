@@ -113,7 +113,7 @@ public static class AuthenticationExtensions
                 {
                     Status = StatusCodes.Status429TooManyRequests,
                     Title = "Too many refresh requests. Try again after the indicated delay.",
-                    Type = "https://tools.ietf.org/html/rfc9110#section-15.5.30",
+                    Type = "https://www.rfc-editor.org/rfc/rfc6585#section-4",
                     Extensions = { ["code"] = "AUTH_REFRESH_RATE_LIMITED",
                         ["traceId"] = System.Diagnostics.Activity.Current?.Id ?? context.TraceIdentifier }
                 }, options: null, contentType: "application/problem+json", cancellationToken: ct);
