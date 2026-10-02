@@ -73,6 +73,7 @@ Các script SQL này cần chạy riêng, không được thay bằng EF EnsureC
 - `AuthTokenCleanup__Enabled`: bật/tắt worker dọn refresh token; mặc định `true`.
 - `AuthTokenCleanup__IntervalMinutes`, `AuthTokenCleanup__RetentionDays`, `AuthTokenCleanup__BatchSize`, `AuthTokenCleanup__MaxBatchesPerRun`: mặc định là `60`, `7`, `500`, `10`. Worker chỉ xóa family khi mọi refresh token trong family đã hết hạn ít nhất `RetentionDays`; access JWT không lưu trong database.
 - Cleanup chọn batch theo hạn cuối family, user ID rồi family ID để thứ tự ổn định trên PostgreSQL. Sau khi lấy khóa user, nó kiểm tra lại mọi token trong family trước khi xóa; token mới hoặc thành viên chưa qua retention giữ toàn bộ family. Không cần migration cho sửa query này.
+- PostgreSQL regression kiểm generation email bằng kiểu `integer` thực tế. Resend legacy cùng account chạy cạnh tranh chỉ tạo một generation sau cooldown và worker của generation cũ bị chặn; link legacy đã phát hành giữ contract riêng. Luồng OTP mới vô hiệu mã/proof cũ khi resend được chấp nhận, và proof đăng ký chỉ dùng một lần.
 - `Mailgun__ApiKey`, `Mailgun__Domain`, `Mailgun__From`, `Mailgun__BaseUrl`: Mailgun.
 - Firebase Admin credential: chỉ cần cho Google; secret JSON, section hoặc file local.
   Email/password/reset local không cần Firebase Web API key hoặc lời gọi Firebase.

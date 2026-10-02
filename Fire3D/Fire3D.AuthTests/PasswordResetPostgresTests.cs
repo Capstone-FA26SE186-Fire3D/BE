@@ -293,7 +293,28 @@ public sealed class PasswordResetPostgresTests
         await using (var secondResendContext = database.Context())
             await new EmailVerificationQueue(secondResendContext, settings).EnqueueAsync("cooldown@example.com", default);
         Assert.Equal(2L, await database.Sql($"SELECT count(*) FROM email_verification_jobs WHERE user_id='{userId}'"));
-        Assert.Equal(2L, await database.Sql($"SELECT max(generation) FROM email_verification_jobs WHERE user_id='{userId}'"));
+        Assert.Equal(2, Assert.IsType<int>(await database.Sql($"SELECT max(generation) FROM email_verification_jobs WHERE user_id='{userId}'")));
+    }
+
+    [ResetPostgresFact]
+    public async Task Concurrent_legacy_resends_create_one_generation_and_fence_the_old_job()
+    {
+        await using var database=await Database.Create();var user=Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role,registration_expires_at) VALUES('{user}','resend-race@example.test','Trainee',now()+interval '2 hours')");
+        var options=Options.Create(new AuthEmailOptions{FrontendUrl="https://app.example.test"});
+        await using var initial=database.Context();var queue=new EmailVerificationQueue(initial,options);
+        await queue.EnqueueAsync(user,"resend-race@example.test",default);
+        var oldJob=Assert.IsType<VerificationEmailJob>(await queue.ClaimAsync(default));
+        await database.Sql("UPDATE email_verification_jobs SET created_at=now()-interval '61 seconds'");
+        await Task.WhenAll(Enumerable.Range(0,5).Select(async _=>
+        {
+            await using var context=database.Context();
+            await new EmailVerificationQueue(context,options).EnqueueAsync("resend-race@example.test",default);
+        }));
+        Assert.Equal(2L,await database.Sql("SELECT count(*) FROM email_verification_jobs"));
+        Assert.Equal(2,Assert.IsType<int>(await database.Sql("SELECT max(generation) FROM email_verification_jobs")));
+        Assert.False(await queue.CanDeliverAsync(oldJob,default));
+        Assert.Null(await queue.CreateLinkAsync(oldJob,default));
     }
 
     [ResetPostgresFact]
