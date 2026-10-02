@@ -8,6 +8,8 @@ public sealed partial class PayosPayments
 {
     public async Task Receive(JsonElement body,CancellationToken ct)
     {
+        if(string.IsNullOrWhiteSpace(options.Value.ClientId)||string.IsNullOrWhiteSpace(options.Value.ApiKey)||string.IsNullOrWhiteSpace(options.Value.ChecksumKey))
+            throw new BillingException(503,"PAYOS_NOT_CONFIGURED","Webhook signature verification is not configured.");
         // The SDK verifies the original signed data before normalization. No bank/customer PII is persisted.
         var ev=await provider.Verify(body,ct);var key="payos:"+options.Value.ClientId+":"+ev.Reference;var hash=Hash(ev);
         await using var tx=await db.Database.BeginTransactionAsync(ct);await Lock("fet3d:payos:inbox:"+key,ct);

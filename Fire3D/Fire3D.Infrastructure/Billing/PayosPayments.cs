@@ -75,7 +75,7 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
             if(await db.PayosPaymentRequests.AnyAsync(x=>x.QuotationId==quote.Id&&x.Status==PaymentRequestStatus.Paid,ct))
                 throw Conflict("QUOTATION_ALREADY_PAID","The quotation is already paid.");
             var lines=await db.Set<QuotationBuildingItem>().AsNoTracking().Where(x=>x.QuotationId==quote.Id).ToListAsync(ct);
-            if(lines.Count==0||await db.Buildings.CountAsync(x=>lines.Select(l=>l.BuildingId).Contains(x.Id)&&x.OrganizationId==quote.OrganizationId&&x.IsActive,ct)!=lines.Count)
+            if(lines.Count==0||await db.Buildings.CountAsync(x=>lines.Select(l=>l.BuildingId).Contains(x.Id)&&x.OrganizationId==quote.OrganizationId&&x.IsActive&&x.DeletedAt==null,ct)!=lines.Count)
                 throw Conflict("BUILDING_UNAVAILABLE","Every quotation Building must remain active in the organization.");
             op=(await db.Set<BillingCheckoutOperation>().AsNoTracking().SingleOrDefaultAsync(x=>x.QuotationId==quote.Id&&(x.Status=="Creating"||x.Status=="Ready"||x.Status=="NeedsReconcile"),ct))!;
             var isNew=op is null;
@@ -109,6 +109,8 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
         try
         {
             var input=Input(op);if(!await Renew(op.Id,lease,ct))return;
+            // A previous cancelled checkout can receive a late verified payment. Close any replacement link.
+            if(await db.PayosPaymentRequests.AnyAsync(x=>x.QuotationId==op.QuotationId&&x.Status==PaymentRequestStatus.Paid,ct))op.CancelRequested=true;
             PayosLink? link=first?await provider.Create(input,ct):await provider.Get(op.OrderCode,ct);
             if(link is null)
             {
@@ -144,7 +146,7 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
         {
             var code=ex is BillingException billing?billing.Code:ex is Npgsql.PostgresException pg?(pg.MessageText.StartsWith("PAYOS_")?pg.MessageText:"PAYOS_DATABASE_"+pg.SqlState):"PAYOS_PROVIDER_UNAVAILABLE";
             logger.LogWarning("PayOS checkout {CheckoutId} attempt {Attempt} failed with {Code}",op.Id,op.Attempts,code);
-            await Failure(op,lease,code,code is "PAYOS_SESSION_REVOKED" or "PAYOS_PROVIDER_MISMATCH",ct);
+            await Failure(op,lease,code,code is "PAYOS_SESSION_REVOKED" or "PAYOS_PROVIDER_MISMATCH" or "PAYOS_SCOPE_UNAVAILABLE" or "PAYOS_QUOTATION_EXPIRED" or "PAYOS_QUOTATION_ALREADY_PAID" or "PAYOS_BUILDING_UNAVAILABLE",ct);
         }
     }
     private async Task<bool> Renew(Guid id,Guid lease,CancellationToken ct)=>await db.Set<BillingCheckoutOperation>().Where(x=>x.Id==id&&x.LeaseToken==lease&&x.LeaseUntil>Now)
@@ -167,8 +169,6 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
             await RunCheckout(op,false,ct);
         }
         await RecoverInbox(ct);
+        await RecoverProvisioning(ct);
     }
-    public Task<PayosPaymentResponse> Payment(Guid actor,Guid id,CancellationToken ct)=>throw Missing();
-    public Task Reconcile(Guid actor,Guid id,CancellationToken ct)=>throw new BillingException(503,"PAYOS_RECOVERY_UNAVAILABLE","Recovery is not enabled in this task.");
-    public Task<BillingPage<EntitlementResponse>> Entitlements(Guid actor,Guid? org,Guid? building,int page,int size,CancellationToken ct)=>throw Missing();
 }

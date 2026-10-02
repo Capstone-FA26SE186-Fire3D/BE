@@ -62,7 +62,7 @@ public sealed class PayosWebhookTests
         await db.Sql("UPDATE billing_checkout_operations SET next_attempt_at=now()");await Recover(factory,db);
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payment_transactions WHERE status='Applied'"));
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM billing_checkout_operations WHERE status='Completed'"));
-        var quote2=await PayosCheckoutTests.Accepted(db);var second=await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(quote2,"quote2")));
+        var quote2=await PayosCheckoutTests.Accepted(db,"Renewal");var second=await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(quote2,"quote2")));
         var id=second.GetProperty("paymentRequestId").GetGuid();using var cancel=new HttpRequestMessage(HttpMethod.Post,$"/api/payments/payos/requests/{id}/cancel");cancel.Headers.Add("Idempotency-Key","cancel2");
         Assert.Equal(HttpStatusCode.OK,(await owner.SendAsync(cancel)).StatusCode);
         var order2=second.GetProperty("orderCode").GetInt64();

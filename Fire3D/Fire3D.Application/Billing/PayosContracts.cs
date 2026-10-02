@@ -16,7 +16,7 @@ public sealed record PayosCheckoutResponse(Guid CheckoutId,Guid QuotationId,Guid
 public sealed record CheckoutResult(PayosCheckoutResponse Value,int HttpStatus);
 public sealed record ProvisioningLineResponse(Guid QuotationItemId,Guid BuildingId,string Status,Guid? EntitlementId,string? ErrorCode);
 public sealed record PayosPaymentResponse(Guid Id,Guid QuotationId,long OrderCode,decimal Amount,string Currency,
-    string PaymentStatus,DateTime? PaidAt,string ProvisioningStatus,IReadOnlyList<ProvisioningLineResponse> Items);
+    string PaymentStatus,DateTime? PaidAt,Guid? TransactionId,string? TransactionStatus,string ProvisioningStatus,IReadOnlyList<ProvisioningLineResponse> Items);
 public sealed record EntitlementResponse(Guid Id,Guid BuildingId,string Status,bool IsEffective,DateTime StartsAt,DateTime EndsAt,Guid? PaymentTransactionId);
 public interface IPayosPayments
 {
@@ -25,7 +25,7 @@ public interface IPayosPayments
     Task<PayosPaymentResponse> Payment(Guid actor,Guid id,CancellationToken ct);
     Task<CheckoutResult> Cancel(Guid actor,Guid family,Guid id,string? key,CancellationToken ct);
     Task Receive(JsonElement body,CancellationToken ct);
-    Task Reconcile(Guid actor,Guid checkoutId,CancellationToken ct);
+    Task Reconcile(Guid actor,Guid family,Guid checkoutId,CancellationToken ct);
     Task<BillingPage<EntitlementResponse>> Entitlements(Guid actor,Guid? organizationId,Guid? buildingId,int page,int pageSize,CancellationToken ct);
     Task Recover(CancellationToken ct);
 }

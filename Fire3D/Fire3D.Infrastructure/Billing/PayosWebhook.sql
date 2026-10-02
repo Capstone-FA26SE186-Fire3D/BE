@@ -6,7 +6,7 @@ DECLARE ev public.payos_webhook_inbox%ROWTYPE; req public.payos_payment_requests
  tid uuid; reason text; quote uuid;
 BEGIN
  SELECT * INTO ev FROM public.payos_webhook_inbox WHERE id=p_inbox FOR UPDATE;
- IF NOT FOUND OR ev.lease_token IS DISTINCT FROM p_lease OR ev.lease_until<=clock_timestamp()
+ IF NOT FOUND OR p_lease IS NULL OR ev.lease_until IS NULL OR ev.lease_token IS DISTINCT FROM p_lease OR ev.lease_until<=clock_timestamp()
   OR ev.verified_at IS NULL THEN RAISE EXCEPTION 'PAYOS_STALE_LEASE'; END IF;
  SELECT quotation_id INTO quote FROM public.billing_checkout_operations WHERE order_code=ev.order_code;
  IF quote IS NULL THEN

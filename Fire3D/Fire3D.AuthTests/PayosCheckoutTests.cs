@@ -43,11 +43,11 @@ public sealed class PayosCheckoutTests
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payos_payment_requests"));
         Assert.Equal("PAYOS_SESSION_REVOKED",(await Json(second)).GetProperty("errorCode").GetString());
     }
-    internal static async Task<Guid> Accepted(BillingDatabase db,string action="New")
+    internal static async Task<Guid> Accepted(BillingDatabase db,string action="New",Guid[]? buildings=null)
     {
         await using var context=db.Context();var billing=new Fire3D.Infrastructure.Billing.BillingService(context);
         var package=await billing.SavePackage(BillingDatabase.Admin,null,new("P"+Guid.NewGuid().ToString("N"),"Test",2000,1),null,default);
-        var quote=await billing.CreateQuotation(BillingDatabase.Owner,new([new(BillingDatabase.Building,package.Id,action)]),Guid.NewGuid().ToString("N"),default);
+        var quote=await billing.CreateQuotation(BillingDatabase.Owner,new((buildings??[BillingDatabase.Building]).Select(id=>new QuotationItemRequest(id,package.Id,action)).ToArray()),Guid.NewGuid().ToString("N"),default);
         quote=await billing.IssueQuotation(BillingDatabase.Admin,quote.Id,new(0,"Test terms",DateTimeOffset.UtcNow.AddDays(1)),BillingETag.Format(quote.Id,quote.Revision),default);
         await billing.AcceptQuotation(BillingDatabase.Owner,quote.Id,BillingETag.Format(quote.Id,quote.Revision),default);return quote.Id;
     }

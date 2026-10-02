@@ -6,6 +6,13 @@ namespace Fire3D.Infrastructure.Billing;
 public sealed class PayosExecutor(IConfiguration configuration)
 {
     public async Task<Guid?> Run(bool webhook,string sql,CancellationToken ct,params (string Name,object Value)[] args)
+        =>await Transaction<Guid?>(webhook,async(connection,transaction)=>
+        {
+            await using var command=new NpgsqlCommand(sql,connection,transaction){CommandTimeout=20};
+            foreach(var (name,input) in args)command.Parameters.AddWithValue(name,input);
+            var result=await command.ExecuteScalarAsync(ct);return result is Guid id?id:null;
+        },ct);
+    public async Task<T> Transaction<T>(bool webhook,Func<NpgsqlConnection,NpgsqlTransaction,Task<T>> work,CancellationToken ct)
     {
         var role=webhook?"fet3d_payos_webhook_executor":"fet3d_payos_request_executor";
         var value=configuration.GetConnectionString(webhook?"PayosWebhookExecutor":"PayosRequestExecutor")
@@ -29,9 +36,6 @@ public sealed class PayosExecutor(IConfiguration configuration)
         }
         await using var transaction=await connection.BeginTransactionAsync(ct);
         await new NpgsqlCommand("SET LOCAL ROLE "+role,connection,transaction).ExecuteNonQueryAsync(ct);
-        await using var command=new NpgsqlCommand(sql,connection,transaction){CommandTimeout=20};
-        foreach(var (name,input) in args)command.Parameters.AddWithValue(name,input);
-        var result=await command.ExecuteScalarAsync(ct);await transaction.CommitAsync(ct);
-        return result is Guid id?id:null;
+        var result=await work(connection,transaction);await transaction.CommitAsync(ct);return result;
     }
 }

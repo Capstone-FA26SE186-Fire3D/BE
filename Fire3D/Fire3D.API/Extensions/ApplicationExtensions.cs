@@ -28,6 +28,7 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Billing.IPayosProvider,Fire3D.Infrastructure.Billing.PayosSdkProvider>();
         services.AddScoped<Fire3D.Infrastructure.Billing.PayosExecutor>();
         services.AddScoped<Fire3D.Application.Billing.IPayosPayments,Fire3D.Infrastructure.Billing.PayosPayments>();
+        services.AddHostedService<Fire3D.Infrastructure.Workers.PayosRecoveryWorker>();
         services.AddScoped<IAdministrationStore, AdministrationStore>();
         services.AddScoped<AvatarStore>();
         services.AddScoped<IAvatarStore>(provider => provider.GetRequiredService<AvatarStore>());

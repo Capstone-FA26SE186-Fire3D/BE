@@ -89,7 +89,7 @@ internal sealed class BillingDatabase : IAsyncDisposable
     }
     public async Task ApplyPayos()
     {
-        foreach(var resource in new[]{"PayosRuntime.sql","PayosCheckout.sql","PayosWebhook.sql"})
+        foreach(var resource in new[]{"PayosRuntime.sql","PayosCheckout.sql","PayosWebhook.sql","PayosProvisioning.sql"})
         {
             using var stream=typeof(Fire3D.Infrastructure.Billing.PayosSdkProvider).Assembly.GetManifestResourceStream("Fire3D.Infrastructure.Billing."+resource);
             if(stream is null)throw new InvalidOperationException("Missing runtime migration resource: "+resource);

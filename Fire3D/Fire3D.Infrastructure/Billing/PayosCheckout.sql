@@ -1,11 +1,11 @@
-﻿ALTER TABLE billing_checkout_operations ADD COLUMN IF NOT EXISTS session_family_id uuid;
+ALTER TABLE billing_checkout_operations ADD COLUMN IF NOT EXISTS session_family_id uuid;
 CREATE OR REPLACE FUNCTION bind_payos_checkout(p_checkout uuid,p_lease uuid) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE op public.billing_checkout_operations%ROWTYPE; rid uuid;
 BEGIN
  PERFORM pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management',0));
  SELECT * INTO op FROM public.billing_checkout_operations WHERE id=p_checkout FOR UPDATE;
- IF NOT FOUND OR op.lease_token IS DISTINCT FROM p_lease OR op.lease_until<=clock_timestamp() THEN
+ IF NOT FOUND OR p_lease IS NULL OR op.lease_until IS NULL OR op.lease_token IS DISTINCT FROM p_lease OR op.lease_until<=clock_timestamp() THEN
   RAISE EXCEPTION 'PAYOS_STALE_LEASE'; END IF;
  IF op.payment_request_id IS NOT NULL THEN RETURN op.payment_request_id; END IF;
  IF op.provider_result IS NULL OR op.payment_link_id IS NULL OR op.provider_input='{}'::jsonb THEN
@@ -13,6 +13,17 @@ BEGIN
  IF NOT EXISTS(SELECT 1 FROM public.auth_refresh_tokens WHERE user_id=op.actor_id
   AND family_id=op.session_family_id AND revoked_at IS NULL AND consumed_at IS NULL AND expires_at>clock_timestamp()) THEN
   RAISE EXCEPTION 'PAYOS_SESSION_REVOKED'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.users u JOIN public.organizations o ON o.id=u.organization_id
+  JOIN public.quotations q ON q.organization_id=o.id WHERE u.id=op.actor_id AND q.id=op.quotation_id
+  AND u.is_active AND u.deleted_at IS NULL AND u.role='OrganizationUser' AND o.is_active AND o.deleted_at IS NULL) THEN
+  RAISE EXCEPTION 'PAYOS_SCOPE_UNAVAILABLE'; END IF;
+ IF EXISTS(SELECT 1 FROM public.quotations WHERE id=op.quotation_id AND (valid_until<=clock_timestamp() OR status<>'Accepted')) THEN
+  RAISE EXCEPTION 'PAYOS_QUOTATION_EXPIRED'; END IF;
+ IF EXISTS(SELECT 1 FROM public.payos_payment_requests WHERE quotation_id=op.quotation_id AND status='Paid') THEN
+  RAISE EXCEPTION 'PAYOS_QUOTATION_ALREADY_PAID'; END IF;
+ IF EXISTS(SELECT 1 FROM public.quotation_building_items qi JOIN public.buildings b ON b.id=qi.building_id
+  JOIN public.quotations q ON q.id=qi.quotation_id WHERE qi.quotation_id=op.quotation_id AND
+  (NOT b.is_active OR b.deleted_at IS NOT NULL OR b.organization_id<>q.organization_id)) THEN RAISE EXCEPTION 'PAYOS_BUILDING_UNAVAILABLE'; END IF;
  IF (op.provider_result->>'OrderCode')::bigint IS DISTINCT FROM op.order_code
   OR (op.provider_result->>'Amount')::numeric IS DISTINCT FROM (op.provider_input->>'Amount')::numeric
   OR op.provider_result->>'Currency'<>'VND'
@@ -34,7 +45,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE op public.billing_checkout_operations%ROWTYPE;
 BEGIN
  SELECT * INTO op FROM public.billing_checkout_operations WHERE id=p_checkout FOR UPDATE;
- IF NOT FOUND OR op.lease_token IS DISTINCT FROM p_lease OR op.lease_until<=clock_timestamp()
+ IF NOT FOUND OR p_lease IS NULL OR op.lease_until IS NULL OR op.lease_token IS DISTINCT FROM p_lease OR op.lease_until<=clock_timestamp()
   OR p_status NOT IN('Cancelled','Expired') OR op.provider_result->>'Status' IS DISTINCT FROM p_status
   OR coalesce((op.provider_result->>'AmountPaid')::bigint,0)<>0 THEN RAISE EXCEPTION 'PAYOS_INVALID_CANCEL'; END IF;
  IF op.payment_request_id IS NOT NULL THEN
