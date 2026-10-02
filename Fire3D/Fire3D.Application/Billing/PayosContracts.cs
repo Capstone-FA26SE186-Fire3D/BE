@@ -20,10 +20,10 @@ public sealed record PayosPaymentResponse(Guid Id,Guid QuotationId,long OrderCod
 public sealed record EntitlementResponse(Guid Id,Guid BuildingId,string Status,bool IsEffective,DateTime StartsAt,DateTime EndsAt,Guid? PaymentTransactionId);
 public interface IPayosPayments
 {
-    Task<CheckoutResult> Create(Guid actor,CreatePayosRequest request,string? key,CancellationToken ct);
+    Task<CheckoutResult> Create(Guid actor,Guid family,CreatePayosRequest request,string? key,CancellationToken ct);
     Task<PayosCheckoutResponse> Checkout(Guid actor,Guid id,CancellationToken ct);
     Task<PayosPaymentResponse> Payment(Guid actor,Guid id,CancellationToken ct);
-    Task<CheckoutResult> Cancel(Guid actor,Guid id,string? key,CancellationToken ct);
+    Task<CheckoutResult> Cancel(Guid actor,Guid family,Guid id,string? key,CancellationToken ct);
     Task Receive(JsonElement body,CancellationToken ct);
     Task Reconcile(Guid actor,Guid checkoutId,CancellationToken ct);
     Task<BillingPage<EntitlementResponse>> Entitlements(Guid actor,Guid? organizationId,Guid? buildingId,int page,int pageSize,CancellationToken ct);

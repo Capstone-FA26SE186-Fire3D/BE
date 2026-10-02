@@ -19,6 +19,7 @@ public sealed class BillingCommandReceipt
 [Table("billing_checkout_operations")]
 public sealed class BillingCheckoutOperation
 {
+    [Column("session_family_id")] public Guid? SessionFamilyId { get; set; }
     [Column("provider_input",TypeName="jsonb")] public string ProviderInput { get; set; } = "{}";
     [Column("payment_link_id")] [MaxLength(100)] public string? PaymentLinkId { get; set; }
     [Column("payment_request_id")] public Guid? PaymentRequestId { get; set; }

@@ -22,7 +22,7 @@ namespace Fire3D.AuthTests;
 
 public sealed class BillingApiTests
 {
-    private sealed class Factory(BillingDatabase database) : WebApplicationFactory<Program>
+    internal sealed class Factory(BillingDatabase database,Fire3D.Application.Billing.IPayosProvider? payos=null) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -32,10 +32,16 @@ public sealed class BillingApiTests
                 ["ConnectionStrings:DefaultConnection"]=database.Connection,
                 ["Jwt:Key"]=new string('k',64), ["Jwt:Issuer"]="billing-tests", ["Jwt:Audience"]="billing-tests",
                 ["AuthEmail:WorkerEnabled"]="false", ["AuthEmail:FrontendUrl"]="https://fet3d.io.vn",
-                ["AuthEmail:VerificationUrl"]="https://fet3d.io.vn", ["PayOS:Enabled"]="false"
+                ["AuthEmail:VerificationUrl"]="https://fet3d.io.vn", ["PayOS:Enabled"]=(payos is not null).ToString(),
+                ["PayOS:WorkerEnabled"]="false",["PayOS:ClientId"]="test-client",["PayOS:ApiKey"]="test-api",
+                ["PayOS:ChecksumKey"]="test-checksum",["PayOS:ReturnUrl"]="https://api.example.test/billing/payment-return/",
+                ["PayOS:CancelUrl"]="https://api.example.test/billing/payment-cancel/",
+                ["ConnectionStrings:PayosRequestExecutor"]=database.RequestConnection,
+                ["ConnectionStrings:PayosWebhookExecutor"]=database.WebhookConnection
             }));
             builder.ConfigureServices(services =>
             {
+                if(payos is not null){services.RemoveAll<Fire3D.Application.Billing.IPayosProvider>();services.AddSingleton(payos);}
                 services.RemoveAll<Fire3DDbContext>();
                 services.RemoveAll<DbContextOptions<Fire3DDbContext>>();
                 services.RemoveAll<IDbContextOptionsConfiguration<Fire3DDbContext>>();
@@ -60,7 +66,7 @@ public sealed class BillingApiTests
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             if(!Guid.TryParse(Request.Headers["X-Test-Actor"],out var actor)) return Task.FromResult(AuthenticateResult.NoResult());
-            var identity=new ClaimsIdentity(new[] {new Claim("sub",actor.ToString()),new Claim(ClaimTypes.Role,actor==BillingDatabase.Admin ? "PlatformAdmin":"OrganizationUser")},Scheme.Name);
+            var identity=new ClaimsIdentity(new[] {new Claim("sub",actor.ToString()),new Claim("sid",actor.ToString()),new Claim(ClaimTypes.Role,actor==BillingDatabase.Admin ? "PlatformAdmin":"OrganizationUser")},Scheme.Name);
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity),Scheme.Name)));
         }
     }

@@ -26,6 +26,8 @@ public static class ApplicationExtensions
             .Validate(options => options.PollSeconds is >= 5 and <= 300, "PayOS PollSeconds must be 5–300.")
             .ValidateOnStart();
         services.AddScoped<Fire3D.Application.Billing.IPayosProvider,Fire3D.Infrastructure.Billing.PayosSdkProvider>();
+        services.AddScoped<Fire3D.Infrastructure.Billing.PayosExecutor>();
+        services.AddScoped<Fire3D.Application.Billing.IPayosPayments,Fire3D.Infrastructure.Billing.PayosPayments>();
         services.AddScoped<IAdministrationStore, AdministrationStore>();
         services.AddScoped<AvatarStore>();
         services.AddScoped<IAvatarStore>(provider => provider.GetRequiredService<AvatarStore>());

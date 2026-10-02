@@ -22,6 +22,9 @@ internal sealed class BillingDatabase : IAsyncDisposable
     private readonly string admin;
     private readonly string name = "fet3d_billing_test_" + Guid.NewGuid().ToString("N");
     public string Connection { get; private set; } = "";
+    public string RequestConnection { get; private set; } = "";
+    public string WebhookConnection { get; private set; } = "";
+    private string requestLogin="",webhookLogin="";
     public static readonly Guid Admin = Guid.Parse("10000000-0000-0000-0000-000000000001");
     public static readonly Guid Owner = Guid.Parse("10000000-0000-0000-0000-000000000002");
     public static readonly Guid Other = Guid.Parse("10000000-0000-0000-0000-000000000003");
@@ -48,7 +51,7 @@ internal sealed class BillingDatabase : IAsyncDisposable
             await using var db = result.Context();
             Assert.Equal(result.name, db.Database.GetDbConnection().Database);
             await db.Database.EnsureCreatedAsync();
-            if (applyBilling) await result.ApplyBilling();
+            if (applyBilling) {await result.ApplyBilling();await result.ApplyPayos();}
             await result.Sql($$"""
                 INSERT INTO organizations(id,name,slug,plan,is_active,metadata,created_at,updated_at)
                 VALUES ('{{Org}}','One','one','Standard',true,'{}',now(),now()),
@@ -61,6 +64,8 @@ internal sealed class BillingDatabase : IAsyncDisposable
                 VALUES ('{{Building}}','{{Org}}','Building One',true,'{{Owner}}',now(),now());
                 INSERT INTO building_locations(building_id,address,created_at,updated_at)
                 VALUES ('{{Building}}','1 Example Street',now(),now());
+                INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at)
+                SELECT gen_random_uuid(),id,id,id::text,now(),now()+interval '1 day' FROM users;
                 """);
             return result;
         }
@@ -82,6 +87,18 @@ internal sealed class BillingDatabase : IAsyncDisposable
         foreach (var operation in new Fire3D.Infrastructure.Migrations.AddBillingCatalogRevisions().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
             await Sql(operation.Sql);
     }
+    public async Task ApplyPayos()
+    {
+        foreach(var resource in new[]{"PayosRuntime.sql","PayosCheckout.sql","PayosWebhook.sql"})
+        {
+            using var stream=typeof(Fire3D.Infrastructure.Billing.PayosSdkProvider).Assembly.GetManifestResourceStream("Fire3D.Infrastructure.Billing."+resource);
+            if(stream is not null)await Sql(new StreamReader(stream).ReadToEnd());
+        }
+        requestLogin="test_req_"+Guid.NewGuid().ToString("N");webhookLogin="test_hook_"+Guid.NewGuid().ToString("N");
+        await Sql($"CREATE ROLE {requestLogin} LOGIN NOINHERIT; CREATE ROLE {webhookLogin} LOGIN NOINHERIT; GRANT fet3d_payos_request_executor TO {requestLogin}; GRANT fet3d_payos_webhook_executor TO {webhookLogin};");
+        var settings=new NpgsqlConnectionStringBuilder(Connection){Username=requestLogin};RequestConnection=settings.ConnectionString;
+        settings.Username=webhookLogin;WebhookConnection=settings.ConnectionString;
+    }
     public async Task Sql(string sql)
     {
         await using var connection = new NpgsqlConnection(Connection);
@@ -100,5 +117,6 @@ internal sealed class BillingDatabase : IAsyncDisposable
         await using var connection = new NpgsqlConnection(admin);
         await connection.OpenAsync();
         await new NpgsqlCommand($"DROP DATABASE IF EXISTS {name} WITH (FORCE)",connection).ExecuteNonQueryAsync();
+        foreach(var role in new[]{requestLogin,webhookLogin}.Where(x=>x.Length>0))await new NpgsqlCommand($"DROP ROLE IF EXISTS {role}",connection).ExecuteNonQueryAsync();
     }
 }
