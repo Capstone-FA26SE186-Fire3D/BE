@@ -74,6 +74,9 @@ public sealed class EnterpriseQuoteRequest
 [Table("payment_provisioning_records")]
 public sealed class PaymentProvisioningRecord
 {
+    [Column("lease_token")] public Guid? LeaseToken { get; set; }
+    [Column("lease_until")] public DateTime? LeaseUntil { get; set; }
+    [Column("next_attempt_at")] public DateTime NextAttemptAt { get; set; }
     [Column("id")]
     public Guid Id { get; set; }
     [Column("payment_transaction_id")]

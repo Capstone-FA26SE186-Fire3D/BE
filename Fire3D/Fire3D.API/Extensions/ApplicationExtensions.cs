@@ -10,6 +10,7 @@ namespace Fire3D.API.Extensions;
 
 public static class ApplicationExtensions
 {
+    private static bool PayosHttps(string value)=>Uri.TryCreate(value,UriKind.Absolute,out var uri) && uri.Scheme=="https" && !uri.IsLoopback && string.IsNullOrEmpty(uri.UserInfo);
     public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton(configuration);
@@ -17,8 +18,14 @@ public static class ApplicationExtensions
         services.AddExceptionHandler<BillingExceptionHandler>();
         services.AddOptions<Fire3D.Application.Billing.PayosOptions>()
             .Bind(configuration.GetSection(Fire3D.Application.Billing.PayosOptions.Section))
-            .Validate(options => !options.Enabled, "PayOS checkout is not implemented yet. Keep PayOS:Enabled=false until the checkout/webhook task is deployed.")
+            .Validate(options => !(options.Enabled || options.WorkerEnabled) ||
+                (!string.IsNullOrWhiteSpace(options.ClientId) && !string.IsNullOrWhiteSpace(options.ApiKey) && !string.IsNullOrWhiteSpace(options.ChecksumKey)), "PayOS requires ClientId, ApiKey and ChecksumKey when checkout or recovery is enabled.")
+            .Validate(options => !options.Enabled || (PayosHttps(options.ReturnUrl) && PayosHttps(options.CancelUrl)), "PayOS ReturnUrl and CancelUrl must be absolute non-loopback HTTPS URLs.")
+            .Validate(options => !(options.Enabled || options.WorkerEnabled) ||
+                (!string.IsNullOrWhiteSpace(configuration.GetConnectionString("PayosRequestExecutor")) && !string.IsNullOrWhiteSpace(configuration.GetConnectionString("PayosWebhookExecutor"))), "PayOS requires separate least-privilege request and webhook executor connections.")
+            .Validate(options => options.PollSeconds is >= 5 and <= 300, "PayOS PollSeconds must be 5–300.")
             .ValidateOnStart();
+        services.AddScoped<Fire3D.Application.Billing.IPayosProvider,Fire3D.Infrastructure.Billing.PayosSdkProvider>();
         services.AddScoped<IAdministrationStore, AdministrationStore>();
         services.AddScoped<AvatarStore>();
         services.AddScoped<IAvatarStore>(provider => provider.GetRequiredService<AvatarStore>());

@@ -19,6 +19,14 @@ public sealed class BillingCommandReceipt
 [Table("billing_checkout_operations")]
 public sealed class BillingCheckoutOperation
 {
+    [Column("provider_input",TypeName="jsonb")] public string ProviderInput { get; set; } = "{}";
+    [Column("payment_link_id")] [MaxLength(100)] public string? PaymentLinkId { get; set; }
+    [Column("payment_request_id")] public Guid? PaymentRequestId { get; set; }
+    [Column("expires_at")] public DateTime? ExpiresAt { get; set; }
+    [Column("attempts")] public int Attempts { get; set; }
+    [Column("next_attempt_at")] public DateTime NextAttemptAt { get; set; }
+    [Column("last_error")] [MaxLength(80)] public string? LastError { get; set; }
+    [Column("cancel_requested")] public bool CancelRequested { get; set; }
     [Column("id")] public Guid Id { get; set; }
     [Column("quotation_id")] public Guid QuotationId { get; set; }
     [Column("actor_id")] public Guid ActorId { get; set; }
@@ -36,6 +44,8 @@ public sealed class BillingCheckoutOperation
 [Table("payos_webhook_inbox")]
 public sealed class PayosWebhookInboxEntry
 {
+    [Column("last_error")] [MaxLength(80)] public string? LastError { get; set; }
+    [Column("processed_at")] public DateTime? ProcessedAt { get; set; }
     [Column("id")] public Guid Id { get; set; }
     [Column("event_key")] [MaxLength(255)] public string EventKey { get; set; } = "";
     [Column("input_hash")] [MaxLength(64)] public string InputHash { get; set; } = "";

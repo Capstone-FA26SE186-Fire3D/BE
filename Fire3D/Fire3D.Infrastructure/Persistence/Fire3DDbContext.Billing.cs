@@ -7,6 +7,11 @@ public partial class Fire3DDbContext
 {
     private static void ConfigureBilling(ModelBuilder model)
     {
+        model.Entity<PayosPaymentRequest>().Property(x=>x.PaymentLinkId).HasColumnName("payment_link_id").HasMaxLength(100);
+        model.Entity<PayosPaymentRequest>().HasIndex(x=>x.PaymentLinkId).IsUnique();
+        model.Entity<BillingCheckoutOperation>().Property(x=>x.ProviderInput).HasDefaultValueSql("'{}'::jsonb");
+        model.Entity<BillingCheckoutOperation>().Property(x=>x.NextAttemptAt).HasDefaultValueSql("now()");
+        model.Entity<PaymentProvisioningRecord>().Property(x=>x.NextAttemptAt).HasDefaultValueSql("now()");
         model.Entity<ServicePackage>().Property(x=>x.Revision).HasColumnName("revision").HasDefaultValue(1L).IsConcurrencyToken();
         model.Entity<ServicePackageDiscountRule>().Property(x=>x.Revision).HasDefaultValue(1L).IsConcurrencyToken();
         model.Entity<Quotation>(e =>

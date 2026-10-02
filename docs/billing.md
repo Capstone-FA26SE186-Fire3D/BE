@@ -67,6 +67,14 @@ Lỗi nghiệp vụ dùng ProblemDetails với `code`, `errors` theo field nếu
 
 ## Verification
 
+### PayOS runtime foundation (Task 1)
+
+SDK `payOS` pinned to 2.1.0 behind `IPayosProvider`. Create/Get/Cancel responses use the SDK's signature verification, timeout15s and no automatic retries. Webhook verification is offline; unknown/duplicate JSON fields are rejected to avoid silently dropping signed data.
+
+Additive migrations AddPayosRuntime + SyncPayosRuntimeModel persist provider input before calls, request/payment-link binding, retry/lease metadata and a bounded unique order-code sequence. Runtime connections `ConnectionStrings:PayosRequestExecutor` and `ConnectionStrings:PayosWebhookExecutor` are mandatory when checkout/recovery is enabled. Credentials belong in deployment secrets, never source. `PayOS:WorkerEnabled` is independent from `Enabled`; both default false until complete runtime is deployed. Callback URLs must be non-loopback HTTPS.
+
+Task1 verified six offline/config/PostgreSQL tests using disposable loopback database. Supabase runtime migration and live provider calls are not performed by those tests. Checkout/webhook endpoints are delivered in subsequent tasks.
+
 Billing tests opt in through `FET3D_BILLING_TEST_ADMIN`, accept only a loopback PostgreSQL host and the `postgres` admin database, and create/drop a dedicated `fet3d_billing_test_*` database for each test. They never read application settings or User Secrets. Tests execute the real additive migration on a model-created relational baseline; this does not certify the full historical migration chain or production grants.
 
 Example: `FET3D_BILLING_TEST_ADMIN=Host=127.0.0.1;Port=<disposable-port>;Database=postgres;Username=<test-admin>` followed by `dotnet test Fire3D/Fire3D.AuthTests --filter FullyQualifiedName~Billing`.
