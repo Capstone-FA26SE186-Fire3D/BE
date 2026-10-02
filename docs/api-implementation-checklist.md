@@ -97,13 +97,13 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 
 ## D. Billing, notification, AI, Learn và báo cáo
 
-### BILLING-01 — P1 · LATER · PayOS và entitlement Building
+### BILLING-01 — P1 · CODE/TEST · PayOS và entitlement Building
 
-- **✅ Có code:** Migration additive, catalog package/discount, quotation nhiều Building Draft → Issued → Accepted với immutable snapshot, ETag, receipt và audit atomic; enterprise contact request. SQL payment gate/grants và recovery storage là nền tảng, chưa phải luồng provider. Contract/test tay tại [billing.md](billing.md).
-- **Kiểm chứng:** HTTP với authentication fixture + PostgreSQL cô lập: tenant/quyền, create/accept cạnh tranh, snapshot, discount/rounding, replay và rollback. Không chứng minh toàn chuỗi migration lịch sử, JWT deployment hoặc provider production.
-- **❌ Còn thiếu:** Checkout/verified-webhook adapter runtime, cấp/gia hạn entitlement từng Building, reconcile provisioning từng dòng và reminder. Chưa áp Supabase; chưa tick publish/playtest chỉ vì có storage.
-- **Nghiệm thu:** Không cấp quyền từ return URL; webhook lặp/đến trễ/sai amount không ghi trùng; retry từng dòng không nhân đôi; kỳ từng Building độc lập.
-
+- **✅ Có code:** Catalog/quotation Draft → Issued → Accepted; SDK payOS2.1.0, checkout idempotent, provider-confirmed cancel, verified durable inbox, ledger/provisioning atomic, cấp/gia hạn từng Building, lease/retry/reconcile, API trạng thái và entitlement. Trang return/cancel chỉ điều hướng. Contract/test tay tại [billing.md](billing.md).
+- **✅ Kiểm chứng tự động:** SDK chữ ký offline, HTTP authorization/OpenAPI, PostgreSQL disposable cho replay/race/rollback/partial recovery, UTC month-end và grants executor. Kết quả cuối đợt ghi trong billing.md; không coi test mock là provider acceptance.
+- **❌ Chưa nghiệm thu:** Migration runtime và login grants trên Supabase, đăng ký webhook/probe PayOS, giao dịch thật với bank/provider và kiểm entitlement deployed. Không tick publish/playtest/training gate từ entitlement storage.
+- **❌ Backlog riêng:** Reminder 5 ngày, revenue, AI settlement, hoàn tiền tự động, eInvoice và FE billing đầy đủ.
+- **Nghiệm thu:** Return URL không ghi Paid; amount/currency/link sai không được apply; webhook/recovery/replay không cấp trùng; cùng payment có mốc kích hoạt chung, renewal nối kỳ đã mua; Paid và provisioning riêng biệt.
 ### NOTIFY-01 — P1 · LATER · Nhắc hết hạn
 
 - **Contract/current:** Mailgun hiện phục vụ reset; reminder dịch vụ chưa có. Docs yêu cầu web/email trước 5 ngày.

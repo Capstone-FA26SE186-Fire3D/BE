@@ -25,13 +25,16 @@ public sealed class PayosExecutor(IConfiguration configuration)
         await using(var check=new NpgsqlCommand("""
             SELECT NOT (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb)
              AND pg_has_role(current_user,@role,'MEMBER')
+             AND NOT pg_has_role(current_user,@other,'MEMBER')
              AND NOT pg_has_role(current_user,'fet3d_payos_ledger_owner','MEMBER')
              AND NOT has_table_privilege(current_user,'public.payos_payment_requests','INSERT,UPDATE,DELETE')
              AND NOT has_table_privilege(current_user,'public.payment_transactions','INSERT,UPDATE,DELETE')
+             AND NOT has_table_privilege(current_user,'public.service_entitlements','INSERT,UPDATE,DELETE')
             FROM pg_roles WHERE rolname=current_user
             """,connection))
         {
             check.Parameters.AddWithValue("role",role);
+            check.Parameters.AddWithValue("other",webhook?"fet3d_payos_request_executor":"fet3d_payos_webhook_executor");
             if(!Equals(await check.ExecuteScalarAsync(ct),true))throw new InvalidOperationException("Unsafe PayOS executor privileges.");
         }
         await using var transaction=await connection.BeginTransactionAsync(ct);

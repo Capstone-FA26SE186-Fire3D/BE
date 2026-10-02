@@ -19,7 +19,7 @@ BEGIN
  SELECT * INTO req FROM public.payos_payment_requests WHERE id=op.payment_request_id FOR UPDATE;
  IF NOT FOUND THEN
   UPDATE public.payos_webhook_inbox SET status='NeedsReconcile',last_error='PAYOS_AWAITING_BIND',lease_token=NULL,lease_until=NULL,
-   next_attempt_at=clock_timestamp()+interval '30 seconds' WHERE id=ev.id;RETURN NULL;
+   next_attempt_at=clock_timestamp()+make_interval(secs=>least(1800,30*power(2,least(ev.attempts-1,6)))::double precision) WHERE id=ev.id;RETURN NULL;
  END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended('fet3d:payos:reference:'||(ev.payload->>'Reference'),0));
  SELECT * INTO old FROM public.payment_transactions WHERE provider_transaction_id=ev.payload->>'Reference';

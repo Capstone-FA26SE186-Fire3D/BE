@@ -10,7 +10,7 @@ public sealed class BillingOperationTransformer : IOpenApiOperationTransformer
     public Task TransformAsync(OpenApiOperation operation,OpenApiOperationTransformerContext context,CancellationToken ct)
     {
         if(context.Description.ActionDescriptor is ControllerActionDescriptor action
-            && action.ControllerTypeInfo.AsType()==typeof(BillingController))
+            && (action.ControllerTypeInfo.AsType()==typeof(BillingController)||action.ControllerTypeInfo.AsType()==typeof(PayosController)))
             foreach(var parameter in operation.Parameters ?? [])
                 if(parameter is OpenApiParameter header && header.In==ParameterLocation.Header
                     && header.Name is "If-Match" or "Idempotency-Key")

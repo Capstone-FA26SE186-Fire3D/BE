@@ -25,6 +25,7 @@ internal sealed class BillingDatabase : IAsyncDisposable
     public string RequestConnection { get; private set; } = "";
     public string WebhookConnection { get; private set; } = "";
     private string requestLogin="",webhookLogin="";
+    private string migrationLogin="";
     public static readonly Guid Admin = Guid.Parse("10000000-0000-0000-0000-000000000001");
     public static readonly Guid Owner = Guid.Parse("10000000-0000-0000-0000-000000000002");
     public static readonly Guid Other = Guid.Parse("10000000-0000-0000-0000-000000000003");
@@ -100,6 +101,35 @@ internal sealed class BillingDatabase : IAsyncDisposable
         var settings=new NpgsqlConnectionStringBuilder(Connection){Username=requestLogin};RequestConnection=settings.ConnectionString;
         settings.Username=webhookLogin;WebhookConnection=settings.ConnectionString;
     }
+    public async Task ApplyPayosAsRestrictedMigration()
+    {
+        migrationLogin="test_migration_"+Guid.NewGuid().ToString("N");
+        await Sql($$"""
+            CREATE ROLE {{migrationLogin}} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+            GRANT fet3d_payos_ledger_owner TO {{migrationLogin}};
+            GRANT USAGE,CREATE ON SCHEMA public TO {{migrationLogin}};
+            ALTER SCHEMA public OWNER TO {{migrationLogin}};
+            DO $transfer$ DECLARE obj record; BEGIN
+              FOR obj IN SELECT relname FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind='r'
+                AND relname NOT IN('payment_transactions','payos_payment_requests') LOOP
+                EXECUTE format('ALTER TABLE public.%I OWNER TO {{migrationLogin}}',obj.relname);
+              END LOOP;
+              FOR obj IN SELECT p.oid::regprocedure signature FROM pg_proc p WHERE p.pronamespace='public'::regnamespace
+                AND p.proowner<>(SELECT oid FROM pg_roles WHERE rolname='fet3d_payos_ledger_owner')
+                AND NOT EXISTS(SELECT 1 FROM pg_depend d WHERE d.classid='pg_proc'::regclass AND d.objid=p.oid AND d.deptype='e') LOOP
+                EXECUTE format('ALTER FUNCTION %s OWNER TO {{migrationLogin}}',obj.signature);
+              END LOOP;
+            END $transfer$;
+            """);
+        await using var connection=new NpgsqlConnection(new NpgsqlConnectionStringBuilder(Connection){Username=migrationLogin}.ConnectionString);
+        await connection.OpenAsync();await using var tx=await connection.BeginTransactionAsync();
+        foreach(var resource in new[]{"PayosRuntime.sql","PayosCheckout.sql","PayosWebhook.sql","PayosProvisioning.sql"})
+        {
+            using var stream=typeof(Fire3D.Infrastructure.Billing.PayosSdkProvider).Assembly.GetManifestResourceStream("Fire3D.Infrastructure.Billing."+resource)!;
+            await new NpgsqlCommand(new StreamReader(stream).ReadToEnd(),connection,tx).ExecuteNonQueryAsync();
+        }
+        await tx.CommitAsync();
+    }
     public async Task Sql(string sql)
     {
         await using var connection = new NpgsqlConnection(Connection);
@@ -118,6 +148,6 @@ internal sealed class BillingDatabase : IAsyncDisposable
         await using var connection = new NpgsqlConnection(admin);
         await connection.OpenAsync();
         await new NpgsqlCommand($"DROP DATABASE IF EXISTS {name} WITH (FORCE)",connection).ExecuteNonQueryAsync();
-        foreach(var role in new[]{requestLogin,webhookLogin}.Where(x=>x.Length>0))await new NpgsqlCommand($"DROP ROLE IF EXISTS {role}",connection).ExecuteNonQueryAsync();
+        foreach(var role in new[]{requestLogin,webhookLogin,migrationLogin}.Where(x=>x.Length>0))await new NpgsqlCommand($"DROP ROLE IF EXISTS {role}",connection).ExecuteNonQueryAsync();
     }
 }

@@ -7,6 +7,27 @@ namespace Fire3D.AuthTests;
 public sealed class PayosWebhookTests
 {
     [BillingPostgresFact]
+    public async Task Lost_create_response_can_bind_a_paid_link_without_treating_provider_get_as_a_webhook()
+    {
+        await using var db=await BillingDatabase.Create();var quote=await PayosCheckoutTests.Accepted(db);
+        var fake=new FakePayos{LoseCreateResponse=true};using var factory=new BillingApiTests.Factory(db,fake);
+        using var owner=factory.As(BillingDatabase.Owner);using var anonymous=factory.CreateClient();
+        var created=await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(quote)));
+        var order=created.GetProperty("orderCode").GetInt64();
+        fake.Links[order]=fake.Links[order] with {Status="Paid",AmountPaid=2000};
+        await db.Sql("UPDATE billing_checkout_operations SET next_attempt_at=now()");await Recover(factory,db);
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payos_payment_requests WHERE status='Pending'"));
+        Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM payment_transactions"));
+        Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
+        Assert.Equal(HttpStatusCode.OK,(await anonymous.PostAsJsonAsync("/api/payments/payos/webhook",
+            new VerifiedPayosEvent(order,2000,"VND","link"+order,"paid-before-bind","2026-10-02 18:00:00"))).StatusCode);
+        await Recover(factory,db);
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payment_transactions WHERE status='Applied'"));
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
+        Assert.Equal(1,fake.Creates);
+    }
+
+    [BillingPostgresFact]
     public async Task Audit_failure_rolls_back_ledger_and_parallel_retries_apply_once()
     {
         await using var db=await BillingDatabase.Create();var quote=await PayosCheckoutTests.Accepted(db);var fake=new FakePayos();

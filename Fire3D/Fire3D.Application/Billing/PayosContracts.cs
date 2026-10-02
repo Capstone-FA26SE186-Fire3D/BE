@@ -2,7 +2,7 @@ using System.Text.Json;
 namespace Fire3D.Application.Billing;
 public sealed record PayosCreateInput(long OrderCode,long Amount,string Description,string ReturnUrl,string CancelUrl,DateTime ExpiresAt);
 public sealed record PayosLink(long OrderCode,long Amount,string Currency,string PaymentLinkId,string Status,string? CheckoutUrl=null,string? QrCode=null,long AmountPaid=0);
-public sealed record VerifiedPayosEvent(long OrderCode,long Amount,string Currency,string PaymentLinkId,string Reference,string TransactionDateTime);
+public sealed record VerifiedPayosEvent(long OrderCode,long Amount,string Currency,string PaymentLinkId,string Reference,string TransactionDateTime,string? SignedDataHash=null);
 public interface IPayosProvider
 {
     Task<PayosLink> Create(PayosCreateInput input,CancellationToken ct);

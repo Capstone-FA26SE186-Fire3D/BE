@@ -5,6 +5,28 @@ using Xunit;
 namespace Fire3D.AuthTests;
 public sealed class PayosProvisioningTests
 {
+    [BillingPostgresFact]
+    public async Task Admin_can_recover_expired_pending_inbox_and_provisioning_claims_at_attempt_limit()
+    {
+        await using var db=await BillingDatabase.Create();var quote=await PayosCheckoutTests.Accepted(db);
+        using var factory=new BillingApiTests.Factory(db,new FakePayos());using var admin=factory.As(BillingDatabase.Admin);
+        var checkout=await Paid(factory,quote,"interrupted");var id=checkout.GetProperty("checkoutId").GetGuid();
+        // Durable state left by a crash after the tenth claim, before applying the inbox.
+        await db.Sql("UPDATE payos_webhook_inbox SET status='Pending',attempts=10,lease_token=gen_random_uuid(),lease_until=now()-interval '1 second'");
+        await db.Sql("CREATE FUNCTION fail_recovery_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.target_entity='service_entitlements' THEN RAISE EXCEPTION 'test interrupted provisioning'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_recovery BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION fail_recovery_audit()");
+        Assert.Equal(HttpStatusCode.Accepted,(await admin.PostAsync($"/api/admin/payments/payos/checkouts/{id}/reconcile",null)).StatusCode);
+        await PayosWebhookTests.Recover(factory,db);
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payment_transactions WHERE status='Applied'"));
+        Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
+        // Simulate the same interruption on the provisioning queue. Never redo Applied money.
+        await db.Sql("DROP TRIGGER fail_recovery ON audit_logs; UPDATE payment_provisioning_records SET status='Pending',attempts=10,lease_token=gen_random_uuid(),lease_until=now()-interval '1 second'");
+        Assert.Equal(HttpStatusCode.Accepted,(await admin.PostAsync($"/api/admin/payments/payos/checkouts/{id}/reconcile",null)).StatusCode);
+        await PayosWebhookTests.Recover(factory,db);
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payment_transactions WHERE status='Applied'"));
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payment_provisioning_records WHERE status='Succeeded'"));
+    }
+
     [Theory]
     [InlineData("2026-01-31T23:30:00Z",null,"2026-02-28T23:30:00Z")]
     [InlineData("2024-01-31T23:30:00Z",null,"2024-02-29T23:30:00Z")]

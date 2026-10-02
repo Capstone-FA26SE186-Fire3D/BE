@@ -37,12 +37,12 @@ public sealed partial class PayosPayments
         var op=await db.Set<BillingCheckoutOperation>().AsNoTracking().SingleOrDefaultAsync(x=>x.Id==id,ct)??throw Missing();
         if(op.Status is "Creating" or "Ready" or "NeedsReconcile")
             await db.Set<BillingCheckoutOperation>().Where(x=>x.Id==id&&(x.LeaseUntil==null||x.LeaseUntil<=Now)).ExecuteUpdateAsync(s=>s.SetProperty(x=>x.Attempts,0).SetProperty(x=>x.NextAttemptAt,Now),ct);
-        await db.Set<PayosWebhookInboxEntry>().Where(x=>x.OrderCode==op.OrderCode&&x.Status=="NeedsReconcile"&&(x.LeaseUntil==null||x.LeaseUntil<=Now))
+        await db.Set<PayosWebhookInboxEntry>().Where(x=>x.OrderCode==op.OrderCode&&(x.Status=="NeedsReconcile"||x.Status=="Pending"&&x.Attempts>=10)&&(x.LeaseUntil==null||x.LeaseUntil<=Now))
             .ExecuteUpdateAsync(s=>s.SetProperty(x=>x.Attempts,0).SetProperty(x=>x.NextAttemptAt,Now),ct);
         if(op.PaymentRequestId.HasValue)
         {
             var paid=await db.PayosPaymentRequests.Where(x=>x.Id==op.PaymentRequestId).Select(x=>x.PaidTransactionId).SingleAsync(ct);
-            if(paid.HasValue)await db.Set<PaymentProvisioningRecord>().Where(x=>x.PaymentTransactionId==paid&&x.Status=="NeedsReconcile"&&(x.LeaseUntil==null||x.LeaseUntil<=Now))
+            if(paid.HasValue)await db.Set<PaymentProvisioningRecord>().Where(x=>x.PaymentTransactionId==paid&&(x.Status=="NeedsReconcile"||x.Status=="Pending"&&x.Attempts>=10)&&(x.LeaseUntil==null||x.LeaseUntil<=Now))
                 .ExecuteUpdateAsync(s=>s.SetProperty(x=>x.Attempts,0).SetProperty(x=>x.NextAttemptAt,Now),ct);
         }
         var organization=await db.Quotations.Where(x=>x.Id==op.QuotationId).Select(x=>x.OrganizationId).SingleAsync(ct);

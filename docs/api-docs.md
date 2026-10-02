@@ -2,7 +2,7 @@
 
 Cập nhật **23/09/2026** theo source BE `main` tại `946017d`, gồm release lifecycle, editor preview và annotations. Đây là mô tả API source hiện có, không phải danh sách đầy đủ contract sản phẩm.
 
-Các phần dưới có baseline lịch sử riêng; không dùng số endpoint cũ để suy mức hoàn thiện hiện tại. Bổ sung **02/10/2026**: catalog, quotation Building và enterprise contact request tại [billing.md](billing.md), gồm route/quyền, If-Match, Idempotency-Key, ví dụ và giới hạn checkout chưa triển khai. Đối chiếu OpenAPI/source và [implementation checklist](api-implementation-checklist.md) khi tích hợp; endpoint tồn tại không chứng minh provider đã hoạt động.
+Các phần dưới có baseline lịch sử riêng; không dùng số endpoint cũ để suy mức hoàn thiện hiện tại. Bổ sung **02/10/2026**: catalog, quotation Building và enterprise contact request tại [billing.md](billing.md), gồm route/quyền, If-Match, Idempotency-Key, ví dụ và luồng checkout PayOS, webhook, entitlement/reconcile đã có code/test. Migration runtime Supabase và giao dịch thật chưa nghiệm thu trong lượt này. Đối chiếu OpenAPI/source và [implementation checklist](api-implementation-checklist.md) khi tích hợp; endpoint tồn tại không chứng minh provider đã hoạt động.
 
 ## 1. Quy ước tích hợp
 

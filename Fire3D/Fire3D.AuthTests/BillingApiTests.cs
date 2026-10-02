@@ -205,7 +205,7 @@ public sealed class BillingApiTests
         edit.Headers.Add("If-Match",current.Headers.ETag!.ToString());Assert.Equal(HttpStatusCode.OK,(await admin.SendAsync(edit)).StatusCode);
         HttpRequestMessage Accept(){var r=new HttpRequestMessage(HttpMethod.Post,$"/api/billing/quotations/{id}/accept");r.Headers.Add("If-Match",issued.Headers.ETag!.ToString());return r;}
         var results=await Task.WhenAll(owner.SendAsync(Accept()),owner.SendAsync(Accept()));
-        Assert.Single(results.Where(x=>x.StatusCode==HttpStatusCode.OK));Assert.Single(results.Where(x=>x.StatusCode==HttpStatusCode.PreconditionFailed));
+        Assert.Single(results,x=>x.StatusCode==HttpStatusCode.OK);Assert.Single(results,x=>x.StatusCode==HttpStatusCode.PreconditionFailed);
         var final=await Body(await owner.GetAsync($"/api/billing/quotations/{id}"));Assert.Equal(100,final.GetProperty("totalAmount").GetDecimal());
         Assert.Equal("Monthly Building",final.GetProperty("items")[0].GetProperty("packageName").GetString());
         Assert.Equal(1L,await database.Scalar($"SELECT count(*) FROM audit_logs WHERE target_id='{id}' AND new_values->>'status'='Accepted'"));

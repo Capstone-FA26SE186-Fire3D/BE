@@ -55,6 +55,7 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
     public async Task<CheckoutResult> Create(Guid actorId,Guid family,CreatePayosRequest request,string? key,CancellationToken ct)
     {
         if(!options.Value.Enabled)throw new BillingException(503,"PAYOS_DISABLED","Payment checkout is disabled.");
+        if(request.QuotationId==Guid.Empty)throw new BillingException(400,"PAYOS_QUOTATION_REQUIRED","A quotationId is required.",new(){{"quotationId",["Use the Accepted quotation ID."]}});
         var idempotency=Key(key);var hash=Hash(request);BillingCheckoutOperation op;
         await using(var tx=await db.Database.BeginTransactionAsync(ct))
         {
@@ -124,7 +125,17 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
             if(await db.Set<BillingCheckoutOperation>().Where(x=>x.Id==op.Id&&x.LeaseToken==lease&&x.LeaseUntil>Now)
                 .ExecuteUpdateAsync(s=>s.SetProperty(x=>x.ProviderResult,JsonSerializer.Serialize(link)).SetProperty(x=>x.PaymentLinkId,link.PaymentLinkId).SetProperty(x=>x.UpdatedAt,Now),ct)!=1)return;
             if(link.Status=="Paid"||link.AmountPaid>0)
-            {await Failure(op,lease,"PAYOS_AWAITING_VERIFIED_WEBHOOK",false,ct);return;}
+            {
+                // A lost create response can leave a fully paid provider link unbound.
+                // Bind only the verified reservation; the inbox remains the sole financial authority.
+                if(!op.PaymentRequestId.HasValue&&link.Status=="Paid"&&link.AmountPaid==input.Amount)
+                {
+                    if(!await Renew(op.Id,lease,ct))return;
+                    await executor.Run(false,"SELECT bind_payos_checkout(@id,@lease)",ct,("id",op.Id),("lease",lease));
+                }
+                else await Failure(op,lease,"PAYOS_AWAITING_VERIFIED_WEBHOOK",false,ct);
+                return;
+            }
             if(op.CancelRequested&&link.Status is not ("Cancelled" or "Expired"))
             {
                 if(!await Renew(op.Id,lease,ct))return;var previous=link;
@@ -144,7 +155,15 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
         catch(OperationCanceledException) when(ct.IsCancellationRequested){throw;}
         catch(Exception ex)
         {
-            var code=ex is BillingException billing?billing.Code:ex is Npgsql.PostgresException pg?(pg.MessageText.StartsWith("PAYOS_")?pg.MessageText:"PAYOS_DATABASE_"+pg.SqlState):"PAYOS_PROVIDER_UNAVAILABLE";
+            var code=ex switch
+            {
+                BillingException billing=>billing.Code,
+                Npgsql.PostgresException pg=>pg.MessageText.StartsWith("PAYOS_")?pg.MessageText:"PAYOS_DATABASE_"+pg.SqlState,
+                PayOS.Exceptions.ConnectionTimeoutException or TimeoutException=>"PAYOS_PROVIDER_TIMEOUT",
+                PayOS.Exceptions.ApiException api=>$"PAYOS_PROVIDER_HTTP_{api.StatusCode??0}",
+                PayOS.Exceptions.InvalidSignatureException=>"PAYOS_RESPONSE_SIGNATURE_INVALID",
+                _=>"PAYOS_PROVIDER_UNAVAILABLE"
+            };
             logger.LogWarning("PayOS checkout {CheckoutId} attempt {Attempt} failed with {Code}",op.Id,op.Attempts,code);
             await Failure(op,lease,code,code is "PAYOS_SESSION_REVOKED" or "PAYOS_PROVIDER_MISMATCH" or "PAYOS_SCOPE_UNAVAILABLE" or "PAYOS_QUOTATION_EXPIRED" or "PAYOS_QUOTATION_ALREADY_PAID" or "PAYOS_BUILDING_UNAVAILABLE",ct);
         }

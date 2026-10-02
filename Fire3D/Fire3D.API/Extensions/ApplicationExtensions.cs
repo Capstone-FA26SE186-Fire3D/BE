@@ -26,6 +26,7 @@ public static class ApplicationExtensions
             .Validate(options => options.PollSeconds is >= 5 and <= 300, "PayOS PollSeconds must be 5–300.")
             .ValidateOnStart();
         services.AddScoped<Fire3D.Application.Billing.IPayosProvider,Fire3D.Infrastructure.Billing.PayosSdkProvider>();
+        services.AddHttpClient("fet3d-payos");
         services.AddScoped<Fire3D.Infrastructure.Billing.PayosExecutor>();
         services.AddScoped<Fire3D.Application.Billing.IPayosPayments,Fire3D.Infrastructure.Billing.PayosPayments>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.PayosRecoveryWorker>();

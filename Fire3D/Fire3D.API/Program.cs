@@ -93,7 +93,7 @@ app.UseForwardedHeaders();
 // Configure the HTTP request pipeline.
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/verify-email") || context.Request.Path.StartsWithSegments("/check-email"))
+    if (context.Request.Path.StartsWithSegments("/verify-email") || context.Request.Path.StartsWithSegments("/check-email") || context.Request.Path.StartsWithSegments("/billing"))
     {
         context.Response.Headers.CacheControl = "no-store, max-age=0";
         context.Response.Headers.Pragma = "no-cache";
