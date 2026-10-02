@@ -33,7 +33,7 @@ internal sealed class BillingDatabase : IAsyncDisposable
     public static readonly Guid Building = Guid.Parse("30000000-0000-0000-0000-000000000001");
 
     private BillingDatabase(string admin) => this.admin = admin;
-    public static async Task<BillingDatabase> Create(bool applyBilling = true)
+    public static async Task<BillingDatabase> Create(bool applyBilling = true,bool applyPayos = true)
     {
         var source = Environment.GetEnvironmentVariable("FET3D_BILLING_TEST_ADMIN")
             ?? throw new InvalidOperationException("An explicit test connection is required.");
@@ -51,7 +51,7 @@ internal sealed class BillingDatabase : IAsyncDisposable
             await using var db = result.Context();
             Assert.Equal(result.name, db.Database.GetDbConnection().Database);
             await db.Database.EnsureCreatedAsync();
-            if (applyBilling) {await result.ApplyBilling();await result.ApplyPayos();}
+            if (applyBilling) {await result.ApplyBilling();if(applyPayos)await result.ApplyPayos();}
             await result.Sql($$"""
                 INSERT INTO organizations(id,name,slug,plan,is_active,metadata,created_at,updated_at)
                 VALUES ('{{Org}}','One','one','Standard',true,'{}',now(),now()),
@@ -92,7 +92,8 @@ internal sealed class BillingDatabase : IAsyncDisposable
         foreach(var resource in new[]{"PayosRuntime.sql","PayosCheckout.sql","PayosWebhook.sql"})
         {
             using var stream=typeof(Fire3D.Infrastructure.Billing.PayosSdkProvider).Assembly.GetManifestResourceStream("Fire3D.Infrastructure.Billing."+resource);
-            if(stream is not null)await Sql(new StreamReader(stream).ReadToEnd());
+            if(stream is null)throw new InvalidOperationException("Missing runtime migration resource: "+resource);
+            await Sql(new StreamReader(stream).ReadToEnd());
         }
         requestLogin="test_req_"+Guid.NewGuid().ToString("N");webhookLogin="test_hook_"+Guid.NewGuid().ToString("N");
         await Sql($"CREATE ROLE {requestLogin} LOGIN NOINHERIT; CREATE ROLE {webhookLogin} LOGIN NOINHERIT; GRANT fet3d_payos_request_executor TO {requestLogin}; GRANT fet3d_payos_webhook_executor TO {webhookLogin};");

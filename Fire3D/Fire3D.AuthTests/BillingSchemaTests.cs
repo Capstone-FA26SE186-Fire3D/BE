@@ -8,7 +8,8 @@ public sealed class BillingSchemaTests
     [BillingPostgresFact]
     public async Task Payment_gates_derive_amount_reject_mismatch_and_apply_duplicate_once()
     {
-        await using var fixture = await BillingDatabase.Create();
+        // Historical foundation gate test. Current runtime revokes this primitive in favor of verified inbox gates.
+        await using var fixture = await BillingDatabase.Create(applyPayos:false);
         await fixture.Sql($$"""
             INSERT INTO service_packages(id,code,name,unit_price,currency,duration_months,features,is_active,created_by,created_at,updated_at)
             VALUES ('40000000-0000-0000-0000-000000000009','GATE','Package',100,'VND',1,'{}',true,'{{BillingDatabase.Admin}}',now(),now());

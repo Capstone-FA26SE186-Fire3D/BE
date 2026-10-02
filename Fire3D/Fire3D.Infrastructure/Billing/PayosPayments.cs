@@ -161,13 +161,13 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
         foreach(var id in ids)
         {
             var nonce=Guid.NewGuid();var now=Now;
-            if(await db.Set<BillingCheckoutOperation>().Where(x=>x.Id==id&&x.Attempts<10&&(x.LeaseUntil==null||x.LeaseUntil<=now))
+            if(await db.Set<BillingCheckoutOperation>().Where(x=>x.Id==id&&(x.Status=="Creating"||x.Status=="NeedsReconcile"||x.Status=="Ready")&&x.NextAttemptAt<=now&&x.Attempts<10&&(x.LeaseUntil==null||x.LeaseUntil<=now))
                 .ExecuteUpdateAsync(s=>s.SetProperty(x=>x.LeaseToken,nonce).SetProperty(x=>x.LeaseUntil,now.AddSeconds(60)).SetProperty(x=>x.Attempts,x=>x.Attempts+1),ct)!=1)continue;
             var op=await db.Set<BillingCheckoutOperation>().AsNoTracking().SingleAsync(x=>x.Id==id,ct);
             await RunCheckout(op,false,ct);
         }
+        await RecoverInbox(ct);
     }
-    public Task Receive(JsonElement body,CancellationToken ct)=>throw new BillingException(503,"PAYOS_WEBHOOK_UNAVAILABLE","Webhook processing is not enabled in this task.");
     public Task<PayosPaymentResponse> Payment(Guid actor,Guid id,CancellationToken ct)=>throw Missing();
     public Task Reconcile(Guid actor,Guid id,CancellationToken ct)=>throw new BillingException(503,"PAYOS_RECOVERY_UNAVAILABLE","Recovery is not enabled in this task.");
     public Task<BillingPage<EntitlementResponse>> Entitlements(Guid actor,Guid? org,Guid? building,int page,int size,CancellationToken ct)=>throw Missing();

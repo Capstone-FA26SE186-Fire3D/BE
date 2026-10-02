@@ -16,6 +16,7 @@
         <EmbeddedResource Include="Billing/Hardening.sql" LogicalName="Fire3D.Infrastructure.Billing.Hardening.sql" />
         <EmbeddedResource Include="Billing/PayosRuntime.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosRuntime.sql" />
         <EmbeddedResource Include="Billing/PayosCheckout.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosCheckout.sql" />
+        <EmbeddedResource Include="Billing/PayosWebhook.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosWebhook.sql" />
 		<PackageReference Include="AWSSDK.Core" Version="*" />
 		<PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="*" />
 		<PackageReference Include="AWSSDK.S3" Version="*" />

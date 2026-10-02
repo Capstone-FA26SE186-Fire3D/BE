@@ -18,4 +18,7 @@ public sealed class PayosController(IPayosPayments payments) : ControllerBase
     [HttpPost("api/payments/payos/requests/{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)
     {var result=await payments.Cancel(User.GetActorId(),User.GetSessionFamilyId(),id,key,ct);return StatusCode(result.HttpStatus,result.Value);}
+    /// <summary>Anonymous JWT endpoint, authenticated by official PayOS signature. ACK only after durable inbox commit; navigation never marks Paid.</summary>
+    [AllowAnonymous][HttpPost("api/payments/payos/webhook")][ProducesResponseType(200)]
+    public async Task<IActionResult> Webhook(System.Text.Json.JsonElement body,CancellationToken ct){await payments.Receive(body,ct);return Ok();}
 }
