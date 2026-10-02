@@ -159,8 +159,11 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     /// <summary>
     /// Cấp lại Access Token mới dựa vào Refresh Token hợp lệ.
     /// </summary>
+    /// <remarks>10 requests per connection IP per minute on each instance. 429 includes Retry-After and AUTH_REFRESH_RATE_LIMITED; no Redis.</remarks>
     [HttpPost("refresh")]
     [AllowAnonymous]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("auth-refresh")]
+    [ProducesResponseType<ProblemDetails>(429)]
     public async Task<ActionResult<TokenResponse>> Refresh(RefreshRequest request, CancellationToken ct) =>
         Respond(await sender.Send(new RefreshTokenCommand(request.RefreshToken), ct));
 

@@ -21,8 +21,7 @@ chỉ cung cấp PostgreSQL; không dùng Supabase Auth. Firebase chỉ xác min
 Register chỉ tạo Trainee; client không chọn role/tenant. Email được trim/lowercase.
 Password mới 6–128 ký tự; fullName 1–200 ký tự. Sai mật khẩu/email không tồn tại
 cùng trả 401, tài khoản/organization bị khóa trả 403 sau khi xác minh mật khẩu.
-Các route anonymous không có rate limit BE riêng trong giai đoạn hiện tại. Header Bearer sai không biến chúng thành route
-bắt buộc đăng nhập; refresh vẫn yêu cầu refreshToken hợp lệ trong body.
+Refresh là anonymous theo JWT nhưng yêu cầu refreshToken hợp lệ trong body; Bearer sai không biến route thành bắt buộc đăng nhập. Route có giới hạn 10 request/IP/phút, fixed window riêng mỗi instance, không Redis. Quota bao gồm request token sai: trong quota trả401, vượt quota trả429 `AUTH_REFRESH_RATE_LIMITED`, `traceId` và `Retry-After`. Middleware quyết định connection IP; không tin trực tiếp header IP từ client. Các route anonymous khác giữ policy hiện hành của từng luồng.
 
 Google yêu cầu Firebase token xác minh được, chưa revoke, email_verified=true và
 sign_in_provider=google.com. UID đã liên kết giữ role/organization trong DB. Email
