@@ -2,7 +2,18 @@
 
 Cập nhật **23/09/2026** theo source BE `main` tại `946017d`, gồm release lifecycle, editor preview và annotations. Đây là mô tả API source hiện có, không phải danh sách đầy đủ contract sản phẩm.
 
-Các phần dưới có baseline lịch sử riêng; không dùng số endpoint cũ để suy mức hoàn thiện hiện tại. Bổ sung **02/10/2026**: catalog, quotation Building và enterprise contact request tại [billing.md](billing.md), gồm route/quyền, If-Match, Idempotency-Key, ví dụ và luồng checkout PayOS, webhook, entitlement/reconcile đã có code/test. Migration runtime Supabase và giao dịch thật chưa nghiệm thu trong lượt này. Đối chiếu OpenAPI/source và [implementation checklist](api-implementation-checklist.md) khi tích hợp; endpoint tồn tại không chứng minh provider đã hoạt động.
+Các phần dưới có baseline lịch sử riêng; không dùng số endpoint cũ để suy mức hoàn thiện hiện tại. Bổ sung **02/10/2026**: catalog, quotation Building và enterprise contact request tại [billing.md](billing.md), gồm route/quyền, If-Match, Idempotency-Key, ví dụ và luồng checkout PayOS, webhook, entitlement/reconcile đã có code/test. Cập nhật **03/10/2026**: migration PayOS/email và login giới hạn quyền đã áp vào Supabase; API local tạo link/QR provider thật thành công, chưa chuyển tiền. Azure đã phục vụ Swagger/OpenAPI/return/cancel và CORS FE, nhưng worker/executor/webhook/Paid/provisioning deployment vẫn chưa nghiệm thu. Đối chiếu OpenAPI/source và [implementation checklist](api-implementation-checklist.md) khi tích hợp; endpoint tồn tại không chứng minh provider đã hoạt động.
+
+### Giới hạn OpenAPI deploy đã kiểm tra ngày 03/10/2026
+
+OpenAPI tại host Azure tự báo build `d785937e5948f31486df66740a1f31ccd9ce25a5`, có 118 operation HTTP GET/POST/PUT/PATCH/DELETE; đây là số metadata, không phải số capability đã hoàn tất. Server `/` dùng cùng HTTPS origin.
+
+- Avatar upload đang mô tả `application/x-www-form-urlencoded` với thuộc tính IFormFile. Contract runtime cần `multipart/form-data`, field `file` và `If-Match`; Swagger chưa thể hiện nút file đúng.
+- `UpdateCurrentProfileRequest` và `UpdateOrganizationProfileRequest` đang là schema `{}`; không hiểu là endpoint không có field.
+- Schema enum UserGender/UserRole đang mô tả integer trong khi JSON runtime cấu hình enum theo tên; gửi tên enum theo contract.
+- `registrationToken` của register và `If-Match` của Avatar upload chưa đánh dấu required; BE vẫn yêu cầu chúng. GET trạng thái PayOS chưa mô tả response thành công đầy đủ.
+
+Đây là lỗi tài liệu OpenAPI còn cần sửa code generator/metadata; đợt cập nhật tài liệu này chưa sửa runtime. [Kết quả Azure và cấu hình CORS](payos-deployment.md) phân biệt kiểm tra HTTP với nghiệm thu provider thật.
 
 ## 1. Quy ước tích hợp
 

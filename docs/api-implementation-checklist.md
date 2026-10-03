@@ -2,6 +2,16 @@
 
 Tài liệu này là backlog đối chiếu code BE với chuẩn nghiệp vụ trong workspace [`Docs`](../../Docs/README.md). Contract gốc nằm ở [requirements](../../Docs/fire_evacuation_requirements.md), [workflows](../../Docs/fire-evacuation-training-workflows.md), [technology](../../Docs/fire-evacuation-training-technology.md), [schema SQL](../../Docs/fire_evacuation_schema.sql) và [ERD](../../Docs/fire_evacuation_erd.md). API guide mô tả hành vi source đang có; checklist này ghi phần còn phải sửa. Không coi tên entity, route hay thiết kế SQL là bằng chứng tính năng đã hoàn tất.
 
+## Kiểm chứng deployment bổ sung ngày 03/10/2026
+
+Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi baseline ghi kèm; bằng chứng mới về PayOS/deployment nằm tại [payos-deployment.md](payos-deployment.md).
+
+- ✅ Supabase đã nhận sáu migration PayOS, migration normalized email và login/grants giới hạn quyền cho test local; không reset dữ liệu.
+- ✅ API local tạo checkout/QR PayOS thật 100.000 VND, create201/replay200 cùng checkout/order; chưa chuyển tiền.
+- ✅ Azure Swagger/OpenAPI/health/return/cancel200; preflight OTP và PayOS cho cả hai domain FE204, có CORS đúng. Create thiếu Bearer401, webhook thiếu chữ ký400, OTP/resend email sai400 có lỗi theo field.
+- ❌ Chưa nghiệm thu worker/executor trên Azure, gửi OTP thật, webhook hợp lệ, Paid/Applied và provisioning/entitlement thật.
+- ❌ Swagger Avatar cần multipart field `file`; PATCH profile schema trống; enum đang mô tả integer trái JSON tên enum; required registrationToken/If-Match và response thành công GET PayOS chưa đầy đủ. Chưa đóng các finding này bằng việc cập nhật Markdown.
+
 ## Baseline và trạng thái
 
 Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhánh tài liệu khi lập checklist). Trước khi bắt đầu mỗi work item, người thực hiện phải xác nhận lại code và remote mới nhất; status dưới đây không thay thế review source sau này.
@@ -101,7 +111,8 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 
 - **✅ Có code:** Catalog/quotation Draft → Issued → Accepted; SDK payOS2.1.0, checkout idempotent, provider-confirmed cancel, verified durable inbox, ledger/provisioning atomic, cấp/gia hạn từng Building, lease/retry/reconcile, API trạng thái và entitlement. Trang return/cancel chỉ điều hướng. Contract/test tay tại [billing.md](billing.md).
 - **✅ Kiểm chứng tự động:** SDK chữ ký offline, HTTP authorization/OpenAPI, PostgreSQL disposable cho replay/race/rollback/partial recovery, UTC month-end và grants executor. Kết quả cuối đợt ghi trong billing.md; không coi test mock là provider acceptance.
-- **❌ Chưa nghiệm thu:** Migration runtime và login grants trên Supabase, đăng ký webhook/probe PayOS, giao dịch thật với bank/provider và kiểm entitlement deployed. Không tick publish/playtest/training gate từ entitlement storage.
+- **✅ Kiểm chứng local/provider một phần:** Sáu migration PayOS và login/grants đã áp vào Supabase cho test local; tạo link/QR provider thật và replay cùng operation đạt. Chưa chuyển tiền.
+- **❌ Chưa nghiệm thu:** Runtime executor/worker deployment Azure, đăng ký webhook/probe PayOS, giao dịch thật với bank/provider và kiểm entitlement deployed. Không tick publish/playtest/training gate từ entitlement storage.
 - **❌ Backlog riêng:** Reminder 5 ngày, revenue, AI settlement, hoàn tiền tự động, eInvoice và FE billing đầy đủ.
 - **Nghiệm thu:** Return URL không ghi Paid; amount/currency/link sai không được apply; webhook/recovery/replay không cấp trùng; cùng payment có mốc kích hoạt chung, renewal nối kỳ đã mua; Paid và provisioning riêng biệt.
 ### NOTIFY-01 — P1 · LATER · Nhắc hết hạn
