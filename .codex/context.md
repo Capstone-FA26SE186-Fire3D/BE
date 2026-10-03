@@ -9,13 +9,25 @@
 - Persistence ở [DbContext](../Fire3D/Fire3D.Infrastructure/Persistence/Fire3DDbContext.cs). Không chạy migration hoặc đổi schema database ngoài phạm vi được yêu cầu.
 - Không lưu connection string/credential vào context hoặc handoff. Không track .vs, bin, obj.
 
+## Luồng auth hiện có — 2026-10-03
+
+Chi tiết request/response, lỗi và nguồn code tại [authentication.md](../docs/authentication.md), [API guide](../docs/api-docs.md) và [test Swagger](../docs/registration-payos-manual-test.md). Phần này mô tả source, không chứng minh deployment/provider đã nghiệm thu.
+
+- Đăng ký cả Trainee/OrganizationUser: FE giữ form trong bộ nhớ → request-otp(email) → verify-otp(email,otp) nhận registrationToken → gửi toàn bộ form+proof tới register theo loại account →201 AccountResponse → login riêng để nhận JWT. Request/verify không tạo user/organization; register consume proof, identity/organization và audit atomic. Server gán role/tenant.
+- Resend-verification gửi OTP sáu số cùng service với request-otp, không gửi link. Cooldown 60 giây, OTP 10 phút, proof 15 phút dùng một lần;5 request/email/giờ, 20/IP/giờ. Email đã có kể cả inactive/deleted trả409 EMAIL_EXISTS/errors.email, không enqueue. `/verify-email` giữ cho pending link legacy; forgot/reset-password là luồng khác.
+- Trainee username lowercase unique 3–30 ký tự; OrganizationUser route nhận tên/địa chỉ/phone tổ chức, hiện không nhận username cá nhân. Password mới 6–128 ký tự, không chỉ whitespace, không trim; confirm khớp. DOB yyyy-MM-dd; emailVerifiedAt tiếp tục timestamp. Không tạo user pending mới trước OTP, không tự xóa user cũ từ flow này.
+- Login kiểm password và lifecycle dưới khóa user, tạo family/refresh hash/audit atomic. Response login/refresh gồm accessToken,refreshToken,user, không có expiresAt; TTL lấy Jwt config. Refresh rotation giữ family/hạn tuyệt đối; replay token cũ revoke family. Middleware kiểm DB family/role/tenant sau xác minh JWT. Logout revoke family hiện tại; logout-all revoke mọi family và tắt push bindings atomic.
+- Profile cá nhân có DOB/gender/phone, GET/PATCH organization đã có ETag; Avatar có upload IFormFile, decoder và cleanup/recovery. Swagger deploy còn schema PATCH trống, multipart sai và metadata thiếu; không suy route thiếu từ OpenAPI lỗi.
+- Google UID đã link trả Authenticated; Google mới OnboardingRequired, email trùng ACCOUNT_LINK_REQUIRED. Explicit onboarding completion/link chưa có; không tự ghép email hoặc coi Google mới đã tạo account.
+- Provider/FE/deployment cần kiểm chứng riêng. Đọc checklist trước task auth và bảo toàn OTP, password/session/ETag invariants; không suy Redis/Hangfire cần thiết từ luồng này.
+
 ## Kiến trúc đích đã thống nhất — 2026-09-17
 
 - Backend dùng C# + ASP.NET Core trên .NET; EF Core/Npgsql kết nối Supabase Database (managed PostgreSQL). Supabase Auth không được dùng.
 - Web/Mobile dùng email/password do BE quản lý hoặc Google Sign-In qua Firebase. API xác minh password/Fire3D session hoặc Firebase ID token rồi lấy role, trạng thái và `organizationId` từ PostgreSQL; không tin role/tenant do client gửi hoặc custom claim đơn lẻ.
 - Schema đích lưu password/refresh/reset token hash và `firebase_uid` nullable khi liên kết Google; không lưu plaintext password, Google refresh token hoặc FCM credential. Backend vẫn sở hữu launch grant, signed URL và authorization nghiệp vụ.
-- BE target chịu trách nhiệm register trainee/organization, username global unique, profile ETag, organization name/address/phone, password change/reset/link Google và avatar S3 intent/complete/delete. Các endpoint này còn là implementation work, không coi context/SQL là migration đã chạy.
-- FCM dùng cho push notification. Registration token là metadata installation có thể rotate/revoke, không phải token đăng nhập.
+- BE chịu trách nhiệm register trainee/organization, username global unique, profile ETag, organization name/address/phone, password change/reset/link Google và avatar S3 intent/complete/delete. Register/profile/password/Avatar đã có đường thực thi; Google onboarding/link còn thiếu. Kiểm tra invariant và deployment theo luồng auth hiện có bên trên, không coi context/SQL là migration đã chạy.
+- FCM dùng cho push notification; FCM registration token là token nhận push của installation, không phải token đăng nhập. `registrationToken` trong API register là proof email sau OTP, không phải FCM token.
 - Raw IFC, manifest và content package nằm trong AWS S3 private; backend cấp signed URL TTL ngắn. Không đưa AWS, Firebase Admin hoặc Supabase service-role secret vào client.
 - Azure đã được chọn cho AI/RAG FastAPI service; compute cho BE, IFC/Blender worker và Unity Editor worker, cùng SKU/region/cost, vẫn phải spike và chốt riêng. Không suy ra toàn bộ hệ thống chạy Azure.
 - OneShield thuộc hệ thống OnePortal của iNET là lớp edge/bảo vệ phía trước Nginx. Nginx tiếp nhận HTTP(S) từ edge và chuyển request vào .NET; backend vẫn là nơi xác minh identity, tenant, quota, scope và gọi AI nội bộ. OneShield không thay thế authorization. Plan/SKU, DNS, TLS termination, WAF/rate limits, upstream, health check và vị trí chạy Nginx là việc triển khai còn lại.
@@ -78,7 +90,7 @@ Khi có Docs bên cạnh, đối chiếu `fire_evacuation_schema.sql`, `fire_eva
 
 ## FET3D account and commercial billing boundary — 2026-09-19
 
-- Trainee local phải gửi username ngay khi đăng ký; OrganizationUser gửi hồ sơ organization (tên, địa chỉ, điện thoại), username cá nhân tùy chọn. Google mới sau Firebase verification chọn Trainee hoặc OrganizationUser qua onboarding token ngắn hạn; account đã link không chọn lại role/tenant và không tự gia nhập organization có sẵn.
+- Contract đích: Trainee local gửi username ngay khi đăng ký; OrganizationUser gửi hồ sơ organization (tên, địa chỉ, điện thoại), username cá nhân tùy chọn theo yêu cầu đích nhưng chưa được route hiện tại nhận. Google mới chọn loại tài khoản qua onboarding ngắn hạn là yêu cầu còn thiếu; exchange hiện chỉ trả OnboardingRequired. Account đã link không chọn lại role/tenant và không tự gia nhập organization có sẵn.
 - Backend là authority cho username lowercase unique, profile ETag, password/session revoke, Google link, S3 avatar và organization profile. Game start không còn ProfileIncomplete username gate.
 - Organization có nhiều Building. `quotation_building_items` là nguồn dòng dịch vụ theo Building; giá/discount/terms snapshot ở quotation/item, payment một lần có thể provision nhiều entitlement bằng key từng item. `enterprise_quote_requests` không tạo charge/entitlement trước quotation/payment.
 - Background task tạo notification web/email trước 5 ngày theo entitlement/kỳ/kênh; Mailgun là kênh email, PostgreSQL/outbox giữ idempotency/retry. Discount không cộng dồn và không sửa lịch sử quotation.
