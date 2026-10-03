@@ -4,7 +4,9 @@ Nguồn: FR-BILLING-03/06/07, workflows §11, technology §10; [SDK .NET](https:
 
 ## Migration và cấu hình
 
-Trong lượt triển khai code này **chưa áp runtime migration lên Supabase**, chưa gửi request provider thật và chưa thanh toán. Không reset database. Review SQL script từ đúng commit và áp trước khi bật checkout:
+Snapshot local đã kiểm tra ngày 2026-10-03: sáu migration PayOS qua `20261002133000_AddPayosProvisioningGates` đã áp vào Supabase; migration email `20261003030000_AddNormalizedRegistrationEmail` cũng đã áp, không reset dữ liệu. Ba login giới hạn quyền đã được cấu hình riêng; checkout và worker PayOS/OTP bật ở User Secrets local. Credentials không nằm trong Git. Đây không phải bằng chứng Azure đã deploy/grants/provider/webhook production đạt. Chưa tạo link provider hoặc thanh toán thật tự động. Với môi trường khác, review SQL từ đúng commit và áp trước khi bật checkout:
+
+`DefaultConnection` runtime phải là login application giới hạn quyền. Giữ migration credential riêng trong `MigrationConnection`, không dùng cho runtime; launcher local xác minh login non-admin. Production DevOps cần cấp credentials riêng và đặt biến môi trường tương ứng, không nhận/chia sẻ file User Secrets. [JSON và trình tự test Swagger](registration-payos-manual-test.md). Callback return/cancel trên host Azure đang trả 404 tại lần kiểm tra này; deploy routes và webhook công khai đúng API trước khi thử chuyển tiền. Hai trang local trả 200, nhưng localhost không nhận webhook internet.
 
 ```powershell
 dotnet ef migrations script 20261002100100_SyncBillingCatalogModel --idempotent --project Fire3D/Fire3D.Infrastructure --startup-project Fire3D/Fire3D.API --output payos-runtime.sql
@@ -67,6 +69,9 @@ Create trả 201 khi link Ready lần đầu, replay 200; đang tạo/chưa rõ 
 7. Checkout mới chưa trả tiền: POST cancel với key riêng, kiểm Cancelled được provider xác nhận; không có entitlement. Một payment có hai Building phải kiểm từng dòng, không chỉ Paid.
 
 ## Điều tra / recovery
+
+- `503 PAYOS_DISABLED`: checkout đang tắt trong cấu hình hiệu lực; chưa gọi provider. Billing trả `application/problem+json` với `code`/`traceId` cả khi Swagger gửi `Accept: text/plain`; không trả stack trace thay cho lỗi nghiệp vụ.
+- Response checkout Ready có `checkoutUrl` và `qrCode` lấy từ PayOS. `qrCode` là dữ liệu để client tạo hình QR, không phải URL ảnh; có thể mở `checkoutUrl` để dùng trang thanh toán của provider. QR/return URL không thay thế webhook xác nhận tiền.
 
 - `PAYOS_PROVIDER_TIMEOUT`/HTTP4xx/5xx: xem operation ID, attempt, errorCode; kiểm channel, cấu hình và outbound HTTPS. Không log secret/signature/HTML/bank payload.
 - `PAYOS_AWAITING_VERIFIED_WEBHOOK`: GET provider báo paid/partial nhưng ledger chưa có webhook đúng. Kiểm delivery provider, yêu cầu redelivery webhook; API reconcile không tự ký hoặc ghi Paid từ GET.
