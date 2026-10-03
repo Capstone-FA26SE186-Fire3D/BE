@@ -12,7 +12,17 @@
 - Forgot/Reset Password là một luồng: email link một lần đặt mật khẩu mới. Change Password là luồng trong phiên đăng nhập, xác minh mật khẩu hiện tại rồi nhận mật khẩu mới. Cả hai thu hồi các refresh session theo contract; chỉ reset gửi Mailgun.
 - Google UID nullable/unique khi liên kết. Link Google vào tài khoản local cần chứng minh đã xác thực tài khoản local; không tự động link.
 
-## Hiện trạng source BE trên nhánh main đã đối chiếu
+## Hiện trạng source BE trên nhánh triển khai (không suy ra deployment/main)
+
+### Luồng form trước, OTP trước khi tạo identity
+
+FE nhập form và giữ trong bộ nhớ, chuyển sang màn hình OTP. `request-otp` nhận email; `resend-verification` gửi lại OTP sau cooldown. Email đã có account trả **409 EMAIL_EXISTS + errors.email**, kể cả khác casing hoặc account bị khóa/xóa mềm; không enqueue email. Email mới trả 202, chưa có identity. Đây là quyết định thông báo email trùng cho form; forgot-password vẫn che account existence bằng 202.
+
+Nút “Xác thực và đăng ký” gọi verify-otp rồi, khi nhận proof, gửi toàn bộ JSON form + registrationToken tới register/trainee hoặc register/organization. Verify không kiểm mật khẩu và chưa tạo account. Validation cuối cùng chạy ở register; consume proof, identity/organization và audit atomic. Form sai không làm mất proof; proof đã dùng không tạo account thứ hai. 201 trả account, phải login để lấy JWT.
+
+Password chỉ giữ trong bộ nhớ FE. Đổi email bỏ proof và xác minh lại; reload mất form quay lại form. Không lưu password vào URL hay web storage. `/check-email/` chỉ là demo OTP/proof, không đại diện cho form FE hoàn chỉnh. [Kịch bản Swagger và JSON đầy đủ](registration-payos-manual-test.md).
+
+Migration additive `20261003030000_AddNormalizedRegistrationEmail` thêm unique expression index `lower(btrim(email))`, giữ index/cột/data cũ. Nếu legacy có duplicate chuẩn hóa, migration dừng để review; không tự merge/xóa account. Chỉ mapping các constraint email/username/slug đã biết; vi phạm unique không liên quan không giả thành EMAIL_EXISTS.
 
 | Năng lực | Source hiện có | Khác biệt so với contract đích |
 |---|---|---|

@@ -21,7 +21,7 @@ Các phần dưới có baseline lịch sử riêng; không dùng số endpoint 
 | `POST /api/auth/register` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/auth/register/trainee` | 201 AccountResponse | `/api/accounts/{id}` |
 | `POST /api/auth/register/organization` | 201 AccountResponse | `/api/accounts/{id}` |
-| `POST /api/auth/registration/request-otp` | 202 Accepted | Không tạo account; phản hồi chung cho email đã có/chưa có |
+| `POST /api/auth/registration/request-otp` | 202 Accepted / 409 EMAIL_EXISTS | Không tạo account; email đã có trả errors.email và không enqueue |
 | `POST /api/auth/registration/verify-otp` | 200 RegistrationOtpVerificationResponse | Trả registrationToken 15 phút, dùng một lần |
 | `POST /api/auth/resend-verification` | 202 Accepted | Gửi lại OTP đăng ký mới sau cooldown; OTP/proof trước đó bị vô hiệu |
 | `POST /api/auth/verify-email` | 204 No Content | **Deprecated**. Chỉ xác minh token link legacy, single-use và hết hạn sau 15 phút |
@@ -131,13 +131,16 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
   "fullName": "Nguyen Van A",
   "dob": "2000-01-02",
   "gender": "PreferNotToSay",
-  "phoneNumber": "+84123456789"
+  "phoneNumber": "+84123456789",
+  "registrationToken": "<proof nhận từ verify-otp>"
 }
 ```
 
 Trước khi gọi một trong ba route register, client gọi `POST /api/auth/registration/request-otp` với `{ "email": "..." }` để nhận mã sáu chữ số từ email, rồi gọi `POST /api/auth/registration/verify-otp` với `{ "email": "...", "otp": "123456" }`. Kết quả thành công trả `{ "registrationToken": "...", "expiresAt": "..." }`; token hết hạn sau 15 phút, gắn với email và chỉ dùng một lần. Khi cần mã mới, client gọi `POST /api/auth/resend-verification`: sau 60 giây, request mới thay mã/proof cũ; mã có hạn 10 phút. Cả hai endpoint gửi OTP cùng có giới hạn 5 lần/email/giờ và 20 lần/IP/giờ; khi vượt giới hạn trả `429 OTP_RATE_LIMITED` cùng header `Retry-After`. Hai API này không tạo `users` hay `organizations`; job gửi OTP chạy tách khỏi worker link xác minh cũ.
 
 `/api/auth/register/trainee` yêu cầu email hợp lệ tối đa 254 ký tự, username lowercase theo `[a-z0-9._-]{3,30}`, password 6–128, confirmPassword trùng password và `registrationToken` còn hiệu lực. fullName, dob, gender và phoneNumber là tùy chọn. Dob không được ở tương lai; gender là `Male`, `Female`, `Other` hoặc `PreferNotToSay`; phoneNumber có 6–15 chữ số, có thể bắt đầu bằng `+`. Username unique không phân biệt hoa thường. Không gửi role/organizationId để cấp quyền.
+
+FE nhập form trước, giữ trong bộ nhớ rồi chuyển sang OTP. Nút “Xác thực và đăng ký” gọi verify-otp rồi gửi toàn bộ form + proof tới register, không phải gửi password tới verify-otp. `request-otp` và `resend-verification` trả **409 EMAIL_EXISTS** với `errors.email` cho account tồn tại (normalize trim/lowercase, kể cả inactive/deleted); không enqueue mã. Form sai trả 400 theo field và chưa consume proof. Đây là quyết định báo email trùng; forgot-password vẫn trả 202 chung. Không lưu password trong URL/web storage. [JSON và test Swagger đăng ký/PayOS](registration-payos-manual-test.md).
 
 BE hash password vào `users.password_hash`, không tạo tài khoản email/password trên Firebase. Trả **201 AccountResponse**, chưa đăng nhập; gọi login tiếp theo:
 

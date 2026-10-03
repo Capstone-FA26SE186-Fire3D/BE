@@ -24,13 +24,20 @@ public sealed class RegistrationOtpStore(Fire3DDbContext db, IOptions<JwtOptions
     public async Task<AuthResult<bool>> RequestOtpAsync(string email, string? remoteAddress, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+        // Serialize the shared IP quota across different email addresses, then the email quota/cooldown.
+        // Every request takes locks in this order; verify/consume only take the email lock.
+        if (!string.IsNullOrWhiteSpace(remoteAddress))
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({"fet3d:registration-otp:ip:" + remoteAddress}, 0))", ct);
         await LockEmailAsync(email, ct);
 
-        // Always accept an existing email without queuing a job so this endpoint does not reveal account existence.
-        if (await db.Users.AsNoTracking().AnyAsync(user => user.Email == email, ct))
+        // Product contract: tell the form about a globally registered address before sending an OTP.
+        // Include legacy casing, inactive and soft-deleted accounts; do not release their identity here.
+        if (await db.Users.AsNoTracking().AnyAsync(user => user.Email.Trim().ToLower() == email, ct))
         {
             await tx.CommitAsync(ct);
-            return AuthResult<bool>.Ok(true);
+            return AuthResult<bool>.Fail("EMAIL_EXISTS", "Email đã được đăng ký. Hãy đăng nhập hoặc đặt lại mật khẩu.", 409,
+                new Dictionary<string, string[]> { ["email"] = ["Email đã được đăng ký."] });
         }
 
         var oneMinuteAgo = clock.GetUtcNow().UtcDateTime.AddMinutes(-1);
