@@ -2,7 +2,18 @@
 
 Cập nhật **23/09/2026** theo source BE `main` tại `946017d`, gồm release lifecycle, editor preview và annotations. Đây là mô tả API source hiện có, không phải danh sách đầy đủ contract sản phẩm.
 
-Các phần dưới có baseline lịch sử riêng; không dùng số endpoint cũ để suy mức hoàn thiện hiện tại. Bổ sung **02/10/2026**: catalog, quotation Building và enterprise contact request tại [billing.md](billing.md), gồm route/quyền, If-Match, Idempotency-Key, ví dụ và luồng checkout PayOS, webhook, entitlement/reconcile đã có code/test. Migration runtime Supabase và giao dịch thật chưa nghiệm thu trong lượt này. Đối chiếu OpenAPI/source và [implementation checklist](api-implementation-checklist.md) khi tích hợp; endpoint tồn tại không chứng minh provider đã hoạt động.
+Các phần dưới có baseline lịch sử riêng; không dùng số endpoint cũ để suy mức hoàn thiện hiện tại. Bổ sung **02/10/2026**: catalog, quotation Building và enterprise contact request tại [billing.md](billing.md), gồm route/quyền, If-Match, Idempotency-Key, ví dụ và luồng checkout PayOS, webhook, entitlement/reconcile đã có code/test. Cập nhật **03/10/2026**: migration PayOS/email và login giới hạn quyền đã áp vào Supabase; API local tạo link/QR provider thật thành công, chưa chuyển tiền. Azure đã phục vụ Swagger/OpenAPI/return/cancel và CORS FE, nhưng worker/executor/webhook/Paid/provisioning deployment vẫn chưa nghiệm thu. Đối chiếu OpenAPI/source và [implementation checklist](api-implementation-checklist.md) khi tích hợp; endpoint tồn tại không chứng minh provider đã hoạt động.
+
+### Giới hạn OpenAPI deploy đã kiểm tra ngày 03/10/2026
+
+OpenAPI tại host Azure tự báo build `d785937e5948f31486df66740a1f31ccd9ce25a5`, có 118 operation HTTP GET/POST/PUT/PATCH/DELETE; đây là số metadata, không phải số capability đã hoàn tất. Server `/` dùng cùng HTTPS origin.
+
+- Avatar upload đang mô tả `application/x-www-form-urlencoded` với thuộc tính IFormFile. Contract runtime cần `multipart/form-data`, field `file` và `If-Match`; Swagger chưa thể hiện nút file đúng.
+- `UpdateCurrentProfileRequest` và `UpdateOrganizationProfileRequest` đang là schema `{}`; không hiểu là endpoint không có field.
+- Schema enum UserGender/UserRole đang mô tả integer trong khi JSON runtime cấu hình enum theo tên; gửi tên enum theo contract.
+- `registrationToken` của register và `If-Match` của Avatar upload chưa đánh dấu required; BE vẫn yêu cầu chúng. GET trạng thái PayOS chưa mô tả response thành công đầy đủ.
+
+Đây là lỗi tài liệu OpenAPI còn cần sửa code generator/metadata; đợt cập nhật tài liệu này chưa sửa runtime. [Kết quả Azure và cấu hình CORS](payos-deployment.md) phân biệt kiểm tra HTTP với nghiệm thu provider thật.
 
 ## 1. Quy ước tích hợp
 
@@ -80,7 +91,9 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 { "items": [], "totalCount": 0, "page": 1, "pageSize": 20 }
 ```
 
-## 2. Authentication — 18 endpoint
+## 2. Authentication
+
+Luồng và bằng chứng source chi tiết tại [authentication.md](authentication.md): cả Trainee và OrganizationUser dùng form → OTP → proof → register → login; JWT chỉ được cấp tại login/refresh hoặc Google UID đã liên kết. Bảng dưới liệt kê API, không dùng số endpoint lịch sử để kết luận auth hoàn tất.
 
 | Method | Path | Quyền | Thành công |
 | --- | --- | --- | --- |
@@ -198,29 +211,30 @@ BE kiểm token, trạng thái thu hồi, email đã xác minh và provider goog
 - UID đã liên kết: dùng hồ sơ/role DB.
 - UID/email mới: trả `OnboardingRequired`, chưa tạo user hay organization cho tới khi luồng onboarding được triển khai.
 - Email thuộc tài khoản khác/chưa liên kết UID này: 409 ACCOUNT_LINK_REQUIRED; không tự ghép chỉ vì trùng email.
-- Xung đột tạo đồng thời có thể 409 ACCOUNT_EXISTS; tài khoản bị khóa 403 ACCOUNT_DISABLED.
+- UID đã thay đổi trong lúc lấy khóa: 409 ACCOUNT_CHANGED; tài khoản/tổ chức bị khóa 403 ACCOUNT_DISABLED.
 
 Google identity mới trả `{ status: "OnboardingRequired" }` và không tạo tài khoản. UID đã liên kết trả `{ status: "Authenticated", authentication: TokenResponse }`. Chưa có onboarding token/endpoint để người dùng hoàn tất chọn Trainee/OrganizationUser.
 
-Response hiện là TokenResponse, **vẫn có expiresAt**:
+Response thành công cho UID đã liên kết là GoogleExchangeResponse, `authentication` chứa TokenResponse **không có expiresAt**:
 
 ```json
 {
-  "accessToken": "<Fire3D JWT>",
-  "accessTokenExpiresAt": "2026-09-22T10:00:00Z",
-  "refreshToken": "<refresh token>",
-  "refreshTokenExpiresAt": "2026-09-29T09:00:00Z",
-  "user": {
-    "id": "11111111-1111-4111-8111-111111111111",
-    "email": "trainee@example.com",
-    "fullName": "Nguyen Van A",
-    "role": "Trainee",
-    "organizationId": null
+  "status": "Authenticated",
+  "authentication": {
+    "accessToken": "<Fire3D JWT>",
+    "refreshToken": "<refresh token>",
+    "user": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "email": "trainee@example.com",
+      "fullName": "Nguyen Van A",
+      "role": "Trainee",
+      "organizationId": null
+    }
   }
 }
 ```
 
-Thời gian ví dụ không thay cấu hình môi trường. Chưa có API liên kết Google vào tài khoản local có sẵn.
+TTL token theo cấu hình Jwt của môi trường. Chưa có API liên kết Google vào tài khoản local có sẵn.
 
 ### 2.4 Refresh, logout, me, devices
 
@@ -236,7 +250,7 @@ Refresh không cần access token:
 { "refreshToken": "<latest refresh token>" }
 ```
 
-Token không trống, tối đa 256. Thành công trả TokenResponse còn hai expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả 401 INVALID_REFRESH_TOKEN; replay token đã dùng có thể thu hồi cả family.
+Token không trống, tối đa 256. Thành công trả TokenResponse gồm accessToken/refreshToken/user, không có expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả401 INVALID_REFRESH_TOKEN; replay token đã consume/revoke thu hồi cả family.
 
 Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại; `/api/auth/logout-all` thu hồi toàn bộ family và vô hiệu push bindings. `GET /api/auth/me` trả AccountResponse cùng `ETag: "<profileRevision>"`; `PATCH /api/auth/me` nhận header đó trong `If-Match`, sửa fullName/username/dob/gender/phoneNumber, rồi trả ETag mới. Avatar hỗ trợ `POST /api/me/avatar/upload` nhận `multipart/form-data` với field `file` (JPEG/PNG/WebP, tối đa 5 MiB) để test S3 qua BE; route bắt buộc `If-Match`, rồi stream lên private staging object và hoàn tất theo cùng luồng Avatar. `POST /api/me/avatar/complete` và `DELETE /api/me/avatar` cũng yêu cầu cùng If-Match; thiếu trả 428, ETag cũ trả 412. `GET /api/organizations/me` trả OrganizationProfileResponse và ETag; PATCH chỉ sửa field được gửi, cần `If-Match`.
 
@@ -244,14 +258,14 @@ Devices upsert cho user hiện tại:
 
 ```json
 {
-  "deviceUuid": "test-device-001",
+  "deviceUuid": "11111111-1111-4111-8111-111111111111",
   "fcmToken": null,
   "deviceModel": "Test device",
   "osVersion": "Windows 11"
 }
 ```
 
-Command có userId nhưng controller ghi đè bằng sub JWT, frontend không cần gửi. Ba trường cuối nullable. Handler chưa có validation riêng đầy đủ cho deviceUuid/FCM; controller không kiểm kết quả bool store. 200 không chứng minh push notification đã gửi.
+Actor và session family lấy từ JWT; FE không gửi userId. Bearer và X-Installation-Key cùng bắt buộc; FE sinh/lưu UUID và secret 32 byte base64url cho installation. FCM token bị trùng binding hoạt động trả 409 FCM_TOKEN_ALREADY_BOUND; proof sai 403 INSTALLATION_KEY_INVALID. Handler kiểm lại family/lifecycle dưới khóa. Optional metadata nullable; 200 chỉ chứng minh binding được lưu, chưa chứng minh FCM delivery. Đăng ký device lại sau logout-all khi login mới để bật push.
 
 ### 2.5 Forgot/reset password qua Mailgun
 

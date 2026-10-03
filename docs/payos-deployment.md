@@ -4,9 +4,9 @@ Nguồn: FR-BILLING-03/06/07, workflows §11, technology §10; [SDK .NET](https:
 
 ## Migration và cấu hình
 
-Snapshot local đã kiểm tra ngày 2026-10-03: sáu migration PayOS qua `20261002133000_AddPayosProvisioningGates` đã áp vào Supabase; migration email `20261003030000_AddNormalizedRegistrationEmail` cũng đã áp, không reset dữ liệu. Ba login giới hạn quyền đã được cấu hình riêng; checkout và worker PayOS/OTP bật ở User Secrets local. Credentials không nằm trong Git. Đây không phải bằng chứng Azure đã deploy/grants/provider/webhook production đạt. Chưa tạo link provider hoặc thanh toán thật tự động. Với môi trường khác, review SQL từ đúng commit và áp trước khi bật checkout:
+Snapshot local đã kiểm tra ngày 2026-10-03: sáu migration PayOS qua `20261002133000_AddPayosProvisioningGates` đã áp vào Supabase; migration email `20261003030000_AddNormalizedRegistrationEmail` cũng đã áp, không reset dữ liệu. Ba login giới hạn quyền đã được cấu hình riêng; checkout và worker PayOS/OTP bật ở User Secrets local. Credentials không nằm trong Git. Đã tạo checkout PayOS thật 100.000 VND qua API local theo yêu cầu người dùng: lần đầu 201 Ready, replay cùng key trả 200 và giữ nguyên checkout/order, có checkoutUrl và payload QR. Chưa chuyển tiền hoặc nghiệm thu webhook/provisioning thật. Với môi trường khác, review SQL từ đúng commit và áp trước khi bật checkout:
 
-`DefaultConnection` runtime phải là login application giới hạn quyền. Giữ migration credential riêng trong `MigrationConnection`, không dùng cho runtime; launcher local xác minh login non-admin. Production DevOps cần cấp credentials riêng và đặt biến môi trường tương ứng, không nhận/chia sẻ file User Secrets. [JSON và trình tự test Swagger](registration-payos-manual-test.md). Callback return/cancel trên host Azure đang trả 404 tại lần kiểm tra này; deploy routes và webhook công khai đúng API trước khi thử chuyển tiền. Hai trang local trả 200, nhưng localhost không nhận webhook internet.
+`DefaultConnection` runtime phải là login application giới hạn quyền. Giữ migration credential riêng trong `MigrationConnection`, không dùng cho runtime; launcher local xác minh login non-admin. Production DevOps cần cấp credentials riêng và đặt biến môi trường tương ứng, không nhận/chia sẻ file User Secrets. [JSON và trình tự test Swagger](registration-payos-manual-test.md). Sau redeploy ngày 2026-10-03, cả hai trang return/cancel trên Azure đã trả 200. Kết quả này chỉ chứng minh trang điều hướng đã có; executor, worker và webhook thanh toán thật trên Azure vẫn chưa nghiệm thu. Localhost không nhận webhook internet.
 
 ```powershell
 dotnet ef migrations script 20261002100100_SyncBillingCatalogModel --idempotent --project Fire3D/Fire3D.Infrastructure --startup-project Fire3D/Fire3D.API --output payos-runtime.sql
@@ -28,9 +28,30 @@ PayOS__CancelUrl=https://<host-BE>/billing/payment-cancel/
 ConnectionStrings__DefaultConnection=<application identity, đúng DB, không có quyền ghi trực tiếp ledger>
 ConnectionStrings__PayosRequestExecutor=<request login, đúng DB>
 ConnectionStrings__PayosWebhookExecutor=<webhook login, đúng DB>
+Auth__FrontendUrls__0=https://fet3d.io.vn
+Auth__FrontendUrls__1=https://www.fet3d.io.vn
 ```
 
 `appsettings.json` là cấu hình nền; User Secrets ghi đè trong Development, environment của deployment ghi đè cấu hình nền. Không đưa credential vào Git. Tắt `Enabled` chỉ ngăn checkout mới; giữ WorkerEnabled và credentials để xử lý các giao dịch đã tồn tại. Worker cần ứng dụng chạy liên tục; App Service bật Always On khi gói hỗ trợ.
+
+Trong Azure App Service, đặt các biến trên tại Environment variables / App settings rồi Apply và restart. Ba connection string dùng ba login có quyền riêng nhưng phải trỏ cùng host, port và database. User Secrets trên máy phát triển không tự được đưa lên Azure. CORS đọc `Auth:FrontendUrls` (hoặc fallback `Auth:FrontendUrl`); `AuthEmail:FrontendUrl` không cấu hình CORS. Sau cập nhật, preflight OTP và PayOS từ cả hai origin FE trên trả 204 với Allow-Origin đúng origin, Allow-Credentials=true và cho phép header authorization/content-type/idempotency-key.
+
+ReturnUrl/CancelUrl có thể dùng host FE nếu FE thực sự phục vụ các trang tương ứng; hoặc dùng hai trang test trên BE `/billing/payment-return/` và `/billing/payment-cancel/`. Webhook vẫn phải là endpoint BE HTTPS công khai `/api/payments/payos/webhook`; return/cancel không ghi nhận tiền. Kiểm tra URL hiệu lực sau khi biến môi trường ghi đè appsettings.
+
+## Kiểm tra Azure ngày 2026-10-03
+
+Host kiểm tra: `https://fire3d-api-h3a5h2fgdvajfbcz.eastasia-01.azurewebsites.net`. `/health/version` tự báo `d785937e5948f31486df66740a1f31ccd9ce25a5`; chưa đối chiếu artifact/commit deployment qua Azure.
+
+| Kiểm tra trực tiếp | Kết quả / giới hạn |
+|---|---|
+| Swagger, `/openapi/v1.json`, `/health`, return/cancel | 200; health trả Healthy, không chứng minh provider/DB grants |
+| OpenAPI server | `/`, cùng origin HTTPS |
+| Preflight từ FE cho request-otp và PayOS create | 204, đầy đủ CORS cho cả domain FE và www |
+| PayOS create không Bearer | 401; chưa gọi create có Bearer trên Azure |
+| Webhook body `{}` không chữ ký | 400 PAYOS_SIGNATURE_INVALID; chưa chứng minh webhook thật được ACK/apply |
+| request-otp/resend với email sai | 400 INVALID_EMAIL, có errors.email và traceId; chưa gửi email thật trong lượt này |
+
+OpenAPI deploy còn lỗi: Avatar upload mô tả form-urlencoded/thành phần IFormFile thay vì multipart field `file`; hai schema PATCH profile trống; registrationToken/If-Match chưa đánh dấu bắt buộc đúng runtime; GET trạng thái PayOS thiếu response thành công. Xem [checklist](api-implementation-checklist.md). Không kết luận API/provider hoàn tất từ Swagger200.
 
 Migration identity là identity quản trị dùng riêng khi deploy. Runtime executor login phải NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/NOCREATEROLE, được membership vào đúng NOLOGIN executor, không vào ledger owner. Adapter kiểm quyền và database mục tiêu trước khi gọi gate. Không dùng `postgres` làm executor. General API identity chỉ đọc bảng tiền; chỉ ghi operation/receipt/inbox và lease/status retry của provisioning, không có INSERT/UPDATE/DELETE trên payment request/transaction hoặc INSERT entitlement. Không cấp webhook executor cho general API login. Các grant phải review theo DB/identity thật, không copy mật khẩu mẫu.
 
