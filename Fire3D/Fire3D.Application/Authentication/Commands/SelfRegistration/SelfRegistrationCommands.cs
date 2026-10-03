@@ -177,8 +177,10 @@ internal static class SelfRegistrationValidation
 
     internal static AuthResult<T> Conflict<T>(RegisterConflict conflict) => conflict switch
     {
-        RegisterConflict.UsernameTaken => AuthResult<T>.Fail("USERNAME_EXISTS", "Username is already registered.", 409),
+        RegisterConflict.UsernameTaken => AuthResult<T>.Fail("USERNAME_EXISTS", "Username is already registered.", 409,
+            new Dictionary<string, string[]> { ["username"] = ["Username đã được đăng ký."] }),
         RegisterConflict.SlugTaken => AuthResult<T>.Fail("ORGANIZATION_CONFLICT", "Organization could not be created. Retry the request.", 409),
-        _ => AuthResult<T>.Fail("EMAIL_EXISTS", "Email is already registered.", 409)
+        _ => AuthResult<T>.Fail("EMAIL_EXISTS", "Email is already registered.", 409,
+            new Dictionary<string, string[]> { ["email"] = ["Email đã được đăng ký."] })
     };
 }

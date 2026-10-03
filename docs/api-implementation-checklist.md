@@ -29,7 +29,7 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 
 ### AUTH-01 — P1 · PARTIAL · Đăng ký local
 
-- **Contract/current:** `POST /api/auth/registration/request-otp` tạo challenge/job gửi mã nhưng không tạo identity; `POST /api/auth/resend-verification` gửi OTP mới sau cooldown và vô hiệu mã/proof cũ; `POST /api/auth/registration/verify-otp` trả proof một lần, rồi ba route register consume proof trong transaction tạo role/tenant server-owned. Trang `/check-email/` gọi request route lần đầu và resend route khi người dùng yêu cầu mã mới. `/verify-email` là route deprecated cho link pending legacy. Migration `20260929120000_AddPreRegistrationOtp` thêm challenge/job OTP; `20260926085252_AddSelfRegistration` thêm username, organization address/phone, index unique lowercase và constraint cho Trainee mới. `/api/auth/register` vẫn là alias Trainee có validation username/confirm password/proof.
+- **Contract/current:** FE nhập form trước → OTP → một nút gọi verify-otp rồi register với toàn bộ form + proof. `POST /api/auth/registration/request-otp` tạo challenge/job gửi mã nhưng không tạo identity; `POST /api/auth/resend-verification` gửi OTP mới sau cooldown và vô hiệu mã/proof cũ. Email đã có account trả 409 EMAIL_EXISTS + errors.email, không enqueue. Ba route register consume proof trong transaction tạo role/tenant server-owned và audit; form sai không consume proof. `/check-email/` là demo OTP, FE thật cần tích hợp riêng. `/verify-email` chỉ dành link pending legacy. Migration `20261003030000_AddNormalizedRegistrationEmail` bổ sung unique email trim/lowercase và guard legacy duplicates, không xóa/gộp dữ liệu; migration OTP/username cũ giữ nguyên. `/api/auth/register` là alias Trainee. [Test tay](registration-payos-manual-test.md); mức nghiệm thu DB/provider/FE phải ghi riêng.
 - **Còn thiếu:** Google onboarding/link và PATCH profile tổ chức. Email verification, `profile_revision`/ETag, đổi username và avatar intent/complete/delete đã có nhưng vẫn cần kiểm thử PostgreSQL/S3 thật.
 - **Nghiệm thu cần chạy:** HTTP/PostgreSQL disposable kiểm tra proof không tạo user trước verify, proof chỉ dùng một lần, hai role, organization transaction và collision username khác hoa/thường. Còn cần test race concurrent cùng username và chuyển dữ liệu production trước khi đóng hoàn toàn.
 
@@ -97,12 +97,13 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 
 ## D. Billing, notification, AI, Learn và báo cáo
 
-### BILLING-01 — P1 · LATER · PayOS và entitlement Building
+### BILLING-01 — P1 · CODE/TEST · PayOS và entitlement Building
 
-- **Contract/current:** Chưa có API/persistence PayOS và entitlement Building production. Docs yêu cầu quotation nhiều Building, snapshot và provisioning theo từng dòng.
-- **Sửa code:** Thêm quotation/item, discount/terms snapshot, payment request và webhook đã xác minh; cấp/gia hạn entitlement từng Building bằng idempotency key; reconcile nếu provision một phần lỗi.
-- **Nghiệm thu:** Không cấp quyền từ return URL; webhook lặp/đến trễ/sai amount không ghi trùng; retry từng dòng không nhân đôi; kỳ từng Building độc lập.
-
+- **✅ Có code:** Catalog/quotation Draft → Issued → Accepted; SDK payOS2.1.0, checkout idempotent, provider-confirmed cancel, verified durable inbox, ledger/provisioning atomic, cấp/gia hạn từng Building, lease/retry/reconcile, API trạng thái và entitlement. Trang return/cancel chỉ điều hướng. Contract/test tay tại [billing.md](billing.md).
+- **✅ Kiểm chứng tự động:** SDK chữ ký offline, HTTP authorization/OpenAPI, PostgreSQL disposable cho replay/race/rollback/partial recovery, UTC month-end và grants executor. Kết quả cuối đợt ghi trong billing.md; không coi test mock là provider acceptance.
+- **❌ Chưa nghiệm thu:** Migration runtime và login grants trên Supabase, đăng ký webhook/probe PayOS, giao dịch thật với bank/provider và kiểm entitlement deployed. Không tick publish/playtest/training gate từ entitlement storage.
+- **❌ Backlog riêng:** Reminder 5 ngày, revenue, AI settlement, hoàn tiền tự động, eInvoice và FE billing đầy đủ.
+- **Nghiệm thu:** Return URL không ghi Paid; amount/currency/link sai không được apply; webhook/recovery/replay không cấp trùng; cùng payment có mốc kích hoạt chung, renewal nối kỳ đã mua; Paid và provisioning riêng biệt.
 ### NOTIFY-01 — P1 · LATER · Nhắc hết hạn
 
 - **Contract/current:** Mailgun hiện phục vụ reset; reminder dịch vụ chưa có. Docs yêu cầu web/email trước 5 ngày.

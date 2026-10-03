@@ -5,6 +5,8 @@ namespace Fire3D.Domain.Entities;
 
 public partial class PayosPaymentRequest
 {
+    public string? PaymentLinkId { get; set; }
+    public string IdempotencyKey { get; set; } = null!;
     public Guid Id { get; set; }
 
     public Guid QuotationId { get; set; }

@@ -65,6 +65,14 @@ The API creates a durable job/outbox record, but this does not establish that an
 
 ## Event-driven target
 
+### PayOS payment boundary (implemented 2026-10-02)
+
+The PayOS path uses PostgreSQL recovery queues and the official `payOS` SDK 2.1.0. A short application transaction reserves a checkout with a stable orderCode and immutable provider input. Create/get/cancel run outside database transactions, with timeout15s and no SDK retries. Verified results are persisted before an EXECUTE-only SQL gate binds a Pending request. A fully paid link recovered after losing the create response can still bind; provider GET and navigation query parameters never authorize financial writes.
+
+An SDK-verified webhook commits a normalized inbox entry before HTTP200. Separate least-privilege request/webhook connections invoke SECURITY DEFINER gates owned by a NOLOGIN ledger role. The inbox gate atomically applies a transaction, records Paid, inserts per-line provisioning work and audit. A fenced worker then commits each snapshot entitlement/receipt/audit in a short transaction, keeping Paid independent from provisioning success. Admin reconciliation reschedules failed work and expired capped Pending claims; it never creates an unsigned payment or repeats Applied money.
+
+Provider results received after tenant/session/quotation validity changes remain durable for investigation; they do not bypass the bind gate. Missing-order responses other than confirmed HTTP404 remain uncertain until the provider contract is verified. Runtime migration, production identity/grant checks and a real payment are deployment acceptance steps, not established by mock or disposable database tests. See [PayOS deployment and manual tests](payos-deployment.md).
+
 An external call must never run inside an open PostgreSQL transaction. A command writes its aggregate, audit record, and an immutable outbox envelope in one short transaction. A dispatcher then publishes it; a consumer records its receipt and business effect in one transaction before acknowledging the message.
 
 ```mermaid

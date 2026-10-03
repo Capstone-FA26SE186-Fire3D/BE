@@ -330,13 +330,37 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
     }
 
     [PostgresFact]
-    public async Task Swagger_documents_bearer_and_auth_requests_are_rate_limited()
+    public async Task Swagger_documents_bearer_security()
     {
         var openapi = await client.GetStringAsync("/openapi/v1.json");
         Assert.Contains("Bearer", openapi);
+        var refresh=JsonDocument.Parse(openapi).RootElement.GetProperty("paths").GetProperty("/api/auth/refresh").GetProperty("post");
+        Assert.True(refresh.GetProperty("responses").TryGetProperty("429",out _));
+    }
+
+    [PostgresFact]
+    public async Task Refresh_requests_are_rate_limited_before_invalid_token_processing()
+    {
+        var origin=Fire3D.API.Configuration.CorsOriginConfiguration.GetAllowedOrigins(factory!.Services.GetRequiredService<IConfiguration>())[0];
+        client.DefaultRequestHeaders.Add("Origin",origin);
         for (var i = 0; i < 10; i++)
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/refresh", new RefreshRequest("invalid"))).StatusCode);
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await client.PostAsJsonAsync("/api/auth/refresh", new RefreshRequest("invalid"))).StatusCode);
+        var limited=await client.PostAsJsonAsync("/api/auth/refresh",new RefreshRequest("invalid"));
+        Assert.Equal(HttpStatusCode.TooManyRequests,limited.StatusCode);
+        Assert.Equal(origin,Assert.Single(limited.Headers.GetValues("Access-Control-Allow-Origin")));
+        Assert.Equal("true",Assert.Single(limited.Headers.GetValues("Access-Control-Allow-Credentials")));
+        var exposed=string.Join(",",limited.Headers.GetValues("Access-Control-Expose-Headers")).Split(',').Select(value=>value.Trim());
+        Assert.Contains("Retry-After",exposed,StringComparer.OrdinalIgnoreCase);
+        Assert.True(limited.Headers.RetryAfter?.Delta>TimeSpan.Zero);
+        var problem=await limited.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("AUTH_REFRESH_RATE_LIMITED",problem.GetProperty("code").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("traceId").GetString()));
+        using var preflight=new HttpRequestMessage(HttpMethod.Options,"/api/auth/refresh");
+        preflight.Headers.Add("Access-Control-Request-Method","POST");
+        preflight.Headers.Add("Access-Control-Request-Headers","content-type");
+        var allowed=await client.SendAsync(preflight);
+        Assert.Equal(HttpStatusCode.NoContent,allowed.StatusCode);
+        Assert.Equal(origin,Assert.Single(allowed.Headers.GetValues("Access-Control-Allow-Origin")));
     }
 
     private async Task<LoginResponse> LoginAsync(string email = "admin@example.test")

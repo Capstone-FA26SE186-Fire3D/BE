@@ -21,8 +21,7 @@ chỉ cung cấp PostgreSQL; không dùng Supabase Auth. Firebase chỉ xác min
 Register chỉ tạo Trainee; client không chọn role/tenant. Email được trim/lowercase.
 Password mới 6–128 ký tự; fullName 1–200 ký tự. Sai mật khẩu/email không tồn tại
 cùng trả 401, tài khoản/organization bị khóa trả 403 sau khi xác minh mật khẩu.
-Các route anonymous không có rate limit BE riêng trong giai đoạn hiện tại. Header Bearer sai không biến chúng thành route
-bắt buộc đăng nhập; refresh vẫn yêu cầu refreshToken hợp lệ trong body.
+Refresh là anonymous theo JWT nhưng yêu cầu refreshToken hợp lệ trong body; Bearer sai không biến route thành bắt buộc đăng nhập. Route có giới hạn 10 request/IP/phút, fixed window riêng mỗi instance, không Redis. Quota bao gồm request token sai: trong quota trả401, vượt quota trả429 `AUTH_REFRESH_RATE_LIMITED`, `traceId` và `Retry-After`. Middleware quyết định connection IP; không tin trực tiếp header IP từ client. CORS chạy trước rate limiter; origin được cho phép đọc response429 và header `Retry-After` đã expose. Preflight không tiêu thụ quota refresh. Các route anonymous khác giữ policy hiện hành của từng luồng.
 
 Google yêu cầu Firebase token xác minh được, chưa revoke, email_verified=true và
 sign_in_provider=google.com. UID đã liên kết giữ role/organization trong DB. Email
@@ -72,6 +71,8 @@ Các script SQL này cần chạy riêng, không được thay bằng EF EnsureC
 - `AuthEmail__WorkerEnabled`: true để gửi email, false khi test không cần worker.
 - `AuthTokenCleanup__Enabled`: bật/tắt worker dọn refresh token; mặc định `true`.
 - `AuthTokenCleanup__IntervalMinutes`, `AuthTokenCleanup__RetentionDays`, `AuthTokenCleanup__BatchSize`, `AuthTokenCleanup__MaxBatchesPerRun`: mặc định là `60`, `7`, `500`, `10`. Worker chỉ xóa family khi mọi refresh token trong family đã hết hạn ít nhất `RetentionDays`; access JWT không lưu trong database.
+- Cleanup chọn batch theo hạn cuối family, user ID rồi family ID để thứ tự ổn định trên PostgreSQL. Sau khi lấy khóa user, nó kiểm tra lại mọi token trong family trước khi xóa; token mới hoặc thành viên chưa qua retention giữ toàn bộ family. Không cần migration cho sửa query này.
+- PostgreSQL regression kiểm generation email bằng kiểu `integer` thực tế. Resend legacy cùng account chạy cạnh tranh chỉ tạo một generation sau cooldown và worker của generation cũ bị chặn; link legacy đã phát hành giữ contract riêng. Luồng OTP mới vô hiệu mã/proof cũ khi resend được chấp nhận, và proof đăng ký chỉ dùng một lần.
 - `Mailgun__ApiKey`, `Mailgun__Domain`, `Mailgun__From`, `Mailgun__BaseUrl`: Mailgun.
 - Firebase Admin credential: chỉ cần cho Google; secret JSON, section hoặc file local.
   Email/password/reset local không cần Firebase Web API key hoặc lời gọi Firebase.

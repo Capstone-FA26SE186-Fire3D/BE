@@ -95,12 +95,13 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     /// <summary>Resends a six-digit registration OTP.</summary>
     /// <remarks>
     /// After the one-minute cooldown, this invalidates the previous registration OTP and registration proof for
-    /// the email. New registrations use <c>registration/request-otp</c> for the first code.
+    /// the email. New registrations use <c>registration/request-otp</c> for the first code. An existing email returns 409 EMAIL_EXISTS.
     /// </remarks>
     [HttpPost("resend-verification")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(429)]
     public async Task<IActionResult> ResendVerification(
         [FromBody] Fire3D.Application.Authentication.RequestRegistrationOtpRequest request,
@@ -126,13 +127,15 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
 
     /// <summary>Requests a six-digit email code before a new account is created.</summary>
     /// <remarks>
-    /// This endpoint never creates a user or organization. It returns 202 for accepted requests so a caller cannot
-    /// determine whether an address is already registered. Codes expire after ten minutes.
+    /// This endpoint never creates a user or organization. New emails return 202; registered emails return 409
+    /// EMAIL_EXISTS with errors.email, without queuing email. Codes expire after ten minutes. The FE keeps its form
+    /// in memory, verifies the OTP, then submits the full form with registrationToken to the appropriate register route.
     /// </remarks>
     [HttpPost("registration/request-otp")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(429)]
     public async Task<IActionResult> RequestRegistrationOtp(
         [FromBody] Fire3D.Application.Authentication.RequestRegistrationOtpRequest request,
@@ -159,8 +162,11 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     /// <summary>
     /// Cấp lại Access Token mới dựa vào Refresh Token hợp lệ.
     /// </summary>
+    /// <remarks>10 requests per connection IP per minute on each instance. 429 includes Retry-After and AUTH_REFRESH_RATE_LIMITED; no Redis.</remarks>
     [HttpPost("refresh")]
     [AllowAnonymous]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("auth-refresh")]
+    [ProducesResponseType<ProblemDetails>(429)]
     public async Task<ActionResult<TokenResponse>> Refresh(RefreshRequest request, CancellationToken ct) =>
         Respond(await sender.Send(new RefreshTokenCommand(request.RefreshToken), ct));
 

@@ -96,6 +96,28 @@ public static class AuthenticationExtensions
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("auth-refresh", context => RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.MapToIPv6().ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true
+                }));
+            options.OnRejected = async (rejection, ct) =>
+            {
+                var context = rejection.HttpContext;
+                if (context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName != "auth-refresh") return;
+                var retry = rejection.Lease.TryGetMetadata(MetadataName.RetryAfter, out var remaining)
+                    ? Math.Max(1, (int)Math.Ceiling(remaining.TotalSeconds)) : 60;
+                context.Response.Headers.RetryAfter = retry.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                context.Response.ContentType = "application/problem+json";
+                await context.Response.WriteAsJsonAsync(new Microsoft.AspNetCore.Mvc.ProblemDetails
+                {
+                    Status = StatusCodes.Status429TooManyRequests,
+                    Title = "Too many refresh requests. Try again after the indicated delay.",
+                    Type = "https://www.rfc-editor.org/rfc/rfc6585#section-4",
+                    Extensions = { ["code"] = "AUTH_REFRESH_RATE_LIMITED",
+                        ["traceId"] = System.Diagnostics.Activity.Current?.Id ?? context.TraceIdentifier }
+                }, options: null, contentType: "application/problem+json", cancellationToken: ct);
+            };
             options.AddPolicy("administration", context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
                 {

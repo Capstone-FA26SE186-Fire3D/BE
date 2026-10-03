@@ -12,6 +12,12 @@
 
 
 	<ItemGroup>
+        <EmbeddedResource Include="Billing/Schema.sql" LogicalName="Fire3D.Infrastructure.Billing.Schema.sql" />
+        <EmbeddedResource Include="Billing/Hardening.sql" LogicalName="Fire3D.Infrastructure.Billing.Hardening.sql" />
+        <EmbeddedResource Include="Billing/PayosRuntime.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosRuntime.sql" />
+        <EmbeddedResource Include="Billing/PayosCheckout.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosCheckout.sql" />
+        <EmbeddedResource Include="Billing/PayosWebhook.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosWebhook.sql" />
+        <EmbeddedResource Include="Billing/PayosProvisioning.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosProvisioning.sql" />
 		<PackageReference Include="AWSSDK.Core" Version="*" />
 		<PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="*" />
 		<PackageReference Include="AWSSDK.S3" Version="*" />
@@ -27,6 +33,7 @@
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
 		<PackageReference Include="MiniExcel" Version="*" />
+		<PackageReference Include="payOS" Version="2.1.0" />
 		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="*" />
 		<PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.12" />
 		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />

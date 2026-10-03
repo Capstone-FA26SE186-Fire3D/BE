@@ -30,7 +30,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
-builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>()
+    .AddOperationTransformer<BillingOperationTransformer>());
 builder.Services.AddHealthChecks();
 
 // Cấu hình Firebase Admin SDK
@@ -60,7 +61,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(frontendUrls)
               .AllowAnyMethod()
               .AllowAnyHeader()
-              .WithExposedHeaders("ETag")
+              .WithExposedHeaders("ETag", "Retry-After")
               .AllowCredentials();
     });
 });
@@ -92,7 +93,7 @@ app.UseForwardedHeaders();
 // Configure the HTTP request pipeline.
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/verify-email") || context.Request.Path.StartsWithSegments("/check-email"))
+    if (context.Request.Path.StartsWithSegments("/verify-email") || context.Request.Path.StartsWithSegments("/check-email") || context.Request.Path.StartsWithSegments("/billing"))
     {
         context.Response.Headers.CacheControl = "no-store, max-age=0";
         context.Response.Headers.Pragma = "no-cache";
@@ -116,8 +117,8 @@ app.UseSwaggerUI(options =>
 // Azure App Service handles SSL termination - no need for HTTPS redirect
 // app.UseHttpsRedirection();
 
-app.UseRateLimiter();
 app.UseCors("AllowFrontend");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

@@ -7,6 +7,7 @@ public partial class Fire3DDbContext
 {
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
     {
+        ConfigureBilling(modelBuilder);
         modelBuilder.ApplyConfiguration(new Configurations.RefreshTokenConfiguration());
         modelBuilder.Entity<User>().Property(x => x.PasswordHash).HasColumnName("password_hash");
         modelBuilder.Entity<User>().Property(x => x.AvatarStorageKey).HasColumnName("avatar_storage_key");

@@ -37,7 +37,8 @@ public sealed class RequestRegistrationOtpCommandHandler(IRegistrationOtpService
     {
         var email = PasswordResetValidation.NormalizeEmail(request.Email);
         return email is null
-            ? Task.FromResult(AuthResult<bool>.Fail("INVALID_EMAIL", "Use a valid email address (maximum 254 characters).", 400))
+            ? Task.FromResult(AuthResult<bool>.Fail("INVALID_EMAIL", "Use a valid email address (maximum 254 characters).", 400,
+                new Dictionary<string, string[]> { ["email"] = ["Email không hợp lệ hoặc vượt quá 254 ký tự."] }))
             : service.RequestOtpAsync(email, request.RemoteAddress, ct);
     }
 }
@@ -53,10 +54,12 @@ public sealed class VerifyRegistrationOtpCommandHandler(IRegistrationOtpService 
         var email = PasswordResetValidation.NormalizeEmail(request.Email);
         if (email is null)
             return Task.FromResult(AuthResult<RegistrationOtpVerificationResponse>.Fail(
-                "INVALID_EMAIL", "Use a valid email address (maximum 254 characters).", 400));
+                "INVALID_EMAIL", "Use a valid email address (maximum 254 characters).", 400,
+                new Dictionary<string, string[]> { ["email"] = ["Email không hợp lệ hoặc vượt quá 254 ký tự."] }));
         if (string.IsNullOrWhiteSpace(request.Otp) || request.Otp.Length != 6 || request.Otp.Any(c => c is < '0' or > '9'))
             return Task.FromResult(AuthResult<RegistrationOtpVerificationResponse>.Fail(
-                "INVALID_OTP", "Enter the six-digit verification code.", 400));
+                "INVALID_OTP", "Enter the six-digit verification code.", 400,
+                new Dictionary<string, string[]> { ["otp"] = ["Nhập mã xác minh gồm sáu chữ số."] }));
         return service.VerifyOtpAsync(email, request.Otp, ct);
     }
 }

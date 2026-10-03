@@ -293,7 +293,28 @@ public sealed class PasswordResetPostgresTests
         await using (var secondResendContext = database.Context())
             await new EmailVerificationQueue(secondResendContext, settings).EnqueueAsync("cooldown@example.com", default);
         Assert.Equal(2L, await database.Sql($"SELECT count(*) FROM email_verification_jobs WHERE user_id='{userId}'"));
-        Assert.Equal(2L, await database.Sql($"SELECT max(generation) FROM email_verification_jobs WHERE user_id='{userId}'"));
+        Assert.Equal(2, Assert.IsType<int>(await database.Sql($"SELECT max(generation) FROM email_verification_jobs WHERE user_id='{userId}'")));
+    }
+
+    [ResetPostgresFact]
+    public async Task Concurrent_legacy_resends_create_one_generation_and_fence_the_old_job()
+    {
+        await using var database=await Database.Create();var user=Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role,registration_expires_at) VALUES('{user}','resend-race@example.test','Trainee',now()+interval '2 hours')");
+        var options=Options.Create(new AuthEmailOptions{FrontendUrl="https://app.example.test"});
+        await using var initial=database.Context();var queue=new EmailVerificationQueue(initial,options);
+        await queue.EnqueueAsync(user,"resend-race@example.test",default);
+        var oldJob=Assert.IsType<VerificationEmailJob>(await queue.ClaimAsync(default));
+        await database.Sql("UPDATE email_verification_jobs SET created_at=now()-interval '61 seconds'");
+        await Task.WhenAll(Enumerable.Range(0,5).Select(async _=>
+        {
+            await using var context=database.Context();
+            await new EmailVerificationQueue(context,options).EnqueueAsync("resend-race@example.test",default);
+        }));
+        Assert.Equal(2L,await database.Sql("SELECT count(*) FROM email_verification_jobs"));
+        Assert.Equal(2,Assert.IsType<int>(await database.Sql("SELECT max(generation) FROM email_verification_jobs")));
+        Assert.False(await queue.CanDeliverAsync(oldJob,default));
+        Assert.Null(await queue.CreateLinkAsync(oldJob,default));
     }
 
     [ResetPostgresFact]
@@ -427,5 +448,60 @@ public sealed class PasswordResetPostgresTests
         Assert.Equal(0L, await database.Sql($"SELECT count(*) FROM auth_refresh_tokens WHERE family_id='{removableFamily}'"));
         Assert.Equal(1L, await database.Sql($"SELECT count(*) FROM auth_refresh_tokens WHERE family_id='{recentFamily}'"));
         Assert.Equal(2L, await database.Sql($"SELECT count(*) FROM auth_refresh_tokens WHERE family_id='{mixedFamily}'"));
+    }
+
+    [ResetPostgresFact]
+    public async Task Refresh_cleanup_batches_have_stable_user_and_family_order()
+    {
+        await using var database=await Database.Create();
+        var firstUser=Guid.Parse("00000000-0000-0000-0000-000000000010");
+        var secondUser=Guid.Parse("00000000-0000-0000-0000-000000000020");
+        var firstFamily=Guid.Parse("00000000-0000-0000-0000-000000000005");
+        var nextFamily=Guid.Parse("00000000-0000-0000-0000-000000000008");
+        await database.Sql($"INSERT INTO users(id,email,role) VALUES('{firstUser}','order-one@example.test','Trainee'),('{secondUser}','order-two@example.test','Trainee')");
+        await database.Sql($"""
+            INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at)
+            VALUES ('{Guid.NewGuid()}','{secondUser}','{firstFamily}','second',now()-interval '20 days',now()-interval '8 days'),
+                   ('{Guid.NewGuid()}','{firstUser}','{nextFamily}','next',now()-interval '20 days',now()-interval '8 days'),
+                   ('{Guid.NewGuid()}','{firstUser}','{firstFamily}','first',now()-interval '20 days',now()-interval '8 days')
+            """);
+        await using var context=database.Context();var cleanup=new RefreshTokenCleanupStore(context);
+        Assert.Equal(1,await cleanup.DeleteExpiredFamiliesAsync(7,1,default));
+        Assert.Equal(0L,await database.Sql($"SELECT count(*) FROM auth_refresh_tokens WHERE user_id='{firstUser}' AND family_id='{firstFamily}'"));
+        Assert.Equal(2L,await database.Sql("SELECT count(*) FROM auth_refresh_tokens"));
+        Assert.Equal(1,await cleanup.DeleteExpiredFamiliesAsync(7,1,default));
+        Assert.Equal(secondUser,await database.Sql("SELECT user_id FROM auth_refresh_tokens"));
+    }
+
+    [ResetPostgresFact]
+    public async Task Refresh_cleanup_rechecks_the_family_after_waiting_for_the_user_lock()
+    {
+        await using var database=await Database.Create();var user=Guid.NewGuid();var family=Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role) VALUES('{user}','cleanup-race@example.test','Trainee'); INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at) VALUES('{Guid.NewGuid()}','{user}','{family}','old',now()-interval '20 days',now()-interval '8 days')");
+        await using var writer=new NpgsqlConnection(database.Connection);await writer.OpenAsync();await using var tx=await writer.BeginTransactionAsync();
+        await new NpgsqlCommand($"SELECT pg_advisory_xact_lock(hashtextextended('fire3d:auth:{user}',0))",writer,tx).ExecuteNonQueryAsync();
+        await using var context=database.Context();var cleanup=new RefreshTokenCleanupStore(context);
+        var pending=cleanup.DeleteExpiredFamiliesAsync(7,20,default);
+        // Observe the real cleanup connection waiting on the lock, rather than racing an arbitrary sleep.
+        using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        while(!Equals(await database.Sql("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event='advisory')"),true))
+        {
+            if(pending.IsCompleted)await pending;
+            await Task.Delay(20,timeout.Token);
+        }
+        await new NpgsqlCommand($"INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at) VALUES('{Guid.NewGuid()}','{user}','{family}','active',now(),now()+interval '1 day')",writer,tx).ExecuteNonQueryAsync();
+        await tx.CommitAsync();
+        Assert.Equal(0,await pending.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal(2L,await database.Sql("SELECT count(*) FROM auth_refresh_tokens"));
+    }
+
+    [ResetPostgresFact]
+    public async Task Refresh_cleanup_keeps_recently_expired_and_active_families_at_retention_boundary()
+    {
+        await using var database=await Database.Create();var user=Guid.NewGuid();
+        await database.Sql($"INSERT INTO users(id,email,role) VALUES('{user}','cleanup-boundary@example.test','Trainee'); INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at) VALUES('{Guid.NewGuid()}','{user}','{Guid.NewGuid()}','boundary',now()-interval '20 days',now()-interval '7 days'),('{Guid.NewGuid()}','{user}','{Guid.NewGuid()}','retained',now()-interval '20 days',now()-interval '7 days'+interval '5 minutes'),('{Guid.NewGuid()}','{user}','{Guid.NewGuid()}','active',now(),now()+interval '1 day')");
+        await using var context=database.Context();
+        Assert.Equal(1,await new RefreshTokenCleanupStore(context).DeleteExpiredFamiliesAsync(7,20,default));
+        Assert.Equal(2L,await database.Sql("SELECT count(*) FROM auth_refresh_tokens WHERE token_hash IN('retained','active')"));
     }
 }

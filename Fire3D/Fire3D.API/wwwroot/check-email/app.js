@@ -13,7 +13,30 @@
   const resendOtpUrl = new URL('../api/auth/resend-verification', location.href);
   const verifyOtpUrl = new URL('../api/auth/registration/verify-otp', location.href);
   const jsonHeaders = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-  const normalizedEmail = () => email.value.trim();
+  const normalizedEmail = () => email.value.trim().toLowerCase();
+
+  function clearProof() {
+    ['email', 'token', 'expiresAt'].forEach(key => sessionStorage.removeItem('fet3d.registration.' + key));
+  }
+
+  function requestErrorMessage(error) {
+    if (error.message === 'rate-limited') return 'Bạn đã yêu cầu quá nhiều mã. Vui lòng thử lại sau.';
+    if (error.message === 'email-changed') return 'Email đã thay đổi. Hãy yêu cầu mã cho email mới.';
+    if (error instanceof TypeError || error instanceof SyntaxError)
+      return 'Không thể kết nối hoặc đọc phản hồi từ máy chủ. Vui lòng thử lại sau.';
+    return error.message;
+  }
+
+  email.addEventListener('input', () => {
+    clearProof();
+    clearInterval(cooldownTimer);
+    verifyForm.classList.add('hidden');
+    otp.value = '';
+    otp.disabled = false;
+    verifyButton.disabled = false;
+    resendButton.disabled = true;
+    status.textContent = 'Email đã thay đổi. Hãy yêu cầu mã xác minh cho email này.';
+  });
 
   function startCooldown(seconds = 60) {
     clearInterval(cooldownTimer);
@@ -33,15 +56,29 @@
   }
 
   async function requestOtp(url) {
+    const requestedEmail = normalizedEmail();
     const response = await fetch(url, {
-      method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: normalizedEmail() })
+      method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: requestedEmail })
     });
+    if (normalizedEmail() !== requestedEmail) throw new Error('email-changed');
+    if (response.status === 409) {
+      clearProof();
+      verifyForm.classList.add('hidden');
+      const error = await response.json();
+      throw new Error(error.errors?.email?.[0] || error.title || 'Email đã được đăng ký. Hãy đăng nhập hoặc đặt lại mật khẩu.');
+    }
     if (response.status === 429) {
       const seconds = Number.parseInt(response.headers.get('Retry-After'), 10);
       startCooldown(Number.isSafeInteger(seconds) && seconds > 0 ? seconds : 60);
       throw new Error('rate-limited');
     }
-    if (!response.ok) throw new Error('request-failed');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.errors?.email?.[0] || error.title || 'Không thể gửi mã lúc này.');
+    }
+    clearProof();
+    otp.disabled = false;
+    verifyButton.disabled = false;
     verifyForm.classList.remove('hidden');
     startCooldown();
     otp.focus();
@@ -52,11 +89,9 @@
     requestButton.disabled = true;
     try {
       await requestOtp(requestOtpUrl);
-      status.textContent = 'Nếu email có thể đăng ký, mã xác minh đã được gửi. Kiểm tra hộp thư của bạn.';
+      status.textContent = 'Yêu cầu gửi mã đã được nhận. Kiểm tra hộp thư và thư rác của bạn.';
     } catch (error) {
-      status.textContent = error.message === 'rate-limited'
-        ? 'Bạn đã yêu cầu quá nhiều mã. Vui lòng thử lại sau.'
-        : 'Không thể gửi mã lúc này. Vui lòng thử lại sau.';
+      status.textContent = requestErrorMessage(error);
     } finally {
       requestButton.disabled = false;
     }
@@ -66,11 +101,10 @@
     resendButton.disabled = true;
     try {
       await requestOtp(resendOtpUrl);
-      status.textContent = 'Nếu email có thể đăng ký, mã mới đã được gửi. Mã cũ không còn hiệu lực.';
+      status.textContent = 'Yêu cầu gửi lại mã đã được nhận. Sau cooldown, mã và proof cũ không còn hiệu lực.';
     } catch (error) {
-      status.textContent = error.message === 'rate-limited'
-        ? 'Bạn đã yêu cầu quá nhiều mã. Vui lòng thử lại sau.'
-        : 'Không thể gửi mã lúc này. Vui lòng thử lại sau.';
+      status.textContent = requestErrorMessage(error);
+      if (error.message !== 'rate-limited') resendButton.disabled = false;
     }
   });
 
@@ -82,13 +116,15 @@
       return;
     }
     verifyButton.disabled = true;
+    const verifiedEmail = normalizedEmail();
     try {
       const response = await fetch(verifyOtpUrl, {
-        method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: normalizedEmail(), otp: code })
+        method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: verifiedEmail, otp: code })
       });
       if (!response.ok) throw new Error('invalid-otp');
       const proof = await response.json();
-      sessionStorage.setItem('fet3d.registration.email', normalizedEmail());
+      if (normalizedEmail() !== verifiedEmail) throw new Error('email-changed');
+      sessionStorage.setItem('fet3d.registration.email', verifiedEmail);
       sessionStorage.setItem('fet3d.registration.token', proof.registrationToken);
       sessionStorage.setItem('fet3d.registration.expiresAt', proof.expiresAt);
       status.textContent = 'Email đã xác minh. Quay lại trang đăng ký để hoàn tất thông tin.';

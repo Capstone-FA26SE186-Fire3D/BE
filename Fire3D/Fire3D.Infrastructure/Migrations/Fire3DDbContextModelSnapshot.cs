@@ -280,6 +280,170 @@ namespace Fire3D.Infrastructure.Migrations
                     b.ToTable("avatar_upload_intents", (string)null);
                 });
 
+            modelBuilder.Entity("Fire3D.Domain.Entities.BillingCheckoutOperation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<bool>("CancelRequested")
+                        .HasColumnType("boolean")
+                        .HasColumnName("cancel_requested");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("InputHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("input_hash");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("last_error");
+
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_token");
+
+                    b.Property<DateTime?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until");
+
+                    b.Property<DateTime>("NextAttemptAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<long>("OrderCode")
+                        .HasColumnType("bigint")
+                        .HasColumnName("order_code");
+
+                    b.Property<string>("PaymentLinkId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("payment_link_id");
+
+                    b.Property<Guid?>("PaymentRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_request_id");
+
+                    b.Property<string>("ProviderInput")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("provider_input")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<string>("ProviderResult")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("provider_result");
+
+                    b.Property<Guid>("QuotationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("quotation_id");
+
+                    b.Property<Guid?>("SessionFamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_family_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderCode")
+                        .IsUnique();
+
+                    b.HasIndex("QuotationId")
+                        .IsUnique()
+                        .HasFilter("status IN ('Creating','Ready','NeedsReconcile')");
+
+                    b.HasIndex("ActorId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("billing_checkout_operations");
+                });
+
+            modelBuilder.Entity("Fire3D.Domain.Entities.BillingCommandReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("InputHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("input_hash");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("operation");
+
+                    b.Property<Guid>("ResourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resource_id");
+
+                    b.Property<string>("Response")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("response");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId", "Operation", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("billing_command_receipts");
+                });
+
             modelBuilder.Entity("Fire3D.Domain.Entities.Building", b =>
                 {
                     b.Property<Guid>("Id")
@@ -650,6 +814,81 @@ namespace Fire3D.Infrastructure.Migrations
                     b.ToTable("device_installations", (string)null);
                 });
 
+            modelBuilder.Entity("Fire3D.Domain.Entities.EnterpriseQuoteRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContactEmail")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("contact_email");
+
+                    b.Property<string>("ContactName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("contact_name");
+
+                    b.Property<string>("ContactPhone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("contact_phone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<Guid?>("QuotationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("quotation_id");
+
+                    b.Property<int>("RequestedBuildingCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("requested_building_count");
+
+                    b.Property<Guid>("RequestedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by");
+
+                    b.Property<int?>("RequestedDurationMonths")
+                        .HasColumnType("integer")
+                        .HasColumnName("requested_duration_months");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("enterprise_quote_requests");
+                });
+
             modelBuilder.Entity("Fire3D.Domain.Entities.Feedback", b =>
                 {
                     b.Property<Guid>("Id")
@@ -821,6 +1060,61 @@ namespace Fire3D.Infrastructure.Migrations
                     b.ToTable("invoice_metadata", (string)null);
                 });
 
+            modelBuilder.Entity("Fire3D.Domain.Entities.NotificationDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("channel");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text")
+                        .HasColumnName("last_error");
+
+                    b.Property<Guid>("NotificationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("notification_id");
+
+                    b.Property<string>("ProviderMessageId")
+                        .HasColumnType("text")
+                        .HasColumnName("provider_message_id");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NotificationId", "Channel")
+                        .IsUnique();
+
+                    b.ToTable("notification_deliveries");
+                });
+
             modelBuilder.Entity("Fire3D.Domain.Entities.Organization", b =>
                 {
                     b.Property<Guid>("Id")
@@ -904,6 +1198,71 @@ namespace Fire3D.Infrastructure.Migrations
                     b.ToTable("organizations", (string)null);
                 });
 
+            modelBuilder.Entity("Fire3D.Domain.Entities.OrganizationNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("body");
+
+                    b.Property<Guid>("BuildingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("building_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EntitlementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entitlement_id");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("NotificationType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("notification_type");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at");
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recipient_user_id");
+
+                    b.Property<DateTime>("ReferenceEndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reference_ends_at");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("organization_notifications");
+                });
+
             modelBuilder.Entity("Fire3D.Domain.Entities.PasswordResetToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -937,6 +1296,83 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasDatabaseName("ix_password_reset_tokens_user_id");
 
                     b.ToTable("password_reset_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("Fire3D.Domain.Entities.PaymentProvisioningRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text")
+                        .HasColumnName("last_error");
+
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_token");
+
+                    b.Property<DateTime?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until");
+
+                    b.Property<DateTime>("NextAttemptAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<Guid>("PaymentTransactionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_transaction_id");
+
+                    b.Property<DateTime?>("ProvisionedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("provisioned_at");
+
+                    b.Property<string>("ProvisioningKey")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("provisioning_key");
+
+                    b.Property<Guid>("QuotationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("quotation_id");
+
+                    b.Property<Guid>("QuotationItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("quotation_item_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentTransactionId", "QuotationItemId")
+                        .IsUnique();
+
+                    b.ToTable("payment_provisioning_records");
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.PaymentTransaction", b =>
@@ -1066,6 +1502,14 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("idempotency_key")
+                        .HasDefaultValueSql("gen_random_uuid()::text");
+
                     b.Property<long>("OrderCode")
                         .HasColumnType("bigint")
                         .HasColumnName("order_code");
@@ -1081,6 +1525,11 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Property<Guid?>("PaidTransactionId")
                         .HasColumnType("uuid")
                         .HasColumnName("paid_transaction_id");
+
+                    b.Property<string>("PaymentLinkId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("payment_link_id");
 
                     b.Property<Guid>("QuotationId")
                         .HasColumnType("uuid")
@@ -1108,6 +1557,12 @@ namespace Fire3D.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("payos_payment_requests_pkey");
 
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("PaymentLinkId")
+                        .IsUnique();
+
                     b.HasIndex("PaidTransactionId", "Id");
 
                     b.HasIndex(new[] { "OrganizationId" }, "idx_payos_payment_requests_organization");
@@ -1123,6 +1578,81 @@ namespace Fire3D.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("payos_payment_requests", (string)null);
+                });
+
+            modelBuilder.Entity("Fire3D.Domain.Entities.PayosWebhookInboxEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("event_key");
+
+                    b.Property<string>("InputHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("input_hash");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("last_error");
+
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_token");
+
+                    b.Property<DateTime?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until");
+
+                    b.Property<DateTime>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<long>("OrderCode")
+                        .HasColumnType("bigint")
+                        .HasColumnName("order_code");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verified_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventKey")
+                        .IsUnique();
+
+                    b.ToTable("payos_webhook_inbox");
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.PlaytestSession", b =>
@@ -1328,6 +1858,14 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("accepted_at");
 
+                    b.Property<string>("BillingPurpose")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("BuildingService")
+                        .HasColumnName("billing_purpose");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -1347,6 +1885,17 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("numeric(14,2)")
                         .HasColumnName("discount_amount");
 
+                    b.Property<Guid?>("DiscountRuleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("discount_rule_id");
+
+                    b.Property<string>("DiscountSnapshot")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("discount_snapshot")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
                     b.Property<DateTime?>("IssuedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("issued_at");
@@ -1358,6 +1907,13 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid")
                         .HasColumnName("organization_id");
+
+                    b.Property<string>("PriceSnapshot")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("price_snapshot")
+                        .HasDefaultValueSql("'{}'::jsonb");
 
                     b.Property<int>("Quantity")
                         .ValueGeneratedOnAdd()
@@ -1375,7 +1931,14 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("requested_by");
 
-                    b.Property<Guid>("ServicePackageId")
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("revision");
+
+                    b.Property<Guid?>("ServicePackageId")
                         .HasColumnType("uuid")
                         .HasColumnName("service_package_id");
 
@@ -1392,6 +1955,13 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasPrecision(14, 2)
                         .HasColumnType("numeric(14,2)")
                         .HasColumnName("tax_amount");
+
+                    b.Property<string>("TermsSnapshot")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("terms_snapshot")
+                        .HasDefaultValueSql("'{}'::jsonb");
 
                     b.Property<decimal>("TotalAmount")
                         .HasPrecision(14, 2)
@@ -1416,6 +1986,8 @@ namespace Fire3D.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("quotations_pkey");
 
+                    b.HasIndex("DiscountRuleId");
+
                     b.HasIndex(new[] { "IssuedBy" }, "idx_quotations_issued_by");
 
                     b.HasIndex(new[] { "OrganizationId" }, "idx_quotations_organization");
@@ -1428,6 +2000,100 @@ namespace Fire3D.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("quotations", (string)null);
+                });
+
+            modelBuilder.Entity("Fire3D.Domain.Entities.QuotationBuildingItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BuildingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("building_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("discount_amount");
+
+                    b.Property<string>("DiscountSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("discount_snapshot");
+
+                    b.Property<string>("LineProvisioningKey")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("line_provisioning_key");
+
+                    b.Property<string>("PriceSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("price_snapshot");
+
+                    b.Property<string>("PurchaseAction")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("purchase_action");
+
+                    b.Property<Guid>("QuotationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("quotation_id");
+
+                    b.Property<int>("ServiceDurationMonths")
+                        .HasColumnType("integer")
+                        .HasColumnName("service_duration_months");
+
+                    b.Property<Guid>("ServicePackageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_package_id");
+
+                    b.Property<decimal>("SubtotalAmount")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("subtotal_amount");
+
+                    b.Property<string>("TermsSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("terms_snapshot");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("total_amount");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("unit_price");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuildingId");
+
+                    b.HasIndex("LineProvisioningKey")
+                        .IsUnique();
+
+                    b.HasIndex("ServicePackageId");
+
+                    b.HasIndex("QuotationId", "BuildingId")
+                        .IsUnique();
+
+                    b.ToTable("quotation_building_items");
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.RefreshToken", b =>
@@ -2422,6 +3088,94 @@ namespace Fire3D.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Fire3D.Domain.Entities.ServiceEntitlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BuildingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("building_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("EndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ends_at");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<Guid?>("PaymentTransactionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_transaction_id");
+
+                    b.Property<int>("PlaytestUnitsGranted")
+                        .HasColumnType("integer")
+                        .HasColumnName("playtest_units_granted");
+
+                    b.Property<int>("PlaytestUnitsUsed")
+                        .HasColumnType("integer")
+                        .HasColumnName("playtest_units_used");
+
+                    b.Property<string>("PriceSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("price_snapshot");
+
+                    b.Property<string>("ProvisioningKey")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("provisioning_key");
+
+                    b.Property<Guid?>("QuotationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("quotation_id");
+
+                    b.Property<Guid?>("QuotationItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("quotation_item_id");
+
+                    b.Property<Guid>("ServicePackageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_package_id");
+
+                    b.Property<DateTime>("StartsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("starts_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TermsSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("terms_snapshot");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProvisioningKey")
+                        .IsUnique();
+
+                    b.HasIndex("QuotationItemId", "PaymentTransactionId")
+                        .IsUnique();
+
+                    b.ToTable("service_entitlements");
+                });
+
             modelBuilder.Entity("Fire3D.Domain.Entities.ServicePackage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2481,6 +3235,13 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("name");
 
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("revision");
+
                     b.Property<decimal>("UnitPrice")
                         .HasPrecision(14, 2)
                         .HasColumnType("numeric(14,2)")
@@ -2504,6 +3265,85 @@ namespace Fire3D.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("service_packages", (string)null);
+                });
+
+            modelBuilder.Entity("Fire3D.Domain.Entities.ServicePackageDiscountRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("DiscountCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("discount_currency");
+
+                    b.Property<string>("DiscountKind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("discount_kind");
+
+                    b.Property<decimal>("DiscountValue")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("discount_value");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<int>("MinimumBuildings")
+                        .HasColumnType("integer")
+                        .HasColumnName("minimum_buildings");
+
+                    b.Property<int?>("MinimumDurationMonths")
+                        .HasColumnType("integer")
+                        .HasColumnName("minimum_duration_months");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("revision");
+
+                    b.Property<Guid?>("ServicePackageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_package_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<DateTime>("ValidFrom")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("valid_from");
+
+                    b.Property<DateTime?>("ValidUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("valid_until");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("service_package_discount_rules");
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.Session", b =>
@@ -3744,6 +4584,11 @@ namespace Fire3D.Infrastructure.Migrations
 
             modelBuilder.Entity("Fire3D.Domain.Entities.Quotation", b =>
                 {
+                    b.HasOne("Fire3D.Domain.Entities.ServicePackageDiscountRule", null)
+                        .WithMany()
+                        .HasForeignKey("DiscountRuleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Fire3D.Domain.Entities.User", "IssuedByNavigation")
                         .WithMany("QuotationIssuedByNavigations")
                         .HasForeignKey("IssuedBy")
@@ -3768,7 +4613,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .WithMany("Quotations")
                         .HasForeignKey("ServicePackageId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("quotations_service_package_id_fkey");
 
                     b.Navigation("IssuedByNavigation");
@@ -3778,6 +4622,27 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Navigation("RequestedByNavigation");
 
                     b.Navigation("ServicePackage");
+                });
+
+            modelBuilder.Entity("Fire3D.Domain.Entities.QuotationBuildingItem", b =>
+                {
+                    b.HasOne("Fire3D.Domain.Entities.Building", null)
+                        .WithMany()
+                        .HasForeignKey("BuildingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Fire3D.Domain.Entities.Quotation", null)
+                        .WithMany()
+                        .HasForeignKey("QuotationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Fire3D.Domain.Entities.ServicePackage", null)
+                        .WithMany()
+                        .HasForeignKey("ServicePackageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.RefreshToken", b =>

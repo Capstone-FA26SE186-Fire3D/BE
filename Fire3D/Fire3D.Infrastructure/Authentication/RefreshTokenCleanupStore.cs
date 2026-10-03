@@ -32,7 +32,7 @@ public sealed class RefreshTokenCleanupStore(Fire3DDbContext db) : IRefreshToken
                   FROM public.auth_refresh_tokens
                  GROUP BY user_id, family_id
                 HAVING max(expires_at) <= statement_timestamp() - (@retention_days * interval '1 day')
-                 ORDER BY max(expires_at), min(id)
+                 ORDER BY max(expires_at), user_id, family_id
                  LIMIT @batch_size
                 """, connection);
             command.Parameters.AddWithValue("retention_days", retentionDays);
