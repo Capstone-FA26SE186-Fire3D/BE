@@ -260,14 +260,21 @@ $$;
 
 -- Caller cannot supply a tenant or directly mutate event envelopes.
 DO $permissions$
-DECLARE target text; client_role text; signature text; was_member boolean; had_create boolean;
+DECLARE target text; client_role text; signature text; original_set boolean; original_inherit boolean; changed_membership boolean; had_create boolean;
 BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='fet3d_integration_owner') THEN
     CREATE ROLE fet3d_integration_owner NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
   END IF;
-  was_member := pg_has_role(current_user,'fet3d_integration_owner','MEMBER');
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='fet3d_integration_owner'
+    AND (rolcanlogin OR rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolreplication)) THEN
+    RAISE EXCEPTION 'integration owner must be a restricted NOLOGIN role';
+  END IF;
+  SELECT set_option,inherit_option INTO original_set,original_inherit FROM pg_auth_members
+    WHERE roleid='fet3d_integration_owner'::regrole AND member=current_user::regrole;
+  changed_membership := NOT pg_has_role(current_user,'fet3d_integration_owner','SET')
+    OR NOT pg_has_role(current_user,'fet3d_integration_owner','USAGE');
   had_create := has_schema_privilege('fet3d_integration_owner','public','CREATE');
-  IF NOT was_member THEN EXECUTE format('GRANT fet3d_integration_owner TO %I',current_user); END IF;
+  IF changed_membership THEN EXECUTE format('GRANT fet3d_integration_owner TO %I WITH SET TRUE, INHERIT TRUE',current_user); END IF;
   GRANT USAGE,CREATE ON SCHEMA public TO fet3d_integration_owner;
   GRANT SELECT,INSERT,UPDATE ON integration_outbox_events TO fet3d_integration_owner;
   GRANT SELECT,INSERT ON integration_event_consumptions TO fet3d_integration_owner;
@@ -308,5 +315,9 @@ BEGIN
     END IF;
   END LOOP;
   IF NOT had_create THEN REVOKE CREATE ON SCHEMA public FROM fet3d_integration_owner; END IF;
-  IF NOT was_member THEN EXECUTE format('REVOKE fet3d_integration_owner FROM %I',current_user); END IF;
+  IF changed_membership THEN
+    IF original_set IS NULL THEN EXECUTE format('REVOKE fet3d_integration_owner FROM %I',current_user);
+    ELSE EXECUTE format('GRANT fet3d_integration_owner TO %I WITH SET %s, INHERIT %s',current_user,CASE WHEN original_set THEN 'TRUE' ELSE 'FALSE' END,CASE WHEN original_inherit THEN 'TRUE' ELSE 'FALSE' END);
+    END IF;
+  END IF;
 END $permissions$;
