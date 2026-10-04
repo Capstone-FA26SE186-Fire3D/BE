@@ -28,7 +28,7 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 
 - **Đã sửa source:** Migration forward-only `HardenBackendObjectPermissions` chặn explicit Supabase anon/authenticated grants trên 6 bảng backend và PayOS SECURITY DEFINER entrypoints; giữ grant executor, thêm backend RLS và sửa default ACL của migration owner. `AddIfcIntegrationOutbox` giao canonical tenant enqueue; `AddRefreshCleanupGate` cho API dọn family hết retention mà không có direct DELETE. [Hardening](database-hardening.md), [outbox](ifc-outbox.md), [cleanup](refresh-token-cleanup.md).
 - **Kiểm chứng:** PostgreSQL cô lập có test quyền backend/executor, rollback/replay outbox, retention và lock recheck cleanup. Full-chain Auth fixture và non-superuser owner-transfer có kiểm tra riêng. Schema này không phải bootstrap toàn bộ v7.
-- **Còn phải nghiệm thu:** trạng thái migration/grants đúng môi trường deploy, worker IFC/provider thật; không coi test local là đã chạy Supabase. SQL migration được kiểm trước khi áp; quyền API production không được chuyển thành postgres.
+- **DB đã kiểm chứng:** 05/10/2026 áp đúng 3 migration lên Supabase hiện có, history 29→32; giữ 4 account/16 refresh token, executor grants và kiểm read-only bằng API identity giới hạn quyền. [Bằng chứng và giới hạn](database-hardening.md#deployment-evidence--2026-10-05). **Còn phải nghiệm thu:** Azure binary, latency thực tế, worker IFC/provider thật; DB update không chứng minh các phần này hoạt động. Quyền API không chuyển thành postgres.
 
 ### AUTH-PERF — CODE/TEST · Đo latency và giảm round trip
 
