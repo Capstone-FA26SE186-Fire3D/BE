@@ -13,6 +13,8 @@ public sealed class RefreshTokenCleanupStore(Fire3DDbContext db) : IRefreshToken
 
     public async Task<int> DeleteExpiredFamiliesAsync(int retentionDays, int batchSize, CancellationToken ct)
     {
+        if (retentionDays is < 1 or > 365 || batchSize is < 1 or > 10000)
+            throw new ArgumentOutOfRangeException(nameof(retentionDays), "Use retention 1-365 days and batch size 1-10000.");
         var candidates = await ReadCandidatesAsync(retentionDays, batchSize, ct);
         var deleted = 0;
         foreach (var candidate in candidates)
@@ -52,26 +54,10 @@ public sealed class RefreshTokenCleanupStore(Fire3DDbContext db) : IRefreshToken
 
     private async Task<int> DeleteFamilyIfStillExpiredAsync(Candidate candidate, int retentionDays, CancellationToken ct)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await db.Database.ExecuteSqlRawAsync(
-            "SELECT pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management', 0))", ct);
-        var userLock = "fire3d:auth:" + candidate.UserId;
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock(hashtextextended({userLock}, 0))", ct);
-
-        var deleted = await db.Database.ExecuteSqlInterpolatedAsync($"""
-            DELETE FROM public.auth_refresh_tokens token
-             WHERE token.user_id={candidate.UserId}
-               AND token.family_id={candidate.FamilyId}
-               AND NOT EXISTS (
-                   SELECT 1
-                     FROM public.auth_refresh_tokens member
-                    WHERE member.user_id={candidate.UserId}
-                      AND member.family_id={candidate.FamilyId}
-                      AND member.expires_at > statement_timestamp() - ({retentionDays} * interval '1 day')
-               )
-            """, ct);
-        await transaction.CommitAsync(ct);
-        return deleted;
+        // The gate locks/rechecks/deletes in the implicit statement transaction.
+        // API identities keep SELECT/EXECUTE, never unrestricted token DELETE.
+        return await db.Database.SqlQuery<int>($"""
+            SELECT public.cleanup_expired_refresh_family({candidate.UserId},{candidate.FamilyId},{retentionDays}) AS "Value"
+            """).SingleAsync(ct);
     }
 }

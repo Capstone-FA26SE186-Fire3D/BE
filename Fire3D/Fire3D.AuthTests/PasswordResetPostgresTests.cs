@@ -70,6 +70,8 @@ public sealed class PasswordResetPostgresTests
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"003_local_password.sql")));
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"005_email_verification.sql")));
             await db.Sql("ALTER TABLE email_verification_jobs ADD COLUMN user_id uuid, ADD COLUMN generation integer NOT NULL DEFAULT 1;");
+            foreach (var operation in new Fire3D.Infrastructure.Migrations.AddRefreshCleanupGate().UpOperations
+                .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>()) await db.Sql(operation.Sql);
             return db;
         }
         private DbContextOptions<Fire3DDbContext>? contextOptions;
