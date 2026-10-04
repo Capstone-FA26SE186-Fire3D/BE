@@ -275,6 +275,25 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
     public Task<bool> FamilyIsActiveAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct) =>
         db.Set<RefreshToken>().AnyAsync(x => x.UserId == userId && x.FamilyId == familyId
             && x.ConsumedAt == null && x.RevokedAt == null && x.ExpiresAt > now, ct);
+    public Task<bool> SessionIsValidAsync(Guid userId,Guid familyId,string? role,string? organizationId,DateTime now,CancellationToken ct)
+    {
+        if(!Enum.TryParse<UserRole>(role,false,out var expectedRole) || !Enum.IsDefined(expectedRole)
+            || expectedRole.ToString()!=role) return Task.FromResult(false);
+        Guid? expectedOrganization=null;
+        if(organizationId is not null)
+        {
+            if(!Guid.TryParseExact(organizationId,"D",out var parsed) || parsed.ToString()!=organizationId)
+                return Task.FromResult(false);
+            expectedOrganization=parsed;
+        }
+        if((expectedRole==UserRole.OrganizationUser)!=expectedOrganization.HasValue) return Task.FromResult(false);
+        return db.Users.AnyAsync(user=>user.Id==userId && user.IsActive && user.DeletedAt==null
+            && user.Role==expectedRole && user.OrganizationId==expectedOrganization
+            && (user.RegistrationExpiresAt==null || user.EmailVerifiedAt!=null)
+            && (user.OrganizationId==null || db.Organizations.Any(org=>org.Id==user.OrganizationId && org.IsActive && org.DeletedAt==null))
+            && db.Set<RefreshToken>().Any(token=>token.UserId==userId && token.FamilyId==familyId
+                && token.ConsumedAt==null && token.RevokedAt==null && token.ExpiresAt>now),ct);
+    }
     public async Task WriteAuditAsync(User actor, string action, Guid targetId, DateTime now, CancellationToken ct, Guid? correlationId = null)
     {
         var scope = action == "Create"

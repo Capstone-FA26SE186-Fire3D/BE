@@ -34,6 +34,7 @@ public interface IAuthStore
     Task RevokeFamilyAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct);
     Task RevokeAllUserSessionsAsync(Guid userId, DateTime revokedAt, CancellationToken ct);
     Task<bool> FamilyIsActiveAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct);
+    Task<bool> SessionIsValidAsync(Guid userId,Guid familyId,string? role,string? organizationId,DateTime now,CancellationToken ct);
     Task WriteAuditAsync(User actor, string action, Guid targetId, DateTime now, CancellationToken ct, Guid? correlationId = null);
 
     // --- Password Reset ---
