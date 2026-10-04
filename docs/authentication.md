@@ -4,6 +4,8 @@
 
 Đọc [FR-AUTH](../../Docs/fire_evacuation_requirements.md), [workflow đăng ký/profile](../../Docs/fire-evacuation-training-workflows.md) và [technology contract](../../Docs/fire-evacuation-training-technology.md). Chuẩn hiện hành là:
 
+Đối chiếu ngày 04/10/2026 tại BE `e42a2eb`: [v7 contract](../../Docs/schema_v7_contract.md) biểu diễn OTP challenge/proof, reset email jobs và installation bền vững. Tên bảng đích không chứng minh EF mapping/grants đã khớp; xem DB-01 trong checklist.
+
 - BE quản lý email/password local, password hash và Fire3D session. Supabase chỉ là PostgreSQL; không dùng Supabase Auth.
 - Firebase xác minh Google identity. Firebase không cấp role nghiệp vụ. Role, trạng thái và tenant lấy từ PostgreSQL.
 - Trainee đăng ký local với email, username, password và confirm password. OrganizationUser đăng ký với email/password và hồ sơ organization; username cá nhân tùy chọn. Client không tự chọn role/tenant.

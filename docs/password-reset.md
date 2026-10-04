@@ -1,6 +1,6 @@
 # Email/password local và Google Firebase
 
-Đây là ghi chú vận hành cho code BE hiện có, không thay thế contract sản phẩm trong [Docs requirements](../../Docs/fire_evacuation_requirements.md) và [Docs technology](../../Docs/fire-evacuation-training-technology.md). Source BE đối chiếu ở `main` commit `946017d` đã có Forgot/Reset Password và Change Password handlers/worker; phần provider thật cần cấu hình và kiểm tra riêng.
+Đây là ghi chú vận hành, đối chiếu source BE `e42a2eb` ngày 04/10/2026 với [Docs v7](../../Docs/schema_v7_contract.md). Source có Forgot/Reset và Change Password handlers/worker; provider thật cần cấu hình/kiểm chứng riêng. Registration/Google flow đầy đủ tại [authentication](authentication.md).
 
 BE quản lý mật khẩu thường bằng ASP.NET Core PasswordHasher: hash có salt nằm ở
 `users.password_hash`, property C# `PasswordHash`. Không trả hash qua API. Supabase
@@ -10,7 +10,7 @@ chỉ cung cấp PostgreSQL; không dùng Supabase Auth. Firebase chỉ xác min
 
 | API | Body | Thành công | Bearer |
 |---|---|---|---|
-| POST /api/auth/register | email, password, fullName | 201, AccountResponse | Không |
+| POST /api/auth/register | Form Trainee gồm username/confirmPassword/registrationToken sau OTP; xem authentication | 201, AccountResponse | Không |
 | POST /api/auth/login | email, password | 200, accessToken/refreshToken/user | Không |
 | POST /api/auth/login-firebase | JSON string chứa Firebase ID token | 200, TokenResponse | Không |
 | POST /api/auth/forgot-password | email | 202, message chung | Không |
@@ -18,7 +18,7 @@ chỉ cung cấp PostgreSQL; không dùng Supabase Auth. Firebase chỉ xác min
 | POST /api/auth/refresh | refreshToken | 200, TokenResponse | Không |
 | GET /api/auth/me | — | 200, AccountResponse | Có |
 
-Register chỉ tạo Trainee; client không chọn role/tenant. Email được trim/lowercase.
+Register là alias Trainee; route OrganizationUser riêng nhận hồ sơ tổ chức. Cả hai consume one-time proof sau OTP trước khi tạo identity; client không gửi role/tenant tùy ý. Email được trim/lowercase.
 Password mới 6–128 ký tự; fullName 1–200 ký tự. Sai mật khẩu/email không tồn tại
 cùng trả 401, tài khoản/organization bị khóa trả 403 sau khi xác minh mật khẩu.
 Refresh là anonymous theo JWT nhưng yêu cầu refreshToken hợp lệ trong body; Bearer sai không biến route thành bắt buộc đăng nhập. Route có giới hạn 10 request/IP/phút, fixed window riêng mỗi instance, không Redis. Quota bao gồm request token sai: trong quota trả401, vượt quota trả429 `AUTH_REFRESH_RATE_LIMITED`, `traceId` và `Retry-After`. Middleware quyết định connection IP; không tin trực tiếp header IP từ client. CORS chạy trước rate limiter; origin được cho phép đọc response429 và header `Retry-After` đã expose. Preflight không tiêu thụ quota refresh. Các route anonymous khác giữ policy hiện hành của từng luồng.
@@ -26,7 +26,7 @@ Refresh là anonymous theo JWT nhưng yêu cầu refreshToken hợp lệ trong b
 Google yêu cầu Firebase token xác minh được, chưa revoke, email_verified=true và
 sign_in_provider=google.com. UID đã liên kết giữ role/organization trong DB. Email
 trùng tài khoản khác trả 409 ACCOUNT_LINK_REQUIRED, không tự gắn UID. Chưa có API
-explicit Google linking trong thay đổi này. Tài khoản Google mới có password_hash NULL.
+explicit Google linking/onboarding completion. UID mới chỉ nhận OnboardingRequired, chưa tạo user; account Google sau khi hoàn tất onboarding sẽ có password_hash nullable theo thiết kế đích.
 
 ## Reset mật khẩu và tài khoản Firebase cũ
 

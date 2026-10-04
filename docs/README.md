@@ -4,6 +4,7 @@ Tài liệu sản phẩm chuẩn nằm trong repo `Docs`. Khi tài liệu BE và
 
 ## Thứ tự đọc
 
+0. [Product contract v7](../../Docs/schema_v7_contract.md) — các quyết định mới về approval, quyền Building, learner seats và AI trả trước.
 1. [Docs gốc: requirements](../../Docs/fire_evacuation_requirements.md) — hành vi và tiêu chí sản phẩm.
 2. [Docs gốc: workflows](../../Docs/fire-evacuation-training-workflows.md) — luồng actor và nghiệp vụ.
 3. [Docs gốc: technology](../../Docs/fire-evacuation-training-technology.md) — service boundary, API contract và invariant kỹ thuật.
@@ -22,11 +23,13 @@ Chi tiết từng luồng: [authentication](authentication.md), [password reset]
 
 ## Database mới và dữ liệu
 
-Thiết kế SQL/ERD trong `Docs` là schema mục tiêu. Theo xác nhận hiện chưa có dữ liệu nghiệp vụ cần chuyển đổi, nên khi bắt đầu triển khai có thể tạo database môi trường mới theo schema mục tiêu và migration cần thiết; không viết yêu cầu backfill chỉ để giữ schema prototype. Không chạy migration, xóa database hoặc áp dụng SQL lên môi trường dùng chung/production nếu chưa có task và xác nhận môi trường riêng.
+Thiết kế SQL/ERD v7 trong `Docs` là schema mục tiêu. Nhận định không có dữ liệu cần chuyển đổi thuộc baseline lịch sử tháng 09/2026; kiểm chứng tháng 10 đã ghi nhận migration và checkout provider trên Supabase. Khi triển khai phải kiểm tra schema/dữ liệu của đúng môi trường trước khi quyết định migration hoặc tạo database test mới. Không chạy migration, xóa database hoặc áp dụng SQL lên môi trường dùng chung/production chỉ để cập nhật tài liệu.
 
 `Docs` chỉ mô tả thiết kế, không chứng minh migration, quyền PostgreSQL, provider hoặc luồng production đã chạy. Ghi riêng trạng thái code, schema từng môi trường và kết quả test.
 
 Source BE hiện còn mapping/entity legacy; database tạo theo schema đích chưa chắc chạy được với API source hiện tại cho tới khi EF mapping, SQL gates, quyền và use case được đồng bộ. Không xem “chưa có dữ liệu” là bằng chứng database bất kỳ đang trống hoặc được phép xóa.
+
+Các khoảng cách tới v7 và tiêu chí triển khai nằm trong [implementation checklist](api-implementation-checklist.md); API guide giữ route/DTO source hiện có. Giá, quota unit/expiry/rollover, công thức nâng cấp và ngưỡng rubric vẫn là chính sách cần chốt, không suy từ schema.
 
 ## Cấu hình S3
 
