@@ -106,4 +106,4 @@ Create trả 201 khi link Ready lần đầu, replay 200; đang tạo/chưa rõ 
 - Crash sau claim thứ10 có thể để job Pending với lease hết hạn. Admin reconcile reschedule cả trạng thái này, không chỉ NeedsReconcile; không chiếm lease còn hiệu lực.
 - SDK adapter chỉ coi HTTP404 là xác nhận không tìm thấy. HTTP200 với business code chưa nhận diện vẫn là lỗi cần đối soát, không tự create lại. Khi nghiệm thu provider thật phải lưu contract của trường hợp order không tồn tại; không đoán code từ ví dụ ngoài tài liệu chính thức. Checkout chưa bind và expired nhưng không có xác nhận terminal vẫn giữ NeedsReconcile để tránh mở link thứ hai không rõ provenance.
 
-Test tự động chứng minh logic/DB fixture, không chứng minh bank/provider hoặc grants production. Reminder5ngày, revenue, AI settlement, refund, eInvoice, FE billing đầy đủ và publish/playtest/training gate vẫn là backlog riêng.
+Test tự động chứng minh logic/DB fixture, không chứng minh bank/provider hoặc grants production. Reminder5ngày, revenue, AI prepaid top-up/package quota v7, refund, eInvoice, FE billing đầy đủ và publish/playtest/training gate vẫn là backlog riêng.

@@ -1,6 +1,16 @@
 # Building billing / PayOS
 
-Requirements: Docs FR-BILLING-01..10, workflows §11, technology §9/10. This implementation uses the current Building address source `building_locations.address`; it does not create a second address on `buildings`.
+Requirements: [Docs v7](../../Docs/schema_v7_contract.md), FR-BILLING-01..11, workflows §11, technology §9/10. Current implementation uses `building_locations.address`; v7 stores address on `buildings`. This is a mapping gap, not a second authoritative address. V7 source review baseline: BE `e42a2eb`, 2026-10-04; test/provider evidence below keeps its dated scope.
+
+## Product v7 target and remaining implementation
+
+Each Building line buys 6/12-month game service with distinct-learner capacity, AI quota and immutable price/terms snapshots. New/Renewal/Upgrade have explicit period semantics, with no overlap of committed periods. Before Issue, quota-bearing lines pin a tenant/audience/unit-valid policy version and absolute grant interval within policy validity. Current catalog/quotation/PayOS delivery does not establish these v7 capabilities.
+
+Seats count distinct Trainee IDs at first online start per Building/service period. Repeated plays use the same seat; list/login/prepare/playtest do not count. Upgrades retain period and consumed seats; renewal starts a new period. Concurrent allocation of the last seat must be atomic.
+
+Organization AI pools prepaid Building/package and paid top-up grants. Top-up has its own quotation/payment purpose and never renews Building service. Request reserve/settle/release consumes existing quota; insufficient quota blocks new billable work. There is no AI billing period, overage consent or postpaid debt.
+
+Provision replay returns a previously committed payment/line resource even after expiry; it must not grant twice or reject replay only because the period is no longer Active. Current payment/provisioning recovery remains a separate implementation boundary. See BILLING-02, CAPACITY-01 and AI-01 in the [implementation checklist](api-implementation-checklist.md). Prices, quota unit/expiry/rollover and upgrade formulas need explicit policy; no values are inferred here.
 
 ## Task 1: database foundation
 
@@ -55,7 +65,7 @@ Admin issue đọc lại giá/catalog hiện hành và chốt snapshot tên/đ�
 
 Enterprise request có `requestedBuildingCount` dương, `requestedDurationMonths` tùy chọn dương, `contactName` (1–255), `contactEmail` hợp lệ; `contactPhone` (1–50) và `notes` (1–10.000) tùy chọn. Trả `201`, lưu trạng thái New, audit và receipt. Chưa có workflow admin chuyển enterprise request thành quotation. Không tạo charge/entitlement từ thông tin liên hệ.
 
-Lỗi nghiệp vụ dùng ProblemDetails với `code`, `errors` theo field nếu có và `traceId`; lỗi JSON/model binding theo format validation ASP.NET hiện hành. Resource ngoài tenant trả 404. Checkout, verified webhook, provisioning và reconcile hiện đã có runtime/test như mô tả bên dưới. Reminder, revenue và AI settlement chưa triển khai; publish/playtest gate không được đánh dấu hoàn tất từ bảng entitlement mới.
+Lỗi nghiệp vụ dùng ProblemDetails với `code`, `errors` theo field nếu có và `traceId`; lỗi JSON/model binding theo format validation ASP.NET hiện hành. Resource ngoài tenant trả 404. Checkout, verified webhook, provisioning và reconcile hiện đã có runtime/test như mô tả bên dưới. Reminder, revenue và AI prepaid top-up/package quota v7 chưa triển khai; publish/playtest gate không được đánh dấu hoàn tất từ bảng entitlement mới.
 
 ## Test tay bằng Swagger
 
@@ -129,4 +139,4 @@ Final follow-up review also reproduced a refresh CORS integration failure: the l
 
 IFC `IfcWriteSqlTests`, `ScenarioStoreTests` and `PlaytestEntitlementContainmentTests` require Docker unavailable in this run. An earlier broader command had two Docker setup failures, not a source assertion failure. Other IFC tests used loopback disposable PostgreSQL where required. Billing fixtures execute real runtime SQL on a model-created baseline; Auth PostgreSQL fixtures also apply the historical EF migration chain to disposable databases. Neither proves production grants/provider behavior.
 
-At the earlier automated-test checkpoint, no real provider call, shared database write, email/push delivery or production payment was performed. Later user-authorized checks on 2026-10-03 applied the PayOS/email migrations and scoped local logins/grants to Supabase, and created one real 100,000VND provider checkout through the local API. Create returned201 Ready; replay returned200 with the same checkout/order and a QR payload. No money was transferred. Redeployed Azure Swagger/OpenAPI/health/return/cancel now return200 and FE CORS passes; these supersede the earlier callback404 observation. Production worker/executor configuration, valid webhook delivery/application and paid entitlement provisioning remain unverified. Current evidence and environment handoff: [payos-deployment.md](payos-deployment.md). Unbound money rejected by scope/expiry gates remains durable and requires investigation; reminder/revenue/AI settlement and publish/playtest/training gates are still outside this delivery.
+At the earlier automated-test checkpoint, no real provider call, shared database write, email/push delivery or production payment was performed. Later user-authorized checks on 2026-10-03 applied the PayOS/email migrations and scoped local logins/grants to Supabase, and created one real 100,000VND provider checkout through the local API. Create returned201 Ready; replay returned200 with the same checkout/order and a QR payload. No money was transferred. Redeployed Azure Swagger/OpenAPI/health/return/cancel now return200 and FE CORS passes; these supersede the earlier callback404 observation. Production worker/executor configuration, valid webhook delivery/application and paid entitlement provisioning remain unverified. Current evidence and environment handoff: [payos-deployment.md](payos-deployment.md). Unbound money rejected by scope/expiry gates remains durable and requires investigation; reminder/revenue/AI prepaid top-up/package quota v7 and publish/playtest/training gates are still outside this delivery.

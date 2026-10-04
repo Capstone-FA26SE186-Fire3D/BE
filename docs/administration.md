@@ -82,6 +82,12 @@ This module implements account access control. Future Training resolve/start han
 
 ## Implementation and verification
 
+### Product v7 administration backlog
+
+[V7](../../Docs/schema_v7_contract.md) adds PlatformAdmin maintenance of versioned scenario templates, rubric samples and supported equipment metadata for Organization authoring, separate from public Learn. Admin approves/rejects every submitted scenario/rubric version by exact hash; rejection has a reason, editing creates a new version/review. ConfirmForTraining is technical readiness. Account/organization administration endpoints do not implement these modules; see LIBRARY-01 and APPROVAL-01 in the [checklist](api-implementation-checklist.md).
+
+Building visibility/code management is owner-tenant scoped. Rotation/revocation or visibility changes invalidate earlier access revisions; participation grants do not create organization membership. Started-session sync keeps its pinned policy after later deactivation/access loss. See ACCESS-01 and SESSION-01 for target acceptance.
+
 API controllers dispatch MediatR commands/queries in Application/Administration. IAdministrationStore is implemented by Infrastructure/Administration/AdministrationStore; DI remains in API/Extensions/ApplicationExtensions.cs.
 
 The existing opt-in PostgreSQL test fixture creates dedicated random localhost databases. Administration tests cover role denial, safe DTOs/filtering, invalid/duplicate slug, deleted resources, session revocation across deactivate/reactivate, self-deactivation, concurrent administrators and rollback on audit failure. Run with the commands in authentication.md.

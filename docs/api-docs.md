@@ -1,6 +1,6 @@
 # Fire3D — Hướng dẫn tích hợp API hiện tại
 
-Cập nhật **23/09/2026** theo source BE `main` tại `946017d`, gồm release lifecycle, editor preview và annotations. Đây là mô tả API source hiện có, không phải danh sách đầy đủ contract sản phẩm.
+Cập nhật contract **04/10/2026** theo [Docs v7](../../Docs/schema_v7_contract.md) và rà source BE `e42a2eb`. Các mục endpoint/editor bắt đầu từ baseline `946017d` ngày 23/09, có bổ sung auth/billing tháng 10; số endpoint ở heading là danh mục lịch sử, cần kiểm controller khi tích hợp. Đây là hướng dẫn API source hiện có, không chứng minh toàn bộ capability v7 đã hoàn thành.
 
 Các phần dưới có baseline lịch sử riêng; không dùng số endpoint cũ để suy mức hoàn thiện hiện tại. Bổ sung **02/10/2026**: catalog, quotation Building và enterprise contact request tại [billing.md](billing.md), gồm route/quyền, If-Match, Idempotency-Key, ví dụ và luồng checkout PayOS, webhook, entitlement/reconcile đã có code/test. Cập nhật **03/10/2026**: migration PayOS/email và login giới hạn quyền đã áp vào Supabase; API local tạo link/QR provider thật thành công, chưa chuyển tiền. Azure đã phục vụ Swagger/OpenAPI/return/cancel và CORS FE, nhưng worker/executor/webhook/Paid/provisioning deployment vẫn chưa nghiệm thu. Đối chiếu OpenAPI/source và [implementation checklist](api-implementation-checklist.md) khi tích hợp; endpoint tồn tại không chứng minh provider đã hoạt động.
 
@@ -621,17 +621,29 @@ Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 40
 | Playtest prepare | Runtime hiện fail-closed 503 `ENTITLEMENT_UNAVAILABLE`; entitlement/trial, compatibility và launch grant chưa triển khai. Store legacy không được DI đăng ký. |
 | Playtest start | Runtime kiểm owner session trước khi delegate trạng thái/audit; chưa trả launch grant. |
 | Release/training | Đã có create-Built/read/revoke; runtime publish fail-closed 503 `PUBLISH_GATE_UNAVAILABLE` cho đến khi có gate. Còn thiếu package-build job và vòng đời Training/session. |
-| Auth | Local self-registration cho Trainee và OrganizationUser đã có username/confirm password/organization profile ban đầu; email verification đã có route, worker và thời hạn đăng ký chờ. `GET/PATCH /api/auth/me`, organization profile PATCH và avatar complete/delete dùng ETag; logout-all đã có. Google onboarding/link còn thiếu. Avatar recovery còn thiếu candidate-final persistence trước S3 copy. Change Password và Forgot/Reset đã có route/handler. |
+| Auth | Form → OTP → proof → register → login cho Trainee/OrganizationUser; OrganizationUser route chưa nhận username cá nhân. Request/verify OTP không tạo identity; verify-email link chỉ cho pending legacy. Profile cá nhân/tổ chức và avatar mutation dùng ETag; logout-all đã có. AvatarService reserve candidate trước conditional S3 copy, có cleanup/recovery source; provider/deployment cần kiểm riêng. Google onboarding completion/link còn thiếu. |
 | Token response | Login local, Firebase login và refresh đều không trả expiresAt |
 | Device | Installation proof và family session được kiểm khi bind/revoke; FCM send chỉ dùng binding active. Không coi test mock là bằng chứng FCM production delivery. |
 
 Số endpoint không phản ánh mức độ hoàn thiện luồng. Cập nhật tài liệu không thay source, chạy migration hoặc xác nhận kết nối dịch vụ thực tế.
 
+### Khoảng cách tới contract v7
+
+| Capability đích | Việc cần triển khai trong checklist |
+| --- | --- |
+| Organization Library / Admin approval | LIBRARY-01, APPROVAL-01: template/rubric/thiết bị version hóa; duyệt scenario/rubric đúng hash, tách readiness kỹ thuật. |
+| Private Building | ACCESS-01: grant gắn account/access revision, rotate/revoke mã và visibility vô hiệu grant cũ; QR không tạo tenant membership. |
+| Seats / session / Assessment | CAPACITY-01, SESSION-01, ASSESSMENT-01: distinct user/Building/kỳ tại start, pin entitlement/review/rubric, kết quả riêng completion; sync sau expiry/revoke. |
+| Gói 6/12 tháng / AI prepaid | BILLING-02, AI-01: snapshot seats/quota/policy, provisioning replay sau expiry; top-up không gia hạn Building, không invoice AI cuối kỳ. |
+| Learner-safe RAG | RAG-01: chỉ name/objectives/instructions approved/published; kiểm quyền mỗi retrieval và chặn AI trong Assessment. |
+
+Chi tiết và acceptance tại [implementation checklist](api-implementation-checklist.md). Capability chưa có route/DTO được ghi là thiết kế đích; method/path/payload thuộc task implementation sau. Learn không có approval riêng; approval v7 áp dụng scenario/rubric.
+
 ## 10. Checklist tích hợp và test tay
 
 ### Auth local
 
-1. Register email mới → 201 Trainee, organizationId null, không token; trùng → 409.
+1. Form → request-otp → verify-otp nhận proof → register toàn bộ form/proof → 201 AccountResponse, không token. Trainee organizationId null; OrganizationUser tạo organization atomic. Request/verify chưa tạo identity; email đã có trả 409 EMAIL_EXISTS.
 2. Login sai → 401; đúng → 200 LoginResponse không expiresAt.
 3. Me không Bearer → 401; Fire3D JWT hợp lệ → đúng tài khoản.
 4. Refresh → lưu cặp mới. Test replay riêng vì token cũ có thể thu hồi family.
@@ -641,7 +653,7 @@ Số endpoint không phản ánh mức độ hoàn thiện luồng. Cập nhật
 
 ### Google, admin và tenant
 
-1. Firebase Google → JSON string ID token → 200 TokenResponse; Firebase email/password provider không dùng được ở route này.
+1. Firebase Google → JSON string ID token: UID đã link trả Authenticated; UID mới trả OnboardingRequired, chưa tạo account. Firebase email/password provider không dùng được ở route này; completion/link còn thiếu.
 2. Local account trùng email Google chưa liên kết → 409, không tự ghép/nâng quyền.
 3. Admin tạo organization → 201; tạo OrganizationUser → 201; login local tài khoản vừa tạo.
 4. Trainee gọi Editor → 403; OrganizationUser đọc revision/job tổ chức khác → 404; kiểm PlatformAdmin riêng cho Editor.
