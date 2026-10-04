@@ -24,7 +24,11 @@ public static class DependencyInjection
                 "Missing connection string: DefaultConnection");
         }
 
-        services.AddDbContext<Fire3DDbContext>(options =>
+        services.AddSingleton<Fire3D.Infrastructure.Authentication.AuthDatabaseDiagnostics>();
+        services.AddDbContext<Fire3DDbContext>((provider, options) =>
+        {
+            if (configuration.GetValue<bool>("AuthDiagnostics:DatabaseTimingEnabled"))
+                options.AddInterceptors(provider.GetRequiredService<Fire3D.Infrastructure.Authentication.AuthDatabaseDiagnostics>());
             options.UseNpgsql(connectionString, postgres =>
             {
                 // Giữ nguyên chữ hoa/thường của các nhãn enum trong SQL.
@@ -83,7 +87,8 @@ public static class DependencyInjection
 
                 postgres.MapEnum<SupportPriority>(
                     "support_priority_enum", nameTranslator: names);
-            }));
+            });
+        });
 
         return services;
     }
