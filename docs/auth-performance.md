@@ -2,6 +2,8 @@
 
 Login phát metric `fet3d.auth.login.phase.duration` (ms) trên meter `FET3D.Authentication`, chỉ có nhãn phase hữu hạn: Total, Lookup, PasswordVerification, LockWait, Revalidation, Persistence. Total bao gồm các phase nên không cộng chúng vào Total lần nữa. Revalidation đo đọc lại user; phần kiểm lifecycle organization nằm trong Total, chưa có nhãn riêng.
 
+Giới hạn hiện tại: nhánh email không tồn tại vẫn chạy dummy password verification chống dò account, nhưng chi phí đó chỉ nằm trong Total, chưa nằm trong PasswordVerification. Vì vậy histogram PasswordVerification chưa bao phủ mọi request bị từ chối; không dùng nó một mình để kết luận chi phí hash của toàn bộ traffic.
+
 Có thể bật `AuthDiagnostics__DatabaseTimingEnabled=true` để nhận `fet3d.db.command.duration` trên meter `FET3D.Database` và log Debug ở `Fire3D.Infrastructure.Authentication.AuthDatabaseDiagnostics`. Interceptor đo EF command async, chỉ ghi loại reader/scalar/nonquery và duration; không ghi SQL, parameter, email, user ID, hash, token. Không tính Npgsql command trực tiếp hoặc thời gian mở kết nối/commit là EF command. Thu thập p50/p95/p99 theo môi trường và traffic, tắt Debug sau khi chẩn đoán. Meter cần collector/listener của hệ thống monitoring; thêm meter không tự cấu hình Azure exporter.
 
 Phân biệt chậm network/pool, thời gian chờ khóa, PBKDF2 và thực thi SQL. Truy vấn với bảng ít dòng dùng SeqScan không đủ lý do thêm index. Không giảm độ mạnh password hash, bỏ reset fencing, cache quyền/tenant/family hoặc dùng kết nối migration cho API để tối ưu.

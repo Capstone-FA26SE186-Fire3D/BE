@@ -24,6 +24,17 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 
 ## A. Database và nền tảng dùng chung
 
+### DB-02 — P0/P1 · CODE/TEST · Backend ACL, IFC enqueue và token cleanup
+
+- **Đã sửa source:** Migration forward-only `HardenBackendObjectPermissions` chặn explicit Supabase anon/authenticated grants trên 6 bảng backend và PayOS SECURITY DEFINER entrypoints; giữ grant executor, thêm backend RLS và sửa default ACL của migration owner. `AddIfcIntegrationOutbox` giao canonical tenant enqueue; `AddRefreshCleanupGate` cho API dọn family hết retention mà không có direct DELETE. [Hardening](database-hardening.md), [outbox](ifc-outbox.md), [cleanup](refresh-token-cleanup.md).
+- **Kiểm chứng:** PostgreSQL cô lập có test quyền backend/executor, rollback/replay outbox, retention và lock recheck cleanup. Full-chain Auth fixture và non-superuser owner-transfer có kiểm tra riêng. Schema này không phải bootstrap toàn bộ v7.
+- **Còn phải nghiệm thu:** trạng thái migration/grants đúng môi trường deploy, worker IFC/provider thật; không coi test local là đã chạy Supabase. SQL migration được kiểm trước khi áp; quyền API production không được chuyển thành postgres.
+
+### AUTH-PERF — CODE/TEST · Đo latency và giảm round trip
+
+- Password verify/rehash ngoài lock, snapshot email/hash và lifecycle được kiểm lại dưới lock; login/session/audit và reset fence atomic. Middleware session authorization còn một SQL query, vẫn kiểm quyền live và family.
+- [Metric và giới hạn](auth-performance.md). Test không chứng minh p95 login Azure đã giảm; không thêm index trùng, giảm hash strength hay cache quyền. Google onboarding/link vẫn là AUTH-02 còn thiếu.
+
 ### DB-01 — P0 · GAP · Schema mapping
 
 - **Contract/current:** SQL v7 là đích; EF/migration/runtime chưa đồng bộ toàn bộ. `LocalPasswordReset` dùng `local_password_reset_tokens`, đã được v7 biểu diễn; EF vẫn giữ `password_reset_tokens` legacy. Chưa được suy môi trường hiện tại trống từ nhận định tháng 09; xem bằng chứng Supabase/PayOS phía trên.
@@ -90,8 +101,8 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 
 ### IFC-01 — P0 · GAP · Outbox và worker result
 
-- **Contract/current:** [IfcWriteStore](../Fire3D/Fire3D.Infrastructure/Ifc/IfcWriteStore.cs) ghi `payload_hash = 'hash'`; worker result phải qua gate lease-bound và receipt theo Docs.
-- **Sửa code:** Sinh canonical envelope/hash đúng schema, dùng outbox entry point được phép và nối worker result qua gate kiểm tra current attempt/lease/provenance. Commit business effect và receipt trước ACK; worker không có DML trực tiếp.
+- **Contract/current:** [IfcWriteStore](../Fire3D/Fire3D.Infrastructure/Ifc/IfcWriteStore.cs) đã gọi canonical enqueue schema `1`; migration `AddIfcIntegrationOutbox` giao table/function/grants, tenant suy từ job và hash do PostgreSQL tính. Test PostgreSQL kiểm process, replay/conflict và rollback job/audit khi enqueue lỗi. [Chi tiết](ifc-outbox.md). **PARTIAL:** chưa đồng nghĩa worker/pipeline đã chạy.
+- **Sửa code còn lại:** Nối dispatcher/consumer và worker result qua gate kiểm current attempt/lease/provenance. Commit business effect và receipt trước ACK; worker không có DML trực tiếp. Gate retry/provenance/full schema v7 phải được giao và nghiệm thu riêng.
 - **Nghiệm thu:** Hash/envelope hợp lệ; duplicate delivery idempotent; sai hash, lease cũ hoặc attempt cũ bị từ chối; crash trước ACK replay không nhân đôi kết quả.
 
 ### IFC-02 — P1 · GAP · Readiness theo revision/version

@@ -60,7 +60,7 @@ Endpoint bảo vệ cần `Authorization: Bearer <Fire3D accessToken>`. Firebase
 
 Ba role hiện có: `PlatformAdmin`, `OrganizationUser`, `Trainee`. Không có `OrganizationAdmin`. OrganizationUser phải có tổ chức hoạt động; hai role còn lại không có organizationId. Public register không cho chọn role/tổ chức. JWT được kiểm tra cả tài khoản, tổ chức và phiên DB; chưa tới exp vẫn có thể mất hiệu lực khi phiên bị thu hồi.
 
-**Building CRUD chưa thống nhất với Editor:** tài khoản không có tổ chức được truyền Guid.Empty, store lọc đúng bằng organization ID. Không giả định PlatformAdmin thao tác xuyên tổ chức ở CRUD building: list có thể rỗng, detail 404, create có thể lỗi DB. Body chưa nhận tenant đích. Đây là thiếu sót implementation, không phải cách cấp quyền cho frontend.
+**Building CRUD:** create/update/archive kiểm actor/role/tenant từ DB và mutation/audit trong cùng transaction, khóa lifecycle/user. PlatformAdmin cần query `organizationId` đích cho mutation; OrganizationUser dùng tenant mình, không được đổi tenant. Body hiện chưa nhận tenant đích. Thiếu scope bị handler từ chối, không coi Guid.Empty là quyền admin. List/detail vẫn lọc organization claim (admin không có tenant có thể nhận list rỗng/404); không suy từ quyền mutation rằng read CRUD đã hỗ trợ admin toàn nền tảng.
 
 ### Lỗi và phân trang
 
@@ -392,9 +392,9 @@ POST/PUT building cùng body; PUT không phải partial PATCH:
 }
 ```
 
-Name bắt buộc tối đa 200 sau trim, totalFloors >= 1. buildingType/location/contact nullable. Nếu có contact phải có contactName: handler Trim trực tiếp. Tọa độ nullable decimal; geojson là chuỗi, không phải object. Chưa validate đầy đủ tọa độ/GeoJSON/contact; không giả định mọi DB exception đều chuyển thành 400.
+Name bắt buộc tối đa 200 sau trim, totalFloors >= 1. buildingType/location/contact nullable. Nếu có contact, contactName trắng/null bị trả 400 trước Trim. Tọa độ nullable decimal; geojson là chuỗi, không phải object. Chưa validate đầy đủ tọa độ/GeoJSON/contact; không giả định mọi DB exception đều chuyển thành 400.
 
-PUT với location/contact null giữ nested data hiện có, không xóa. OrganizationId lấy từ JWT, không có trong request.
+PUT với location/contact null giữ nested data hiện có, không xóa. Query organizationId chỉ chọn scope đích, vẫn kiểm quyền từ DB; mặc định tenant claim. OrganizationId chưa có trong body.
 
 BuildingResponse: id, name, buildingType, totalFloors, isActive, organizationId, createdAt, updatedAt, location, contact. Nested response thêm id vào các trường request tương ứng. BuildingSummaryResponse: id, name, buildingType, totalFloors, isActive, createdAt.
 
@@ -613,10 +613,10 @@ Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 40
 
 | Phần | Hiện trạng và ảnh hưởng |
 | --- | --- |
-| Building CRUD | Scope khác Editor, PlatformAdmin không chọn tenant đích, role guard chưa nhất quán |
+| Building CRUD | Mutation kiểm DB actor/tenant và audit atomic; admin dùng query organizationId. Read list/detail vẫn dựa scope organization claim, body chưa nhận organizationId; chưa coi admin read toàn nền tảng đã hoàn thiện. |
 | Upload-url cũ | Đã là alias tương thích của initiation IFC; client mới dùng `/api/buildings/{buildingId}/ifc` |
 | IFC finalize | Chưa ràng buộc đủ key với revision/upload; chưa kiểm hash nội dung; validation MIME/tên/hash hạn chế |
-| IFC process | Outbox còn literal payload_hash = 'hash', không phải SHA-256 hợp lệ; chưa bảo đảm tương thích schema/gate/worker. Process/confirm truy cập navigation Building nhưng query không Include Building, có nguy cơ null |
+| IFC process | Process/confirm đã Include Building; Process gọi enqueue_integration_outbox_event schema 1, hash canonical JSONB và tenant suy từ DB, job/audit/outbox atomic. Migration AddIfcIntegrationOutbox giao table/function/grants còn thiếu. Dispatcher/worker delivery, attempt/result gates và provenance production chưa hoàn chỉnh. Xem [IFC outbox](ifc-outbox.md). |
 | Draft editor | GET draft state/version đã có. Kiểm tra response ETag/xmin trước khi tích hợp; không coi đây là API còn thiếu. |
 | Playtest prepare | Runtime hiện fail-closed 503 `ENTITLEMENT_UNAVAILABLE`; entitlement/trial, compatibility và launch grant chưa triển khai. Store legacy không được DI đăng ký. |
 | Playtest start | Runtime kiểm owner session trước khi delegate trạng thái/audit; chưa trả launch grant. |

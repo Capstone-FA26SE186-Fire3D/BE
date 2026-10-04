@@ -62,7 +62,7 @@ Nguồn: [AuthController](../Fire3D/Fire3D.API/Controllers/AuthController.cs), [
 
 ### Luồng đăng nhập, phiên và đăng xuất
 
-1. FE gọi `POST /api/auth/login` bằng email/password. BE chuẩn hóa email, tìm account, khóa user và đọc lại; kiểm password hash, account/organization đang hoạt động và điều kiện pending legacy. Login không áp minimum6 của password mới, chỉ yêu cầu không rỗng/tối đa128 để tương thích tài khoản cũ.
+1. FE gọi `POST /api/auth/login` bằng email/password. BE chuẩn hóa email, tìm account và kiểm password/rehash trước khi mở transaction. Sau khi lấy khóa lifecycle rồi user, BE đọc lại identity, kiểm email/hash không đổi và account/organization đang hoạt động cùng điều kiện pending legacy. Session, cập nhật login và audit được ghi atomic với reset fence. Login không áp minimum6 của password mới, chỉ yêu cầu không rỗng/tối đa128 để tương thích tài khoản cũ. Xem [đo và tối ưu authentication](auth-performance.md).
 2. Password sai/email không có trả401 INVALID_CREDENTIALS; account/organization bị khóa 403 ACCOUNT_DISABLED. Account pending legacy chưa xác thực/hết hạn trả403 EMAIL_NOT_VERIFIED/REGISTRATION_EXPIRED. Account OTP mới đã verified tại register.
 3. Login thành công tạo session family mới, lưu hash refresh token, cập nhật lastLoginAt và audit cùng transaction. Response200 gồm accessToken/refreshToken/user; LoginResponse và TokenResponse không có field expiresAt. TTL do cấu hình Jwt quyết định; mặc định code15 phút access và7 ngày refresh.
 4. FE gửi Bearer vào API bảo vệ. Middleware kiểm chữ ký/issuer/audience/expiry rồi đọc DB để kiểm account, organization, role/tenant và family. Access JWT chưa tới exp vẫn bị từ chối sau khi family bị revoke.
