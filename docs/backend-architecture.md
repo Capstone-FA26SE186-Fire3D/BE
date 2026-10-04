@@ -2,6 +2,16 @@
 
 Use [Docs technology](../../Docs/fire-evacuation-training-technology.md), [workflows](../../Docs/fire-evacuation-training-workflows.md) and [schema](../../Docs/fire_evacuation_schema.sql) as the target contract. Diagrams below label current code separately from target behavior; an architecture diagram is not proof a worker/provider is deployed.
 
+## Product v7 gates — target design
+
+[Docs v7](../../Docs/schema_v7_contract.md) requires PlatformAdmin approval of the submitted scenario/rubric content hash, separately from revision/version technical readiness. Submission freezes reviewed content; editing creates a new version/review. Publish checks both gates and package/runtime/provenance, Training and entitlement. The versioned Organization template/rubric/equipment library remains separate from public Learn.
+
+Private is the default Building visibility. Participation-code verification grants account-bound access at the current access revision; rotation/revocation or visibility changes invalidate older grants. List/package/prepare check access. Online start rechecks access, approved/published content, active entitlement and runtime, allocates a distinct-user seat atomically per Building/period and pins entitlement/review/rubric. Prepare/playtest allocate no seats; started sessions continue/sync after expiry or access loss with owner/replay checks.
+
+Payments provision 6/12-month Building lines and prepaid AI top-ups idempotently, including replay after expiry. Upgrade retains period and consumed seats; renewal creates a new period without overlap. Organization AI pools prepaid grants; Trainee daily quota stays separate. Request reserve/settle/release consumes existing quota; uncertain requests reconcile without postpaid invoices/debt.
+
+Learner retrieval rechecks access/service before vector search and indexes exactly approved/published name/objectives/instructions. Draft/rubric/answers/private IFC stay excluded. After access loss, own saved result explanations and permitted Common content remain available. Assessment blocks AI and records the pinned rubric, criterion results and outcome separately from session completion. Prices/quota validity/rollover/upgrade formulas/rubric thresholds require explicit policy. These modules remain implementation work in the [checklist](api-implementation-checklist.md).
+
 ## HTTP response rules
 
 `POST` does not automatically mean `201`.
@@ -54,7 +64,7 @@ sequenceDiagram
     A-->>C: 204
     C->>A: POST /revisions/{id}/process
     A->>D: create job + audit + outbox event
-    Note over A,D: Current source writes placeholder payload_hash; verify/fix before v6.7 contract use
+    Note over A,D: Current source writes placeholder payload_hash; align with the v7 event contract
     A-->>C: 202 /processing-jobs/{jobId}
     C->>A: GET job, QA, issues, artifacts, logs
     A->>D: tenant-scoped read
@@ -82,7 +92,7 @@ flowchart LR
     Tx --> Outbox[(integration_outbox_events)]
     Outbox --> Dispatcher[Outbox dispatcher\nlease / retry]
     Dispatcher --> Queue[Durable queue]
-    Stream --> Consumer[IFC / email / notification consumer]
+    Queue --> Consumer[IFC / email / notification consumer]
     Consumer --> Gate[Backend-owned DB gate]
     Gate --> Effect[Business result + receipt in one transaction]
     Effect --> Receipt[(integration_event_consumptions)]
@@ -92,6 +102,8 @@ flowchart LR
 The processing worker claims its attempt/lease through the backend and registers artifact/validation/issues through the lease-bound gate such as `register_processing_output`. It does not write protected provenance tables directly. This target follows the event and recovery contract in Docs technology; it is not evidence that the full dispatcher/consumer/gates run in the current environment.
 
 ### Migration order
+
+These steps cover the event pipeline only; v7 product dependencies are tracked in the [implementation checklist](api-implementation-checklist.md).
 
 1. Keep existing synchronous resource creation transactional with its audit record.
 2. Standardize `ProcessingJobRequested` and `ProcessingJobRequeue` outbox envelopes: event ID, aggregate ID, tenant-derived scope, schema version, canonical payload hash and idempotency key.

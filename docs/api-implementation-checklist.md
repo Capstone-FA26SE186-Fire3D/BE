@@ -14,20 +14,21 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 
 ## Baseline và trạng thái
 
-Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhánh tài liệu khi lập checklist). Trước khi bắt đầu mỗi work item, người thực hiện phải xác nhận lại code và remote mới nhất; status dưới đây không thay thế review source sau này.
+Đồng bộ contract ngày 04/10/2026 theo [Docs v7](../../Docs/schema_v7_contract.md), Docs commit `2b56ba3`; đối chiếu source BE `origin/develop` tại `e42a2eb`. Các kết quả test/deployment ngày 02–03/10 giữ baseline và giới hạn riêng. Trước khi triển khai mỗi work item phải xác nhận lại source; lần rà tài liệu này không chạy lại application tests hoặc provider.
 
 - **GAP:** capability/contract còn thiếu hoặc source đang lệch.
 - **VERIFY:** đã thấy code cho một phần contract; cần kiểm thử và/hoặc khớp schema/provider trước khi kết luận.
 - **LATER:** requirement có trong Docs, triển khai sau dependency nêu trong thứ tự công việc.
+- **PARTIAL / CODE/TEST:** source có một phần hoặc có bằng chứng kiểm thử lịch sử; không đồng nghĩa đã triển khai đầy đủ contract v7.
 - Mỗi task triển khai cập nhật checklist, API guide và bằng chứng trong PR. Chỉ cập nhật trạng thái sau khi kiểm cả quyền, tenant, trạng thái, persistence, audit/idempotency và lỗi liên quan.
 
 ## A. Database và nền tảng dùng chung
 
 ### DB-01 — P0 · GAP · Schema mapping
 
-- **Contract/current:** Schema trong Docs là đích; code/SQL còn theo mô hình cũ, gồm `organizations.plan` và bảng reset token riêng. Chưa có dữ liệu nghiệp vụ cần chuyển.
-- **Sửa code:** Lập mapping entity/enum/query/grant sang schema Docs; thay truy vấn legacy và tách reset token hash của schema đích khỏi queue email. Dựng database test mới theo schema đích; không dùng `EnsureCreated` thay SQL/gates.
-- **Nghiệm thu:** Database test mới dựng được từ schema mục tiêu; enum/FK/constraint/grant và truy vấn task chạy đúng. Không chạy destructive SQL lên DB dùng chung hoặc thêm backfill cho dữ liệu không tồn tại.
+- **Contract/current:** SQL v7 là đích; EF/migration/runtime chưa đồng bộ toàn bộ. `LocalPasswordReset` dùng `local_password_reset_tokens`, đã được v7 biểu diễn; EF vẫn giữ `password_reset_tokens` legacy. Chưa được suy môi trường hiện tại trống từ nhận định tháng 09; xem bằng chứng Supabase/PayOS phía trên.
+- **Sửa code:** Lập mapping entity/enum/query/grant sang v7, kiểm tra schema/dữ liệu từng môi trường và đường gọi reset trước khi xử lý bảng legacy. Dựng database test mới theo schema đích; không dùng `EnsureCreated` thay SQL/gates. Schema v7 đã syntax-load trên PostgreSQL disposable với stand-in pgvector theo contract Docs; cần kiểm actual extension/quyền/runtime riêng.
+- **Nghiệm thu:** Database test mới dựng được từ schema mục tiêu; enum/FK/constraint/grant và truy vấn task chạy đúng. Migration/backfill của môi trường khác phải dựa trên dữ liệu đã kiểm tra; không chạy destructive SQL lên DB dùng chung để kiểm chứng tài liệu.
 
 ### AUTHZ-01 — P0 · GAP · Actor và tenant
 
@@ -40,7 +41,7 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 ### AUTH-01 — P1 · PARTIAL · Đăng ký local
 
 - **Contract/current:** FE nhập form trước → OTP → một nút gọi verify-otp rồi register với toàn bộ form + proof. `POST /api/auth/registration/request-otp` tạo challenge/job gửi mã nhưng không tạo identity; `POST /api/auth/resend-verification` gửi OTP mới sau cooldown và vô hiệu mã/proof cũ. Email đã có account trả 409 EMAIL_EXISTS + errors.email, không enqueue. Ba route register consume proof trong transaction tạo role/tenant server-owned và audit; form sai không consume proof. `/check-email/` là demo OTP, FE thật cần tích hợp riêng. `/verify-email` chỉ dành link pending legacy. Migration `20261003030000_AddNormalizedRegistrationEmail` bổ sung unique email trim/lowercase và guard legacy duplicates, không xóa/gộp dữ liệu; migration OTP/username cũ giữ nguyên. `/api/auth/register` là alias Trainee. [Test tay](registration-payos-manual-test.md); mức nghiệm thu DB/provider/FE phải ghi riêng.
-- **Còn thiếu:** Google onboarding/link và PATCH profile tổ chức. Email verification, `profile_revision`/ETag, đổi username và avatar intent/complete/delete đã có nhưng vẫn cần kiểm thử PostgreSQL/S3 thật.
+- **Còn thiếu:** Google onboarding/link và username cá nhân tùy chọn cho đăng ký OrganizationUser. PATCH profile tổ chức đã có ở `OrganizationProfileController`; email verification, profile ETag, đổi username và avatar cần nghiệm thu provider/deployment riêng.
 - **Nghiệm thu cần chạy:** HTTP/PostgreSQL disposable kiểm tra proof không tạo user trước verify, proof chỉ dùng một lần, hai role, organization transaction và collision username khác hoa/thường. Còn cần test race concurrent cùng username và chuyển dữ liệu production trước khi đóng hoàn toàn.
 
 ### AUTH-02 — P0 · GAP · Google onboarding và link
@@ -52,7 +53,7 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 ### AUTH-03 — P1 · PARTIAL · Profile, ETag và avatar
 
 - **Contract/current:** `GET/PATCH /api/auth/me` trả/nhận ETag theo `profile_revision`; PATCH hỗ trợ full name, username, dob, gender và phone. `/api/me/avatar` có intent/complete/GET/delete, complete copy theo S3 ETag và không dùng chung final key giữa các request. `GET/PATCH /api/organizations/me` trả ETag và PATCH chỉ thay đổi field được gửi.
-- **Còn thiếu:** Persist candidate final Avatar trước S3 copy để recovery khi tiến trình dừng giữa copy và DB finalize; kiểm chứng cleanup trên PostgreSQL/S3 cô lập.
+- **Còn thiếu:** Kiểm chứng cleanup/recovery trên PostgreSQL/S3 cô lập. `AvatarService` đã gọi `ReserveCopyCandidateAsync` trước conditional S3 copy; `AvatarStore` lưu attempt/key/source ETag/lease và có cleanup cho candidate hết lease. Không lập task bổ sung lại đường ghi đã có.
 - **Nghiệm thu:** Lưu thành công trả ETag mới; ETag cũ không ghi đè thay đổi; không sửa được role/email/tenant/status; username, organization scope và quyền sở hữu object S3 được kiểm tra.
 
 ### AUTH-04 — P1 · VERIFY · Reset và change password
@@ -63,11 +64,29 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 
 ### AUTH-05 — P1 · VERIFY · FCM device token
 
-- **Contract/current:** AuthController có đăng ký/xóa device token và adapter FCM.
+- **Contract/current:** AuthController có đăng ký/xóa device token và adapter FCM; v7 biểu diễn `device_installations` và binding user/session riêng. Code proof/family binding đã có, cần đối chiếu persistence/grants.
 - **Sửa code:** Rà ownership theo user/installation, rotate/revoke, validate token và che token khỏi log. FCM chỉ dùng push, không dùng để đăng nhập.
 - **Nghiệm thu:** Nhiều thiết bị, token invalid/replaced và user khác xóa token đều được xử lý đúng. Unit/mock không được ghi là bằng chứng FCM thật.
 
 ## C. Building, IFC, authoring và release
+
+### ACCESS-01 — P1 · GAP · Quyền tham gia Building (FR-TRAINING-04)
+
+- **Contract/current:** V7 mặc định Building Private; source chưa có capability participation grant/access revision tương ứng.
+- **Sửa code:** List/package/prepare kiểm Trainee đăng nhập và quyền Building; verify mã hiện hành tạo account-bound grant. Rotate/revoke mã hoặc đổi visibility tăng access revision, vô hiệu grant cũ. Public vẫn cần Trainee đăng nhập; QR không tạo tenant membership.
+- **Nghiệm thu:** Mã sai hoặc grant user khác bị từ chối; grant cũ mất hiệu lực sau thay đổi; start recheck quyền. Phiên đã start giữ quyền sync theo snapshot.
+
+### LIBRARY-01 — P1 · LATER · Thư viện Organization (FR-LIBRARY-01–02)
+
+- **Contract/current:** Chưa thấy module library v7 trong source; catalog scenario cũ không chứng minh thư viện đã có.
+- **Sửa code:** PlatformAdmin maintain template/rubric mẫu/metadata thiết bị có version; OrganizationUser đọc trong console để author. Template tùy chọn, capability chỉ chọn runtime hỗ trợ; tách Learn và kho riêng tenant.
+- **Nghiệm thu:** Organization không quản trị library; sửa mẫu không sửa bài đã phát hành; private IFC/scenario không tự vào thư viện; capability không hỗ trợ bị từ chối.
+
+### APPROVAL-01 — P1 · GAP · Duyệt scenario/rubric (FR-SCENARIO-03)
+
+- **Contract/current:** Readiness/ConfirmForTraining hiện có không thay approval nội dung của PlatformAdmin; chưa thấy `scenario_content_reviews` v7 trong source.
+- **Sửa code:** Submit đóng băng version/rubric và content hash; Admin approve/reject đúng hash, reject có lý do; sửa tạo version/review mới. Publish pin approval cùng readiness và package provenance.
+- **Nghiệm thu:** Hash lệch, thiếu approval hoặc readiness không đạt chặn publish; sửa version submitted bị chặn; approval không áp sang version khác. Learn giữ editorial lifecycle riêng, không thêm approval Learn.
 
 ### IFC-01 — P0 · GAP · Outbox và worker result
 
@@ -96,14 +115,20 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 ### RELEASE-01 — P1 · GAP · Publish gates
 
 - **Contract/current:** Runtime dùng [FailClosedReleaseStore](../Fire3D/Fire3D.Infrastructure/Releases/FailClosedReleaseStore.cs): publish trả 503 thay vì bỏ qua gate. Create Built, GET và revoke vẫn delegate implementation hiện có.
-- **Sửa code:** Tách ghi nhận build hoàn tất khỏi việc chạy Unity. Trước publish kiểm tra package/manifest hash, artifact, validation Passed, blocker, runtime compatibility, Training và entitlement theo Docs.
+- **Sửa code:** Tách ghi nhận build hoàn tất khỏi việc chạy Unity. Trước publish kiểm approval đúng scenario/rubric hash (APPROVAL-01), readiness đúng revision/version, package/manifest hash, artifact, validation Passed, blocker, runtime compatibility, Training và entitlement theo Docs.
 - **Nghiệm thu:** Provenance/review sai, QA lỗi hoặc còn blocker, runtime không tương thích, entitlement không Active đều không publish. Retry/revoke/audit đúng; create Built không bị mô tả là đã chạy Unity.
 
 ### SESSION-01 — P1 · LATER · QR và training session
 
 - **Contract/current:** QR Building, Training list, session preparation/start, launch grant và offline continuation/sync chưa có đủ API production.
-- **Sửa code:** Sau khi entitlement/release gates sẵn sàng, triển khai QR canonical cấp Building, preparation pin release/scenario/package, explicit online start cấp grant; hỗ trợ tiếp tục và sync kết quả sau mất mạng.
-- **Nghiệm thu:** Preparation không cấp quyền; start mới kiểm tra online và idempotency; session đã bắt đầu tiếp tục/sync được khi mất mạng nhưng không thể mở session mới khi entitlement hết hạn.
+- **Sửa code:** Sau ACCESS-01, APPROVAL-01, CAPACITY-01 và release/entitlement gates, triển khai QR cấp Building; list/package/prepare kiểm access, prepare pin release/scenario/package. Explicit online start recheck access/approved/published/entitlement/runtime, phân suất nguyên tử rồi cấp grant; pin entitlement/review/rubric.
+- **Nghiệm thu:** Package cache không mở session mới offline; prepare/playtest không tính seat. Retry start không tạo session/seat trùng. Phiên đã start tiếp tục/sync sau expiry, rotate/revoke quyền hoặc account bị khóa; event/result vẫn kiểm owner và replay hash.
+
+### ASSESSMENT-01 — P1 · LATER · Kết quả theo rubric (FR-TRAINING-01,08)
+
+- **Contract/current:** Chưa có đầy đủ runtime/result API v7; session Completed không suy ra Passed.
+- **Sửa code:** Lưu rubric hash đã duyệt, criterion results, score, outcome `Passed|NotPassed|Incomplete|NotAssessed` và lý do theo session/version. Trainee tự chọn mode, retry không giới hạn; AI bị chặn trong Assessment.
+- **Nghiệm thu:** Kết quả cũ giữ rubric cũ sau publish mới; replay không ghi trùng; Completed không tự Passed; không prerequisite/module/sprint/certificate. Threshold/trọng số cần policy được chốt trước implementation.
 
 ## D. Billing, notification, AI, Learn và báo cáo
 
@@ -113,7 +138,7 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 - **✅ Kiểm chứng tự động:** SDK chữ ký offline, HTTP authorization/OpenAPI, PostgreSQL disposable cho replay/race/rollback/partial recovery, UTC month-end và grants executor. Kết quả cuối đợt ghi trong billing.md; không coi test mock là provider acceptance.
 - **✅ Kiểm chứng local/provider một phần:** Sáu migration PayOS và login/grants đã áp vào Supabase cho test local; tạo link/QR provider thật và replay cùng operation đạt. Chưa chuyển tiền.
 - **❌ Chưa nghiệm thu:** Runtime executor/worker deployment Azure, đăng ký webhook/probe PayOS, giao dịch thật với bank/provider và kiểm entitlement deployed. Không tick publish/playtest/training gate từ entitlement storage.
-- **❌ Backlog riêng:** Reminder 5 ngày, revenue, AI settlement, hoàn tiền tự động, eInvoice và FE billing đầy đủ.
+- **❌ Backlog riêng:** Reminder 5 ngày, revenue, package/capacity v7 và AI prepaid top-up/provisioning, hoàn tiền tự động, eInvoice và FE billing đầy đủ. Không lập AI invoice cuối kỳ hoặc overage debt.
 - **Nghiệm thu:** Return URL không ghi Paid; amount/currency/link sai không được apply; webhook/recovery/replay không cấp trùng; cùng payment có mốc kích hoạt chung, renewal nối kỳ đã mua; Paid và provisioning riêng biệt.
 ### NOTIFY-01 — P1 · LATER · Nhắc hết hạn
 
@@ -123,9 +148,27 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 
 ### AI-01 — P1 · LATER · AI request và quota
 
-- **Contract/current:** Chưa có luồng production BE sở hữu AI request, authorization, quota, consent, reservation/settlement và reconcile.
-- **Sửa code:** Xây durable request/result qua BE và service AI; giữ quota/ledger/price snapshot ở BE; xử lý timeout/retry qua idempotency và reconcile, không cho AI ghi billing.
-- **Nghiệm thu:** Test concurrent reserve, duplicate/hash conflict, timeout sau khi AI trả kết quả, consent, quota Trainee riêng và scope organization/Building.
+- **Contract/current:** V7 dùng Organization quota pooled trả trước từ Building/package/top-up và Trainee daily quota riêng; chưa có luồng production BE request/quota đầy đủ. Không còn overage consent, AI billing period hoặc nợ trả sau.
+- **Sửa code:** Durable request/result qua BE; reserve quota trước billable work, settle/release idempotent và reconcile timeout. Giữ policy/usage/grant provenance, lock order request → ledger/reservation → grants theo ID. Quota request không tạo invoice; BILLING-02 cấp quota qua payment đã áp dụng.
+- **Nghiệm thu:** Concurrent reserve không vượt quota; thiếu quota chặn request mới; duplicate/hash conflict, late result/timeout/release không trừ trùng; quota Trainee không consume pool Organization. Provider nằm ngoài transaction DB.
+
+### CAPACITY-01 — P1 · LATER · Hạn mức người theo kỳ (FR-BILLING-11)
+
+- **Contract/current:** Chưa thấy learner-seat/upgrade v7 trong source.
+- **Sửa code:** Một distinct Trainee user ID chiếm một seat tại Building/entitlement khi start lần đầu; nhiều bài/lượt cùng kỳ chỉ một seat. Tòa khác/kỳ renewal mới tính riêng. Upgrade giữ kỳ và số seat đã dùng; user đã tính được start tiếp khi access/service hợp lệ.
+- **Nghiệm thu:** Hai user tranh suất cuối chỉ một thành công; retry cùng user không tăng count; login/list/prepare/playtest không tính. Upgrade không reset seats hoặc chồng kỳ cam kết.
+
+### BILLING-02 — P1 · GAP · Gói v7 và AI top-up (FR-BILLING-01,05–07,11)
+
+- **Contract/current:** PayOS/Building billing hiện có code/test theo delivery tháng 10; chưa biểu diễn đầy đủ package 6/12 tháng, learner limit, quota policy và top-up v7.
+- **Sửa code:** Snapshot game service, seats, quota/price/terms cho từng Building line New/Renewal/Upgrade. Trước Issue, quota-bearing line pin tenant/audience/unit/policy version và grant interval hợp lệ. Provision payment/line idempotent; top-up cấp pooled AI grant riêng và không gia hạn Building. Kiểm replay đã provision trước điều kiện expiry; không chồng kỳ đã cam kết.
+- **Nghiệm thu:** Replay sau expiry trả entitlement/grant đã cấp; webhook lặp không tăng quota/seats; top-up không đổi kỳ Building; invalid policy/interval chặn Issue. Giá/expiry/rollover/công thức upgrade phải cấu hình, không mặc định từ schema.
+
+### RAG-01 — P1 · LATER · Learner-safe retrieval (FR-AI-03,05–06)
+
+- **Contract/current:** V7 có `scenario_knowledge_documents`; chưa thấy index/retrieval authorization production tương ứng.
+- **Sửa code:** Chỉ index snapshot approved/published đúng hash gồm `name`, `objectives`, `instructions`; mỗi retrieval recheck current access/service trước vector retrieval. Loại draft/rubric/đáp án/private IFC. Learn pin post/version hợp lệ, Hidden có thể RAG, Deleted/Unpublished bị loại.
+- **Nghiệm thu:** Access/service mất quyền chặn Building retrieval mới dù index/cache còn; vẫn đọc giải thích kết quả của chính mình đã lưu và Common hợp lệ. Assessment chặn AI; nguồn/version khác tenant bị từ chối.
 
 ### LEARN-01 — P1 · LATER · CMS và bookmark
 
@@ -142,9 +185,9 @@ Source được rà tại BE `main` commit `946017d` (cũng là HEAD của nhán
 ## E. Thứ tự phụ thuộc và cách hoàn tất task
 
 1. **DB-01, AUTHZ-01, AUTH-01–04:** schema test, tenant boundary, đăng ký/onboarding/profile/session/recovery.
-2. **IFC-01, IFC-02, SCENARIO-01:** outbox/worker gate, QA provenance, draft/version/readiness.
-3. **BILLING-01, NOTIFY-01, PLAYTEST-01, RELEASE-01:** entitlement Building và các gate phụ thuộc entitlement; song song hoàn thiện package/QA.
-4. **SESSION-01:** QR, Training, launch grant và offline sync sau khi release/entitlement đạt.
-5. **AI-01, LEARN-01, REPORT-01:** tích hợp các capability còn lại theo quyền và schema đã chốt.
+2. **IFC-01, IFC-02, SCENARIO-01, LIBRARY-01, APPROVAL-01:** worker/QA, draft/version, thư viện và approval; readiness và approval là hai dependency riêng.
+3. **BILLING-01–02, ACCESS-01, CAPACITY-01, NOTIFY-01, PLAYTEST-01, RELEASE-01:** payment/provisioning, access/capacity và publish gates.
+4. **SESSION-01, ASSESSMENT-01:** start/launch grant, pin rubric, offline sync và kết quả theo mode.
+5. **AI-01, LEARN-01, RAG-01, REPORT-01:** request/quota và retrieval đã cấp quyền; indexing cần approved/published version, analytics cần session/result chuẩn.
 
 Task chỉ hoàn tất khi contract, handler/store/schema/gate và role/tenant đúng; có kiểm tra happy path cùng lỗi/race/replay phù hợp trên database test; tài liệu API phản ánh source mới; và PR ghi lệnh, kết quả, phần bị mock/bỏ qua, cùng giới hạn provider. Không coi build, route tồn tại hoặc mock test là bằng chứng provider/production đã hoạt động. Đợt đồng bộ này chỉ cập nhật BE docs; không sửa bộ `Docs` chuẩn.
