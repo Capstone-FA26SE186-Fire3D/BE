@@ -19,11 +19,10 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         try
         {
             // Shared for normal auth; admin status changes take the exclusive lock before revoking sessions.
-            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management', 0))", ct);
-            // The same user lock serializes login, refresh, replay revocation and logout across API instances.
+            // Both locks run in one round trip, preserving lifecycle-before-user order.
             var key = "fire3d:auth:" + userId;
             await db.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", ct);
+                $"SELECT pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management', 0)); SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", ct);
             return new AuthTransaction(transaction);
         }
         catch
@@ -110,6 +109,33 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         await db.Users.Where(x => x.Id == id).ExecuteUpdateAsync(update => update
             .SetProperty(x => x.LastLoginAt, now).SetProperty(x => x.UpdatedAt, now)
             , ct);
+
+    public async Task FinalizePasswordLoginAsync(User user,string? rehashedPassword,RefreshToken token,DateTime now,CancellationToken ct)
+    {
+        if(db.Database.CurrentTransaction is null) throw new InvalidOperationException("Login requires the lifecycle/user transaction.");
+        if(token.UserId!=user.Id || token.CreatedAt!=now) throw new InvalidOperationException("Login token scope does not match identity.");
+        await using var command=new NpgsqlCommand("""
+            WITH updated AS (
+              UPDATE public.users SET last_login_at=@now,updated_at=@now,password_hash=COALESCE(@password,password_hash)
+              WHERE id=@user AND NOT EXISTS(SELECT 1 FROM public.password_reset_operations
+                WHERE user_id=@user AND (status='Pending' OR finished_at>=@now)) RETURNING id
+            ), issued AS (
+              INSERT INTO public.auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at)
+              SELECT @token,id,@family,@hash,@now,@expires FROM updated RETURNING id
+            )
+            INSERT INTO public.audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,created_at)
+            SELECT @audit,updated.id,@organization,'User','Login','users',updated.id,@correlation,@now FROM updated CROSS JOIN issued
+            RETURNING id
+            """,(NpgsqlConnection)db.Database.GetDbConnection(),(NpgsqlTransaction)db.Database.CurrentTransaction.GetDbTransaction());
+        command.Parameters.AddWithValue("user",user.Id);command.Parameters.AddWithValue("now",now);
+        command.Parameters.AddWithValue("password",NpgsqlTypes.NpgsqlDbType.Text,(object?)rehashedPassword??DBNull.Value);
+        command.Parameters.AddWithValue("organization",NpgsqlTypes.NpgsqlDbType.Uuid,(object?)user.OrganizationId??DBNull.Value);
+        command.Parameters.AddWithValue("token",token.Id);command.Parameters.AddWithValue("family",token.FamilyId);
+        command.Parameters.AddWithValue("hash",token.TokenHash);command.Parameters.AddWithValue("expires",token.ExpiresAt);
+        command.Parameters.AddWithValue("audit",Guid.NewGuid());command.Parameters.AddWithValue("correlation",Guid.NewGuid());
+        if(await command.ExecuteScalarAsync(ct) is null)
+            throw new PasswordResetException("RESET_PENDING","Sign in again after password recovery completes.",503);
+    }
 
     public async Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, DeviceInstallationProof installationProof,
         string? fcmToken, string? deviceModel, string? osVersion, string? appVersion, DateTime now, CancellationToken ct)

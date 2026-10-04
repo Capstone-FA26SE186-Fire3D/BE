@@ -23,33 +23,41 @@ public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordS
             passwords.VerifyDummy(command.Password);
             return InvalidCredentials();
         }
-        // Re-read and verify under the same lock as password reset, refresh and disable.
+        // PBKDF2 and an optional upgrade happen without holding a database lock.
+        var expectedHash=user.PasswordHash;
+        bool verified; bool rehash;
+        string? upgradedHash;
+        using(AuthDiagnostics.Measure(LoginPhase.PasswordVerification))
+        {
+            verified=passwords.Verify(user,command.Password,out rehash);
+            upgradedHash=verified && rehash ? passwords.Hash(user,command.Password) : null;
+        }
+        if(!verified) return InvalidCredentials();
+        // Reset, password change and disable serialize on this same lifecycle/user lock.
         IAuthTransaction transaction;
         using(AuthDiagnostics.Measure(LoginPhase.LockWait)) transaction=await store.BeginUserTransactionAsync(user.Id,ct);
         await using var tx=transaction;
         using(AuthDiagnostics.Measure(LoginPhase.Revalidation)) user=await store.FindUserAsync(user.Id,ct);
-        if (user is null) { passwords.VerifyDummy(command.Password); return InvalidCredentials(); }
-        bool verified; bool rehash;
-        using(AuthDiagnostics.Measure(LoginPhase.PasswordVerification)) verified=passwords.Verify(user,command.Password,out rehash);
-        if (!verified) return InvalidCredentials();
+        if (user is null || !string.Equals(user.Email,email,StringComparison.Ordinal)
+            || !string.Equals(user.PasswordHash,expectedHash,StringComparison.Ordinal)) return InvalidCredentials();
         if (!await AuthSupport.IsActiveAsync(store, user, ct))
             return AuthResult<LoginResponse>.Fail("ACCOUNT_DISABLED", "Account or organization is unavailable.", 403);
         if (AuthSupport.RegistrationHasExpired(user, AuthSupport.UtcNow(clock)))
             return AuthResult<LoginResponse>.Fail("REGISTRATION_EXPIRED", "This unverified registration has expired. Register again to receive a new link.", 403);
         if (AuthSupport.IsPendingEmailVerification(user))
             return AuthResult<LoginResponse>.Fail("EMAIL_NOT_VERIFIED", "Verify your email before signing in.", 403);
-        if (rehash)
-        {
-            user.PasswordHash = passwords.Hash(user, command.Password);
-            await store.UpdatePasswordHashAsync(user.Id, user.PasswordHash, AuthSupport.UtcNow(clock), ct);
-        }
         var now = AuthSupport.UtcNow(clock);
         using var persistence=AuthDiagnostics.Measure(LoginPhase.Persistence);
-        await store.UpdateLoginAsync(user.Id, now, ct);
-        var response = await AuthSupport.IssueAsync(store, tokens, user, Guid.NewGuid(), now, now.Add(tokens.RefreshTokenLifetime), ct);
-        await store.WriteAuditAsync(user, "Login", user.Id, now, ct);
+        var family=Guid.NewGuid();var raw=tokens.CreateRefreshToken();
+        await store.FinalizePasswordLoginAsync(user,upgradedHash,new Fire3D.Domain.Entities.RefreshToken
+        {
+            Id=Guid.NewGuid(),UserId=user.Id,FamilyId=family,TokenHash=tokens.HashRefreshToken(raw),
+            CreatedAt=now,ExpiresAt=now.Add(tokens.RefreshTokenLifetime)
+        },now,ct);
+        var access=tokens.CreateAccessToken(user,family,now);
         await tx.CommitAsync(ct);
-        return AuthResult<LoginResponse>.Ok(new(response.AccessToken, response.RefreshToken, response.User));
+        user.LastLoginAt=now;user.UpdatedAt=now;
+        return AuthResult<LoginResponse>.Ok(new(access.Value,raw,AuthSupport.ToAccount(user)));
     }
     private static AuthResult<LoginResponse> InvalidCredentials() =>
         AuthResult<LoginResponse>.Fail("INVALID_CREDENTIALS", "Invalid email or password.", 401);

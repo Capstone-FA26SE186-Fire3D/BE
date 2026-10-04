@@ -7,3 +7,9 @@ Có thể bật `AuthDiagnostics__DatabaseTimingEnabled=true` để nhận `fet3
 Phân biệt chậm network/pool, thời gian chờ khóa, PBKDF2 và thực thi SQL. Truy vấn với bảng ít dòng dùng SeqScan không đủ lý do thêm index. Không giảm độ mạnh password hash, bỏ reset fencing, cache quyền/tenant/family hoặc dùng kết nối migration cho API để tối ưu.
 
 Tại snapshot kiểm tra, Supabase cùng phiên có RTT SELECT 1 khoảng 107–121 ms còn SQL lookup/family/reset fence dưới 1 ms; đây là phép đo kết nối từ máy local, không phải latency login Azure. Cần đo App Service thực tế trước khi quyết định region/pool. Tránh tạo pool mới mỗi request; giữ pooling và giới hạn phù hợp connection budget, không tự tăng max pool theo phỏng đoán.
+
+Login xác thực PBKDF2/rehash trước khi lấy khóa database. Dưới khóa lifecycle rồi user, đọc lại identity, so sánh đúng email/hash đã xác thực và kiểm lifecycle/email verification. Hash đã đổi thì trả INVALID_CREDENTIALS; không dùng kết quả xác thực cũ để cấp phiên. Password reset Pending/finished fence tiếp tục được kiểm trước khi ghi session.
+
+Hai advisory locks được gửi trong một round trip theo đúng thứ tự. Một CTE parameterized cập nhật login/rehash, ghi refresh token và audit cùng transaction, có reset fence. Lỗi audit rollback cả login và token. Không có transaction mở khi chạy PBKDF2, không đổi hash algorithm/iteration, không cache quyền. Phải deploy binary chứa các method store/handler đồng bộ; API request/response không đổi.
+
+Unit tests kiểm verify trước khóa, wrong password không lấy khóa và identity thay đổi. PostgreSQL/HTTP test lấy khóa từ connection khác, thay mật khẩu hoặc khóa account, rồi kiểm login bị từ chối; lỗi audit không để lại session. Full-migration auth fixture kiểm chain thực tế; test dữ liệu legacy tạo database ở migration lịch sử riêng, không downgrade hardening. Kết quả test không phải benchmark production.

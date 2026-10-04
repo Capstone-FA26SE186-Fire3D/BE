@@ -24,6 +24,7 @@ public interface IAuthStore
     Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username,
         DateOnly? dob, UserGender? gender, string? phoneNumber, DateTime now, CancellationToken ct);
     Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct);
+    Task FinalizePasswordLoginAsync(User user, string? rehashedPassword, RefreshToken token, DateTime now, CancellationToken ct);
     Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, Users.Commands.RegisterDevice.DeviceInstallationProof installationProof, string? fcmToken, string? deviceModel, string? osVersion, string? appVersion, DateTime now, CancellationToken ct);
     Task<DeviceRevokeResult> RevokeDeviceAsync(Guid userId, string deviceUuid, Users.Commands.RegisterDevice.DeviceInstallationProof installationProof, DateTime now, CancellationToken ct);
     Task DisableUserPushDevicesAsync(Guid userId, DateTime now, CancellationToken ct);
