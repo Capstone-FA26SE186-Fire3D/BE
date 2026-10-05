@@ -346,6 +346,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     }
     private ObjectResult ResetProblem(AuthError error)
     {
+        if (error.RetryAfterSeconds is int retry) Response.Headers.RetryAfter = retry.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var extensions = new Dictionary<string, object?> { ["code"] = error.Code };
         if (error.Errors is { Count: > 0 }) extensions["errors"] = error.Errors;
         return Problem(statusCode: error.Status, title: error.Message,

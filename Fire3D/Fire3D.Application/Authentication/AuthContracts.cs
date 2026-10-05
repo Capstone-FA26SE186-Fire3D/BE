@@ -21,12 +21,12 @@ public sealed record GoogleOnboardingDetails(string Token, DateTime ExpiresAt, s
 public sealed record ForgotPasswordRequest(string Email);
 public sealed record ResetPasswordRequest(Guid Token, string NewPassword);
 public sealed record AuthError(string Code, string Message, int Status,
-    IReadOnlyDictionary<string, string[]>? Errors = null);
+    IReadOnlyDictionary<string, string[]>? Errors = null, int? RetryAfterSeconds = null);
 public sealed record AuthResult<T>(T? Value, AuthError? Error)
 {
     public bool IsSuccess => Error is null;
     public static AuthResult<T> Ok(T value) => new(value, null);
     public static AuthResult<T> Fail(string code, string message, int status,
-        IReadOnlyDictionary<string, string[]>? errors = null) =>
-        new(default, new(code, message, status, errors));
+        IReadOnlyDictionary<string, string[]>? errors = null, int? retryAfterSeconds = null) =>
+        new(default, new(code, message, status, errors, retryAfterSeconds));
 }

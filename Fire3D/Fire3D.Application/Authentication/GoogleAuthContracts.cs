@@ -6,12 +6,13 @@ using System.Text.Json.Serialization;
 namespace Fire3D.Application.Authentication;
 
 public sealed record GoogleOnboardingProof(string Token, DateTime ExpiresAt);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record GoogleOnboardingCompleteRequest(string OnboardingToken,
     [property: JsonConverter(typeof(GoogleAccountTypeJsonConverter))] UserRole AccountType,
     string? Username = null, string? FullName = null, DateOnly? Dob = null, UserGender? Gender = null,
     string? PhoneNumber = null, string? OrganizationName = null, string? OrganizationAddress = null,
     string? OrganizationPhoneNumber = null);
-public sealed record GoogleOnboardingCompletion(AccountResponse User, bool Replayed);
+public sealed record GoogleOnboardingCompletion(TokenResponse Authentication);
 
 // Applies only to onboarding account selection, never to authorization role serialization.
 public sealed class GoogleAccountTypeJsonConverter : JsonConverter<UserRole>

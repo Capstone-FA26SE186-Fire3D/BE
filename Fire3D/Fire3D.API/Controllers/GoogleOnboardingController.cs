@@ -7,21 +7,23 @@ namespace Fire3D.API.Controllers;
 [ApiController]
 [Route("api/auth/google/onboarding")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+[GoogleOnboardingModelState]
 public sealed class GoogleOnboardingController(IGoogleOnboardingService onboarding) : ControllerBase
 {
     /// <summary>Completes verified Google onboarding as Trainee or OrganizationUser.</summary>
     /// <remarks>Use the 15-minute onboardingToken from login-firebase. Trainee requires username;
     /// OrganizationUser requires organizationName, organizationAddress and organizationPhoneNumber.
     /// Server creates a Google-only account; no password, role/tenant override or session is accepted.
-    /// 201 first completion; 200 same normalized input replay within 24 hours; 409 different input.
-    /// Exchange the Firebase token again to sign in after completion.</remarks>
+    /// 201 returns authentication after atomic account/session creation. Same input replay within 24 hours
+    /// returns 409 ONBOARDING_ALREADY_COMPLETED; recover by exchanging a valid Firebase ID token.
+    /// Different input returns 409 IDEMPOTENCY_KEY_CONFLICT.</remarks>
     [HttpPost("complete")]
     [AllowAnonymous]
-    [ProducesResponseType<AccountResponse>(201)]
-    [ProducesResponseType<AccountResponse>(200)]
+    [ProducesResponseType<GoogleExchangeResponse>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(503)]
     public async Task<IActionResult> Complete([FromBody] GoogleOnboardingCompleteRequest request, CancellationToken ct)
     {
         var result = await onboarding.CompleteAsync(request, ct);
@@ -32,8 +34,9 @@ public sealed class GoogleOnboardingController(IGoogleOnboardingService onboardi
             problem.Extensions["code"] = error.Code;
             problem.Extensions["traceId"] = System.Diagnostics.Activity.Current?.Id ?? HttpContext.TraceIdentifier;
             if (error.Errors is not null) problem.Extensions["errors"] = error.Errors;
+            if (error.RetryAfterSeconds is int retry) Response.Headers.RetryAfter = retry.ToString(System.Globalization.CultureInfo.InvariantCulture);
             return StatusCode(error.Status, problem);
         }
-        return result.Value!.Replayed ? Ok(result.Value.User) : StatusCode(201, result.Value.User);
+        return StatusCode(201, new GoogleExchangeResponse("Authenticated", result.Value!.Authentication));
     }
 }

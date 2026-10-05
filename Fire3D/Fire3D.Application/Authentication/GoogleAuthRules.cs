@@ -8,6 +8,9 @@ namespace Fire3D.Application.Authentication;
 // Shared application rules for infrastructure-backed Google account operations.
 public static class GoogleAuthRules
 {
+    public static Task<TokenResponse> IssueSessionAsync(IAuthStore store, ITokenService tokens,
+        User user, Guid familyId, DateTime now, CancellationToken ct) =>
+        AuthSupport.IssueAsync(store, tokens, user, familyId, now, now.Add(tokens.RefreshTokenLifetime), ct);
     public static DateTime UtcNow(TimeProvider clock) => AuthSupport.UtcNow(clock);
     public static AccountResponse ToAccount(User user) => AuthSupport.ToAccount(user);
     public static string? NormalizeDisplayName(string? name) => SelfRegistrationValidation.NormalizeName(name);

@@ -23,7 +23,6 @@ public sealed class GoogleLinkPostgresTests
         await db.Sql($$"""
             CREATE TABLE local_password_reset_tokens(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id),token_hash text,
                 expires_at timestamptz,used_at timestamptz);
-            CREATE TABLE password_reset_operations(user_id uuid,status text,finished_at timestamptz);
             INSERT INTO local_password_reset_tokens VALUES(gen_random_uuid(),'{{BillingDatabase.Owner}}','test-hash',now()+interval '1 hour',null);
             INSERT INTO password_reset_tokens(id,user_id,expires_at) VALUES(gen_random_uuid(),'{{BillingDatabase.Owner}}',now()+interval '1 hour');
             GRANT SELECT,UPDATE ON local_password_reset_tokens,auth_refresh_tokens TO fire3d_api;
@@ -130,17 +129,17 @@ public sealed class GoogleLinkPostgresTests
     {
         await using var db = await BillingDatabase.Create(false); await Prepare(db);
         await using var proofContext = db.Context();
-        var proof = await new GoogleOnboardingService(proofContext, new AuthStore(proofContext), TimeProvider.System)
+        var proof = await new GoogleOnboardingService(proofContext, new AuthStore(proofContext), TimeProvider.System, GoogleOnboardingTestDoubles.Tokens())
             .BeginAsync(new("linked-google", "different-google@example.test"), default);
         Assert.True(proof.IsSuccess);
         await using var linkContext = db.Context(); await using var completeContext = db.Context();
         var linkTask = Link(linkContext);
-        var completeTask = new GoogleOnboardingService(completeContext, new AuthStore(completeContext), TimeProvider.System)
+        var completeTask = new GoogleOnboardingService(completeContext, new AuthStore(completeContext), TimeProvider.System, GoogleOnboardingTestDoubles.Tokens())
             .CompleteAsync(new(proof.Value!.Token, Fire3D.Domain.Enums.UserRole.Trainee, "race_google_user"), default);
         await Task.WhenAll(linkTask, completeTask);
         Assert.NotEqual(linkTask.Result.IsSuccess, completeTask.Result.IsSuccess);
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM users WHERE firebase_uid='linked-google'"));
-        Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM audit_logs"));
+        Assert.Equal(completeTask.Result.IsSuccess ? 2L : 1L, await db.Scalar("SELECT count(*) FROM audit_logs"));
     }
 
     [BillingPostgresFact]
@@ -186,7 +185,7 @@ public sealed class GoogleLinkPostgresTests
     public async Task Pending_reset_blocks_new_binding()
     {
         await using var db = await BillingDatabase.Create(false); await Prepare(db); await using var context = db.Context();
-        await db.Sql($"INSERT INTO password_reset_operations VALUES('{BillingDatabase.Owner}','Pending',null)");
+        await db.Sql($"INSERT INTO password_reset_operations(id,user_id,firebase_uid,code_hash,status) VALUES(gen_random_uuid(),'{BillingDatabase.Owner}','test',repeat('a',64),'Pending')");
         Assert.Equal("PASSWORD_RESET_PENDING", (await Link(context)).Error?.Code);
         Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM users WHERE firebase_uid IS NOT NULL"));
     }

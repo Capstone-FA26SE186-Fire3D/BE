@@ -12,6 +12,7 @@ public sealed class GoogleOnboardingPostgresTests
 {
     internal static async Task Prepare(BillingDatabase db, bool includeDisplayName = true)
     {
+        await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "002_password_reset_recovery.sql")));
         await db.Sql("""
             DO $$ BEGIN
              IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF;
@@ -21,6 +22,9 @@ public sealed class GoogleOnboardingPostgresTests
             GRANT USAGE ON SCHEMA public TO fire3d_api;
             GRANT SELECT,INSERT,UPDATE ON users,organizations TO fire3d_api;
             GRANT INSERT ON audit_logs TO fire3d_api;
+            GRANT SELECT,INSERT ON auth_refresh_tokens TO fire3d_api;
+            GRANT SELECT ON password_reset_operations TO fire3d_api;
+            CREATE POLICY onboarding_reset_fence ON password_reset_operations TO fire3d_api USING (true);
             """);
         await BackendDatabasePermissionsTests.Apply(db, "AddSelfRegistration");
         await BackendDatabasePermissionsTests.Apply(db, "AddNormalizedRegistrationEmail");
@@ -29,7 +33,7 @@ public sealed class GoogleOnboardingPostgresTests
     }
 
     private static GoogleOnboardingService Service(Fire3D.Infrastructure.Persistence.Fire3DDbContext db, TimeProvider? clock = null) =>
-        new(db, new AuthStore(db), clock ?? TimeProvider.System);
+        new(db, new AuthStore(db), clock ?? TimeProvider.System, GoogleOnboardingTestDoubles.Tokens());
     private static async Task<string> Begin(BillingDatabase db, string uid = "new-google", string email = "new@example.test", TimeProvider? clock = null)
     {
         await using var context = db.Context();
@@ -55,7 +59,7 @@ public sealed class GoogleOnboardingPostgresTests
     }
 
     [BillingPostgresFact]
-    public async Task Restricted_runtime_creates_verified_trainee_without_password_or_automatic_session()
+    public async Task Restricted_runtime_creates_verified_trainee_without_password_and_with_one_session()
     {
         await using var db = await BillingDatabase.Create(false); await Prepare(db);
         await using var context = db.Context();
@@ -68,12 +72,12 @@ public sealed class GoogleOnboardingPostgresTests
         Assert.NotEqual(proof.Value!.Token, await db.Scalar("SELECT onboarding_token_hash FROM auth_google_onboarding_sessions"));
         var result = await service.CompleteAsync(Trainee(proof.Value.Token, " GOOGLE_User "), default);
         Assert.True(result.IsSuccess, result.Error?.Message);
-        Assert.Equal("google_user", result.Value!.User.Username);
-        Assert.Equal("new@example.test", result.Value.User.Email);
-        Assert.NotNull(result.Value.User.EmailVerifiedAt);
-        Assert.Null(result.Value.User.OrganizationId);
+        Assert.Equal("google_user", result.Value!.Authentication.User.Username);
+        Assert.Equal("new@example.test", result.Value.Authentication.User.Email);
+        Assert.NotNull(result.Value.Authentication.User.EmailVerifiedAt);
+        Assert.Null(result.Value.Authentication.User.OrganizationId);
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM users WHERE firebase_uid='new-google' AND password_hash IS NULL"));
-        Assert.Equal(3L, await db.Scalar("SELECT count(*) FROM auth_refresh_tokens"));
+        Assert.Equal(4L, await db.Scalar("SELECT count(*) FROM auth_refresh_tokens"));
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM audit_logs WHERE action='Create'"));
     }
 
@@ -87,12 +91,11 @@ public sealed class GoogleOnboardingPostgresTests
         await using var context = db.Context();
         var first = await Service(context).CompleteAsync(request, default);
         Assert.True(first.IsSuccess, first.Error?.Message);
-        Assert.False(first.Value!.Replayed); Assert.NotNull(first.Value.User.OrganizationId); Assert.Null(first.Value.User.Username);
+        Assert.NotNull(first.Value!.Authentication.User.OrganizationId); Assert.Null(first.Value.Authentication.User.Username);
         var second = await Service(context).CompleteAsync(request with { OrganizationName = "My Org" }, default);
-        Assert.True(second.Value?.Replayed);
-        Assert.Equal(first.Value.User.Id, second.Value!.User.Id);
+        Assert.Equal("ONBOARDING_ALREADY_COMPLETED", second.Error?.Code);
         Assert.Equal(3L, await db.Scalar("SELECT count(*) FROM organizations"));
-        Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM audit_logs"));
+        Assert.Equal(2L, await db.Scalar("SELECT count(*) FROM audit_logs"));
         var different = await Service(context).CompleteAsync(request with { OrganizationName = "Different" }, default);
         Assert.Equal("IDEMPOTENCY_KEY_CONFLICT", different.Error?.Code);
     }
@@ -106,11 +109,11 @@ public sealed class GoogleOnboardingPostgresTests
             await using var context = db.Context(); return await Service(context).CompleteAsync(Trainee(token), default);
         }
         var results = await Task.WhenAll(Complete(), Complete());
-        Assert.All(results, result => Assert.True(result.IsSuccess, result.Error?.Message));
-        Assert.Single(results, x => !x.Value!.Replayed); Assert.Single(results, x => x.Value!.Replayed);
-        Assert.Equal(results[0].Value!.User.Id, results[1].Value!.User.Id);
+        Assert.Single(results, x => x.IsSuccess);
+        Assert.Equal("ONBOARDING_ALREADY_COMPLETED", Assert.Single(results, x => !x.IsSuccess).Error?.Code);
+        Assert.Equal(4L, await db.Scalar("SELECT count(*) FROM auth_refresh_tokens"));
         Assert.Equal(4L, await db.Scalar("SELECT count(*) FROM users"));
-        Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM audit_logs"));
+        Assert.Equal(2L, await db.Scalar("SELECT count(*) FROM audit_logs"));
     }
 
     [BillingPostgresFact]
@@ -133,9 +136,9 @@ public sealed class GoogleOnboardingPostgresTests
         Assert.Contains("accountType", admin.Error!.Errors!.Keys);
         var dob = await service.CompleteAsync(Trainee(token) with { Dob = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) }, default);
         Assert.Contains("dob", dob.Error!.Errors!.Keys);
-        Assert.Equal("INVALID_ONBOARDING_TOKEN", (await service.CompleteAsync(Trainee("invalid"), default)).Error?.Code);
+        Assert.Equal("ONBOARDING_TOKEN_INVALID", (await service.CompleteAsync(Trainee("invalid"), default)).Error?.Code);
         await db.Sql("UPDATE auth_google_onboarding_sessions SET created_at=now()-interval '20 minutes',expires_at=now()-interval '5 minutes'");
-        Assert.Equal("INVALID_ONBOARDING_TOKEN", (await service.CompleteAsync(Trainee(token), default)).Error?.Code);
+        Assert.Equal("ONBOARDING_TOKEN_EXPIRED", (await service.CompleteAsync(Trainee(token), default)).Error?.Code);
         Assert.Equal(3L, await db.Scalar("SELECT count(*) FROM users"));
     }
 
@@ -163,7 +166,7 @@ public sealed class GoogleOnboardingPostgresTests
         }
         var interleaved = ResetProxy.For<IAuthStore>((method, args) => method == nameof(IAuthStore.TryCreateTraineeAsync)
             ? Register(args) : typeof(IAuthStore).GetMethod(method)!.Invoke(store, args)!);
-        var result = await new GoogleOnboardingService(context, interleaved, TimeProvider.System).CompleteAsync(Trainee(token), default);
+        var result = await new GoogleOnboardingService(context, interleaved, TimeProvider.System, GoogleOnboardingTestDoubles.Tokens()).CompleteAsync(Trainee(token), default);
         Assert.Equal("ACCOUNT_LINK_REQUIRED", result.Error?.Code);
         Assert.Equal(4L, await db.Scalar("SELECT count(*) FROM users"));
         Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM users WHERE firebase_uid IS NOT NULL"));
@@ -192,8 +195,8 @@ public sealed class GoogleOnboardingPostgresTests
         await using var context = db.Context(); var service = Service(context);
         Assert.True((await service.CompleteAsync(Trainee(token), default)).IsSuccess);
         await db.Sql("UPDATE auth_google_onboarding_sessions SET created_at=now()-interval '1 hour',expires_at=now()-interval '45 minutes',completed_at=now()-interval '50 minutes'");
-        Assert.True((await service.CompleteAsync(Trainee(token), default)).Value?.Replayed);
+        Assert.Equal("ONBOARDING_ALREADY_COMPLETED", (await service.CompleteAsync(Trainee(token), default)).Error?.Code);
         await db.Sql("UPDATE auth_google_onboarding_sessions SET created_at=now()-interval '26 hours',expires_at=now()-interval '25 hours',completed_at=now()-interval '25 hours'");
-        Assert.Equal("INVALID_ONBOARDING_TOKEN", (await service.CompleteAsync(Trainee(token), default)).Error?.Code);
+        Assert.Equal("ONBOARDING_TOKEN_EXPIRED", (await service.CompleteAsync(Trainee(token), default)).Error?.Code);
     }
 }
