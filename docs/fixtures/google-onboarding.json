@@ -1,0 +1,97 @@
+{
+  "note": "Mock fixtures only. Tokens below are placeholders; never use them against a real API.",
+  "onboardingRequired": {
+    "status": "OnboardingRequired",
+    "authentication": null,
+    "onboarding": {
+      "token": "<opaque-proof>",
+      "expiresAt": "2026-10-06T10:15:00Z",
+      "email": "verified@example.test",
+      "displayName": "Verified Google User"
+    },
+    "onboardingToken": "<opaque-proof>",
+    "expiresAt": "2026-10-06T10:15:00Z"
+  },
+  "completeTrainee": {
+    "onboardingToken": "<opaque-proof>",
+    "accountType": "trainee",
+    "username": "trainee_user"
+  },
+  "completeOrganization": {
+    "onboardingToken": "<opaque-proof>",
+    "accountType": "organization",
+    "organizationName": "Training Lab",
+    "organizationAddress": "1 Example Street",
+    "organizationPhoneNumber": "+84123456789"
+  },
+  "completed201": {
+    "status": "Authenticated",
+    "authentication": {
+      "accessToken": "<access-token>",
+      "refreshToken": "<refresh-token>",
+      "user": {
+        "id": "00000000-0000-0000-0000-000000000001",
+        "email": "verified@example.test",
+        "fullName": "Verified Google User",
+        "role": "Trainee",
+        "organizationId": null,
+        "username": "trainee_user",
+        "dob": null,
+        "gender": null,
+        "phoneNumber": null,
+        "avatarUrl": null,
+        "isActive": true,
+        "lastLoginAt": "2026-10-06T10:00:00Z",
+        "createdAt": "2026-10-06T10:00:00Z",
+        "updatedAt": "2026-10-06T10:00:00Z",
+        "emailVerifiedAt": "2026-10-06T10:00:00Z",
+        "registrationExpiresAt": null,
+        "profileRevision": 1
+      }
+    },
+    "onboarding": null,
+    "onboardingToken": null,
+    "expiresAt": null
+  },
+  "alreadyCompleted409": {
+    "title": "Onboarding is already complete. Exchange a valid Firebase ID token to sign in.",
+    "status": 409,
+    "code": "ONBOARDING_ALREADY_COMPLETED",
+    "traceId": "<trace-id>"
+  },
+  "expired400": {
+    "title": "Onboarding token has expired. Sign in with Google again.",
+    "status": 400,
+    "code": "ONBOARDING_TOKEN_EXPIRED",
+    "traceId": "<trace-id>"
+  },
+  "usernameConflict409": {
+    "title": "Username is already registered.",
+    "status": 409,
+    "code": "USERNAME_EXISTS",
+    "errors": { "username": ["Choose another username."] },
+    "traceId": "<trace-id>"
+  },
+  "linkRequired409": {
+    "title": "Sign in locally before linking Google.",
+    "status": 409,
+    "code": "ACCOUNT_LINK_REQUIRED",
+    "errors": { "email": ["Email is already registered. Sign in locally before linking Google."] },
+    "traceId": "<trace-id>"
+  },
+  "validation400": {
+    "title": "One or more fields are invalid.",
+    "status": 400,
+    "code": "VALIDATION_ERROR",
+    "errors": { "accountType": ["Choose trainee or organization."] },
+    "traceId": "<trace-id>"
+  },
+  "rateLimited429": {
+    "headers": { "Retry-After": "60" },
+    "body": { "title": "Too many onboarding attempts. Try again later.", "status": 429, "code": "GOOGLE_ONBOARDING_RATE_LIMITED", "traceId": "<trace-id>" }
+  },
+  "retry503": {
+    "headers": { "Retry-After": "1" },
+    "body": { "title": "Onboarding is busy. Try again.", "status": 503, "code": "ONBOARDING_RETRY_REQUIRED", "traceId": "<trace-id>" }
+  }
+}

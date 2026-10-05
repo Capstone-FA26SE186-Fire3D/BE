@@ -10,7 +10,7 @@ namespace Fire3D.API.Controllers;
 [GoogleOnboardingModelState]
 public sealed class GoogleOnboardingController(IGoogleOnboardingService onboarding) : ControllerBase
 {
-    /// <summary>Completes verified Google onboarding as Trainee or OrganizationUser.</summary>
+    /// <summary>Completes verified Google onboarding and issues an authenticated session.</summary>
     /// <remarks>Use the 15-minute onboardingToken from login-firebase. Trainee requires username;
     /// OrganizationUser requires organizationName, organizationAddress and organizationPhoneNumber.
     /// Server creates a Google-only account; no password, role/tenant override or session is accepted.

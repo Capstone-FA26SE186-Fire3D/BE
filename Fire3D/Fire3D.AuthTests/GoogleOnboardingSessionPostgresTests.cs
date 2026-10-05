@@ -11,6 +11,29 @@ namespace Fire3D.AuthTests;
 public sealed class GoogleOnboardingSessionPostgresTests
 {
     [BillingPostgresFact]
+    public async Task Legacy_proof_and_completed_receipt_survive_upgrade_without_reissuing_session()
+    {
+        await using var db = await BillingDatabase.Create(false); await GoogleOnboardingPostgresTests.Prepare(db, includeDisplayName: false);
+        var proof = new string('l', 43);
+        var proofHash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(proof)));
+        await db.Sql($"INSERT INTO auth_google_onboarding_sessions(id,firebase_uid,email,onboarding_token_hash,created_at,expires_at) VALUES(gen_random_uuid(),'legacy-uid','legacy@example.test','{proofHash}',now(),now()+interval '15 minutes')");
+        await BackendDatabasePermissionsTests.Apply(db, "AddGoogleOnboardingDisplayName");
+        var request = new GoogleOnboardingCompleteRequest(proof, UserRole.Trainee, "legacy_user");
+        await using var context = db.Context();
+        var service = new GoogleOnboardingService(context, new AuthStore(context), TimeProvider.System, GoogleOnboardingTestDoubles.Tokens());
+        var completed = await service.CompleteAsync(request, default);
+        Assert.True(completed.IsSuccess, completed.Error?.Message);
+        Assert.Null(completed.Value!.Authentication.User.FullName);
+        // Previous deployment wrote the same numeric-enum canonical hash, without any bearer receipt.
+        var legacyInput = GoogleAuthRules.Validate(request, DateOnly.FromDateTime(DateTime.UtcNow)).Value!;
+        var legacyHash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(legacyInput))));
+        Assert.Equal(legacyHash, await db.Scalar("SELECT completed_input_hash FROM auth_google_onboarding_sessions"));
+        var replay = await service.CompleteAsync(request, default);
+        Assert.Equal("ONBOARDING_ALREADY_COMPLETED", replay.Error?.Code);
+        Assert.Equal(4L, await db.Scalar("SELECT count(*) FROM auth_refresh_tokens"));
+    }
+
+    [BillingPostgresFact]
     public async Task Signing_failure_rolls_back_and_proof_can_be_used_on_retry()
     {
         await using var db = await BillingDatabase.Create(false); await GoogleOnboardingPostgresTests.Prepare(db);

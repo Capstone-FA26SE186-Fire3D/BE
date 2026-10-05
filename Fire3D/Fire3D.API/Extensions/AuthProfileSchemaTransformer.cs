@@ -69,12 +69,19 @@ public sealed class AuthProfileSchemaTransformer : IOpenApiSchemaTransformer
         }
         else if (context.JsonTypeInfo.Type == typeof(GoogleOnboardingCompleteRequest) && schema.Properties is not null)
         {
+            schema.AdditionalPropertiesAllowed = false;
+            schema.Required = new HashSet<string> { "onboardingToken", "accountType" };
             schema.Properties["gender"] = NullableGender();
-            schema.Properties["accountType"] = new OpenApiSchema
-            {
-                Type = JsonSchemaType.String, Enum = new List<JsonNode> { JsonValue.Create("Trainee")!, JsonValue.Create("OrganizationUser")! },
-                Description = "Choose allowed self-registration type; server creates role/tenant. PlatformAdmin is forbidden."
-            };
+        }
+        else if (context.JsonTypeInfo.Type == typeof(GoogleExchangeResponse) && schema.Properties is not null)
+        {
+            foreach (var name in new[] { "onboardingToken", "expiresAt" })
+                if (schema.Properties[name] is OpenApiSchema alias)
+                {
+                    alias.Deprecated = true;
+                    alias.Description = "Deprecated onboarding alias; use onboarding.token/onboarding.expiresAt. Same value, not authentication expiry.";
+                }
+            schema.Description = "Authenticated includes authentication. OnboardingRequired includes verified onboarding metadata and no account/session. Completion returns Authenticated with authentication after commit.";
         }
         return Task.CompletedTask;
     }
