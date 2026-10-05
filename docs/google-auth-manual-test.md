@@ -60,6 +60,7 @@ BE kiểm live family/account/tổ chức, Google provider/email verified/revoca
 
 ## Kiểm tra trước deployment
 
+- Regression timeout kiểm cả advisory lock và unique-index wait lúc EF ghi user/organization: trả503/Retry-After:1, rollback receipt và retry sau khi gỡ contention không tạo trùng account/session.
 - Chạy migration với identity migration, xác minh login API kế thừa `fire3d_api` hoặc `fet3d_backend_executor`, có đúng quyền trên onboarding/users/organizations/audit. `anon`/`authenticated` không truy cập proof.
 - Kiểm startup/DI và OpenAPI ở artifact mới. HTTP pass với fixture không chứng minh Firebase production hoạt động.
 - Test thật chỉ sau cấu hình Firebase project đúng: hai loại account, account local trùng email, Google UID đã link, revoked Firebase token và provider outage. Không dùng DTO/table tồn tại để kết luận client đã tích hợp.

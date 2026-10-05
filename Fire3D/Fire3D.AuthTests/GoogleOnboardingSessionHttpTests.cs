@@ -16,6 +16,29 @@ namespace Fire3D.AuthTests;
 
 public sealed class GoogleOnboardingSessionHttpTests
 {
+    [BillingPostgresFact]
+    public async Task Unique_insert_lock_timeout_returns_retry_response_and_retry_keeps_proof()
+    {
+        await using var db = await BillingDatabase.Create(false); await GoogleOnboardingPostgresTests.Prepare(db);
+        using var factory = Factory(db); using var client = factory.CreateClient();
+        using var exchange = JsonDocument.Parse(await (await client.PostAsJsonAsync("/api/auth/login-firebase", "fake-token")).Content.ReadAsStringAsync());
+        var proof = exchange.RootElement.GetProperty("onboarding").GetProperty("token").GetString();
+        await using var connection = new Npgsql.NpgsqlConnection(db.Connection); await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        await new Npgsql.NpgsqlCommand("INSERT INTO users(id,email,role,username,is_active,created_at,updated_at) VALUES(gen_random_uuid(),'competing@example.test','Trainee','blocked_user',true,now(),now())", connection, transaction).ExecuteNonQueryAsync();
+        var body = new { onboardingToken = proof, accountType = "trainee", username = "blocked_user" };
+        var busy = await client.PostAsJsonAsync("/api/auth/google/onboarding/complete", body);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, busy.StatusCode);
+        using var error = JsonDocument.Parse(await busy.Content.ReadAsStringAsync());
+        Assert.Equal("ONBOARDING_RETRY_REQUIRED", error.RootElement.GetProperty("code").GetString());
+        Assert.Equal("1", Assert.Single(busy.Headers.GetValues("Retry-After")));
+        Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM auth_google_onboarding_sessions WHERE completed_at IS NOT NULL"));
+        Assert.Equal(3L, await db.Scalar("SELECT count(*) FROM users"));
+        await transaction.RollbackAsync();
+        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/auth/google/onboarding/complete", body)).StatusCode);
+        Assert.Equal(4L, await db.Scalar("SELECT count(*) FROM auth_refresh_tokens"));
+    }
+
     internal static WebApplicationFactory<Program> Factory(BillingDatabase db) =>
         new BillingApiTests.Factory(db).WithWebHostBuilder(builder => builder.ConfigureServices(services =>
         {

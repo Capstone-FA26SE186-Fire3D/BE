@@ -20,15 +20,23 @@ public sealed class GoogleOnboardingService(Fire3DDbContext db, IAuthStore accou
     public async Task<AuthResult<GoogleOnboardingProof>> BeginAsync(VerifiedIdentity identity, CancellationToken ct)
     {
         try { return await BeginCoreAsync(identity, ct); }
-        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.LockNotAvailable)
+        catch (Exception e) when (IsLockTimeout(e))
         { return AuthResult<GoogleOnboardingProof>.Fail("ONBOARDING_RETRY_REQUIRED", "Onboarding is busy. Try again.", 503, retryAfterSeconds: 1); }
     }
     public async Task<AuthResult<GoogleOnboardingCompletion>> CompleteAsync(GoogleOnboardingCompleteRequest request, CancellationToken ct)
     {
         try { return await CompleteCoreAsync(request, ct); }
-        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.LockNotAvailable)
+        catch (Exception e) when (IsLockTimeout(e))
         { return AuthResult<GoogleOnboardingCompletion>.Fail("ONBOARDING_RETRY_REQUIRED", "Onboarding is busy. Try again.", 503, retryAfterSeconds: 1); }
     }
+    // Npgsql's execution strategy can wrap the EF update exception again. Only classify the exact SQL state.
+    private static bool IsLockTimeout(Exception error) => error switch
+    {
+        PostgresException pg => pg.SqlState == PostgresErrorCodes.LockNotAvailable,
+        DbUpdateException { InnerException: { } inner } => IsLockTimeout(inner),
+        InvalidOperationException { InnerException: { } inner } => IsLockTimeout(inner),
+        _ => false
+    };
     private async Task<AuthResult<GoogleOnboardingProof>> BeginCoreAsync(VerifiedIdentity identity, CancellationToken ct)
     {
         var email = PasswordResetValidation.NormalizeEmail(identity.Email);
