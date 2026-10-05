@@ -277,8 +277,8 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     /// Gửi hướng dẫn đặt lại mật khẩu qua email. Không cần Bearer.
     /// </summary>
     /// <remarks>Body: email hợp lệ, tối đa 254 ký tự. Trả 202 cho cả email có và không có tài khoản;
-    /// 202 chỉ xác nhận đã nhận yêu cầu, không đảm bảo email đã được gửi. Chủ email đã xác minh
-    /// qua link có thể đặt mật khẩu local, kể cả tài khoản trước đây chỉ dùng Firebase.</remarks>
+    /// 202 chỉ xác nhận đã nhận yêu cầu, không đảm bảo email đã được gửi.
+    /// Chỉ tài khoản local đang hoạt động đủ điều kiện reset; tài khoản chỉ dùng Google không được thêm mật khẩu qua luồng này.</remarks>
     [HttpPost("forgot-password")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
@@ -328,7 +328,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
         CancellationToken ct)
     {
         var result = await sender.Send(new Fire3D.Application.Authentication.Commands.ChangePassword.ChangePasswordCommand(
-            User.GetActorId(), request.CurrentPassword, request.NewPassword), ct);
+            User.GetActorId(), User.GetSessionFamilyId(), request.CurrentPassword, request.NewPassword), ct);
         return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
     }
     private ObjectResult ResetProblem(AuthError error)

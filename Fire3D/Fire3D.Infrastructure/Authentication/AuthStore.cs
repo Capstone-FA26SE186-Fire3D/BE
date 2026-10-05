@@ -35,7 +35,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
     public Task<User?> FindUserAsync(Guid id, CancellationToken ct) =>
         db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<User?> FindUserByEmailAsync(string email, CancellationToken ct) =>
-        db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Email == email, ct);
+        db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Email.Trim().ToLower() == email, ct);
     public Task<User?> FindUserByFirebaseUidAsync(string uid, CancellationToken ct) =>
         db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.FirebaseUid == uid, ct);
     public Task<bool> HasAdminAsync(CancellationToken ct) =>
@@ -332,10 +332,12 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
                 .Where(x => x.Id == tokenId)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.UsedAt, now), ct);
 
-    public async Task InvalidateUserResetTokensAsync(Guid userId, CancellationToken ct) =>
-        await db.Set<PasswordResetToken>()
-                .Where(x => x.UserId == userId && x.UsedAt == null)
-                .ExecuteDeleteAsync(ct);
+    public async Task InvalidateUserResetTokensAsync(Guid userId, CancellationToken ct)
+    {
+        if (db.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Reset-token invalidation requires the user transaction.");
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT public.invalidate_legacy_reset_tokens({userId})", ct);
+    }
 
     // Registration
     public async Task<RegisterConflict> TryCreateOrganizationWithUserAsync(Organization organization, User user, CancellationToken ct)

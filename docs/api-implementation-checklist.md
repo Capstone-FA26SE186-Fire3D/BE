@@ -67,11 +67,11 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 - **Còn thiếu:** Kiểm chứng cleanup/recovery trên PostgreSQL/S3 cô lập. `AvatarService` đã gọi `ReserveCopyCandidateAsync` trước conditional S3 copy; `AvatarStore` lưu attempt/key/source ETag/lease và có cleanup cho candidate hết lease. Không lập task bổ sung lại đường ghi đã có.
 - **Nghiệm thu:** Lưu thành công trả ETag mới; ETag cũ không ghi đè thay đổi; không sửa được role/email/tenant/status; username, organization scope và quyền sở hữu object S3 được kiểm tra.
 
-### AUTH-04 — P1 · VERIFY · Reset và change password
+### AUTH-04 — P1 · CODE/TEST · Reset và change password
 
-- **Contract/current:** Forgot/reset gửi qua worker Mailgun; change xác minh mật khẩu cũ. [LocalPasswordReset](../Fire3D/Fire3D.Infrastructure/Authentication/LocalPasswordReset.cs) đã khóa user, consume token, đổi hash, revoke session và ghi audit trong transaction. Bảng token BE cần đối chiếu schema đích.
+- **Contract/current:** Forgot/reset gửi qua worker Mailgun; change xác minh mật khẩu cũ và live family lấy từ JWT dưới lifecycle/user lock. Reset/change consume/invalidate token local và legacy, đổi hash, revoke session và audit atomic. Migration `AddPasswordRecoveryGate` cấp EXECUTE gate legacy cho backend, giữ lịch sử và không cần direct DELETE. Forgot/link/reset kiểm lifecycle; Google-only không được thêm password qua reset. Lookup email dùng trim/lowercase tương thích index/dữ liệu legacy.
 - **Sửa code:** Giữ reset và change là hai luồng riêng. Hoàn tất mapping sang schema đích; kiểm tra rollback, race login/reset và mọi refresh-token family. Không coi có worker là bằng chứng Mailgun production đã gửi thành công.
-- **Nghiệm thu:** Token hết hạn/dùng lại thất bại; change sai mật khẩu hiện tại thất bại; lỗi DB/audit rollback toàn bộ; session cũ bị từ chối sau reset/change. Kiểm tra PostgreSQL riêng với provider Mailgun thật.
+- **Nghiệm thu:** Có PostgreSQL disposable regression cho restricted runtime role, reset replay/race/audit rollback, organization bị khóa, email legacy và change chờ khóa/family revoked. Migration database dùng chung và Mailgun/deployment thật cần nghiệm thu riêng; không đóng provider từ DB test.
 
 ### AUTH-05 — P1 · VERIFY · FCM device token
 

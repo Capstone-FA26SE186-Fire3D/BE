@@ -87,7 +87,7 @@ Nguồn: [ExchangeFirebaseTokenCommand](../Fire3D/Fire3D.Application/Authenticat
 | Google | `POST /api/auth/login-firebase`; UID đã liên kết trả `Authenticated`, email local trùng trả `ACCOUNT_LINK_REQUIRED`, Google mới trả `OnboardingRequired` và không tự tạo tài khoản | Chưa có endpoint onboarding/link tường minh để hoàn tất chọn loại tài khoản |
 | Profile | GET/PATCH cá nhân có ETag; PATCH sửa fullName/username/dob/gender/phoneNumber. GET/PATCH organization đã có cho OrganizationUser, ETag riêng. Avatar có decoder, candidate trước copy và cleanup/recovery worker. | Không coi schema Swagger trống là route thiếu; còn cần kiểm chứng provider/deployment và recovery đúng môi trường |
 | Reset password | Forgot tạo job bền vững; worker gửi Mailgun; reset tiêu thụ token, đổi hash, thu hồi phiên và ghi audit trong user transaction | Core local reset đã có code; cần đối chiếu bảng token với schema target và kiểm thử rollback/race. Chưa khẳng định Mailgun production đã gửi thật |
-| Change password | `POST /api/auth/change-password` kiểm tra mật khẩu hiện tại, lưu mật khẩu mới, vô hiệu token reset và thu hồi phiên trong user transaction | Đã có code; không gửi email; cần giữ kiểm tra rollback/session cũ khi đồng bộ schema |
+| Change password | `POST /api/auth/change-password` kiểm lại live family từ JWT/account/organization dưới khóa, kiểm password, invalidate reset local/legacy qua gate và revoke/audit atomic | PostgreSQL restricted-role/race/rollback có regression; migration/deployment cần nghiệm thu riêng |
 
 Chi tiết request/response hiện tại nằm ở [API guide](api-docs.md). Chi tiết worker/token/cấu hình nằm ở [password-reset.md](password-reset.md). Không copy contract endpoint mục tiêu thành route “đang có” nếu controller chưa triển khai.
 

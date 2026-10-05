@@ -61,6 +61,9 @@ public sealed class PasswordResetPostgresTests
                   id uuid PRIMARY KEY,user_id uuid REFERENCES users(id),family_id uuid NOT NULL,
                   token_hash varchar(64) NOT NULL UNIQUE,created_at timestamptz NOT NULL,expires_at timestamptz NOT NULL,
                   consumed_at timestamptz,revoked_at timestamptz);
+                CREATE TABLE password_reset_tokens (
+                  id uuid PRIMARY KEY,user_id uuid NOT NULL REFERENCES users(id),
+                  expires_at timestamptz NOT NULL,created_at timestamptz NOT NULL DEFAULT now(),used_at timestamptz);
                 CREATE TABLE audit_logs (
                   id uuid PRIMARY KEY,user_id uuid,organization_id uuid,actor_type text,action audit_action_enum,
                   target_entity text,target_id uuid,correlation_id uuid,old_values jsonb,new_values jsonb,
@@ -71,6 +74,8 @@ public sealed class PasswordResetPostgresTests
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"005_email_verification.sql")));
             await db.Sql("ALTER TABLE email_verification_jobs ADD COLUMN user_id uuid, ADD COLUMN generation integer NOT NULL DEFAULT 1;");
             foreach (var operation in new Fire3D.Infrastructure.Migrations.AddRefreshCleanupGate().UpOperations
+                .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>()) await db.Sql(operation.Sql);
+            foreach (var operation in new Fire3D.Infrastructure.Migrations.AddPasswordRecoveryGate().UpOperations
                 .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>()) await db.Sql(operation.Sql);
             return db;
         }

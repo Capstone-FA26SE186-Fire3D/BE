@@ -54,6 +54,19 @@ public class PasswordResetTests
         Assert.True((await new ForgotPasswordCommandHandler(store).Handle(new("google@example.test"),default)).IsSuccess);
     }
     [Fact]
+    public async Task Disabled_organization_forgot_password_keeps_generic_success_without_enqueue()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "owner@example.test", PasswordHash = "hash",
+            IsActive = true, Role = Fire3D.Domain.Enums.UserRole.OrganizationUser, OrganizationId = Guid.NewGuid() };
+        var store = ResetProxy.For<IAuthStore>((method, _) => method switch
+        {
+            "FindUserByEmailAsync" => Task.FromResult<User?>(user),
+            "OrganizationIsActiveAsync" => Task.FromResult(false),
+            _ => throw new Exception("Must not enqueue: " + method)
+        });
+        Assert.True((await new ForgotPasswordCommandHandler(store).Handle(new(user.Email), default)).IsSuccess);
+    }
+    [Fact]
     public async Task Local_login_verifies_the_database_password_hash_without_firebase()
     {
         var user = new User { Id = Guid.NewGuid(), Email = "local@example.test", IsActive = true,

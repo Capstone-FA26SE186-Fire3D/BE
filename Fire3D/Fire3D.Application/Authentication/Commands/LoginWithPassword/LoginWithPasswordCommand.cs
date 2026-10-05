@@ -25,6 +25,7 @@ public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordS
         }
         // PBKDF2 and an optional upgrade happen without holding a database lock.
         var expectedHash=user.PasswordHash;
+        var expectedEmail=user.Email;
         bool verified; bool rehash;
         string? upgradedHash;
         using(AuthDiagnostics.Measure(LoginPhase.PasswordVerification))
@@ -38,7 +39,8 @@ public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordS
         using(AuthDiagnostics.Measure(LoginPhase.LockWait)) transaction=await store.BeginUserTransactionAsync(user.Id,ct);
         await using var tx=transaction;
         using(AuthDiagnostics.Measure(LoginPhase.Revalidation)) user=await store.FindUserAsync(user.Id,ct);
-        if (user is null || !string.Equals(user.Email,email,StringComparison.Ordinal)
+        if (user is null || !string.Equals(user.Email,expectedEmail,StringComparison.Ordinal)
+            || PasswordResetValidation.NormalizeEmail(user.Email) != email
             || !string.Equals(user.PasswordHash,expectedHash,StringComparison.Ordinal)) return InvalidCredentials();
         if (!await AuthSupport.IsActiveAsync(store, user, ct))
             return AuthResult<LoginResponse>.Fail("ACCOUNT_DISABLED", "Account or organization is unavailable.", 403);

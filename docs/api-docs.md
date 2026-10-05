@@ -309,7 +309,7 @@ Endpoint cần `Authorization: Bearer <Fire3D accessToken>` và không nhận `a
 
 `currentPassword` không rỗng và tối đa 128 ký tự. `newPassword` phải dài 6–128 ký tự, không chỉ khoảng trắng và phải khác mật khẩu hiện tại. Sai mật khẩu hiện tại: 400 `INVALID_CURRENT_PASSWORD`; mật khẩu mới không hợp lệ: 400 `INVALID_PASSWORD`; trùng mật khẩu hiện tại: 400 `PASSWORD_UNCHANGED`; tài khoản/organization không còn hoạt động: 401 `UNAUTHORIZED`.
 
-Thành công trả 204. Trong cùng transaction khóa theo user, BE cập nhật `password_hash`, vô hiệu token reset chưa dùng, thu hồi toàn bộ refresh session và ghi audit. Access JWT hiện tại sẽ không còn được chấp nhận sau khi family session bị thu hồi; client phải đăng nhập lại. Endpoint không gửi email, không thay đổi password Google/Firebase và không nhận Firebase oobCode.
+Thành công trả 204. Trong cùng transaction khóa lifecycle/user, BE kiểm lại family lấy từ JWT, account và organization rồi cập nhật `password_hash`, đánh dấu token reset local/legacy đã dùng, thu hồi toàn bộ refresh session và ghi audit. Family đã revoke trả401 ngay cả khi request đã qua middleware trước đó; phiên login mới không bị request cũ thu hồi. Legacy invalidation gọi gate giới hạn quyền, không DELETE lịch sử. Access JWT hiện tại sẽ không còn được chấp nhận; client phải đăng nhập lại. Endpoint không gửi email, không thay đổi password Google/Firebase và không nhận Firebase oobCode.
 
 ## 3. Accounts và Organizations — 8 endpoint
 
