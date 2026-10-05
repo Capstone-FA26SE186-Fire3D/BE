@@ -25,11 +25,14 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore, IAvatarClean
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:avatar-intent:" + intentId}, 0))", ct);
+        now = await DatabaseNowAsync(ct);
         var intent = await db.AvatarUploadIntents.SingleOrDefaultAsync(x => x.Id == intentId && x.UserId == userId, ct);
         if (intent is null || intent.CompletedAt.HasValue || intent.ExpiresAt <= now)
             return new(AvatarCandidateReservationStatus.Unavailable, null);
         if (intent.CandidateAttemptId.HasValue)
         {
+            if (intent.CandidateLeaseUntil is null || intent.CandidateLeaseUntil <= now)
+                return new(AvatarCandidateReservationStatus.Unavailable, null);
             if (intent.ExpectedProfileRevision != expectedProfileRevision || !string.Equals(intent.CandidateSourceEtag, sourceEtag, StringComparison.Ordinal))
                 return new(AvatarCandidateReservationStatus.PreconditionFailed, null);
             await transaction.CommitAsync(ct);
@@ -49,7 +52,8 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore, IAvatarClean
     public async Task<AvatarFinalizeResult> FinalizeUploadAsync(Guid intentId, Guid userId, Guid attemptId, long expectedProfileRevision, string objectKey, DateTime completedAt, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await TakeIdentityReadLockAsync(ct);
+        await TakeIdentityReadLockAsync(userId, ct);
+        completedAt = await DatabaseNowAsync(ct);
         var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == userId && x.IsActive && x.DeletedAt == null, ct);
         if (user is null || (user.OrganizationId is Guid org && !await db.Organizations.AnyAsync(x => x.Id == org && x.IsActive && x.DeletedAt == null, ct)))
             return new(AvatarFinalizeStatus.Unavailable, null);
@@ -59,7 +63,8 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore, IAvatarClean
         // transaction. A stale request rolls back its claim, so an intent is consumed once.
         var claimed = await db.AvatarUploadIntents
             .Where(x => x.Id == intentId && x.UserId == userId && x.CompletedAt == null && x.ExpiresAt > completedAt
-                && x.CandidateAttemptId == attemptId && x.CandidateObjectKey == objectKey && x.ExpectedProfileRevision == expectedProfileRevision)
+                && x.CandidateAttemptId == attemptId && x.CandidateObjectKey == objectKey && x.ExpectedProfileRevision == expectedProfileRevision
+                && x.CandidateLeaseUntil > completedAt)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.CompletedAt, completedAt)
                 .SetProperty(x => x.FinalObjectKey, objectKey), ct);
@@ -88,7 +93,8 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore, IAvatarClean
     public async Task<AvatarDeleteResult> DeleteAvatarAsync(Guid userId, long expectedProfileRevision, DateTime deletedAt, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await TakeIdentityReadLockAsync(ct);
+        await TakeIdentityReadLockAsync(userId, ct);
+        deletedAt = await DatabaseNowAsync(ct);
         var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == userId && x.IsActive && x.DeletedAt == null, ct);
         if (user is null || (user.OrganizationId is Guid org && !await db.Organizations.AnyAsync(x => x.Id == org && x.IsActive && x.DeletedAt == null, ct)))
             return new(AvatarDeleteStatus.Unavailable, null);
@@ -178,6 +184,15 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore, IAvatarClean
         CorrelationId = Guid.NewGuid(), CreatedAt = now
     });
 
-    private Task TakeIdentityReadLockAsync(CancellationToken ct) => db.Database.ExecuteSqlRawAsync(
-        "SELECT pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management', 0))", ct);
+    private async Task TakeIdentityReadLockAsync(Guid userId, CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlRawAsync(
+            "SELECT pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management', 0))", ct);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:auth:" + userId}, 0))", ct);
+    }
+
+    // Transaction-start now() and caller timestamps can predate waiting for the lock.
+    private Task<DateTime> DatabaseNowAsync(CancellationToken ct) =>
+        db.Database.SqlQueryRaw<DateTime>("SELECT clock_timestamp() AS \"Value\"").SingleAsync(ct);
 }

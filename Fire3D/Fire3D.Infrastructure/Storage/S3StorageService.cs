@@ -90,7 +90,7 @@ public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration, 
                 EtagToMatch = expectedETag
             }, ct);
             var buffer = new byte[length];
-            var read = await response.ResponseStream.ReadAsync(buffer.AsMemory(), ct);
+            var read = await response.ResponseStream.ReadAtLeastAsync(buffer.AsMemory(), length, throwOnEndOfStream: false, ct);
             return buffer[..read];
         }
         catch (AmazonS3Exception ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed) { return null; }
@@ -106,8 +106,17 @@ public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration, 
             }, ct);
             if (response.ContentLength < 0 || response.ContentLength > maxBytes || response.ContentLength > int.MaxValue) return null;
             await using var buffer = new MemoryStream((int)response.ContentLength);
-            await response.ResponseStream.CopyToAsync(buffer, ct);
-            return buffer.Length <= maxBytes ? buffer.ToArray() : null;
+            var chunk = new byte[8192];
+            while (buffer.Length <= maxBytes)
+            {
+                // Read one byte beyond the limit to detect oversized bodies without buffering them.
+                var limit = (int)Math.Min(chunk.Length, maxBytes - buffer.Length + 1);
+                var read = await response.ResponseStream.ReadAsync(chunk.AsMemory(0, limit), ct);
+                if (read == 0) return buffer.ToArray();
+                if (buffer.Length + read > maxBytes) return null;
+                await buffer.WriteAsync(chunk.AsMemory(0, read), ct);
+            }
+            return null;
         }
         catch (AmazonS3Exception ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed) { return null; }
     }

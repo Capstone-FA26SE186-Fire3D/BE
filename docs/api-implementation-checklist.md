@@ -65,7 +65,8 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 ### AUTH-03 — P1 · PARTIAL · Profile, ETag và avatar
 
 - **Contract/current:** `GET/PATCH /api/auth/me` trả/nhận ETag theo `profile_revision`; PATCH hỗ trợ full name, username, dob, gender và phone. `/api/me/avatar` có intent/complete/GET/delete, complete copy theo S3 ETag và không dùng chung final key giữa các request. `GET/PATCH /api/organizations/me` trả ETag và PATCH chỉ thay đổi field được gửi.
-- **Còn thiếu:** Kiểm chứng cleanup/recovery trên PostgreSQL/S3 cô lập. `AvatarService` đã gọi `ReserveCopyCandidateAsync` trước conditional S3 copy; `AvatarStore` lưu attempt/key/source ETag/lease và có cleanup cho candidate hết lease. Không lập task bổ sung lại đường ghi đã có.
+- **✅ Code/test Avatar:** Candidate được lưu trước conditional copy; reserve/finalize chặn lease hết hạn theo clock DB sau khóa. Có PostgreSQL disposable test restricted role/RLS, rollback audit, cleanup/retry/protection, complete/delete cạnh tranh; SDK signing offline và stream S3 giả lập có test. [Test tay và giới hạn](avatar-manual-test.md).
+- **❌ Chưa nghiệm thu:** S3 thật/IAM/CORS, request treo vượt cleanup grace, FE mở signed URL và vận hành deployed worker. Không lập lại task bổ sung candidate path đã có; không suy IAM/object tồn tại từ URL ký được.
 - **Nghiệm thu:** Lưu thành công trả ETag mới; ETag cũ không ghi đè thay đổi; không sửa được role/email/tenant/status; username, organization scope và quyền sở hữu object S3 được kiểm tra.
 
 ### AUTH-04 — P1 · CODE/TEST · Reset và change password
