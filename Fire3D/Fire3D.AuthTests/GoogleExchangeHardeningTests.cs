@@ -34,7 +34,7 @@ public sealed class GoogleExchangeHardeningTests
             _ => throw new Exception(method)
         });
         AccessTokenValue Access(object?[] args) { Assert.Same(user, args[0]); return new("access", DateTime.UtcNow.AddMinutes(15)); }
-        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System).Handle(new("token"), default);
+        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, GoogleOnboardingTestDoubles.Proofs()).Handle(new("token"), default);
         Assert.Equal("Authenticated", result.Value?.Status);
         Assert.Equal(user.OrganizationId, result.Value?.Authentication?.User.OrganizationId);
         Assert.Equal(UserRole.OrganizationUser, result.Value?.Authentication?.User.Role);
@@ -52,7 +52,7 @@ public sealed class GoogleExchangeHardeningTests
         var provider = ResetProxy.For<IIdentityProvider>((_, _) => throw new GoogleIdentityException(GoogleIdentityFailure.InvalidToken));
         var store = ResetProxy.For<IAuthStore>((_, _) => throw new Exception("Must not access DB"));
         var tokens = ResetProxy.For<ITokenService>((_, _) => throw new Exception("Must not issue tokens"));
-        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System)
+        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, GoogleOnboardingTestDoubles.Proofs())
             .Handle(new("token"), default);
         Assert.Equal(401, result.Error?.Status);
         Assert.Equal("INVALID_FIREBASE_TOKEN", result.Error?.Code);
@@ -71,7 +71,7 @@ public sealed class GoogleExchangeHardeningTests
         Task<IAuthTransaction> Disable() { user.IsActive = false; return Task.FromResult<IAuthTransaction>(new Transaction()); }
         var provider = ResetProxy.For<IIdentityProvider>((_, _) => Task.FromResult(new VerifiedIdentity("uid", user.Email)));
         var tokens = ResetProxy.For<ITokenService>((_, _) => throw new Exception("Must not issue tokens"));
-        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System).Handle(new("token"), default);
+        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, GoogleOnboardingTestDoubles.Proofs()).Handle(new("token"), default);
         Assert.Equal(403, result.Error?.Status);
         Assert.Equal("ACCOUNT_DISABLED", result.Error?.Code);
     }
@@ -89,7 +89,7 @@ public sealed class GoogleExchangeHardeningTests
         });
         var provider = ResetProxy.For<IIdentityProvider>((_, _) => Task.FromResult(new VerifiedIdentity("new-uid", "user@example.test")));
         var tokens = ResetProxy.For<ITokenService>((_, _) => throw new Exception("Must not issue tokens"));
-        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System).Handle(new("token"), default);
+        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, GoogleOnboardingTestDoubles.Proofs()).Handle(new("token"), default);
         if (emailExists) { Assert.Equal(409, result.Error?.Status); Assert.Equal("ACCOUNT_LINK_REQUIRED", result.Error?.Code); }
         else Assert.Equal("OnboardingRequired", result.Value?.Status);
     }
@@ -106,7 +106,7 @@ public sealed class GoogleExchangeHardeningTests
         });
         var store = ResetProxy.For<IAuthStore>((_, _) => throw new Exception("Must not access DB"));
         var tokens = ResetProxy.For<ITokenService>((_, _) => throw new Exception("Must not issue tokens"));
-        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System)
+        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, GoogleOnboardingTestDoubles.Proofs())
             .Handle(new("token"), default);
         Assert.Equal(503, result.Error?.Status);
         Assert.Equal("GOOGLE_PROVIDER_UNAVAILABLE", result.Error?.Code);
@@ -126,7 +126,7 @@ public sealed class GoogleExchangeHardeningTests
         });
         var provider = ResetProxy.For<IIdentityProvider>((_, _) => Task.FromResult(new VerifiedIdentity(before.FirebaseUid, before.Email)));
         var tokens = ResetProxy.For<ITokenService>((_, _) => throw new Exception("Must not issue tokens"));
-        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System)
+        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, GoogleOnboardingTestDoubles.Proofs())
             .Handle(new("token"), default);
         Assert.Equal("ACCOUNT_CHANGED", result.Error?.Code);
     }
@@ -144,7 +144,7 @@ public sealed class GoogleExchangeHardeningTests
         });
         var provider = ResetProxy.For<IIdentityProvider>((_, _) => Task.FromResult(new VerifiedIdentity(user.FirebaseUid, user.Email)));
         var tokens = ResetProxy.For<ITokenService>((_, _) => throw new Exception("Must not issue tokens"));
-        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System)
+        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, GoogleOnboardingTestDoubles.Proofs())
             .Handle(new("token"), default);
         Assert.Equal("EMAIL_NOT_VERIFIED", result.Error?.Code);
         Assert.Equal(403, result.Error?.Status);

@@ -106,6 +106,7 @@ Luồng và bằng chứng source chi tiết tại [authentication.md](authentic
 | POST | `/api/auth/verify-email` | Public, deprecated | 204 No Content |
 | POST | `/api/auth/login` | Public | 200 LoginResponse |
 | POST | `/api/auth/login-firebase` | Public | 200 GoogleExchangeResponse; 401 invalid identity; 409 explicit link/race; 503 provider unavailable |
+| POST | `/api/auth/google/onboarding/complete` | Public + onboarding proof | 201 AccountResponse; replay 200; 400 validation/expiry; 409 input/identity conflict |
 | POST | `/api/auth/refresh` | Public | 200 TokenResponse |
 | POST | `/api/auth/logout` | User | 204 |
 | POST | `/api/auth/logout-all` | User | 204 |

@@ -73,20 +73,20 @@ Nguồn: [AuthController](../Fire3D/Fire3D.API/Controllers/AuthController.cs), [
 
 Nguồn: [LoginWithPasswordCommand](../Fire3D/Fire3D.Application/Authentication/Commands/LoginWithPassword/LoginWithPasswordCommand.cs), [RefreshTokenCommandHandler](../Fire3D/Fire3D.Application/Authentication/Commands/RefreshToken/RefreshTokenCommandHandler.cs), [ValidateSessionQueryHandler](../Fire3D/Fire3D.Application/Authentication/Queries/ValidateSession/ValidateSessionQueryHandler.cs), [LogoutAllCommand](../Fire3D/Fire3D.Application/Authentication/Commands/Logout/LogoutAllCommand.cs), [AuthenticationExtensions](../Fire3D/Fire3D.API/Extensions/AuthenticationExtensions.cs).
 
-### Google: nhánh đang có và phần còn thiếu
+### Google: exchange và onboarding
 
 Exchange dùng Firebase Admin SDK với `checkRevoked=true`, bắt buộc `email_verified` dạng boolean true và provider `google.com`. Token invalid/expired/revoked hoặc sai provider trả401 INVALID_FIREBASE_TOKEN. Timeout 15 giây và lỗi tạm thời trả503 GOOGLE_PROVIDER_UNAVAILABLE, khác lỗi token; cancellation từ request không bị đổi thành401/503. Sau khóa lifecycle/user, kiểm lại đúng user sở hữu UID và trạng thái account/organization/pending legacy rồi mới cấp family. Mock/HTTP kiểm contract và mapping lỗi SDK; chưa gọi Firebase thật trong đợt này.
 
-FE gửi Firebase ID token dưới dạng JSON string tới `POST /api/auth/login-firebase`. UID đã link trả200 `{status:"Authenticated", authentication:{accessToken,refreshToken,user}}`; email local trùng nhưng UID chưa link trả409 ACCOUNT_LINK_REQUIRED; UID/email mới trả200 `{status:"OnboardingRequired"}`. Không tự tạo account hoặc link chỉ từ email trùng. Chưa có endpoint/proof onboarding completion hoặc explicit Google link để hoàn tất hai nhánh còn thiếu; không hướng dẫn FE coi OnboardingRequired là đã đăng nhập.
+FE gửi Firebase ID token dưới dạng JSON string tới `POST /api/auth/login-firebase`. UID đã link trả200 `Authenticated` kèm token BE; email local trùng nhưng UID chưa link trả409 `ACCOUNT_LINK_REQUIRED`. UID/email mới trả200 `OnboardingRequired` kèm `onboardingToken` và `expiresAt` (15 phút), chưa tạo user/session. `POST /api/auth/google/onboarding/complete` chọn Trainee (username bắt buộc) hoặc OrganizationUser (tổ chức mới + owner atomic). Chỉ lưu proof hash, UID/email và receipt input hash/user ID; tài khoản Google-only không có password. Complete trả201 account, replay cùng input chuẩn hóa trong24 giờ trả200; khác input409. Đăng nhập bằng exchange tiếp theo. Explicit Google link chưa triển khai ở task onboarding này. Hướng dẫn và giới hạn migration/provider: [google-auth-manual-test.md](google-auth-manual-test.md).
 
 Nguồn: [ExchangeFirebaseTokenCommand](../Fire3D/Fire3D.Application/Authentication/Commands/FirebaseLogin/ExchangeFirebaseTokenCommand.cs).
 
 | Năng lực | Source hiện có | Khác biệt so với contract đích |
 |---|---|---|
-| Local registration | Hai route Trainee/OrganizationUser dùng cùng flow form → OTP → proof → register → login; alias `/register` dùng contract Trainee. | FE form chưa kiểm chứng tích hợp; Google onboarding/link còn thiếu |
+| Local registration | Hai route Trainee/OrganizationUser dùng cùng flow form → OTP → proof → register → login; alias `/register` dùng contract Trainee. | FE form chưa kiểm chứng tích hợp; explicit Google link còn thiếu |
 | Email verification | OTP registration worker có challenge 10 phút, resend 1 phút, 5 email/giờ, 20 IP/giờ và proof 15 phút dùng một lần. `POST /api/auth/registration/request-otp` gửi OTP lần đầu; `POST /api/auth/resend-verification` gửi OTP mới và vô hiệu mã/proof cũ; `/check-email/` dùng hai route này. `/verify-email` vẫn deprecated cho link của account pending legacy. | Provider Mailgun production vẫn cần nghiệm thu riêng. |
 | Local login/session | Login, refresh rotation/replay revoke, logout, logout-all và `/api/auth/me` dùng session family trong DB | Provider/deployment và client cần nghiệm thu riêng; không xóa family để bỏ validation |
-| Google | `POST /api/auth/login-firebase`; UID đã liên kết trả `Authenticated`, email local trùng trả `ACCOUNT_LINK_REQUIRED`, Google mới trả `OnboardingRequired` và không tự tạo tài khoản | Chưa có endpoint onboarding/link tường minh để hoàn tất chọn loại tài khoản |
+| Google | `POST /api/auth/login-firebase`; UID đã liên kết trả `Authenticated`, email local trùng trả `ACCOUNT_LINK_REQUIRED`, Google mới trả `OnboardingRequired` và không tự tạo tài khoản | Onboarding completion đã có; explicit link còn thiếu, Firebase/client/deployment chưa kiểm chứng |
 | Profile | GET/PATCH cá nhân có ETag; PATCH sửa fullName/username/dob/gender/phoneNumber. GET/PATCH organization đã có cho OrganizationUser, ETag riêng. Avatar có decoder, candidate trước copy và cleanup/recovery worker. | Không coi schema Swagger trống là route thiếu; còn cần kiểm chứng provider/deployment và recovery đúng môi trường |
 | Reset password | Forgot tạo job bền vững; worker gửi Mailgun; reset tiêu thụ token, đổi hash, thu hồi phiên và ghi audit trong user transaction | Core local reset đã có code; cần đối chiếu bảng token với schema target và kiểm thử rollback/race. Chưa khẳng định Mailgun production đã gửi thật |
 | Change password | `POST /api/auth/change-password` kiểm lại live family từ JWT/account/organization dưới khóa, kiểm password, invalidate reset local/legacy qua gate và revoke/audit atomic | PostgreSQL restricted-role/race/rollback có regression; migration/deployment cần nghiệm thu riêng |
@@ -95,7 +95,7 @@ Chi tiết request/response hiện tại nằm ở [API guide](api-docs.md). Chi
 
 ## Hướng triển khai khi sửa auth
 
-1. Hoàn tất Google onboarding idempotent, giữ role/tenant của UID đã link, yêu cầu xác thực local trước khi link vào email local hiện có.
+1. Onboarding idempotent đã có; hoàn tất explicit Google link với chứng minh local, giữ role/tenant của account hiện có.
 2. Kiểm chứng organization profile/Avatar recovery và sửa OpenAPI đang thiếu schema PATCH, multipart/header; các route, decoder và cleanup đã có source. Không nhận URL/avatar data tùy ý từ client.
 3. Giữ reset và change thành hai use case riêng nhưng dùng cùng chính sách transaction, token/session revoke và audit của Docs. Core transaction hiện có; đối chiếu mapping schema token và kiểm thử PostgreSQL trước khi coi luồng hoàn tất. Không dùng Firebase password reset cho local password.
 
