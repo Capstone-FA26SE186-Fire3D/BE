@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 namespace Fire3D.Application.Authentication.Abstractions;
 
 public record IdentityUser(string Uid, string Email, string FullName);
-public record VerifiedIdentity(string Uid, string Email);
+public record VerifiedIdentity(string Uid, string Email, string? DisplayName = null);
 
 public interface IIdentityProvider
 {

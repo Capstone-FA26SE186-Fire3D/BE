@@ -10,6 +10,7 @@ public static class GoogleAuthRules
 {
     public static DateTime UtcNow(TimeProvider clock) => AuthSupport.UtcNow(clock);
     public static AccountResponse ToAccount(User user) => AuthSupport.ToAccount(user);
+    public static string? NormalizeDisplayName(string? name) => SelfRegistrationValidation.NormalizeName(name);
     public static Task<bool> IsActiveAsync(IAuthStore store, User user, CancellationToken ct) => AuthSupport.IsActiveAsync(store, user, ct);
     public static AuthResult<T> Conflict<T>(RegisterConflict conflict) => SelfRegistrationValidation.Conflict<T>(conflict);
 

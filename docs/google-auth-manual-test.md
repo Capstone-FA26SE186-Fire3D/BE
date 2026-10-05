@@ -5,7 +5,7 @@ Nguồn yêu cầu: Docs FR-AUTH-01/05/06/08/10, workflow §2.3. Firebase xác m
 ## Onboarding
 
 1. FE dùng Firebase Google Sign-In để lấy **Firebase ID token**, không dùng Google OAuth access token. Gọi anonymous `POST /api/auth/login-firebase` với body JSON string `"<firebase-id-token>"`.
-2. UID đã liên kết trả `Authenticated` và token BE. Email trùng account local trả `409 ACCOUNT_LINK_REQUIRED`: đăng nhập local rồi dùng link, không tạo account khác. UID/email mới trả `OnboardingRequired`, `onboardingToken`, `expiresAt`; chưa có account hoặc JWT BE.
+2. UID đã liên kết trả `Authenticated` và token BE. Email trùng account local trả `409 ACCOUNT_LINK_REQUIRED`: đăng nhập local rồi dùng link, không tạo account khác. UID/email mới trả `OnboardingRequired` và `onboarding: {token, expiresAt, email, displayName}`; chưa có account hoặc JWT BE. Email/displayName lấy từ identity đã xác minh, tên có thể null. Alias ngoài cùng `onboardingToken`/`expiresAt` giữ cùng giá trị trong giai đoạn chuyển đổi và sẽ bỏ trong phiên bản riêng. Proof có hạn 15 phút, chỉ giữ trong bộ nhớ FE.
 3. Trong 15 phút gọi anonymous `POST /api/auth/google/onboarding/complete`:
 
 ```json

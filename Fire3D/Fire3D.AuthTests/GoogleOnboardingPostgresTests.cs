@@ -10,7 +10,7 @@ namespace Fire3D.AuthTests;
 
 public sealed class GoogleOnboardingPostgresTests
 {
-    internal static async Task Prepare(BillingDatabase db)
+    internal static async Task Prepare(BillingDatabase db, bool includeDisplayName = true)
     {
         await db.Sql("""
             DO $$ BEGIN
@@ -25,6 +25,7 @@ public sealed class GoogleOnboardingPostgresTests
         await BackendDatabasePermissionsTests.Apply(db, "AddSelfRegistration");
         await BackendDatabasePermissionsTests.Apply(db, "AddNormalizedRegistrationEmail");
         await BackendDatabasePermissionsTests.Apply(db, "AddGoogleOnboarding");
+        if (includeDisplayName) await BackendDatabasePermissionsTests.Apply(db, "AddGoogleOnboardingDisplayName");
     }
 
     private static GoogleOnboardingService Service(Fire3D.Infrastructure.Persistence.Fire3DDbContext db, TimeProvider? clock = null) =>
