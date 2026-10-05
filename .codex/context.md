@@ -119,6 +119,11 @@ Khi có Docs bên cạnh, đối chiếu `fire_evacuation_schema.sql`, `fire_eva
 
 ## Recovery gate corrections — 2026-09-19
 
+### Local auth / Google exchange implementation — 2026-10-05
+
+- Email lookup hiện dùng `lower(btrim(email))` theo normalized index, input trim/lowercase. Change-password lấy family từ JWT và recheck dưới khóa lifecycle/user; reset/change tiêu thụ reset local/legacy, revoke families và audit atomic. Migration `20261005090000_AddPasswordRecoveryGate` thêm restricted SECURITY DEFINER gate `invalidate_legacy_reset_tokens(uuid)` đánh dấu used_at, không DELETE lịch sử. Migration mới chỉ kiểm trên PostgreSQL disposable, chưa áp Supabase trong đợt này.
+- Google exchange dùng Firebase Admin SDK checkRevoked, bắt buộc Google provider/email verified; deadline15 giây, invalid identity401, provider unavailable503, giữ request cancellation. Sau khóa recheck user ID/UID và lifecycle. Không bổ sung onboarding completion/link hoặc sửa S3 ở hai task này. Tài liệu test tay: `docs/auth-local-google-manual-test.md`; kết quả từng lượt test/handoff đặt ở `.codex/local`, không suy ra provider/deployment đã nghiệm thu.
+
 - Session preparation uses the dedicated executor with read access to its referenced identity, Building, training, package and validation rows. Session result/event writes go through `record_session_event` and `complete_training_session`; playtest completion goes through `complete_playtest_session`. Replay is keyed by event ID/sequence or result/completion key/hash and does not re-check entitlement or current user activity after start.
 - Playtest creator activity is checked at preparation/start. A playtest already started may complete or sync after the creator is disabled or the entitlement expires.
 - Processing workers register artifact/validation/issues through lease-bound `register_processing_output`; they do not receive direct provenance-table DML. Prepaid provisioning uses `provision_ai_topup_v7` and `provision_building_line_v7`; request quota reserve/settle remains replay-safe.

@@ -33,17 +33,24 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
         return result.IsSuccess ? Ok(result.Value) : ResetProblem(result.Error!);
     }
 
-    /// <summary>
-    /// Đăng nhập bằng Firebase ID Token.
-    /// </summary>
+    /// <summary>Exchange a verified Google Firebase ID token; does not create or automatically link accounts.</summary>
+    /// <remarks>Body is a JSON string. Google provider, verified email and revocation checks are required.
+    /// 200: Authenticated or OnboardingRequired; 409: ACCOUNT_LINK_REQUIRED/ACCOUNT_CHANGED;
+    /// 401: invalid, expired or revoked identity; 503 GOOGLE_PROVIDER_UNAVAILABLE: provider timeout/outage (15 second deadline).</remarks>
     [HttpPost("login-firebase")]
     [AllowAnonymous]
+    [ProducesResponseType<GoogleExchangeResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(503)]
     public async Task<ActionResult> LoginFirebase([FromBody] string firebaseIdToken, CancellationToken ct)
     {
         var result = await sender.Send(new Fire3D.Application.Authentication.Commands.FirebaseLogin.ExchangeFirebaseTokenCommand(firebaseIdToken), ct);
         if (!result.IsSuccess) 
         {
-            return Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+            return ResetProblem(result.Error!);
         }
         return Ok(result.Value);
     }

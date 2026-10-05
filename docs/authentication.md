@@ -75,6 +75,8 @@ Nguồn: [LoginWithPasswordCommand](../Fire3D/Fire3D.Application/Authentication/
 
 ### Google: nhánh đang có và phần còn thiếu
 
+Exchange dùng Firebase Admin SDK với `checkRevoked=true`, bắt buộc `email_verified` dạng boolean true và provider `google.com`. Token invalid/expired/revoked hoặc sai provider trả401 INVALID_FIREBASE_TOKEN. Timeout 15 giây và lỗi tạm thời trả503 GOOGLE_PROVIDER_UNAVAILABLE, khác lỗi token; cancellation từ request không bị đổi thành401/503. Sau khóa lifecycle/user, kiểm lại đúng user sở hữu UID và trạng thái account/organization/pending legacy rồi mới cấp family. Mock/HTTP kiểm contract và mapping lỗi SDK; chưa gọi Firebase thật trong đợt này.
+
 FE gửi Firebase ID token dưới dạng JSON string tới `POST /api/auth/login-firebase`. UID đã link trả200 `{status:"Authenticated", authentication:{accessToken,refreshToken,user}}`; email local trùng nhưng UID chưa link trả409 ACCOUNT_LINK_REQUIRED; UID/email mới trả200 `{status:"OnboardingRequired"}`. Không tự tạo account hoặc link chỉ từ email trùng. Chưa có endpoint/proof onboarding completion hoặc explicit Google link để hoàn tất hai nhánh còn thiếu; không hướng dẫn FE coi OnboardingRequired là đã đăng nhập.
 
 Nguồn: [ExchangeFirebaseTokenCommand](../Fire3D/Fire3D.Application/Authentication/Commands/FirebaseLogin/ExchangeFirebaseTokenCommand.cs).

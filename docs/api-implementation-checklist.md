@@ -58,6 +58,7 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 ### AUTH-02 — P0 · GAP · Google onboarding và link
 
 - **Contract/current:** [ExchangeFirebaseTokenCommand](../Fire3D/Fire3D.Application/Authentication/Commands/FirebaseLogin/ExchangeFirebaseTokenCommand.cs) xác minh Google và trả `OnboardingRequired` cho identity mới; chưa có token/endpoint onboarding chọn role hoặc link có chứng minh tài khoản local.
+- **Exchange đã củng cố:** [FirebaseIdentityProvider](../Fire3D/Fire3D.Infrastructure/Authentication/FirebaseIdentityProvider.cs) dùng SDK/revocation, Google provider và email verified, timeout15 giây;401 invalid khác503 unavailable. Recheck UID owner/lifecycle dưới khóa, giữ response Authenticated/OnboardingRequired/ACCOUNT_LINK_REQUIRED. [FirebaseGoogleVerificationTests](../Fire3D/Fire3D.AuthTests/FirebaseGoogleVerificationTests.cs) kiểm claims/revoked/timeout/cancellation; [GoogleExchangeHardeningTests](../Fire3D/Fire3D.AuthTests/GoogleExchangeHardeningTests.cs) kiểm ownership/lifecycle và không auto-link. Test SDK giả lập, không xác nhận Firebase production.
 - **Sửa code:** Thêm onboarding token ngắn hạn, hoàn tất Trainee/OrganizationUser và link explicit sau khi xác thực local. Lưu hash/expiry và kết quả hoàn tất để retry cùng input trả kết quả đã commit.
 - **Nghiệm thu:** Kiểm tra UID mới/đã link, email local chưa link, token hết hạn, retry cùng/khác input và hai request đồng thời. Không tạo user/organization trùng hoặc đổi role/tenant tài khoản đã link.
 

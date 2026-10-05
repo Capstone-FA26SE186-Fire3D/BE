@@ -31,6 +31,7 @@ public static class AuthenticationExtensions
         services.AddScoped<IRefreshTokenCleanupStore, RefreshTokenCleanupStore>();
         services.AddScoped<ILocalPasswordReset, LocalPasswordReset>();
         services.AddScoped<Fire3D.Application.Authentication.Services.Fire3DSessionIssuer>();
+        services.AddSingleton<IFirebaseGoogleTokenVerifier, FirebaseGoogleTokenVerifier>();
         services.AddHttpClient<Fire3D.Application.Authentication.Abstractions.IIdentityProvider, FirebaseIdentityProvider>(
             client => client.Timeout = TimeSpan.FromSeconds(15)).RemoveAllLoggers();
         services.AddOptions<AuthEmailOptions>()

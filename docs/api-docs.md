@@ -105,7 +105,7 @@ Luồng và bằng chứng source chi tiết tại [authentication.md](authentic
 | POST | `/api/auth/resend-verification` | Public | 202 Accepted |
 | POST | `/api/auth/verify-email` | Public, deprecated | 204 No Content |
 | POST | `/api/auth/login` | Public | 200 LoginResponse |
-| POST | `/api/auth/login-firebase` | Public | 200 TokenResponse |
+| POST | `/api/auth/login-firebase` | Public | 200 GoogleExchangeResponse; 401 invalid identity; 409 explicit link/race; 503 provider unavailable |
 | POST | `/api/auth/refresh` | Public | 200 TokenResponse |
 | POST | `/api/auth/logout` | User | 204 |
 | POST | `/api/auth/logout-all` | User | 204 |
@@ -206,12 +206,13 @@ Frontend đăng nhập Google bằng Firebase SDK, lấy Firebase ID token rồi
 "<Firebase ID token from Google sign-in>"
 ```
 
-BE kiểm token, trạng thái thu hồi, email đã xác minh và provider google.com. Input rỗng/quá 16384 ký tự: 400; token/provider sai: 401 INVALID_FIREBASE_TOKEN.
+BE dùng Firebase Admin SDK kiểm chữ ký/expiry/revocation, `email_verified=true` và `firebase.sign_in_provider=google.com`; không dùng email claim đơn lẻ làm bằng chứng Google. Input rỗng/quá 16384 ký tự: 400; token/provider sai, expired hoặc revoked: 401 INVALID_FIREBASE_TOKEN. Deadline 15 giây, timeout/lỗi mạng/certificate fetch trả 503 GOOGLE_PROVIDER_UNAVAILABLE; request cancellation được giữ nguyên. Lỗi/log không chứa token, claim hoặc thông điệp nhạy cảm của SDK.
 
 - UID đã liên kết: dùng hồ sơ/role DB.
 - UID/email mới: trả `OnboardingRequired`, chưa tạo user hay organization cho tới khi luồng onboarding được triển khai.
 - Email thuộc tài khoản khác/chưa liên kết UID này: 409 ACCOUNT_LINK_REQUIRED; không tự ghép chỉ vì trùng email.
 - UID đã thay đổi trong lúc lấy khóa: 409 ACCOUNT_CHANGED; tài khoản/tổ chức bị khóa 403 ACCOUNT_DISABLED.
+- Dưới khóa lifecycle/user, BE kiểm lại cả user ID sở hữu UID, role/tenant và pending legacy trước khi ghi session/audit. Account pending chưa verified/hết hạn vẫn trả403 EMAIL_NOT_VERIFIED/REGISTRATION_EXPIRED.
 
 Google identity mới trả `{ status: "OnboardingRequired" }` và không tạo tài khoản. UID đã liên kết trả `{ status: "Authenticated", authentication: TokenResponse }`. Chưa có onboarding token/endpoint để người dùng hoàn tất chọn Trainee/OrganizationUser.
 

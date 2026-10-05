@@ -11,15 +11,18 @@ public sealed class ExchangeFirebaseTokenCommandHandler(IAuthStore store, IToken
 {
     public async Task<AuthResult<GoogleExchangeResponse>> Handle(ExchangeFirebaseTokenCommand request,CancellationToken ct)
     {
-        var authenticatedAt = AuthSupport.UtcNow(clock);
         if (string.IsNullOrWhiteSpace(request.IdToken) || request.IdToken.Length>16384)
             return AuthResult<GoogleExchangeResponse>.Fail("INVALID_FIREBASE_TOKEN","Google ID token is required.",400);
         VerifiedIdentity identity;
         try { identity = await identityProvider.VerifyGoogleTokenAsync(request.IdToken,ct); }
         catch (OperationCanceledException) when(ct.IsCancellationRequested) { throw; }
-        catch (Exception) { return AuthResult<GoogleExchangeResponse>.Fail("INVALID_FIREBASE_TOKEN","Invalid Firebase ID token.",401); }
+        catch (GoogleIdentityException ex) when (ex.Failure == GoogleIdentityFailure.InvalidToken)
+        { return AuthResult<GoogleExchangeResponse>.Fail("INVALID_FIREBASE_TOKEN","Invalid Firebase ID token.",401); }
+        catch (Exception)
+        { return AuthResult<GoogleExchangeResponse>.Fail("GOOGLE_PROVIDER_UNAVAILABLE","Google verification is temporarily unavailable. Try again.",503); }
         var email = PasswordResetValidation.NormalizeEmail(identity.Email);
-        if (email is null) return AuthResult<GoogleExchangeResponse>.Fail("INVALID_FIREBASE_TOKEN","Verified email is required.",401);
+        if (email is null || string.IsNullOrWhiteSpace(identity.Uid) || identity.Uid.Length > 128)
+            return AuthResult<GoogleExchangeResponse>.Fail("INVALID_FIREBASE_TOKEN","Verified Google identity is required.",401);
         var existing = await store.FindUserByFirebaseUidAsync(identity.Uid,ct);
         if (existing is null)
         {
@@ -31,10 +34,15 @@ public sealed class ExchangeFirebaseTokenCommandHandler(IAuthStore store, IToken
         }
         await using var tx = await store.BeginUserTransactionAsync(existing.Id,ct);
         var user = await store.FindUserByFirebaseUidAsync(identity.Uid,ct);
-        if (user is null)
+        if (user is null || user.Id != existing.Id || user.FirebaseUid != identity.Uid)
             return AuthResult<GoogleExchangeResponse>.Fail("ACCOUNT_CHANGED","Account changed concurrently. Retry sign-in.",409);
         if (!await AuthSupport.IsActiveAsync(store,user,ct))
             return AuthResult<GoogleExchangeResponse>.Fail("ACCOUNT_DISABLED","Account or organization is unavailable.",403);
+        var authenticatedAt = AuthSupport.UtcNow(clock);
+        if (AuthSupport.RegistrationHasExpired(user, authenticatedAt))
+            return AuthResult<GoogleExchangeResponse>.Fail("REGISTRATION_EXPIRED", "This unverified registration has expired.", 403);
+        if (AuthSupport.IsPendingEmailVerification(user))
+            return AuthResult<GoogleExchangeResponse>.Fail("EMAIL_NOT_VERIFIED", "Verify your email before signing in.", 403);
         await store.UpdateLoginAsync(user.Id,authenticatedAt,ct);
         var response = await AuthSupport.IssueAsync(store,tokens,user,Guid.NewGuid(),authenticatedAt,
             authenticatedAt.Add(tokens.RefreshTokenLifetime),ct);
