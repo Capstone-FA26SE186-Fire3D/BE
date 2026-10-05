@@ -19,11 +19,10 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         try
         {
             // Shared for normal auth; admin status changes take the exclusive lock before revoking sessions.
-            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management', 0))", ct);
-            // The same user lock serializes login, refresh, replay revocation and logout across API instances.
+            // Both locks run in one round trip, preserving lifecycle-before-user order.
             var key = "fire3d:auth:" + userId;
             await db.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", ct);
+                $"SELECT pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management', 0)); SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", ct);
             return new AuthTransaction(transaction);
         }
         catch
@@ -36,7 +35,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
     public Task<User?> FindUserAsync(Guid id, CancellationToken ct) =>
         db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<User?> FindUserByEmailAsync(string email, CancellationToken ct) =>
-        db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Email == email, ct);
+        db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Email.Trim().ToLower() == email, ct);
     public Task<User?> FindUserByFirebaseUidAsync(string uid, CancellationToken ct) =>
         db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.FirebaseUid == uid, ct);
     public Task<bool> HasAdminAsync(CancellationToken ct) =>
@@ -110,6 +109,33 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         await db.Users.Where(x => x.Id == id).ExecuteUpdateAsync(update => update
             .SetProperty(x => x.LastLoginAt, now).SetProperty(x => x.UpdatedAt, now)
             , ct);
+
+    public async Task FinalizePasswordLoginAsync(User user,string? rehashedPassword,RefreshToken token,DateTime now,CancellationToken ct)
+    {
+        if(db.Database.CurrentTransaction is null) throw new InvalidOperationException("Login requires the lifecycle/user transaction.");
+        if(token.UserId!=user.Id || token.CreatedAt!=now) throw new InvalidOperationException("Login token scope does not match identity.");
+        await using var command=new NpgsqlCommand("""
+            WITH updated AS (
+              UPDATE public.users SET last_login_at=@now,updated_at=@now,password_hash=COALESCE(@password,password_hash)
+              WHERE id=@user AND NOT EXISTS(SELECT 1 FROM public.password_reset_operations
+                WHERE user_id=@user AND (status='Pending' OR finished_at>=@now)) RETURNING id
+            ), issued AS (
+              INSERT INTO public.auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at)
+              SELECT @token,id,@family,@hash,@now,@expires FROM updated RETURNING id
+            )
+            INSERT INTO public.audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,created_at)
+            SELECT @audit,updated.id,@organization,'User','Login','users',updated.id,@correlation,@now FROM updated CROSS JOIN issued
+            RETURNING id
+            """,(NpgsqlConnection)db.Database.GetDbConnection(),(NpgsqlTransaction)db.Database.CurrentTransaction.GetDbTransaction());
+        command.Parameters.AddWithValue("user",user.Id);command.Parameters.AddWithValue("now",now);
+        command.Parameters.AddWithValue("password",NpgsqlTypes.NpgsqlDbType.Text,(object?)rehashedPassword??DBNull.Value);
+        command.Parameters.AddWithValue("organization",NpgsqlTypes.NpgsqlDbType.Uuid,(object?)user.OrganizationId??DBNull.Value);
+        command.Parameters.AddWithValue("token",token.Id);command.Parameters.AddWithValue("family",token.FamilyId);
+        command.Parameters.AddWithValue("hash",token.TokenHash);command.Parameters.AddWithValue("expires",token.ExpiresAt);
+        command.Parameters.AddWithValue("audit",Guid.NewGuid());command.Parameters.AddWithValue("correlation",Guid.NewGuid());
+        if(await command.ExecuteScalarAsync(ct) is null)
+            throw new PasswordResetException("RESET_PENDING","Sign in again after password recovery completes.",503);
+    }
 
     public async Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, DeviceInstallationProof installationProof,
         string? fcmToken, string? deviceModel, string? osVersion, string? appVersion, DateTime now, CancellationToken ct)
@@ -249,6 +275,25 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
     public Task<bool> FamilyIsActiveAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct) =>
         db.Set<RefreshToken>().AnyAsync(x => x.UserId == userId && x.FamilyId == familyId
             && x.ConsumedAt == null && x.RevokedAt == null && x.ExpiresAt > now, ct);
+    public Task<bool> SessionIsValidAsync(Guid userId,Guid familyId,string? role,string? organizationId,DateTime now,CancellationToken ct)
+    {
+        if(!Enum.TryParse<UserRole>(role,false,out var expectedRole) || !Enum.IsDefined(expectedRole)
+            || expectedRole.ToString()!=role) return Task.FromResult(false);
+        Guid? expectedOrganization=null;
+        if(organizationId is not null)
+        {
+            if(!Guid.TryParseExact(organizationId,"D",out var parsed) || parsed.ToString()!=organizationId)
+                return Task.FromResult(false);
+            expectedOrganization=parsed;
+        }
+        if((expectedRole==UserRole.OrganizationUser)!=expectedOrganization.HasValue) return Task.FromResult(false);
+        return db.Users.AnyAsync(user=>user.Id==userId && user.IsActive && user.DeletedAt==null
+            && user.Role==expectedRole && user.OrganizationId==expectedOrganization
+            && (user.RegistrationExpiresAt==null || user.EmailVerifiedAt!=null)
+            && (user.OrganizationId==null || db.Organizations.Any(org=>org.Id==user.OrganizationId && org.IsActive && org.DeletedAt==null))
+            && db.Set<RefreshToken>().Any(token=>token.UserId==userId && token.FamilyId==familyId
+                && token.ConsumedAt==null && token.RevokedAt==null && token.ExpiresAt>now),ct);
+    }
     public async Task WriteAuditAsync(User actor, string action, Guid targetId, DateTime now, CancellationToken ct, Guid? correlationId = null)
     {
         var scope = action == "Create"
@@ -287,10 +332,12 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
                 .Where(x => x.Id == tokenId)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.UsedAt, now), ct);
 
-    public async Task InvalidateUserResetTokensAsync(Guid userId, CancellationToken ct) =>
-        await db.Set<PasswordResetToken>()
-                .Where(x => x.UserId == userId && x.UsedAt == null)
-                .ExecuteDeleteAsync(ct);
+    public async Task InvalidateUserResetTokensAsync(Guid userId, CancellationToken ct)
+    {
+        if (db.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Reset-token invalidation requires the user transaction.");
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT public.invalidate_legacy_reset_tokens({userId})", ct);
+    }
 
     // Registration
     public async Task<RegisterConflict> TryCreateOrganizationWithUserAsync(Organization organization, User user, CancellationToken ct)

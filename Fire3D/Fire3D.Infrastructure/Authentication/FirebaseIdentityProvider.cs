@@ -9,13 +9,16 @@ using FirebaseAdmin.Auth;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Fire3D.Application.Authentication;
+using Newtonsoft.Json.Linq;
 
 namespace Fire3D.Infrastructure.Authentication;
 
 public class FirebaseIdentityProvider(
     HttpClient httpClient,
     IOptions<AuthEmailOptions> options,
-    ILogger<FirebaseIdentityProvider> logger) : IIdentityProvider
+    ILogger<FirebaseIdentityProvider> logger,
+    IFirebaseGoogleTokenVerifier googleVerifier,
+    TimeProvider clock) : IIdentityProvider
 {
     private readonly string _apiKey = options.Value.FirebaseApiKey;
 
@@ -77,29 +80,43 @@ public class FirebaseIdentityProvider(
 
     public async Task<VerifiedIdentity> VerifyGoogleTokenAsync(string idToken, CancellationToken ct)
     {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15), clock);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
         try
         {
-            var decodedToken = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken, true, ct);
-            var uid = decodedToken.Uid;
-            var email = decodedToken.Claims.TryGetValue("email", out var emailObj) ? emailObj?.ToString() : null;
-
-            if (string.IsNullOrEmpty(email))
-            {
-                throw new Exception("InvalidToken");
-            }
-
-            return new VerifiedIdentity(uid, email);
+            var decoded = await googleVerifier.VerifyAsync(idToken, true, linked.Token).WaitAsync(linked.Token);
+            var claims = decoded.Claims;
+            var email = claims.TryGetValue("email", out var emailValue) && emailValue is string text
+                ? PasswordResetValidation.NormalizeEmail(text) : null;
+            if (string.IsNullOrWhiteSpace(decoded.Uid) || decoded.Uid.Length > 128 || email is null
+                || !claims.TryGetValue("email_verified", out var verified) || verified is not true
+                || !claims.TryGetValue("firebase", out var firebase) || SignInProvider(firebase) != "google.com")
+                throw new GoogleIdentityException(GoogleIdentityFailure.InvalidToken);
+            return new VerifiedIdentity(decoded.Uid, email);
         }
-        catch (FirebaseAuthException ex) when (ex.AuthErrorCode == AuthErrorCode.RevokedIdToken || ex.AuthErrorCode == AuthErrorCode.ExpiredIdToken)
+        catch (GoogleIdentityException) { throw; }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (FirebaseAuthException ex) when (ex.AuthErrorCode is AuthErrorCode.InvalidIdToken
+            or AuthErrorCode.ExpiredIdToken or AuthErrorCode.RevokedIdToken or AuthErrorCode.UserNotFound or AuthErrorCode.TenantIdMismatch)
         {
-            throw new Exception("InvalidToken");
+            throw new GoogleIdentityException(GoogleIdentityFailure.InvalidToken);
         }
+        catch (ArgumentException) { throw new GoogleIdentityException(GoogleIdentityFailure.InvalidToken); }
         catch (Exception ex)
         {
-            logger.LogError(ex, "VerifyGoogleTokenAsync failed");
-            throw new Exception("InvalidToken");
+            // Do not attach SDK exception messages/stack traces or claims to provider logs.
+            logger.LogWarning("Google verification unavailable. FailureKind={FailureKind}", ex.GetType().Name);
+            throw new GoogleIdentityException(GoogleIdentityFailure.ProviderUnavailable);
         }
     }
+
+    private static string? SignInProvider(object firebase) => firebase switch
+    {
+        IReadOnlyDictionary<string, object> values when values.TryGetValue("sign_in_provider", out var provider) => provider as string,
+        IDictionary<string, object> values when values.TryGetValue("sign_in_provider", out var provider) => provider as string,
+        JObject values when values["sign_in_provider"]?.Type == JTokenType.String => values["sign_in_provider"]!.Value<string>(),
+        _ => null
+    };
 
     public async Task DeleteUserAsync(string uid, CancellationToken ct)
     {

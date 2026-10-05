@@ -6,7 +6,7 @@ Tai lieu nay dung de chan doan email verification/reset sau khi deploy. HTTP `20
 
 1. Xac nhan App Service, resource group, deployment slot va commit/build version dang duoc deploy.
 2. Goi `GET /health/version` va xem startup log `FET3D startup configuration`. Log phai cho dung environment, `VerificationHost=fet3d.io.vn` va `EmailWorkerEnabled=True`; khong co token, API key hay dia chi nguoi nhan.
-3. Mo `https://fet3d.io.vn/verify-email/` tren browser. Trang nay goi `../api/auth/verify-email` theo relative URL, vi vay origin nay phai cung phuc vu API hoac reverse-proxy `/api` toi BE deploy. Thu mot token test chi sau khi da kiem tra worker.
+3. Luong dang ky hien tai: form Trainee/Organization -> request-otp -> OTP sau so -> verify-otp -> registrationToken -> register -> login. `/check-email/` la demo OTP, khong tao account cho den register. Demo goi API relative nen origin phai phuc vu/proxy `/api`; FE that phai cau hinh dung API deploy. `/verify-email/` chi danh cho link pending legacy, khong la buoc OTP moi.
 
 ## 2. App Settings cua Azure
 
@@ -27,8 +27,8 @@ Dung endpoint Mailgun dung region cua domain. Domain EU dung endpoint EU thay vi
 
 ## 3. Kiem tra queue va worker
 
-1. Dang ky/resend mot tai khoan test va giu response `202` cung `traceId`.
-2. Trong database dung cua App Service, theo doi job email tu `Pending` sang `Leased`, sau do `Sent`, retry hoac `Dead`.
+1. Goi `POST /api/auth/registration/request-otp` voi email test chua dang ky: 202. Nut gui lai goi `POST /api/auth/resend-verification`: gui OTP, cooldown 60 giay, ma/proof cu mat hieu luc khi resend tao challenge moi. Email da co account tra 409 EMAIL_EXISTS. Khong suy account duoc tao tu 202.
+2. Trong database dung cua App Service, theo doi `registration_otp_email_jobs` va worker `RegistrationOtpEmailWorker` tu Pending -> Leased -> Sent/retry/Dead. `AuthEmail__WorkerEnabled=true` bat worker OTP va legacy email; legacy dung `email_verification_jobs`, forgot-password dung queue rieng. Migration/grants cua moi queue phai du, khong lay trang thai queue legacy lam bang chung OTP da gui.
 3. Xem Application Insights/App Service Log Stream theo `JobId`, `Attempt`, `ErrorType`, `ProviderStatusCode` va `ProviderRequestId`. Log khong duoc co recipient, token, API key hoac HTML email.
 4. `401`/`403` Mailgun la loi cau hinh/xac thuc va job se `Dead`; `429`, timeout va `5xx` duoc retry theo lease/backoff.
 5. Bat **Always On** neu App Service plan ho tro, va kiem tra outbound DNS/HTTPS tu App Service toi Mailgun. Worker chay trong process nen co the dung khi app bi unload neu Always On tat.
@@ -38,7 +38,7 @@ Dung endpoint Mailgun dung region cua domain. Domain EU dung endpoint EU thay vi
 1. Domain `mg.fet3d.io.vn` phai verified va `From` phai thuoc domain nay.
 2. Xac nhan API key va API region trung nhau, tai khoan duoc phep gui, va Mailgun sending logs co request ID tu BE.
 3. Phan biet `accepted` cua Mailgun voi `delivered`, `rejected`, `bounced`, suppressed va spam trong Mailgun event log va inbox.
-4. Gui mot email nghiem thu toi hop thu duoc phep, doi chieu job, Mailgun event va inbox, sau do bam link de xac minh thanh cong.
+4. Gui mot email nghiem thu toi hop thu duoc phep, doi chieu job, Mailgun event va inbox. Nhap OTP vao verify-otp, dung registrationToken de register, sau do login. Test resend sau cooldown: ma cu bi tu choi. Forgot/reset password la luong rieng cho account da co; link reset khong la OTP registration. Khong gui mail that chi de kiem tra tai lieu.
 
 ## Thu tu uu tien cau hinh .NET
 

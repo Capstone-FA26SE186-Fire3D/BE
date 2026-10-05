@@ -38,19 +38,24 @@ public sealed partial class AuthIntegrationTests
     [PostgresFact]
     public async Task Normalized_email_migration_refuses_legacy_duplicates_without_changing_accounts()
     {
-        var proof = await VerifyRegistrationEmailAsync("second@example.test");
-        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/auth/register/trainee", new
+        // Seed a fresh historical database; never downgrade security hardening to reproduce legacy data.
+        var legacyName=databaseName+"_legacy";
+        await using var admin=new NpgsqlConnection(adminConnection);await admin.OpenAsync();
+        await new NpgsqlCommand($"CREATE DATABASE \"{legacyName}\"",admin).ExecuteNonQueryAsync();
+        try
         {
-            email = "second@example.test", username = "second", password = "Test123", confirmPassword = "Test123", registrationToken = proof
-        })).StatusCode);
-        using var db = new Fire3DDbContext(new DbContextOptionsBuilder<Fire3DDbContext>().UseNpgsql(testConnection).Options);
-        await db.GetService<IMigrator>().MigrateAsync("20261002133000_AddPayosProvisioningGates");
-        await ExecuteAsync("UPDATE users SET email='ADMIN@EXAMPLE.TEST' WHERE email='second@example.test'");
-        var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.MigrateAsync());
-        Assert.Contains("Normalized email duplicates", error.MessageText);
-        Assert.Equal(2L, await ScalarAsync("SELECT count(*) FROM users"));
-        Assert.Equal(2L, await ScalarAsync("SELECT count(*) FROM users WHERE lower(btrim(email))='admin@example.test'"));
-        Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM public.\"__EFMigrationsHistory\" WHERE \"MigrationId\"='20261003030000_AddNormalizedRegistrationEmail'"));
+            var legacyConnection=new NpgsqlConnectionStringBuilder(testConnection){Database=legacyName}.ConnectionString;
+            await using var db=new Fire3DDbContext(new DbContextOptionsBuilder<Fire3DDbContext>().UseNpgsql(legacyConnection).Options);
+            await db.GetService<IMigrator>().MigrateAsync("20261002133000_AddPayosProvisioningGates");
+            await using var connection=new NpgsqlConnection(legacyConnection);await connection.OpenAsync();
+            await new NpgsqlCommand("INSERT INTO users(id,email,role) VALUES(gen_random_uuid(),'admin@example.test','PlatformAdmin'),(gen_random_uuid(),'ADMIN@EXAMPLE.TEST','PlatformAdmin')",connection).ExecuteNonQueryAsync();
+            var error=await Assert.ThrowsAsync<PostgresException>(()=>db.Database.MigrateAsync());
+            Assert.Contains("Normalized email duplicates",error.MessageText);
+            Assert.Equal(2L,await new NpgsqlCommand("SELECT count(*) FROM users",connection).ExecuteScalarAsync());
+            Assert.Equal(2L,await new NpgsqlCommand("SELECT count(*) FROM users WHERE lower(btrim(email))='admin@example.test'",connection).ExecuteScalarAsync());
+            Assert.Equal(0L,await new NpgsqlCommand("SELECT count(*) FROM public.\"__EFMigrationsHistory\" WHERE \"MigrationId\"='20261003030000_AddNormalizedRegistrationEmail'",connection).ExecuteScalarAsync());
+        }
+        finally {NpgsqlConnection.ClearAllPools();await new NpgsqlCommand($"DROP DATABASE \"{legacyName}\" WITH (FORCE)",admin).ExecuteNonQueryAsync();}
     }
 
     [PostgresFact]

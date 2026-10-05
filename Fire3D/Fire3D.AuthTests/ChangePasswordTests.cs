@@ -6,6 +6,15 @@ namespace Fire3D.AuthTests;
 
 public sealed class ChangePasswordTests
 {
+    [Fact]
+    public async Task Missing_session_family_does_not_reach_password_store()
+    {
+        var store = ResetProxy.For<ILocalPasswordReset>((_, _) => throw new Exception("Unexpected mutation"));
+        var result = await new ChangePasswordCommandHandler(store)
+            .Handle(new(Guid.NewGuid(), Guid.Empty, "current", "new-password"), default);
+        Assert.Equal(401, result.Error?.Status);
+    }
+
     [Theory]
     [InlineData("", "New-Example-Password-2026!", "INVALID_CURRENT_PASSWORD")]
     [InlineData("current", "short", "INVALID_PASSWORD")]
@@ -13,7 +22,7 @@ public sealed class ChangePasswordTests
     {
         var store = ResetProxy.For<ILocalPasswordReset>((_, _) => throw new Exception("Unexpected mutation"));
         var result = await new ChangePasswordCommandHandler(store)
-            .Handle(new(Guid.NewGuid(), currentPassword, newPassword), default);
+            .Handle(new(Guid.NewGuid(), Guid.NewGuid(), currentPassword, newPassword), default);
 
         Assert.Equal(code, result.Error?.Code);
     }
@@ -22,17 +31,19 @@ public sealed class ChangePasswordTests
     public async Task Valid_request_uses_authenticated_actor_only()
     {
         var actorId = Guid.NewGuid();
+        var familyId = Guid.NewGuid();
         var store = ResetProxy.For<ILocalPasswordReset>((method, args) =>
         {
             Assert.Equal(nameof(ILocalPasswordReset.ChangeAsync), method);
             Assert.Equal(actorId, args[0]);
-            Assert.Equal("current-password", args[1]);
-            Assert.Equal("New-Example-Password-2026!", args[2]);
+            Assert.Equal(familyId, args[1]);
+            Assert.Equal("current-password", args[2]);
+            Assert.Equal("New-Example-Password-2026!", args[3]);
             return Task.FromResult(AuthResult<bool>.Ok(true));
         });
 
         var result = await new ChangePasswordCommandHandler(store)
-            .Handle(new(actorId, "current-password", "New-Example-Password-2026!"), default);
+            .Handle(new(actorId, familyId, "current-password", "New-Example-Password-2026!"), default);
 
         Assert.True(result.IsSuccess);
     }

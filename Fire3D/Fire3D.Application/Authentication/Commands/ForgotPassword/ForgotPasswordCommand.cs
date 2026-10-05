@@ -1,5 +1,6 @@
 ﻿using MediatR;
 namespace Fire3D.Application.Authentication.Commands.ForgotPassword;
+using Fire3D.Application.Authentication.Internal;
 public sealed record ForgotPasswordCommand(string Email) : IRequest<AuthResult<bool>>;
 public sealed class ForgotPasswordCommandHandler(IAuthStore authStore) : IRequestHandler<ForgotPasswordCommand, AuthResult<bool>>
 {
@@ -10,7 +11,8 @@ public sealed class ForgotPasswordCommandHandler(IAuthStore authStore) : IReques
         var user = await authStore.FindUserByEmailAsync(email, ct);
         // Keep the public response identical for every valid email, while never creating a
         // local-password reset token for an account authenticated solely through Google.
-        if (user is { IsActive: true, DeletedAt: null } && !string.IsNullOrWhiteSpace(user.PasswordHash))
+        if (user is not null && !string.IsNullOrWhiteSpace(user.PasswordHash)
+            && !AuthSupport.IsPendingEmailVerification(user) && await AuthSupport.IsActiveAsync(authStore, user, ct))
             await authStore.EnqueuePasswordResetAsync(email, ct);
         return AuthResult<bool>.Ok(true);
     }

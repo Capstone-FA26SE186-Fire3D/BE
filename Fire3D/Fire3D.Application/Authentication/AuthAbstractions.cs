@@ -24,6 +24,7 @@ public interface IAuthStore
     Task<ProfileUpdateResult> UpdateProfileAsync(Guid userId, long expectedProfileRevision, string? fullName, string? username,
         DateOnly? dob, UserGender? gender, string? phoneNumber, DateTime now, CancellationToken ct);
     Task UpdateLoginAsync(Guid id, DateTime now, CancellationToken ct);
+    Task FinalizePasswordLoginAsync(User user, string? rehashedPassword, RefreshToken token, DateTime now, CancellationToken ct);
     Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, Users.Commands.RegisterDevice.DeviceInstallationProof installationProof, string? fcmToken, string? deviceModel, string? osVersion, string? appVersion, DateTime now, CancellationToken ct);
     Task<DeviceRevokeResult> RevokeDeviceAsync(Guid userId, string deviceUuid, Users.Commands.RegisterDevice.DeviceInstallationProof installationProof, DateTime now, CancellationToken ct);
     Task DisableUserPushDevicesAsync(Guid userId, DateTime now, CancellationToken ct);
@@ -33,6 +34,7 @@ public interface IAuthStore
     Task RevokeFamilyAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct);
     Task RevokeAllUserSessionsAsync(Guid userId, DateTime revokedAt, CancellationToken ct);
     Task<bool> FamilyIsActiveAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct);
+    Task<bool> SessionIsValidAsync(Guid userId,Guid familyId,string? role,string? organizationId,DateTime now,CancellationToken ct);
     Task WriteAuditAsync(User actor, string action, Guid targetId, DateTime now, CancellationToken ct, Guid? correlationId = null);
 
     // --- Password Reset ---

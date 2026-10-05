@@ -62,7 +62,7 @@ Nguồn: [AuthController](../Fire3D/Fire3D.API/Controllers/AuthController.cs), [
 
 ### Luồng đăng nhập, phiên và đăng xuất
 
-1. FE gọi `POST /api/auth/login` bằng email/password. BE chuẩn hóa email, tìm account, khóa user và đọc lại; kiểm password hash, account/organization đang hoạt động và điều kiện pending legacy. Login không áp minimum6 của password mới, chỉ yêu cầu không rỗng/tối đa128 để tương thích tài khoản cũ.
+1. FE gọi `POST /api/auth/login` bằng email/password. BE chuẩn hóa email, tìm account và kiểm password/rehash trước khi mở transaction. Sau khi lấy khóa lifecycle rồi user, BE đọc lại identity, kiểm email/hash không đổi và account/organization đang hoạt động cùng điều kiện pending legacy. Session, cập nhật login và audit được ghi atomic với reset fence. Login không áp minimum6 của password mới, chỉ yêu cầu không rỗng/tối đa128 để tương thích tài khoản cũ. Xem [đo và tối ưu authentication](auth-performance.md).
 2. Password sai/email không có trả401 INVALID_CREDENTIALS; account/organization bị khóa 403 ACCOUNT_DISABLED. Account pending legacy chưa xác thực/hết hạn trả403 EMAIL_NOT_VERIFIED/REGISTRATION_EXPIRED. Account OTP mới đã verified tại register.
 3. Login thành công tạo session family mới, lưu hash refresh token, cập nhật lastLoginAt và audit cùng transaction. Response200 gồm accessToken/refreshToken/user; LoginResponse và TokenResponse không có field expiresAt. TTL do cấu hình Jwt quyết định; mặc định code15 phút access và7 ngày refresh.
 4. FE gửi Bearer vào API bảo vệ. Middleware kiểm chữ ký/issuer/audience/expiry rồi đọc DB để kiểm account, organization, role/tenant và family. Access JWT chưa tới exp vẫn bị từ chối sau khi family bị revoke.
@@ -74,6 +74,8 @@ Nguồn: [AuthController](../Fire3D/Fire3D.API/Controllers/AuthController.cs), [
 Nguồn: [LoginWithPasswordCommand](../Fire3D/Fire3D.Application/Authentication/Commands/LoginWithPassword/LoginWithPasswordCommand.cs), [RefreshTokenCommandHandler](../Fire3D/Fire3D.Application/Authentication/Commands/RefreshToken/RefreshTokenCommandHandler.cs), [ValidateSessionQueryHandler](../Fire3D/Fire3D.Application/Authentication/Queries/ValidateSession/ValidateSessionQueryHandler.cs), [LogoutAllCommand](../Fire3D/Fire3D.Application/Authentication/Commands/Logout/LogoutAllCommand.cs), [AuthenticationExtensions](../Fire3D/Fire3D.API/Extensions/AuthenticationExtensions.cs).
 
 ### Google: nhánh đang có và phần còn thiếu
+
+Exchange dùng Firebase Admin SDK với `checkRevoked=true`, bắt buộc `email_verified` dạng boolean true và provider `google.com`. Token invalid/expired/revoked hoặc sai provider trả401 INVALID_FIREBASE_TOKEN. Timeout 15 giây và lỗi tạm thời trả503 GOOGLE_PROVIDER_UNAVAILABLE, khác lỗi token; cancellation từ request không bị đổi thành401/503. Sau khóa lifecycle/user, kiểm lại đúng user sở hữu UID và trạng thái account/organization/pending legacy rồi mới cấp family. Mock/HTTP kiểm contract và mapping lỗi SDK; chưa gọi Firebase thật trong đợt này.
 
 FE gửi Firebase ID token dưới dạng JSON string tới `POST /api/auth/login-firebase`. UID đã link trả200 `{status:"Authenticated", authentication:{accessToken,refreshToken,user}}`; email local trùng nhưng UID chưa link trả409 ACCOUNT_LINK_REQUIRED; UID/email mới trả200 `{status:"OnboardingRequired"}`. Không tự tạo account hoặc link chỉ từ email trùng. Chưa có endpoint/proof onboarding completion hoặc explicit Google link để hoàn tất hai nhánh còn thiếu; không hướng dẫn FE coi OnboardingRequired là đã đăng nhập.
 
@@ -87,7 +89,7 @@ Nguồn: [ExchangeFirebaseTokenCommand](../Fire3D/Fire3D.Application/Authenticat
 | Google | `POST /api/auth/login-firebase`; UID đã liên kết trả `Authenticated`, email local trùng trả `ACCOUNT_LINK_REQUIRED`, Google mới trả `OnboardingRequired` và không tự tạo tài khoản | Chưa có endpoint onboarding/link tường minh để hoàn tất chọn loại tài khoản |
 | Profile | GET/PATCH cá nhân có ETag; PATCH sửa fullName/username/dob/gender/phoneNumber. GET/PATCH organization đã có cho OrganizationUser, ETag riêng. Avatar có decoder, candidate trước copy và cleanup/recovery worker. | Không coi schema Swagger trống là route thiếu; còn cần kiểm chứng provider/deployment và recovery đúng môi trường |
 | Reset password | Forgot tạo job bền vững; worker gửi Mailgun; reset tiêu thụ token, đổi hash, thu hồi phiên và ghi audit trong user transaction | Core local reset đã có code; cần đối chiếu bảng token với schema target và kiểm thử rollback/race. Chưa khẳng định Mailgun production đã gửi thật |
-| Change password | `POST /api/auth/change-password` kiểm tra mật khẩu hiện tại, lưu mật khẩu mới, vô hiệu token reset và thu hồi phiên trong user transaction | Đã có code; không gửi email; cần giữ kiểm tra rollback/session cũ khi đồng bộ schema |
+| Change password | `POST /api/auth/change-password` kiểm lại live family từ JWT/account/organization dưới khóa, kiểm password, invalidate reset local/legacy qua gate và revoke/audit atomic | PostgreSQL restricted-role/race/rollback có regression; migration/deployment cần nghiệm thu riêng |
 
 Chi tiết request/response hiện tại nằm ở [API guide](api-docs.md). Chi tiết worker/token/cấu hình nằm ở [password-reset.md](password-reset.md). Không copy contract endpoint mục tiêu thành route “đang có” nếu controller chưa triển khai.
 

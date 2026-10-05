@@ -24,7 +24,7 @@ The PayOS options section has `Enabled`, `ClientId`, `ApiKey`, `ChecksumKey`, `R
 
 ## Task 2: catalog và báo giá Building
 
-`20261002100000_AddBillingCatalogRevisions` thêm revision catalog, response receipt và SQL hardening: FK discount, tenant/requester/purpose bất biến từ Draft, thu hồi PUBLIC quotation grants, PayOS gate chỉ nhận số nguyên VND và kiểm tổ chức hoạt động. Migration từ chối role PayOS có login/quyền quản trị hoặc executor kế thừa ledger owner/direct payment DML; cần sửa cấu hình quyền trước khi áp, không tự cấp backend membership. `20261002100100_SyncBillingCatalogModel` chỉ đồng bộ metadata EF. Không cần reset dữ liệu. Bốn migration nền billing đã được áp trong lượt trước; các migration runtime PayOS mới trong lượt này chưa áp Supabase.
+`20261002100000_AddBillingCatalogRevisions` thêm revision catalog, response receipt và SQL hardening: FK discount, tenant/requester/purpose bất biến từ Draft, thu hồi PUBLIC quotation grants, PayOS gate chỉ nhận số nguyên VND và kiểm tổ chức hoạt động. Migration từ chối role PayOS có login/quyền quản trị hoặc executor kế thừa ledger owner/direct payment DML; cần sửa cấu hình quyền trước khi áp, không tự cấp backend membership. `20261002100100_SyncBillingCatalogModel` chỉ đồng bộ metadata EF. Không cần reset dữ liệu. Ở checkpoint đầu, bốn migration nền đã áp còn runtime chưa áp; bằng chứng bổ sung 03/10 đã áp runtime, nằm cuối tài liệu và [deployment](payos-deployment.md). Không đọc trạng thái checkpoint cũ như trạng thái hiện tại.
 
 | Method / route | Quyền | Header bắt buộc |
 | --- | --- | --- |
@@ -128,7 +128,7 @@ Final validation on this worktree:
 | Auth full suite, all configured test databases disposable loopback | After review fixes: 213 passed / 0 failed / 0 skipped, including Billing/PayOS; run independently of IFC |
 | IFC filtered regression | 104 passed / 0 failed / 0 skipped; Docker classes below excluded |
 | EF `has-pending-model-changes --no-build` (Task 5 evidence before follow-up fixes) | None; follow-up fixes add no migration or model changes |
-| EF runtime idempotent script generation (Task 5 evidence) | Pass; six additive migration records since SyncBillingCatalogModel, not applied to Supabase |
+| EF runtime idempotent script generation (Task 5 historical evidence) | Pass; six additive records since SyncBillingCatalogModel, not yet applied at that checkpoint; applied in the later authorized 03/10 check below |
 | Non-superuser runtime migration (Task 5 evidence) | Pass with dedicated schema-owner migration identity; preserves existing user/quotation data and restores temporary schema CREATE grants |
 
 The earlier Task 5 run had 202 passed / 3 failed / 0 skipped (205 total). Those failures were independently reproduced on detached baseline `f68c20e`: missing refresh rate limiting, Int64 assertion against Int32 generation, and unsupported PostgreSQL `min(uuid)`. The follow-up fixes resolve all three and add cancellation replay coverage. The final Auth/Billing/PayOS run passes all 213 tests; the user's root `AuthIntegrationTests.cs` modification remains untouched.

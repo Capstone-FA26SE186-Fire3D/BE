@@ -64,14 +64,14 @@ sequenceDiagram
     A-->>C: 204
     C->>A: POST /revisions/{id}/process
     A->>D: create job + audit + outbox event
-    Note over A,D: Current source writes placeholder payload_hash; align with the v7 event contract
+    Note over A,D: Enqueue gate derives tenant and canonical JSONB SHA-256 (schema 1)
     A-->>C: 202 /processing-jobs/{jobId}
     C->>A: GET job, QA, issues, artifacts, logs
     A->>D: tenant-scoped read
     A-->>C: persisted status/result (does not prove a worker ran)
 ```
 
-The API creates a durable job/outbox record, but this does not establish that an outbox dispatcher or production IFC consumer is running. The current BE store still writes a placeholder payload hash. Treat processing/QA output as unavailable until the event contract is valid and a worker is connected and verified.
+The API creates a durable job/audit/outbox record in one transaction through the canonical enqueue gate delivered by `AddIfcIntegrationOutbox`. This does not establish that a dispatcher or production IFC consumer is running. Processing/QA output remains unavailable until worker lease/result/provenance gates and delivery are connected and verified; see [IFC outbox](ifc-outbox.md).
 
 ## Event-driven target
 
@@ -112,4 +112,4 @@ These steps cover the event pipeline only; v7 product dependencies are tracked i
 5. Move email and FCM delivery to the same pattern. Password reset already uses a durable queue/worker pattern and is the reference for worker retries.
 6. Add integration tests for duplicate delivery, consumer crash after effect/before ACK, stale lease, tenant isolation and outbox retry.
 
-The current IFC process path creates the processing job, audit record and `ProcessingJobRequested` outbox row in one transaction, but its payload hash is a placeholder. It still needs the canonical envelope/hash, real dispatcher/consumer and gate-backed result path before it can be treated as a completed event-driven pipeline. For the task-by-task gaps and acceptance criteria, use the [BE implementation checklist](api-implementation-checklist.md).
+The current IFC process path creates job/audit/canonical tenant outbox in one transaction. A real dispatcher/consumer and gate-backed result path are still required before the event-driven pipeline is complete. For task gaps and acceptance criteria, use the [BE implementation checklist](api-implementation-checklist.md). Backend ACL and bounded refresh maintenance delivery are described in [database hardening](database-hardening.md) and [token cleanup](refresh-token-cleanup.md).

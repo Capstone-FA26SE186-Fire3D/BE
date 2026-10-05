@@ -41,13 +41,19 @@ Firebase confirm, không gửi `oobCode`. Link Firebase cũ không dùng đượ
 Token sống 30 phút, dùng một lần; reset thành công vô hiệu mọi token reset còn lại
 của user và thu hồi mọi refresh-token family, khiến access JWT cũ bị từ chối khi
 kiểm tra phiên. Hash mới, consume token, revoke và audit cùng một transaction dưới
-user advisory lock. Login xác minh hash dưới cùng lock nên không cấp phiên bằng
-mật khẩu cũ sau khi reset đã commit. Audit/DB failure rollback toàn bộ.
+lifecycle/user advisory lock. Login xác minh hash ngoài transaction và kiểm lại
+email/hash snapshot dưới khóa nên không cấp phiên bằng mật khẩu cũ sau khi reset
+đã commit. Audit/DB failure rollback toàn bộ.
 
-Forgot trả 202 chung kể cả email không tồn tại. Tài khoản Firebase cũ không có hash
-không thể đăng nhập local bằng mật khẩu Firebase cũ: chủ email dùng reset để đặt
-mật khẩu BE mới. Việc này không thay đổi mật khẩu Firebase. Chủ email của tài khoản
-Google cũng có thể thiết lập mật khẩu local qua cùng quy trình, giữ nguyên UID.
+Forgot trả 202 chung kể cả email không tồn tại, Google-only hoặc account/organization
+bị khóa. Chỉ account đã có password local và identity đang hoạt động mới đủ điều kiện.
+Google-only không nhận reset token và không được thêm password local qua luồng này.
+Worker kiểm lại lifecycle trước tạo link; reset kiểm lại dưới khóa trước consume token.
+
+Change-password nhận session family từ JWT, không từ JSON. Sau khi lấy khóa, BE
+kiểm lại family/account/organization trước mutation; request cũ đã đi qua middleware
+nhưng family vừa bị revoke trả401 và không thu hồi phiên login mới.
+Reset/change đánh dấu mọi token local và legacy của user đã dùng, bảo toàn lịch sử.
 
 Queue có cooldown một phút/email, lease hai phút, timeout việc 45 giây, tối đa năm
 lần thử và backoff. Email có thể lặp nếu Mailgun đã nhận nhưng worker chết trước ack.
@@ -63,6 +69,11 @@ anon/authenticated; cấp role backend fire3d_api/fet3d_backend_executor phù h�
 Hai bảng của 002 vẫn phục vụ queue và bảo vệ phiên với operation Firebase cũ; không
 xóa Pending cũ nếu chưa đối soát. Luồng local mới không tạo operation Firebase.
 Các script SQL này cần chạy riêng, không được thay bằng EF EnsureCreated.
+
+Migration additive `20261005090000_AddPasswordRecoveryGate` cung cấp function
+`invalidate_legacy_reset_tokens(uuid)`. Owner NOLOGIN chỉ SELECT/UPDATE(used_at)
+trên bảng legacy có RLS; API được EXECUTE, không cần quyền DELETE trực tiếp.
+Apply migration trước khi deploy binary dùng gate. Không tự áp lên database dùng chung.
 
 - `ConnectionStrings__DefaultConnection`: PostgreSQL backend connection.
 - `Jwt__Issuer`, `Jwt__Audience`, `Jwt__SigningKey`: JWT Fire3D; signing key base64 đủ độ dài.

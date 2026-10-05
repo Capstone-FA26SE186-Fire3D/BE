@@ -24,6 +24,17 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 
 ## A. Database và nền tảng dùng chung
 
+### DB-02 — P0/P1 · CODE/TEST · Backend ACL, IFC enqueue và token cleanup
+
+- **Đã sửa source:** Migration forward-only `HardenBackendObjectPermissions` chặn explicit Supabase anon/authenticated grants trên 6 bảng backend và PayOS SECURITY DEFINER entrypoints; giữ grant executor, thêm backend RLS và sửa default ACL của migration owner. `AddIfcIntegrationOutbox` giao canonical tenant enqueue; `AddRefreshCleanupGate` cho API dọn family hết retention mà không có direct DELETE. [Hardening](database-hardening.md), [outbox](ifc-outbox.md), [cleanup](refresh-token-cleanup.md).
+- **Kiểm chứng:** PostgreSQL cô lập có test quyền backend/executor, rollback/replay outbox, retention và lock recheck cleanup. Full-chain Auth fixture và non-superuser owner-transfer có kiểm tra riêng. Schema này không phải bootstrap toàn bộ v7.
+- **DB đã kiểm chứng:** 05/10/2026 áp đúng 3 migration lên Supabase hiện có, history 29→32; giữ 4 account/16 refresh token, executor grants và kiểm read-only bằng API identity giới hạn quyền. [Bằng chứng và giới hạn](database-hardening.md#deployment-evidence--2026-10-05). **Còn phải nghiệm thu:** Azure binary, latency thực tế, worker IFC/provider thật; DB update không chứng minh các phần này hoạt động. Quyền API không chuyển thành postgres.
+
+### AUTH-PERF — CODE/TEST · Đo latency và giảm round trip
+
+- Password verify/rehash ngoài lock, snapshot email/hash và lifecycle được kiểm lại dưới lock; login/session/audit và reset fence atomic. Middleware session authorization còn một SQL query, vẫn kiểm quyền live và family.
+- [Metric và giới hạn](auth-performance.md). Test không chứng minh p95 login Azure đã giảm; không thêm index trùng, giảm hash strength hay cache quyền. Google onboarding/link vẫn là AUTH-02 còn thiếu.
+
 ### DB-01 — P0 · GAP · Schema mapping
 
 - **Contract/current:** SQL v7 là đích; EF/migration/runtime chưa đồng bộ toàn bộ. `LocalPasswordReset` dùng `local_password_reset_tokens`, đã được v7 biểu diễn; EF vẫn giữ `password_reset_tokens` legacy. Chưa được suy môi trường hiện tại trống từ nhận định tháng 09; xem bằng chứng Supabase/PayOS phía trên.
@@ -47,6 +58,7 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 ### AUTH-02 — P0 · GAP · Google onboarding và link
 
 - **Contract/current:** [ExchangeFirebaseTokenCommand](../Fire3D/Fire3D.Application/Authentication/Commands/FirebaseLogin/ExchangeFirebaseTokenCommand.cs) xác minh Google và trả `OnboardingRequired` cho identity mới; chưa có token/endpoint onboarding chọn role hoặc link có chứng minh tài khoản local.
+- **Exchange đã củng cố:** [FirebaseIdentityProvider](../Fire3D/Fire3D.Infrastructure/Authentication/FirebaseIdentityProvider.cs) dùng SDK/revocation, Google provider và email verified, timeout15 giây;401 invalid khác503 unavailable. Recheck UID owner/lifecycle dưới khóa, giữ response Authenticated/OnboardingRequired/ACCOUNT_LINK_REQUIRED. [FirebaseGoogleVerificationTests](../Fire3D/Fire3D.AuthTests/FirebaseGoogleVerificationTests.cs) kiểm claims/revoked/timeout/cancellation; [GoogleExchangeHardeningTests](../Fire3D/Fire3D.AuthTests/GoogleExchangeHardeningTests.cs) kiểm ownership/lifecycle và không auto-link. Test SDK giả lập, không xác nhận Firebase production.
 - **Sửa code:** Thêm onboarding token ngắn hạn, hoàn tất Trainee/OrganizationUser và link explicit sau khi xác thực local. Lưu hash/expiry và kết quả hoàn tất để retry cùng input trả kết quả đã commit.
 - **Nghiệm thu:** Kiểm tra UID mới/đã link, email local chưa link, token hết hạn, retry cùng/khác input và hai request đồng thời. Không tạo user/organization trùng hoặc đổi role/tenant tài khoản đã link.
 
@@ -56,11 +68,11 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 - **Còn thiếu:** Kiểm chứng cleanup/recovery trên PostgreSQL/S3 cô lập. `AvatarService` đã gọi `ReserveCopyCandidateAsync` trước conditional S3 copy; `AvatarStore` lưu attempt/key/source ETag/lease và có cleanup cho candidate hết lease. Không lập task bổ sung lại đường ghi đã có.
 - **Nghiệm thu:** Lưu thành công trả ETag mới; ETag cũ không ghi đè thay đổi; không sửa được role/email/tenant/status; username, organization scope và quyền sở hữu object S3 được kiểm tra.
 
-### AUTH-04 — P1 · VERIFY · Reset và change password
+### AUTH-04 — P1 · CODE/TEST · Reset và change password
 
-- **Contract/current:** Forgot/reset gửi qua worker Mailgun; change xác minh mật khẩu cũ. [LocalPasswordReset](../Fire3D/Fire3D.Infrastructure/Authentication/LocalPasswordReset.cs) đã khóa user, consume token, đổi hash, revoke session và ghi audit trong transaction. Bảng token BE cần đối chiếu schema đích.
+- **Contract/current:** Forgot/reset gửi qua worker Mailgun; change xác minh mật khẩu cũ và live family lấy từ JWT dưới lifecycle/user lock. Reset/change consume/invalidate token local và legacy, đổi hash, revoke session và audit atomic. Migration `AddPasswordRecoveryGate` cấp EXECUTE gate legacy cho backend, giữ lịch sử và không cần direct DELETE. Forgot/link/reset kiểm lifecycle; Google-only không được thêm password qua reset. Lookup email dùng trim/lowercase tương thích index/dữ liệu legacy.
 - **Sửa code:** Giữ reset và change là hai luồng riêng. Hoàn tất mapping sang schema đích; kiểm tra rollback, race login/reset và mọi refresh-token family. Không coi có worker là bằng chứng Mailgun production đã gửi thành công.
-- **Nghiệm thu:** Token hết hạn/dùng lại thất bại; change sai mật khẩu hiện tại thất bại; lỗi DB/audit rollback toàn bộ; session cũ bị từ chối sau reset/change. Kiểm tra PostgreSQL riêng với provider Mailgun thật.
+- **Nghiệm thu:** Có PostgreSQL disposable regression cho restricted runtime role, reset replay/race/audit rollback, organization bị khóa, email legacy và change chờ khóa/family revoked. Migration database dùng chung và Mailgun/deployment thật cần nghiệm thu riêng; không đóng provider từ DB test.
 
 ### AUTH-05 — P1 · VERIFY · FCM device token
 
@@ -90,8 +102,8 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 
 ### IFC-01 — P0 · GAP · Outbox và worker result
 
-- **Contract/current:** [IfcWriteStore](../Fire3D/Fire3D.Infrastructure/Ifc/IfcWriteStore.cs) ghi `payload_hash = 'hash'`; worker result phải qua gate lease-bound và receipt theo Docs.
-- **Sửa code:** Sinh canonical envelope/hash đúng schema, dùng outbox entry point được phép và nối worker result qua gate kiểm tra current attempt/lease/provenance. Commit business effect và receipt trước ACK; worker không có DML trực tiếp.
+- **Contract/current:** [IfcWriteStore](../Fire3D/Fire3D.Infrastructure/Ifc/IfcWriteStore.cs) đã gọi canonical enqueue schema `1`; migration `AddIfcIntegrationOutbox` giao table/function/grants, tenant suy từ job và hash do PostgreSQL tính. Test PostgreSQL kiểm process, replay/conflict và rollback job/audit khi enqueue lỗi. [Chi tiết](ifc-outbox.md). **PARTIAL:** chưa đồng nghĩa worker/pipeline đã chạy.
+- **Sửa code còn lại:** Nối dispatcher/consumer và worker result qua gate kiểm current attempt/lease/provenance. Commit business effect và receipt trước ACK; worker không có DML trực tiếp. Gate retry/provenance/full schema v7 phải được giao và nghiệm thu riêng.
 - **Nghiệm thu:** Hash/envelope hợp lệ; duplicate delivery idempotent; sai hash, lease cũ hoặc attempt cũ bị từ chối; crash trước ACK replay không nhân đôi kết quả.
 
 ### IFC-02 — P1 · GAP · Readiness theo revision/version
