@@ -15,7 +15,8 @@ public sealed record AccountResponse(Guid Id, string Email, string? FullName,
     DateTime? EmailVerifiedAt = null, DateTime? RegistrationExpiresAt = null, long ProfileRevision = 1);
 public sealed record LoginResponse(string AccessToken, string RefreshToken, AccountResponse User);
 public sealed record TokenResponse(string AccessToken, string RefreshToken, AccountResponse User);
-public sealed record GoogleExchangeResponse(string Status, TokenResponse? Authentication = null);
+public sealed record GoogleExchangeResponse(string Status, TokenResponse? Authentication = null,
+    string? OnboardingToken = null, DateTime? ExpiresAt = null);
 public sealed record ForgotPasswordRequest(string Email);
 public sealed record ResetPasswordRequest(Guid Token, string NewPassword);
 public sealed record AuthError(string Code, string Message, int Status,

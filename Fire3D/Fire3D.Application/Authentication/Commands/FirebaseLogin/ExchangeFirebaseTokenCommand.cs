@@ -7,7 +7,7 @@ namespace Fire3D.Application.Authentication.Commands.FirebaseLogin;
 
 public record ExchangeFirebaseTokenCommand(string IdToken) : IRequest<AuthResult<GoogleExchangeResponse>>;
 public sealed class ExchangeFirebaseTokenCommandHandler(IAuthStore store, ITokenService tokens,
-    IIdentityProvider identityProvider, TimeProvider clock) : IRequestHandler<ExchangeFirebaseTokenCommand,AuthResult<GoogleExchangeResponse>>
+    IIdentityProvider identityProvider, TimeProvider clock, IGoogleOnboardingService onboarding) : IRequestHandler<ExchangeFirebaseTokenCommand,AuthResult<GoogleExchangeResponse>>
 {
     public async Task<AuthResult<GoogleExchangeResponse>> Handle(ExchangeFirebaseTokenCommand request,CancellationToken ct)
     {
@@ -30,7 +30,10 @@ public sealed class ExchangeFirebaseTokenCommandHandler(IAuthStore store, IToken
             // must collect the account type and any required Trainee/organization details.
             if (await store.FindUserByEmailAsync(email,ct) is not null)
                 return AuthResult<GoogleExchangeResponse>.Fail("ACCOUNT_LINK_REQUIRED","Sign in with your existing account. Explicit Google linking is required.",409);
-            return AuthResult<GoogleExchangeResponse>.Ok(new("OnboardingRequired"));
+            var proof = await onboarding.BeginAsync(identity, ct);
+            if (!proof.IsSuccess)
+                return AuthResult<GoogleExchangeResponse>.Fail(proof.Error!.Code, proof.Error.Message, proof.Error.Status, proof.Error.Errors);
+            return AuthResult<GoogleExchangeResponse>.Ok(new("OnboardingRequired", OnboardingToken: proof.Value!.Token, ExpiresAt: proof.Value.ExpiresAt));
         }
         await using var tx = await store.BeginUserTransactionAsync(existing.Id,ct);
         var user = await store.FindUserByFirebaseUidAsync(identity.Uid,ct);

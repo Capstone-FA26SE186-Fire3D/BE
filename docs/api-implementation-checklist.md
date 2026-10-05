@@ -33,7 +33,7 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 ### AUTH-PERF — CODE/TEST · Đo latency và giảm round trip
 
 - Password verify/rehash ngoài lock, snapshot email/hash và lifecycle được kiểm lại dưới lock; login/session/audit và reset fence atomic. Middleware session authorization còn một SQL query, vẫn kiểm quyền live và family.
-- [Metric và giới hạn](auth-performance.md). Test không chứng minh p95 login Azure đã giảm; không thêm index trùng, giảm hash strength hay cache quyền. Google onboarding/link vẫn là AUTH-02 còn thiếu.
+- [Metric và giới hạn](auth-performance.md). Test không chứng minh p95 login Azure đã giảm; không thêm index trùng, giảm hash strength hay cache quyền. Google onboarding/link có source và regression, AUTH-02 chưa nghiệm thu Firebase/client/deployment.
 
 ### DB-01 — P0 · GAP · Schema mapping
 
@@ -52,14 +52,14 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 ### AUTH-01 — P1 · PARTIAL · Đăng ký local
 
 - **Contract/current:** FE nhập form trước → OTP → một nút gọi verify-otp rồi register với toàn bộ form + proof. `POST /api/auth/registration/request-otp` tạo challenge/job gửi mã nhưng không tạo identity; `POST /api/auth/resend-verification` gửi OTP mới sau cooldown và vô hiệu mã/proof cũ. Email đã có account trả 409 EMAIL_EXISTS + errors.email, không enqueue. Ba route register consume proof trong transaction tạo role/tenant server-owned và audit; form sai không consume proof. `/check-email/` là demo OTP, FE thật cần tích hợp riêng. `/verify-email` chỉ dành link pending legacy. Migration `20261003030000_AddNormalizedRegistrationEmail` bổ sung unique email trim/lowercase và guard legacy duplicates, không xóa/gộp dữ liệu; migration OTP/username cũ giữ nguyên. `/api/auth/register` là alias Trainee. [Test tay](registration-payos-manual-test.md); mức nghiệm thu DB/provider/FE phải ghi riêng.
-- **Còn thiếu:** Google onboarding/link và username cá nhân tùy chọn cho đăng ký OrganizationUser. PATCH profile tổ chức đã có ở `OrganizationProfileController`; email verification, profile ETag, đổi username và avatar cần nghiệm thu provider/deployment riêng.
+- **Còn thiếu:** username cá nhân tùy chọn cho đăng ký OrganizationUser. PATCH profile tổ chức đã có ở `OrganizationProfileController`; email verification, profile ETag, đổi username và avatar cần nghiệm thu provider/deployment riêng.
 - **Nghiệm thu cần chạy:** HTTP/PostgreSQL disposable kiểm tra proof không tạo user trước verify, proof chỉ dùng một lần, hai role, organization transaction và collision username khác hoa/thường. Còn cần test race concurrent cùng username và chuyển dữ liệu production trước khi đóng hoàn toàn.
 
-### AUTH-02 — P0 · GAP · Google onboarding và link
+### AUTH-02 — CODE/TEST · Google onboarding và link; deployment chưa nghiệm thu
 
-- **Contract/current:** [ExchangeFirebaseTokenCommand](../Fire3D/Fire3D.Application/Authentication/Commands/FirebaseLogin/ExchangeFirebaseTokenCommand.cs) xác minh Google và trả `OnboardingRequired` cho identity mới; chưa có token/endpoint onboarding chọn role hoặc link có chứng minh tài khoản local.
+- **Contract/current:** [ExchangeFirebaseTokenCommand](../Fire3D/Fire3D.Application/Authentication/Commands/FirebaseLogin/ExchangeFirebaseTokenCommand.cs) xác minh Google và trả `OnboardingRequired` cho identity mới; đã có proof15 phút và `/api/auth/google/onboarding/complete`, tạo Google-only Trainee/OrganizationUser + receipt/audit atomic, replay24 giờ. `/api/me/link-google` yêu cầu live family/local password/verified Google; link mới revoke sessions/reset proofs và tăng profile revision + audit atomic, giữ role/tenant/email, cùng UID replay với session mới không duplicate audit.
 - **Exchange đã củng cố:** [FirebaseIdentityProvider](../Fire3D/Fire3D.Infrastructure/Authentication/FirebaseIdentityProvider.cs) dùng SDK/revocation, Google provider và email verified, timeout15 giây;401 invalid khác503 unavailable. Recheck UID owner/lifecycle dưới khóa, giữ response Authenticated/OnboardingRequired/ACCOUNT_LINK_REQUIRED. [FirebaseGoogleVerificationTests](../Fire3D/Fire3D.AuthTests/FirebaseGoogleVerificationTests.cs) kiểm claims/revoked/timeout/cancellation; [GoogleExchangeHardeningTests](../Fire3D/Fire3D.AuthTests/GoogleExchangeHardeningTests.cs) kiểm ownership/lifecycle và không auto-link. Test SDK giả lập, không xác nhận Firebase production.
-- **Sửa code:** Thêm onboarding token ngắn hạn, hoàn tất Trainee/OrganizationUser và link explicit sau khi xác thực local. Lưu hash/expiry và kết quả hoàn tất để retry cùng input trả kết quả đã commit.
+- **Đã triển khai:** proof15 phút và replay24 giờ, Google-only Trainee/OrganizationUser; link explicit không auto-match email, không replacement/chiếm UID; lock lifecycle → UID → user.
 - **Nghiệm thu:** Kiểm tra UID mới/đã link, email local chưa link, token hết hạn, retry cùng/khác input và hai request đồng thời. Không tạo user/organization trùng hoặc đổi role/tenant tài khoản đã link.
 
 ### AUTH-03 — P1 · PARTIAL · Profile, ETag và avatar
@@ -203,3 +203,5 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 5. **AI-01, LEARN-01, RAG-01, REPORT-01:** request/quota và retrieval đã cấp quyền; indexing cần approved/published version, analytics cần session/result chuẩn.
 
 Task chỉ hoàn tất khi contract, handler/store/schema/gate và role/tenant đúng; có kiểm tra happy path cùng lỗi/race/replay phù hợp trên database test; tài liệu API phản ánh source mới; và PR ghi lệnh, kết quả, phần bị mock/bỏ qua, cùng giới hạn provider. Không coi build, route tồn tại hoặc mock test là bằng chứng provider/production đã hoạt động. Đợt đồng bộ này chỉ cập nhật BE docs; không sửa bộ `Docs` chuẩn.
+
+Google onboarding/link: source/DI/controller + PostgreSQL migration/constraints/RLS, atomic create/replay/race/rollback đã có kiểm thử; Firebase thật, client và deployment chưa kiểm chứng. Migration chưa áp Supabase. Hướng dẫn: [google-auth-manual-test.md](google-auth-manual-test.md).

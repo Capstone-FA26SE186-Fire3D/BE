@@ -26,7 +26,7 @@ public class LocalAuthenticationTests
         var provider=ResetProxy.For<Fire3D.Application.Authentication.Abstractions.IIdentityProvider>((_,_)=>
             Task.FromResult(new Fire3D.Application.Authentication.Abstractions.VerifiedIdentity("google-uid",local.Email)));
         var tokens=ResetProxy.For<ITokenService>((_,_)=>throw new Exception("Must not issue session"));
-        var handler=new Fire3D.Application.Authentication.Commands.FirebaseLogin.ExchangeFirebaseTokenCommandHandler(accounts,tokens,provider,TimeProvider.System);
+        var handler=new Fire3D.Application.Authentication.Commands.FirebaseLogin.ExchangeFirebaseTokenCommandHandler(accounts,tokens,provider,TimeProvider.System,GoogleOnboardingTestDoubles.Proofs());
         Assert.Equal("ACCOUNT_LINK_REQUIRED",(await handler.Handle(new("id-token"),default)).Error?.Code);
         Assert.Null(local.FirebaseUid);
     }
@@ -40,7 +40,7 @@ public class LocalAuthenticationTests
         var provider=ResetProxy.For<Fire3D.Application.Authentication.Abstractions.IIdentityProvider>((_,_)=>
             Task.FromResult(new Fire3D.Application.Authentication.Abstractions.VerifiedIdentity("google-uid","new@example.test")));
         var tokens=ResetProxy.For<ITokenService>((_,_)=>throw new Exception("Must not issue session"));
-        var handler=new Fire3D.Application.Authentication.Commands.FirebaseLogin.ExchangeFirebaseTokenCommandHandler(accounts,tokens,provider,TimeProvider.System);
+        var handler=new Fire3D.Application.Authentication.Commands.FirebaseLogin.ExchangeFirebaseTokenCommandHandler(accounts,tokens,provider,TimeProvider.System,GoogleOnboardingTestDoubles.Proofs());
 
         var result=await handler.Handle(new("id-token"),default);
 

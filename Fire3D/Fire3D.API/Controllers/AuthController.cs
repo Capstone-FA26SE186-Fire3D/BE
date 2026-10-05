@@ -35,11 +35,13 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
 
     /// <summary>Exchange a verified Google Firebase ID token; does not create or automatically link accounts.</summary>
     /// <remarks>Body is a JSON string. Google provider, verified email and revocation checks are required.
-    /// 200: Authenticated or OnboardingRequired; 409: ACCOUNT_LINK_REQUIRED/ACCOUNT_CHANGED;
+    /// 200: Authenticated or OnboardingRequired with a 15-minute onboardingToken;
+    /// complete via /api/auth/google/onboarding/complete. 409: ACCOUNT_LINK_REQUIRED/ACCOUNT_CHANGED;
     /// 401: invalid, expired or revoked identity; 503 GOOGLE_PROVIDER_UNAVAILABLE: provider timeout/outage (15 second deadline).</remarks>
     [HttpPost("login-firebase")]
     [AllowAnonymous]
     [ProducesResponseType<GoogleExchangeResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(429)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]

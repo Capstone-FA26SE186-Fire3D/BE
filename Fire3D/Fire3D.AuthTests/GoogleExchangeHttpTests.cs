@@ -28,7 +28,7 @@ public sealed class GoogleExchangeHttpTests
         var provider = ResetProxy.For<IIdentityProvider>((_, _) => throw new GoogleIdentityException(failure));
         var store = ResetProxy.For<IAuthStore>((_, _) => throw new Exception("Must not access DB"));
         var tokens = ResetProxy.For<ITokenService>((_, _) => throw new Exception("Must not issue tokens"));
-        var handler = new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System);
+        var handler = new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, GoogleOnboardingTestDoubles.Proofs());
         var sender = ResetProxy.For<ISender>((_, args) => handler.Handle((ExchangeFirebaseTokenCommand)args[0]!, (CancellationToken)args[1]!));
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {

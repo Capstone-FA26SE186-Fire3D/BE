@@ -35,14 +35,14 @@ Phạm vi: hai task password recovery/session và Google exchange. Không nghi�
 | Trường hợp | Kỳ vọng |
 |---|---|
 | Google UID đã liên kết account active | 200 Authenticated, token Fire3D và role/tenant từ DB |
-| UID/email mới | 200 OnboardingRequired; chưa tạo account/organization và chưa có JWT |
+| UID/email mới | 200 OnboardingRequired + onboardingToken/expiry15 phút; chưa tạo account/organization/JWT |
 | Email local có sẵn nhưng UID chưa link | 409 ACCOUNT_LINK_REQUIRED; không tự link |
 | Token sai/expired/revoked; provider password/anonymous; email chưa verified | 401 INVALID_FIREBASE_TOKEN |
 | Account/organization bị khóa dưới khóa | 403 ACCOUNT_DISABLED |
 | UID đổi chủ lúc chờ khóa | 409 ACCOUNT_CHANGED, không cấp session cho owner mới |
 | Provider mạng/cert fetch/timeout15 giây | 503 GOOGLE_PROVIDER_UNAVAILABLE |
 
-Chỉ dùng Firebase token cùng project deploy, không dùng Google access token hoặc JWT Fire3D làm input. Revocation/timeout/UID race được kiểm qua SDK giả lập và mock; kiểm provider thật cần môi trường Firebase test riêng. Client hủy request giữ cancellation, không đổi thành lỗi token. Không log claims/token. Onboarding completion/link explicit vẫn chưa triển khai.
+Chỉ dùng Firebase token cùng project deploy, không dùng Google access token hoặc JWT Fire3D làm input. Revocation/timeout/UID race được kiểm qua SDK giả lập và mock; kiểm provider thật cần môi trường Firebase test riêng. Client hủy request giữ cancellation, không đổi thành lỗi token. Không log claims/token. Onboarding completion và explicit link đã có sau phần exchange nền; xem [Google onboarding/link test tay](google-auth-manual-test.md).
 
 ## Bằng chứng tự động
 
