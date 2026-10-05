@@ -86,6 +86,8 @@ public sealed class GoogleOnboardingService(Fire3DDbContext db, IAuthStore accou
             conflict = await accounts.TryCreateOrganizationWithUserAsync(organization, user, ct);
         }
         else conflict = await accounts.TryCreateTraineeAsync(user, ct);
+        if (conflict == RegisterConflict.EmailTaken)
+            return AuthResult<GoogleOnboardingCompletion>.Fail("ACCOUNT_LINK_REQUIRED", "Sign in locally before linking Google.", 409);
         if (conflict != RegisterConflict.None) return GoogleAuthRules.Conflict<GoogleOnboardingCompletion>(conflict);
         var consumed = await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE public.auth_google_onboarding_sessions SET requested_role={request.AccountType.ToString()}::public.user_role_enum,

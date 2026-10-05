@@ -1,6 +1,7 @@
 using Fire3D.Application.Authentication;
 using Fire3D.Application.Authentication.Abstractions;
 using Fire3D.Domain.Enums;
+using Fire3D.Domain.Entities;
 using Fire3D.Infrastructure.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -146,6 +147,26 @@ public sealed class GoogleOnboardingPostgresTests
         Assert.Equal("ACCOUNT_LINK_REQUIRED", (await Service(context).CompleteAsync(Trainee(token), default)).Error?.Code);
         Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM auth_google_onboarding_sessions WHERE completed_at IS NOT NULL"));
         Assert.Equal(3L, await db.Scalar("SELECT count(*) FROM users"));
+    }
+
+    [BillingPostgresFact]
+    public async Task Local_registration_winning_between_lookup_and_insert_returns_link_required()
+    {
+        await using var db = await BillingDatabase.Create(false); await Prepare(db); var token = await Begin(db);
+        await using var context = db.Context(); var store = new AuthStore(context);
+        async Task<RegisterConflict> Register(object?[] args)
+        {
+            // A second connection commits a local registration after onboarding checked the email.
+            await db.Sql("INSERT INTO users(id,email,role,username,is_active,created_at,updated_at,password_hash) VALUES(gen_random_uuid(),'new@example.test','Trainee','race_local_user',true,now(),now(),'fake-local-hash')");
+            return await store.TryCreateTraineeAsync((User)args[0]!, (CancellationToken)args[1]!);
+        }
+        var interleaved = ResetProxy.For<IAuthStore>((method, args) => method == nameof(IAuthStore.TryCreateTraineeAsync)
+            ? Register(args) : typeof(IAuthStore).GetMethod(method)!.Invoke(store, args)!);
+        var result = await new GoogleOnboardingService(context, interleaved, TimeProvider.System).CompleteAsync(Trainee(token), default);
+        Assert.Equal("ACCOUNT_LINK_REQUIRED", result.Error?.Code);
+        Assert.Equal(4L, await db.Scalar("SELECT count(*) FROM users"));
+        Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM users WHERE firebase_uid IS NOT NULL"));
+        Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM auth_google_onboarding_sessions WHERE completed_at IS NOT NULL"));
     }
 
     [BillingPostgresFact]

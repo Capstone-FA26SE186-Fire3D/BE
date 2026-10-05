@@ -107,6 +107,7 @@ public class ServiceRegistrationTests
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IIdentityProvider>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IGoogleOnboardingService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IGoogleLinkService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<Fire3DSessionIssuer>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRegistrationOtpService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRegistrationOtpDeliveryQueue>());
