@@ -10,7 +10,11 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 - ✅ API local tạo checkout/QR PayOS thật 100.000 VND, create201/replay200 cùng checkout/order; chưa chuyển tiền.
 - ✅ Azure Swagger/OpenAPI/health/return/cancel200; preflight OTP và PayOS cho cả hai domain FE204, có CORS đúng. Create thiếu Bearer401, webhook thiếu chữ ký400, OTP/resend email sai400 có lỗi theo field.
 - ❌ Chưa nghiệm thu worker/executor trên Azure, gửi OTP thật, webhook hợp lệ, Paid/Applied và provisioning/entitlement thật.
-- ❌ Swagger Avatar cần multipart field `file`; PATCH profile schema trống; enum đang mô tả integer trái JSON tên enum; required registrationToken/If-Match và response thành công GET PayOS chưa đầy đủ. Chưa đóng các finding này bằng việc cập nhật Markdown.
+- Finding Swagger tại baseline deployment 03/10: multipart/PATCH/enum/proof/header sai hoặc thiếu. Phần **auth** đã sửa source bằng schema/operation transformer và có contract test ngày 05/10; binary/OpenAPI deployment mới chưa kiểm chứng. Response GET PayOS và các module ngoài auth không thuộc đợt này.
+
+## Cập nhật auth source/test — 05/10/2026
+
+[Checklist 28 endpoint auth](auth-api-checklist.md) ghi riêng code/test/provider. Avatar đã chặn lease hết hạn và có PostgreSQL recovery/rollback/race; OpenAPI auth khai báo đúng schema PATCH, multipart file, proof bắt buộc, enum tên, If-Match và installation proof. Google source đã có onboarding/link; chưa áp migration mới lên Supabase hoặc test Firebase/S3 thật. Không dùng tình trạng deployment lịch sử để đánh dấu binary mới đã nghiệm thu.
 
 ## Baseline và trạng thái
 

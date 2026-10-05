@@ -9,13 +9,20 @@ namespace Fire3D.API.Controllers;
 [ApiController]
 [Route("api/me/avatar")]
 [Authorize]
+[ProducesResponseType<ProblemDetails>(400)]
+[ProducesResponseType<ProblemDetails>(401)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AvatarController(IAvatarService avatars) : ControllerBase
 {
+    /// <summary>Uploads a private avatar using multipart field file and the profile ETag.</summary>
     [HttpPost("upload")]
     [Consumes("multipart/form-data")]
     [RequestFormLimits(MultipartBodyLengthLimit = AvatarUploadRules.MaxBytes + 64 * 1024)]
     [ProducesResponseType<AvatarResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(412)]
+    [ProducesResponseType<ProblemDetails>(428)]
+    [ProducesResponseType<ProblemDetails>(503)]
     public async Task<ActionResult<AvatarResponse>> Upload([FromForm] IFormFile? file,
         [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
     {
@@ -40,6 +47,9 @@ public sealed class AvatarController(IAvatarService avatars) : ControllerBase
 
     [HttpPost("complete")]
     [ProducesResponseType<AvatarResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(412)]
+    [ProducesResponseType<ProblemDetails>(428)]
     public async Task<ActionResult<AvatarResponse>> Complete(CompleteAvatarUploadRequest request,
         [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
     {
@@ -52,6 +62,7 @@ public sealed class AvatarController(IAvatarService avatars) : ControllerBase
 
     [HttpGet]
     [ProducesResponseType<AvatarResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(404)]
     public async Task<ActionResult<AvatarResponse>> Get(CancellationToken ct)
     {
         var result = await avatars.GetAvatarAsync(User.GetActorId(), ct);
@@ -62,6 +73,8 @@ public sealed class AvatarController(IAvatarService avatars) : ControllerBase
 
     [HttpDelete]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(412)]
+    [ProducesResponseType<ProblemDetails>(428)]
     public async Task<IActionResult> Delete([FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
     {
         if (!ProfileEtag.TryParse(ifMatch, out var revision)) return EtagProblem(ifMatch);

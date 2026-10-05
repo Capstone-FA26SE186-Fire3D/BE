@@ -31,6 +31,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
 builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>()
+    .AddSchemaTransformer<AuthProfileSchemaTransformer>()
+    .AddOperationTransformer<AuthOperationTransformer>()
     .AddOperationTransformer<BillingOperationTransformer>());
 builder.Services.AddHealthChecks();
 

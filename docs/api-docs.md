@@ -13,7 +13,7 @@ OpenAPI tại host Azure tự báo build `d785937e5948f31486df66740a1f31ccd9ce25
 - Schema enum UserGender/UserRole đang mô tả integer trong khi JSON runtime cấu hình enum theo tên; gửi tên enum theo contract.
 - `registrationToken` của register và `If-Match` của Avatar upload chưa đánh dấu required; BE vẫn yêu cầu chúng. GET trạng thái PayOS chưa mô tả response thành công đầy đủ.
 
-Đây là lỗi tài liệu OpenAPI còn cần sửa code generator/metadata; đợt cập nhật tài liệu này chưa sửa runtime. [Kết quả Azure và cấu hình CORS](payos-deployment.md) phân biệt kiểm tra HTTP với nghiệm thu provider thật.
+Đây là các lỗi ghi nhận trên binary deployment ngày 03/10. Source auth ngày 05/10 đã sửa schema/metadata cho PATCH, multipart, enum, proof và header; xem [checklist auth](auth-api-checklist.md). Chưa kiểm OpenAPI sau khi deploy binary mới; response PayOS và module ngoài auth không thuộc đợt sửa này. [Kết quả Azure và cấu hình CORS](payos-deployment.md) phân biệt kiểm tra HTTP với nghiệm thu provider thật.
 
 ## 1. Quy ước tích hợp
 
@@ -94,6 +94,8 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 ## 2. Authentication
 
 Luồng và bằng chứng source chi tiết tại [authentication.md](authentication.md): cả Trainee và OrganizationUser dùng form → OTP → proof → register → login; JWT chỉ được cấp tại login/refresh hoặc Google UID đã liên kết. Bảng dưới liệt kê API, không dùng số endpoint lịch sử để kết luận auth hoàn tất.
+
+[Checklist 28 endpoint auth](auth-api-checklist.md) tách code/test/provider và có contract test đối chiếu OpenAPI. Swagger source hiện hiển thị đúng field PATCH/null semantics, multipart `file`, enum tên, registrationToken và header bắt buộc. Production Swagger chỉ đổi sau deploy binary này; không suy từ Markdown rằng deployment đã cập nhật. [Avatar test và signed S3 URL](avatar-manual-test.md).
 
 | Method | Path | Quyền | Thành công |
 | --- | --- | --- | --- |

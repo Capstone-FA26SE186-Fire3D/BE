@@ -73,6 +73,12 @@ Nguồn: [AuthController](../Fire3D/Fire3D.API/Controllers/AuthController.cs), [
 
 Nguồn: [LoginWithPasswordCommand](../Fire3D/Fire3D.Application/Authentication/Commands/LoginWithPassword/LoginWithPasswordCommand.cs), [RefreshTokenCommandHandler](../Fire3D/Fire3D.Application/Authentication/Commands/RefreshToken/RefreshTokenCommandHandler.cs), [ValidateSessionQueryHandler](../Fire3D/Fire3D.Application/Authentication/Queries/ValidateSession/ValidateSessionQueryHandler.cs), [LogoutAllCommand](../Fire3D/Fire3D.Application/Authentication/Commands/Logout/LogoutAllCommand.cs), [AuthenticationExtensions](../Fire3D/Fire3D.API/Extensions/AuthenticationExtensions.cs).
 
+## Profile/Avatar và contract Swagger
+
+[Checklist toàn bộ endpoint auth](auth-api-checklist.md) phân biệt source/test và provider/deployment. OpenAPI dùng metadata authorization, server tương đối `/`; schema transformer mô tả converter-backed PATCH và proof/enum, operation transformer hiển thị multipart `file` cùng header bắt buộc. `/api/organizations/me` yêu cầu OrganizationUser ở metadata và vẫn kiểm actor/tenant/lifecycle trong handler.
+
+Personal PATCH: omitted giữ nguyên; null xóa DOB/gender/phone, null fullName/username giữ nguyên. Organization PATCH: omitted giữ nguyên, supplied null/rỗng bị từ chối. If-Match lấy từ GET đúng profile; missing428, malformed400, stale412. Avatar candidate được ghi trước copy, lease kiểm theo clock DB sau khóa, finalize/delete/audit/cleanup atomic; test recovery không chứng minh AWS production. [Test Swagger và signed URL không cần API Bearer](avatar-manual-test.md).
+
 ### Google: exchange, onboarding và explicit link
 
 Exchange dùng Firebase Admin SDK với `checkRevoked=true`, bắt buộc `email_verified` dạng boolean true và provider `google.com`. Token invalid/expired/revoked hoặc sai provider trả401 INVALID_FIREBASE_TOKEN. Timeout 15 giây và lỗi tạm thời trả503 GOOGLE_PROVIDER_UNAVAILABLE, khác lỗi token; cancellation từ request không bị đổi thành401/503. Sau khóa lifecycle/user, kiểm lại đúng user sở hữu UID và trạng thái account/organization/pending legacy rồi mới cấp family. Mock/HTTP kiểm contract và mapping lỗi SDK; chưa gọi Firebase thật trong đợt này.

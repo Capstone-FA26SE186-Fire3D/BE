@@ -221,6 +221,9 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     [ProducesResponseType<AccountResponse>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(412)]
+    [ProducesResponseType<ProblemDetails>(428)]
     public async Task<ActionResult<AccountResponse>> UpdateMe(
         Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileRequest request,
         [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
@@ -257,10 +260,11 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(400)]
-    public async Task<IActionResult> RevokeDevice(string deviceUuid, CancellationToken ct)
+    public async Task<IActionResult> RevokeDevice(string deviceUuid,
+        [FromHeader(Name = "X-Installation-Key")] string? installationKey, CancellationToken ct)
     {
         var result = await sender.Send(
-        new Fire3D.Application.Users.Commands.RegisterDevice.RevokeDeviceCommand(User.GetActorId(), User.GetSessionFamilyId(), deviceUuid, Request.Headers["X-Installation-Key"].FirstOrDefault()), ct);
+        new Fire3D.Application.Users.Commands.RegisterDevice.RevokeDeviceCommand(User.GetActorId(), User.GetSessionFamilyId(), deviceUuid, installationKey), ct);
         return result.IsSuccess ? NoContent() : ResetProblem(result.Error!);
     }
 
