@@ -13,7 +13,7 @@ namespace Fire3D.API.Controllers;
 
 [ApiController]
 [Route("api/organizations/me")]
-[Authorize]
+[Authorize(Roles = "OrganizationUser")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class OrganizationProfileController(ISender sender) : ControllerBase
 {

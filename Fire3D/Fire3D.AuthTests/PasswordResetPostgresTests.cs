@@ -244,11 +244,18 @@ public sealed class PasswordResetPostgresTests
         await database.Sql($"INSERT INTO users(id,email,role) VALUES ('{userId}','avatar-race@example.com','Trainee')");
         await database.Sql($"INSERT INTO avatar_upload_intents(id,user_id,staging_object_key,content_type,expected_size_bytes,expires_at,created_at) VALUES ('{intentId}','{userId}','avatars/staging/test','image/png',1024,now()+interval '5 minutes',now())");
 
+        var bothReserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reservationCount = 0;
         var outcomes = await Task.WhenAll(Enumerable.Range(0, 2).Select(async attempt =>
         {
             await using var context = database.Context();
             var store = new AvatarStore(context);
             var reservation = await store.ReserveCopyCandidateAsync(intentId, userId, 1, "etag", DateTime.UtcNow, default);
+            Assert.True(reservation.Reserved);
+            if (Interlocked.Increment(ref reservationCount) == 2) bothReserved.SetResult();
+            // Race the final writes after both requests have valid candidates; otherwise the
+            // winner can consume the intent before the other reserve and Candidate is null.
+            await bothReserved.Task.WaitAsync(TimeSpan.FromSeconds(10));
             return await store.FinalizeUploadAsync(intentId, userId, reservation.Candidate!.AttemptId, 1,
                 reservation.Candidate.ObjectKey, DateTime.UtcNow, default);
         }));
