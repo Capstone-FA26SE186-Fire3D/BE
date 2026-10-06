@@ -122,10 +122,12 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
             ), issued AS (
               INSERT INTO public.auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at)
               SELECT @token,id,@family,@hash,@now,@expires FROM updated RETURNING id
+            ), audited AS (
+              INSERT INTO public.audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,created_at)
+              SELECT @audit,updated.id,@organization,'User','Login','users',updated.id,@correlation,@now FROM updated CROSS JOIN issued
             )
-            INSERT INTO public.audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,created_at)
-            SELECT @audit,updated.id,@organization,'User','Login','users',updated.id,@correlation,@now FROM updated CROSS JOIN issued
-            RETURNING id
+            -- Audit is insert-only for the API role; return the user row instead of reading audit columns.
+            SELECT id FROM updated
             """,(NpgsqlConnection)db.Database.GetDbConnection(),(NpgsqlTransaction)db.Database.CurrentTransaction.GetDbTransaction());
         command.Parameters.AddWithValue("user",user.Id);command.Parameters.AddWithValue("now",now);
         command.Parameters.AddWithValue("password",NpgsqlTypes.NpgsqlDbType.Text,(object?)rehashedPassword??DBNull.Value);
