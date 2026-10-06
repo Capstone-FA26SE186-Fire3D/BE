@@ -21,39 +21,53 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     private Guid ActorId => User.GetActorId();
     private Guid? OrganizationId => User.GetOrganizationId();
 
+    /// <summary>Creates a Building in a live organization with atomic audit.</summary>
+    /// <remarks>OrganizationUser uses their database tenant. PlatformAdmin must select organizationId in the body.
+    /// The organizationId query parameter is a deprecated alias; conflicting body/query values return 400.
+    /// Validation returns code VALIDATION_ERROR with errors keyed by field.</remarks>
     [HttpPost]
+    [ProducesResponseType<BuildingResponse>(201)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [Authorize(Roles = "PlatformAdmin,OrganizationUser")]
     public async Task<ActionResult<BuildingResponse>> CreateBuilding(CreateBuildingRequest request, [FromQuery] Guid? organizationId, CancellationToken ct)
     {
-        var result = await sender.Send(new CreateBuildingCommand(ActorId, organizationId ?? OrganizationId ?? Guid.Empty, request), ct);
-        return result.IsSuccess ? Created($"/api/buildings/{result.Value!.Id}", result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
+        var result = await sender.Send(new CreateBuildingCommand(ActorId, organizationId, request), ct);
+        return result.IsSuccess ? Created($"/api/buildings/{result.Value!.Id}", result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     [HttpGet]
-    public async Task<ActionResult<PageResponse<BuildingSummaryResponse>>> ListBuildings([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] bool? isActive = null, CancellationToken ct = default)
+    [Authorize(Roles = "PlatformAdmin,OrganizationUser")]
+    public async Task<ActionResult<PageResponse<BuildingSummaryResponse>>> ListBuildings([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] bool? isActive = null, [FromQuery] Guid? organizationId = null, CancellationToken ct = default)
     {
-        var result = await sender.Send(new ListBuildingsQuery(ActorId, (OrganizationId ?? Guid.Empty), new BuildingFilter(page, pageSize, search, isActive)), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
+        var result = await sender.Send(new ListBuildingsQuery(ActorId, organizationId, new BuildingFilter(page, pageSize, search, isActive)), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = "PlatformAdmin,OrganizationUser")]
     public async Task<ActionResult<BuildingResponse>> GetBuilding(Guid id, CancellationToken ct)
     {
-        var result = await sender.Send(new GetBuildingQuery(ActorId, (OrganizationId ?? Guid.Empty), id), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
+        var result = await sender.Send(new GetBuildingQuery(ActorId, null, id), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "PlatformAdmin,OrganizationUser")]
     public async Task<ActionResult<BuildingResponse>> UpdateBuilding(Guid id, UpdateBuildingRequest request, [FromQuery] Guid? organizationId, CancellationToken ct)
     {
-        var result = await sender.Send(new UpdateBuildingCommand(ActorId, organizationId ?? OrganizationId ?? Guid.Empty, id, request), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
+        var result = await sender.Send(new UpdateBuildingCommand(ActorId, organizationId, id, request), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "PlatformAdmin,OrganizationUser")]
     public async Task<ActionResult<BuildingSummaryResponse>> DeleteBuilding(Guid id, [FromQuery] Guid? organizationId, CancellationToken ct)
     {
-        var result = await sender.Send(new SetBuildingActiveCommand(ActorId, organizationId ?? OrganizationId ?? Guid.Empty, id, false), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
+        var result = await sender.Send(new SetBuildingActiveCommand(ActorId, organizationId, id, false), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     [HttpPost("{id:guid}/revisions/upload-url")]
@@ -73,12 +87,12 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
-    /// <summary>Danh sách revision IFC của Building, có phân trang.</summary>
+    /// <summary>Danh sÃ¡ch revision IFC cá»§a Building, cÃ³ phÃ¢n trang.</summary>
     /// <remarks>
-    /// OrganizationUser chỉ xem tổ chức của mình; PlatformAdmin được xem Building đích.
-    /// Role/tenant lấy từ DB; Trainee bị từ chối. page mặc định 1; pageSize mặc định 20, tối đa 100.
-    /// Response gồm items,totalCount,page,pageSize. Building hợp lệ chưa có revision trả items rỗng.
-    /// Building không tồn tại, bị archive hoặc khác tenant trả 404. Không trả raw IFC/storage key.
+    /// OrganizationUser chá»‰ xem tá»• chá»©c cá»§a mÃ¬nh; PlatformAdmin Ä‘Æ°á»£c xem Building Ä‘Ã­ch.
+    /// Role/tenant láº¥y tá»« DB; Trainee bá»‹ tá»« chá»‘i. page máº·c Ä‘á»‹nh 1; pageSize máº·c Ä‘á»‹nh 20, tá»‘i Ä‘a 100.
+    /// Response gá»“m items,totalCount,page,pageSize. Building há»£p lá»‡ chÆ°a cÃ³ revision tráº£ items rá»—ng.
+    /// Building khÃ´ng tá»“n táº¡i, bá»‹ archive hoáº·c khÃ¡c tenant tráº£ 404. KhÃ´ng tráº£ raw IFC/storage key.
     /// </remarks>
     [HttpGet("{id:guid}/revisions")]
     [ProducesResponseType<PageResponse<RevisionResponse>>(200)]
@@ -111,6 +125,6 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
 
         return result.IsSuccess 
             ? Ok(result.Value)
-            : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 }

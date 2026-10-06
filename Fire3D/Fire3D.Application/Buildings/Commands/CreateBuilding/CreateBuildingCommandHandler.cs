@@ -12,19 +12,26 @@ internal sealed class CreateBuildingCommandHandler(IBuildingStore store, IAuthSt
         var request = command.Request;
         var name = request.Name?.Trim();
         
-        if (string.IsNullOrEmpty(name) || name.Length > 200 || request.TotalFloors < 1 || (request.Contact is not null && string.IsNullOrWhiteSpace(request.Contact.ContactName)))
-            return AuthResult<BuildingResponse>.Fail("VALIDATION_ERROR", "Name is required (max 200) and TotalFloors must be >= 1.", 400);
-        if (!await BuildingAuthorization.CanMutateAsync(accounts, command.ActorId, command.OrganizationId, ct))
+        var errors = BuildingValidation.Validate(name, request.BuildingType, request.TotalFloors, request.Location, request.Contact);
+        var actor = await accounts.FindUserAsync(command.ActorId, ct);
+        var alias = command.OrganizationId == Guid.Empty ? null : command.OrganizationId;
+        if (request.OrganizationId == Guid.Empty || (request.OrganizationId.HasValue && alias.HasValue && request.OrganizationId != alias))
+            errors["organizationId"] = ["Body and query organizationId must identify the same non-empty organization."];
+        var organizationId = request.OrganizationId ?? alias ?? actor?.OrganizationId;
+        if (actor?.Role == Fire3D.Domain.Enums.UserRole.PlatformAdmin && !organizationId.HasValue)
+            errors["organizationId"] = ["PlatformAdmin must select organizationId in the request body."];
+        if (errors.Count > 0)
+            return AuthResult<BuildingResponse>.Fail("VALIDATION_ERROR", "Building validation failed.", 400, errors);
+        if (!organizationId.HasValue || !await BuildingAuthorization.CanMutateAsync(accounts, command.ActorId, organizationId.Value, ct))
             return AuthResult<BuildingResponse>.Fail("FORBIDDEN", "An active organization scope is required.", 403);
-
         var now = clock.GetUtcNow().UtcDateTime;
         var buildingId = Guid.NewGuid();
         
         var building = new Building
         {
             Id = buildingId,
-            OrganizationId = command.OrganizationId,
-            Name = name,
+            OrganizationId = organizationId.Value,
+            Name = name!,
             BuildingType = request.BuildingType?.Trim(),
             TotalFloors = request.TotalFloors,
             IsActive = true,

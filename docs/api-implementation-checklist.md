@@ -212,3 +212,7 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 Task chỉ hoàn tất khi contract, handler/store/schema/gate và role/tenant đúng; có kiểm tra happy path cùng lỗi/race/replay phù hợp trên database test; tài liệu API phản ánh source mới; và PR ghi lệnh, kết quả, phần bị mock/bỏ qua, cùng giới hạn provider. Không coi build, route tồn tại hoặc mock test là bằng chứng provider/production đã hoạt động. Đợt đồng bộ này chỉ cập nhật BE docs; không sửa bộ `Docs` chuẩn.
 
 Google onboarding/link: source/DI/controller + PostgreSQL migration/constraints/RLS, atomic create/replay/race/rollback đã có kiểm thử; Firebase thật, client và deployment chưa kiểm chứng. Migration chưa áp Supabase. Hướng dẫn: [google-auth-manual-test.md](google-auth-manual-test.md).
+
+## Building mutation — code và test trong đợt API được chọn
+
+POST body `organizationId`/alias query, admin PUT/DELETE derive tenant, validation nested theo field đã triển khai. Unit/HTTP và PostgreSQL chạy migration history thật, gồm runtime audit INSERT-only, rollback audit và race khóa lifecycle được ghi trong `building-manual-test.md`. Access/participation, IFC worker, readiness/approval, playtest và package build vẫn là các task riêng; không suy hoàn tất từ Building CRUD. Supabase/deployment chưa cập nhật trong đợt này.

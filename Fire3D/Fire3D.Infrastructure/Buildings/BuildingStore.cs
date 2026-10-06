@@ -9,16 +9,16 @@ namespace Fire3D.Infrastructure.Buildings;
 
 public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
 {
-    public Task<Building?> FindBuildingAsync(Guid id, Guid organizationId, CancellationToken ct) =>
+    public Task<Building?> FindBuildingAsync(Guid id, Guid? organizationId, CancellationToken ct) =>
         db.Buildings
             .Include(x => x.BuildingLocation)
             .Include(x => x.BuildingContact)
             .AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == id && x.OrganizationId == organizationId && x.DeletedAt == null, ct);
+            .SingleOrDefaultAsync(x => x.Id == id && (organizationId == null || x.OrganizationId == organizationId) && x.DeletedAt == null, ct);
 
-    public async Task<PageResponse<BuildingSummaryResponse>> ListBuildingsAsync(Guid organizationId, BuildingFilter filter, CancellationToken ct)
+    public async Task<PageResponse<BuildingSummaryResponse>> ListBuildingsAsync(Guid? organizationId, BuildingFilter filter, CancellationToken ct)
     {
-        var query = db.Buildings.AsNoTracking().Where(x => x.OrganizationId == organizationId && x.DeletedAt == null);
+        var query = db.Buildings.AsNoTracking().Where(x => (organizationId == null || x.OrganizationId == organizationId) && x.DeletedAt == null);
         
         if (filter.IsActive.HasValue) query = query.Where(x => x.IsActive == filter.IsActive.Value);
         

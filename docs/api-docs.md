@@ -381,7 +381,7 @@ OrganizationResponse: id, name, slug, isActive, createdAt, updatedAt. List nhậ
 | GET | `/api/buildings/{id}/trainings` | Editor | 200 TrainingDto[] |
 | GET | `/api/revisions/{id}` | Editor | 200 RevisionResponse |
 
-POST/PUT building cùng body; PUT không phải partial PATCH:
+POST/PUT dùng các trường Building dưới đây; POST thêm `organizationId` tùy chọn trong body. PlatformAdmin bắt buộc chọn tổ chức đích; OrganizationUser mặc định dùng tenant lấy từ DB. PUT không phải partial PATCH:
 
 ```json
 {
@@ -399,9 +399,9 @@ POST/PUT building cùng body; PUT không phải partial PATCH:
 }
 ```
 
-Name bắt buộc tối đa 200 sau trim, totalFloors >= 1. buildingType/location/contact nullable. Nếu có contact, contactName trắng/null bị trả 400 trước Trim. Tọa độ nullable decimal; geojson là chuỗi, không phải object. Chưa validate đầy đủ tọa độ/GeoJSON/contact; không giả định mọi DB exception đều chuyển thành 400.
+Name bắt buộc tối đa 200 sau trim, totalFloors >= 1. buildingType/location/contact nullable. Nếu có contact, contactName trắng/null bị trả 400 trước Trim. Tọa độ nullable decimal; geojson là chuỗi, không phải object. Latitude [-90,90], longitude [-180,180], tối đa 8 chữ số thập phân. GeoJSON kiểm geometry/Feature, cấu trúc coordinates, tọa độ WGS84 hữu hạn và vòng polygon đóng. Contact email hợp lệ, tên tối đa 255, role 100, phone 50; buildingType 100, city/district 255. Lỗi trả `400 VALIDATION_ERROR` với `errors` theo field và traceId.
 
-PUT với location/contact null giữ nested data hiện có, không xóa. Query organizationId chỉ chọn scope đích, vẫn kiểm quyền từ DB; mặc định tenant claim. OrganizationId chưa có trong body.
+PUT với location/contact null giữ nested data hiện có, không xóa. Query `organizationId` của POST là alias deprecated; body/query khác nhau trả 400. PUT/DELETE admin lấy tenant từ Building, không cần gửi lại query. GET list admin có scope toàn nền tảng rõ ràng khi bỏ organizationId hoặc lọc query; OrganizationUser chỉ xem tenant của mình. Mutation khóa lifecycle trước Building, kiểm lại actor/organization dưới khóa, ghi Building/location/contact/audit trong cùng transaction. DELETE là archive; replay không ghi audit mới.
 
 BuildingResponse: id, name, buildingType, totalFloors, isActive, organizationId, createdAt, updatedAt, location, contact. Nested response thêm id vào các trường request tương ứng. BuildingSummaryResponse: id, name, buildingType, totalFloors, isActive, createdAt.
 

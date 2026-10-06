@@ -5,8 +5,8 @@ namespace Fire3D.Application.Buildings;
 
 public interface IBuildingStore
 {
-    Task<Building?> FindBuildingAsync(Guid id, Guid organizationId, CancellationToken ct);
-    Task<PageResponse<BuildingSummaryResponse>> ListBuildingsAsync(Guid organizationId, BuildingFilter filter, CancellationToken ct);
+    Task<Building?> FindBuildingAsync(Guid id, Guid? organizationId, CancellationToken ct);
+    Task<PageResponse<BuildingSummaryResponse>> ListBuildingsAsync(Guid? organizationId, BuildingFilter filter, CancellationToken ct);
     Task<bool> TryCreateBuildingAsync(Building building, BuildingLocation? location, BuildingContact? contact, CancellationToken ct);
     Task<bool> CreateBuildingWithAuditAsync(Building building, BuildingLocation? location, BuildingContact? contact, Guid actorId, DateTime now, CancellationToken ct);
     Task UpdateBuildingAsync(Building building, BuildingLocation? location, BuildingContact? contact, CancellationToken ct);

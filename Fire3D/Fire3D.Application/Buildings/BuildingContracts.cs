@@ -10,7 +10,8 @@ public sealed record CreateBuildingRequest(
     string? BuildingType, 
     int TotalFloors, 
     CreateBuildingLocationRequest? Location,
-    CreateBuildingContactRequest? Contact);
+    CreateBuildingContactRequest? Contact,
+    Guid? OrganizationId = null);
 
 public sealed record UpdateBuildingRequest(
     string Name, 
