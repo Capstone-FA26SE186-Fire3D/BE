@@ -108,8 +108,7 @@ public sealed class OrganizationPhoneHttpTests
         await GoogleOnboardingPostgresTests.Prepare(db);
         await BackendDatabasePermissionsTests.Apply(db, "AddPreRegistrationOtp");
         await db.Sql("GRANT UPDATE ON auth_refresh_tokens TO fire3d_api;");
-        // Target-schema fixture for conflict mapping; migration execution is covered separately.
-        await db.Sql("CREATE UNIQUE INDEX organizations_phone_normalized_key ON public.organizations (regexp_replace(phone,'[^0-9+]','','g')) WHERE phone IS NOT NULL");
+        await OrganizationPhoneMigrationTests.Apply(db);
     }
 
     internal static WebApplicationFactory<Program> Factory(BillingDatabase db)
