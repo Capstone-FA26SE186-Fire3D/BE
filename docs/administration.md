@@ -6,6 +6,8 @@ Phase 1 scope: PlatformAdmin creates organizations/accounts, reads paginated lis
 
 ## Endpoints
 
+Hồ sơ self-service OrganizationUser: `GET/PATCH /api/organizations/me` trả ETag và PATCH yêu cầu If-Match. Phone đã được tổ chức khác giữ trả409 `ORGANIZATION_PHONE_EXISTS` và `errors.phoneNumber`, không tăng revision/ghi audit. Giữ số hiện tại hợp lệ; omitted giữ nguyên, null/rỗng400, missing428/malformed400/stale412. Unique canonical phone gồm cả inactive/soft-deleted, legacy/admin NULL vẫn tồn tại; không đoán mã quốc gia hoặc gộp với phone cá nhân. [Migration và test tay](organization-phone-manual-test.md). Các route administration bên dưới vẫn giữ role/response hiện hành.
+
 All endpoints require a valid PlatformAdmin bearer token. OrganizationUser and Trainee receive 403; missing/invalid credentials receive 401.
 
 Authorization is centralized in API/Authorization/AuthorizationPolicies.cs. Controllers require authentication by default, and administration uses the PlatformAdministration policy. Application handlers independently check the current actor. See [the Swagger authorization walkthrough](testing-authorization.md) for the role matrix and manual tests.

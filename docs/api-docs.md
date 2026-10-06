@@ -93,6 +93,8 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 
 ## 2. Authentication
 
+Số điện thoại tổ chức unique sau normalization giữa mọi tổ chức, gồm inactive/soft-deleted; legacy NULL được giữ. Trim/bỏ khoảng trắng ASCII, `-`, `(`, `)`; giữ dấu `+` đầu và 6–15 chữ số. Không suy `0…` tương đương `+84…`; phone cá nhân độc lập. Khi index `organizations_phone_normalized_key` đã được triển khai, register organization và Google organization completion trả409 `ORGANIZATION_PHONE_EXISTS`/`errors.organizationPhoneNumber`; PATCH organization trả cùng code với `errors.phoneNumber`. Conflict rollback và giữ proof chưa hết hạn; PATCH không tăng revision/audit. Không thêm endpoint hoặc thay response thành công. [Preflight/deployment và test tay](organization-phone-manual-test.md).
+
 Luồng và bằng chứng source chi tiết tại [authentication.md](authentication.md): cả Trainee và OrganizationUser dùng form → OTP → proof → register → login; JWT được cấp tại login/refresh, Google UID đã liên kết hoặc lần complete Google onboarding đầu tiên. Bảng dưới liệt kê API, không dùng số endpoint lịch sử để kết luận auth hoàn tất.
 
 [Checklist 28 endpoint auth](auth-api-checklist.md) tách code/test/provider và có contract test đối chiếu OpenAPI. Swagger source hiện hiển thị đúng field PATCH/null semantics, multipart `file`, enum tên, registrationToken và header bắt buộc. Production Swagger chỉ đổi sau deploy binary này; không suy từ Markdown rằng deployment đã cập nhật. [Avatar test và signed S3 URL](avatar-manual-test.md).

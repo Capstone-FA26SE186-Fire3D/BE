@@ -10,7 +10,7 @@ Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn th
 | POST | `/api/auth/login-firebase` | ✅ | Public; Firebase ID token JSON string; Google verified/revocation |
 | POST | `/api/auth/register` | ✅ | Alias Trainee; deprecated, cùng proof/validation |
 | POST | `/api/auth/register/trainee` | ✅ | Public; toàn bộ form + registrationToken; server gán role |
-| POST | `/api/auth/register/organization` | ✅ | Public; form organization + registrationToken; owner/org atomic |
+| POST | `/api/auth/register/organization` | ✅ | Public; form organization + registrationToken; owner/org atomic; phone conflict409/errors.organizationPhoneNumber |
 | POST | `/api/auth/registration/request-otp` | ✅ | Public; email; gửi mã đầu, không tạo account |
 | POST | `/api/auth/registration/verify-otp` | ✅ | Public; email/OTP sáu số; trả proof, không tạo account |
 | POST | `/api/auth/resend-verification` | ✅ | Public; gửi OTP mới sau cooldown; không gửi link mới |
@@ -28,7 +28,7 @@ Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn th
 | POST | `/api/auth/google/onboarding/complete` | ✅ | Public + proof15m; trainee/organization (alias tên role);201 authentication; cùng input replay409 AlreadyCompleted → exchange recovery |
 | POST | `/api/me/link-google` | ✅ | Bearer + currentPassword + Google token; giữ role/tenant/email |
 | GET | `/api/organizations/me` | ✅ | OrganizationUser; profile tổ chức + ETag |
-| PATCH | `/api/organizations/me` | ✅ | OrganizationUser + If-Match; name/address/phoneNumber |
+| PATCH | `/api/organizations/me` | ✅ | OrganizationUser + If-Match; name/address/phoneNumber; phone conflict409/errors.phoneNumber |
 | POST | `/api/me/avatar/upload` | ✅ | Bearer + If-Match; multipart IFormFile `file` |
 | POST | `/api/me/avatar/upload-intent` | ✅ | Bearer; contentType/contentLength; signed PUT5m |
 | POST | `/api/me/avatar/complete` | ✅ | Bearer + If-Match; uploadId; receipt replay24h |
@@ -43,6 +43,7 @@ Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn th
 | OTP/register | ✅ Form → OTP → proof → account → login, quota/cooldown/collision có regression | ❌ FE form hoàn chỉnh và inbox OTP trên bản deploy mới |
 | Google | ✅ Nested proof + alias; session atomic; bearer/refresh/recovery HTTP; RLS/race/rollback/lock timeout PostgreSQL; provider giả | ❌ Migration onboarding Supabase, Firebase project thật, FE/Mobile integration |
 | Profile/organization | ✅ Converter giữ omitted/null; OpenAPI có field, header và role đúng; ETag regression | ❌ Client/deployment PATCH trên binary mới |
+| Organization phone | ✅ Cả email/Google/PATCH map đúng constraint; PostgreSQL migration/history, runtime role, race/rollback/proof retry và lifecycle có test | ❌ Preflight/index Supabase và smoke test binary đích; không suy từ source rằng DB đã áp index |
 | Avatar | ✅ Decoder, pin ETag, bounded/fragmented stream; PG lease/rollback/recovery/cleanup/race và SDK signing offline | ❌ IAM/CORS/object AWS thật, crash/timeout production, tab ẩn danh đọc ảnh thật |
 | Device | ✅ Installation proof/family/rotate/revoke có source/test | ❌ FCM thật và client secure installation storage |
 | Swagger | ✅ Schema PATCH/multipart/proof/enum/headers và security metadata; relative server `/`; HTTP contract checks | ❌ OpenAPI/binary deploy mới; không chứng minh provider hoạt động |
@@ -52,6 +53,7 @@ Không đánh dấu toàn bộ audit hoàn tất từ bảng này. Google unlink
 ## Test tay sau khi deploy
 
 - [Google onboarding/link](google-auth-manual-test.md).
+- [Trùng số điện thoại tổ chức, proof retry và PATCH ETag](organization-phone-manual-test.md).
 - [Local password recovery/Google exchange](auth-local-google-manual-test.md).
 - [OTP/register cả hai loại tài khoản](registration-payos-manual-test.md) — chỉ dùng phần register khi test auth.
 - [Avatar và link S3 trong tab ẩn danh](avatar-manual-test.md).

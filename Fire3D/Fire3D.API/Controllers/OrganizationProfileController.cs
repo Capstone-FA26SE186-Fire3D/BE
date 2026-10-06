@@ -31,6 +31,11 @@ public sealed class OrganizationProfileController(ISender sender) : ControllerBa
         return Ok(result.Value);
     }
 
+    /// <summary>Updates the current organization's name, address or phone with If-Match.</summary>
+    /// <remarks>Omitted fields are unchanged; explicit null/empty is invalid. Keeping the current phone is valid.
+    /// Phone reserved by another organization (including inactive/deleted) returns 409 ORGANIZATION_PHONE_EXISTS
+    /// with errors.phoneNumber; revision/audit remain unchanged. Missing If-Match returns 428,
+    /// malformed 400, stale 412. Canonical normalization does not infer country codes.</remarks>
     [HttpPatch]
     [ProducesResponseType<OrganizationProfileResponse>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
