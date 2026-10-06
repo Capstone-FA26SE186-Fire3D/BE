@@ -23,7 +23,20 @@ public sealed class ProcessingRuntimeStore(Fire3DDbContext db, IConfiguration co
         await using var connection=new NpgsqlConnection(configuration.GetConnectionString("ProcessingExecutor"));await connection.OpenAsync(ct);
         await using var cmd=new NpgsqlCommand("SELECT processing_worker_gate(@action,@job,@input)::text",connection);
         cmd.Parameters.AddWithValue("action",action);cmd.Parameters.AddWithValue("job",job);cmd.Parameters.AddWithValue("input",NpgsqlDbType.Jsonb,input.GetRawText());
-        var value=Parse(await cmd.ExecuteScalarAsync(ct));return Error(value) is { } error ? new(default,error) : AuthResult<JsonElement>.Ok(value);
+        var value=Parse(await cmd.ExecuteScalarAsync(ct));
+        if(Error(value) is { } error) return new(default,error);
+        if(action=="Claim")
+        {
+            await using var context=new NpgsqlCommand("SELECT processing_worker_context(@attempt,@token)::text",connection);
+            context.Parameters.AddWithValue("attempt",value.GetProperty("attemptId").GetGuid());context.Parameters.AddWithValue("token",value.GetProperty("leaseToken").GetGuid());
+            if(await context.ExecuteScalarAsync(ct) is string snapshot)
+            {
+                var node=System.Text.Json.Nodes.JsonNode.Parse(value.GetRawText())!;
+                foreach(var field in System.Text.Json.Nodes.JsonNode.Parse(snapshot)!.AsObject())node[field.Key]=field.Value?.DeepClone();
+                value=JsonSerializer.SerializeToElement(node);
+            }
+        }
+        return AuthResult<JsonElement>.Ok(value);
     }
     public async Task<JsonElement> ExecuteAsync(string action,string? key,Guid? token,Guid? receipt,CancellationToken ct)
     {

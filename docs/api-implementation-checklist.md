@@ -224,3 +224,6 @@ Hai route initiate dùng chung intent/receipt và SHA-256 dự kiến. Complete 
 ### Selected scope Task 3 — processing/outbox/HTTP worker (source/test; provider pending)
 
 Process dùng verified source + Idempotency-Key và SQL gate atomic. Machine-only claim/renew/output/complete/fail, restricted executor, dispatcher receipt-before-ACK, lease fencing/recovery và retry gate đã triển khai. Artifacts/QA/issues chỉ lấy current accepted attempt; alias additive giữ các cột legacy. Xem `processing-worker.md`. Worker nghiệm thu bằng fake HTTP, chưa có IFC/Blender/Unity thật; dispatcher mặc định tắt. Readiness/approval/package runtime/playtest và publish chưa được suy hoàn tất từ kết quả này.
+
+
+Scenario authoring: implemented durable create/snapshot/package-build receipts, draft ETag 428/400/412, locked numbering, immutable canonical v7 snapshot/rubric/learner fields and accepted geometry/runtime references. PostgreSQL actual-history plus fake package output tests ran; real Unity and deployment remain unchecked. See scenario-authoring.md. Structural validation alone is not readiness.

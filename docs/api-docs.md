@@ -722,3 +722,6 @@ Tối đa 500 item, id GUID khác rỗng và không trùng; ifcGlobalId tối đ
 Thiếu If-Match: 428 `PRECONDITION_REQUIRED`; sai định dạng (wildcard/weak/multiple tag không được hỗ trợ): 400; ETag cũ: 412 `PRECONDITION_FAILED`; anchor không tồn tại trong revision: 400 `INVALID_ANCHOR`. Sau 412, FE GET lại và cho người dùng đối chiếu thay đổi, không tự ghi đè.
 
 PUT khóa revision, kiểm tra version rồi append annotation_sets + audit_logs trong cùng transaction PostgreSQL. Lỗi audit rollback annotation. Mỗi bản cũ bất biến; chưa có event/outbox cho annotations vì chưa có downstream consumer trong phạm vi này. Không cần bảng mới nếu deployment đã có schema đích annotation_sets và các cột provenance của processing jobs/artifacts; chưa chạy migration Supabase trong task này.
+
+
+Authoring hardening: draft PUT/snapshot require quoted xmin If-Match (428/400/412); scenario/draft/snapshot/package-build use durable idempotency receipts. V7 snapshots require explicit rubric/learner fields; structural validation does not establish readiness. See [scenario authoring](scenario-authoring.md). Isolated PostgreSQL/HTTP/fake package tests ran; real Unity and deployment remain unverified.

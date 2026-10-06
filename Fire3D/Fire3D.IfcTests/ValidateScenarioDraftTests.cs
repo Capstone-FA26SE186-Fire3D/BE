@@ -21,7 +21,7 @@ public sealed class ValidateScenarioDraftTests
     public void Structural_validator_accepts_a_valid_draft()
     {
         var state = JsonNode.Parse("""
-            {"spawnPoints":[{"x":1,"y":2,"z":3,"rotation":0}],"hazards":[],"scoringConfig":{"baseScore":100,"timeLimitSeconds":60,"penaltyPerMistake":5},"routingConfig":{"evacuationRoutes":["exit-a"]}}
+            {"spawnPoints":[{"x":1,"y":2,"z":3,"rotation":0}],"hazards":[],"scoringConfig":{"baseScore":100,"timeLimitSeconds":60,"penaltyPerMistake":5},"routingConfig":{"evacuationRoutes":["exit-a"]},"learningObjectives":["Evacuate"],"learnerInstructions":"Follow exits","rubric":{"schema_version":"1","pass_threshold":1,"criteria":[{"id":"exit","metric":"exit","mandatory":true,"weight":1,"operator":"gte","threshold":1}]}}
             """)!;
         Assert.Empty(ScenarioDraftStructuralValidator.Validate(state));
     }

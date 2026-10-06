@@ -17,10 +17,12 @@ public sealed record ScenarioVersionConfigurationResponse(JsonNode Spawn, JsonNo
 public sealed record ScenarioVersionDetailResponse(Guid Id, Guid ScenarioId, Guid RevisionId, Guid BuildingId,
     Guid OrganizationId, int VersionNumber, string Name, string SchemaVersion, string AlgorithmVersion,
     long RandomSeed, int TimeLimitSeconds, int ReplanIntervalSeconds, string ScenarioHash,
-    ScenarioVersionConfigurationResponse Configuration, DateTime CreatedAt);
+    ScenarioVersionConfigurationResponse Configuration, DateTime CreatedAt, JsonNode? StateSnapshot = null, JsonNode? Rubric = null, JsonNode? LearningObjectives = null, string? LearnerInstructions = null);
 
 public interface IScenarioReadStore
 {
+    Task<IReadOnlyList<Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ScenarioDraftValidationIssue>> ValidateReferencesAsync(Guid revision,JsonNode state,CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ScenarioDraftValidationIssue>>([]);
     Task<PageResponse<ScenarioSummaryResponse>?> ListBuildingScenariosAsync(
         Guid buildingId, Guid? organizationId, int page, int pageSize, CancellationToken ct);
     Task<ScenarioDetailResponse?> GetScenarioAsync(Guid scenarioId, Guid? organizationId, CancellationToken ct);

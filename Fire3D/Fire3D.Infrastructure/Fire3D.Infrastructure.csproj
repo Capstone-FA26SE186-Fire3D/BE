@@ -12,6 +12,7 @@
 
 
 	<ItemGroup>
+        <EmbeddedResource Include="Persistence/Sql/ScenarioAuthoring.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ScenarioAuthoring.sql" />
         <EmbeddedResource Include="Persistence/Sql/ProcessingWorker.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ProcessingWorker.sql" />
         <EmbeddedResource Include="Persistence/Sql/IfcUploads.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.IfcUploads.sql" />
         <EmbeddedResource Include="Persistence/Sql/BackendObjectPermissions.sql" LogicalName="Fire3D.Infrastructure.Persistence.BackendObjectPermissions.sql" />

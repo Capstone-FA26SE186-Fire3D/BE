@@ -42,9 +42,15 @@ public sealed class ProcessingWorkerController(IProcessingWorkerGate gate,IOptio
                 {
                     foreach(var name in new[]{"artifactType","objectKey","schemaVersion","validatorVersion"})if(!Text(output,name,name=="objectKey"?1024:100))errors["output."+name]=["A nonempty bounded value is required."];
                     if(!Hash(output,"sha256Hash"))errors["output.sha256Hash"]=["A SHA-256 hash is required."];
-                    if(!output.TryGetProperty("sizeBytes",out var size)||!size.TryGetInt64(out var bytes)||bytes<=0)errors["output.sizeBytes"]=["A positive size is required."];
+                    if(!output.TryGetProperty("sizeBytes",out var size)||size.ValueKind!=JsonValueKind.Number||!size.TryGetInt64(out var bytes)||bytes<=0)errors["output.sizeBytes"]=["A positive size is required."];
                     if(!output.TryGetProperty("outcome",out var outcome)||outcome.ValueKind!=JsonValueKind.String||outcome.GetString() is not("Passed" or "Failed"))errors["output.outcome"]=["Use Passed or Failed."];
                     if(!output.TryGetProperty("metadata",out var metadata)||metadata.ValueKind!=JsonValueKind.Object)errors["output.metadata"]=["Metadata must be an object."];
+                    if(Text(output,"artifactType",100)&&output.GetProperty("artifactType").GetString()=="unity_package" && output.TryGetProperty("metadata",out var package)&&package.ValueKind==JsonValueKind.Object)
+                    {
+                        foreach(var name in new[]{"buildTarget","protocolVersion","manifestSchemaVersion"}) if(!Text(package,name,100)) errors["output.metadata."+name]=["Package runtime metadata is required."];
+                        if(!Text(package,"minRuntimeVersion",100)||!System.Text.RegularExpressions.Regex.IsMatch(package.GetProperty("minRuntimeVersion").GetString()!,@"^[0-9]+\.[0-9]+\.[0-9]+$"))errors["output.metadata.minRuntimeVersion"]=["Use a three-part runtime version."];
+                        if(!package.TryGetProperty("requiredCapabilities",out var caps)||caps.ValueKind!=JsonValueKind.Array||caps.GetArrayLength()>100||caps.EnumerateArray().Any(x=>x.ValueKind!=JsonValueKind.String||string.IsNullOrWhiteSpace(x.GetString())||x.GetString()!.Length>100))errors["output.metadata.requiredCapabilities"]=["Use an array of supported capability names."];
+                    }
                     if(!output.TryGetProperty("issues",out var issues)||issues.ValueKind!=JsonValueKind.Array||issues.GetArrayLength()>1000)errors["output.issues"]=["Issues must be an array with at most 1000 entries."];
                     else
                     {

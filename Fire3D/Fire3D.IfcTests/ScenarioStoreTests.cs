@@ -19,7 +19,7 @@ public class ScenarioStoreTests : IAsyncLifetime
         private PostgreSqlContainer _dbContainer;
     public ScenarioStoreTests()
     {
-        _dbContainer = new PostgreSqlBuilder("postgres:15-alpine").Build();
+        _dbContainer = new PostgreSqlBuilder("postgres:17-alpine").Build();
     }
     public async Task InitializeAsync() => await _dbContainer.StartAsync();
     public async Task DisposeAsync() => await _dbContainer.DisposeAsync();
@@ -28,7 +28,7 @@ public class ScenarioStoreTests : IAsyncLifetime
     {
         var options = IfcTestOptions.Create(_dbContainer.GetConnectionString());
         var db = new Fire3DDbContext(options);
-        db.Database.EnsureCreated();
+        db.Database.Migrate();
         // Seed prerequisites
         var orgId = Guid.NewGuid();
         var buildingId = Guid.NewGuid();
@@ -58,7 +58,7 @@ public class ScenarioStoreTests : IAsyncLifetime
 
         // 1. Create Scenario (D09)
         var createReq = new CreateScenarioRequest(building.Id, "Fire Evacuation Scenario");
-        var scenarioResult = await store.CreateScenarioAsync(actorId, building.Id, org.Id, createReq, CancellationToken.None);
+        var scenarioResult = await store.CreateScenarioAsync(actorId, building.Id, org.Id, createReq, CancellationToken.None,"scenario-create");
         
         Assert.True(scenarioResult.IsSuccess);
         var scenarioId = scenarioResult.Value;
@@ -66,7 +66,7 @@ public class ScenarioStoreTests : IAsyncLifetime
 
         // 2. Create Draft (D10)
         var draftReq = new CreateScenarioDraftRequest(revision.Id);
-        var draftResult = await store.CreateScenarioDraftAsync(actorId, scenarioId, org.Id, draftReq, CancellationToken.None);
+        var draftResult = await store.CreateScenarioDraftAsync(actorId, scenarioId, org.Id, draftReq, CancellationToken.None,"draft-create");
         
         Assert.True(draftResult.IsSuccess);
         var draftId = draftResult.Value;
@@ -84,7 +84,9 @@ public class ScenarioStoreTests : IAsyncLifetime
             SpawnPoints: new System.Collections.Generic.List<SpawnPoint> { new SpawnPoint(1, 2, 3, 90) },
             Hazards: new System.Collections.Generic.List<Hazard>(),
             ScoringConfig: new ScoringConfig(100, 300, 10),
-            RoutingConfig: new RoutingConfig(new System.Collections.Generic.List<string>())
+            RoutingConfig: new RoutingConfig(["exit"]),
+            Rubric: JsonNode.Parse("""{"schema_version":"1","pass_threshold":1,"criteria":[{"id":"exit","metric":"exit","mandatory":true,"weight":1,"operator":"gte","threshold":1}]}""")!.AsObject(),
+            LearningObjectives:["Evacuate"],LearnerInstructions:"Follow exits"
         );
 
         var updateResult = await store.UpdateScenarioDraftAsync(actorId, draftId, originalVersion, updateReq, org.Id, CancellationToken.None);
@@ -93,17 +95,17 @@ public class ScenarioStoreTests : IAsyncLifetime
         // 4. Update Concurrency Conflict
         var conflictResult = await store.UpdateScenarioDraftAsync(actorId, draftId, originalVersion, updateReq, org.Id, CancellationToken.None);
         Assert.False(conflictResult.IsSuccess);
-        Assert.Equal(409, conflictResult.Error!.Status);
+        Assert.Equal(412, conflictResult.Error!.Status);
 
         // 5. Snapshot Draft (D12)
-        var snapshotResult = await store.SnapshotScenarioDraftAsync(actorId, draftId, org.Id, CancellationToken.None);
+        var snapshotResult = await store.SnapshotScenarioDraftAsync(actorId, draftId, org.Id, CancellationToken.None,"snapshot",updateResult.Value);
         Assert.True(snapshotResult.IsSuccess);
         var snapshotId = snapshotResult.Value;
 
         var snapshot = await db.ScenarioVersions.FindAsync(snapshotId);
         Assert.NotNull(snapshot);
         Assert.Equal(1, snapshot.VersionNumber);
-        Assert.Equal("Snapshot 1", snapshot.Name);
+        Assert.Equal("Fire Evacuation Scenario", snapshot.Name);
         Assert.Equal(300, snapshot.TimeLimitSeconds); // Extracted from JSON config!
     }
 }
