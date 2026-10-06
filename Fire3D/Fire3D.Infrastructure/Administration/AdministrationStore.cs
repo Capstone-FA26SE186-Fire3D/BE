@@ -36,10 +36,20 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
     public async Task<OrganizationProfileUpdateResult> UpdateOrganizationProfileAsync(Guid organizationId, long revision,
         string name, string? address, string? phoneNumber, DateTime now, CancellationToken ct)
     {
-        var changed = await db.Organizations.Where(x => x.Id == organizationId && x.IsActive && x.DeletedAt == null && x.ProfileRevision == revision)
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, name).SetProperty(x => x.Address, address)
-                .SetProperty(x => x.PhoneNumber, phoneNumber).SetProperty(x => x.ProfileRevision, x => x.ProfileRevision + 1)
-                .SetProperty(x => x.UpdatedAt, now), ct);
+        int changed;
+        try
+        {
+            changed = await db.Organizations.Where(x => x.Id == organizationId && x.IsActive && x.DeletedAt == null && x.ProfileRevision == revision)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, name).SetProperty(x => x.Address, address)
+                    .SetProperty(x => x.PhoneNumber, phoneNumber).SetProperty(x => x.ProfileRevision, x => x.ProfileRevision + 1)
+                    .SetProperty(x => x.UpdatedAt, now), ct);
+        }
+        catch (PostgresException error) when (error.SqlState == PostgresErrorCodes.UniqueViolation
+            && error.ConstraintName == "organizations_phone_normalized_key")
+        {
+            // The caller returns immediately and disposes its transaction; never query an aborted transaction.
+            return OrganizationProfileUpdateResult.PhoneTaken;
+        }
         return changed == 1 ? OrganizationProfileUpdateResult.Updated
             : await db.Organizations.AnyAsync(x => x.Id == organizationId && x.IsActive && x.DeletedAt == null, ct)
                 ? OrganizationProfileUpdateResult.PreconditionFailed : OrganizationProfileUpdateResult.Unavailable;

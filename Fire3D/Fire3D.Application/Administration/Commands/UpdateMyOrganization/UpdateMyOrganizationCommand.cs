@@ -40,6 +40,9 @@ public sealed class UpdateMyOrganizationCommandHandler(IAuthStore accounts, IAdm
             return AuthResult<OrganizationProfileResponse>.Fail("VALIDATION_ERROR", "Name, address, or phone number is invalid.", 400);
         var now = AuthSupport.UtcNow(clock);
         var result = await organizations.UpdateOrganizationProfileAsync(organizationId, revision, name, address, phone, now, ct);
+        if (result == OrganizationProfileUpdateResult.PhoneTaken)
+            return AuthResult<OrganizationProfileResponse>.Fail("ORGANIZATION_PHONE_EXISTS", "Số điện thoại đã được một tổ chức sử dụng.", 409,
+                new Dictionary<string, string[]> { ["phoneNumber"] = ["Chọn số điện thoại khác cho tổ chức."] });
         if (result == OrganizationProfileUpdateResult.PreconditionFailed)
             return AuthResult<OrganizationProfileResponse>.Fail("PRECONDITION_FAILED", "The organization profile changed. Reload it and retry.", 412);
         if (result == OrganizationProfileUpdateResult.Unavailable)
