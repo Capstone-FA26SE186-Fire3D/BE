@@ -54,3 +54,5 @@ Không chạy cả schema Docs đè database. Không mở thêm quyền API ho�
 - Source: mapping ở store chung, handler/controller field errors, Swagger409 và policy; không pre-check thay DB constraint.
 - Test: PostgreSQL disposable, runtime role hạn chế quyền, cross-flow HTTP, direct concurrent writes, registration↔PATCH, rollback audit, proof retry, lifecycle, normalization parity, migration/history preservation và preflight blocking.
 - Chưa nghiệm thu Supabase index, binary Azure, Firebase/Mailgun thật hoặc FE. Chỉ tick deployment sau khi history/index và các response trên môi trường đích đã được kiểm tra; không lấy build/mock pass thay bằng chứng này.
+
+Preflight Supabase chỉ đọc ngày 06/10/2026: 6 tổ chức, 0 phone NULL; có 2 nhóm duplicate canonical (3 và 2 tổ chức), không thấy phone sai định dạng. Index/history migration phone chưa có. **Migration bị chặn bởi dữ liệu trùng**, không có DDL/DML, gộp/xóa hoặc đổi phone. Báo cáo ID/lifecycle/số che được giữ local trong kênh vận hành; không commit PII. Cần quyết định xử lý các tổ chức trùng rồi chạy lại preflight; số liệu này chỉ mô tả snapshot lúc kiểm tra, không bảo đảm dữ liệu chưa đổi sau đó.
