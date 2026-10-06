@@ -92,7 +92,9 @@ public class FirebaseIdentityProvider(
                 || !claims.TryGetValue("email_verified", out var verified) || verified is not true
                 || !claims.TryGetValue("firebase", out var firebase) || SignInProvider(firebase) != "google.com")
                 throw new GoogleIdentityException(GoogleIdentityFailure.InvalidToken);
-            return new VerifiedIdentity(decoded.Uid, email);
+            var displayName = claims.TryGetValue("name", out var name) && name is string nameText
+                ? GoogleAuthRules.NormalizeDisplayName(nameText) : null;
+            return new VerifiedIdentity(decoded.Uid, email, displayName);
         }
         catch (GoogleIdentityException) { throw; }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }

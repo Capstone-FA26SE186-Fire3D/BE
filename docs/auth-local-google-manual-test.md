@@ -35,7 +35,7 @@ Phạm vi: hai task password recovery/session và Google exchange. Không nghi�
 | Trường hợp | Kỳ vọng |
 |---|---|
 | Google UID đã liên kết account active | 200 Authenticated, token Fire3D và role/tenant từ DB |
-| UID/email mới | 200 OnboardingRequired + onboardingToken/expiry15 phút; chưa tạo account/organization/JWT |
+| UID/email mới | 200 OnboardingRequired + onboarding {token,expiresAt,email,displayName}, root proof/expiry alias deprecated15 phút; chưa tạo account/organization/JWT |
 | Email local có sẵn nhưng UID chưa link | 409 ACCOUNT_LINK_REQUIRED; không tự link |
 | Token sai/expired/revoked; provider password/anonymous; email chưa verified | 401 INVALID_FIREBASE_TOKEN |
 | Account/organization bị khóa dưới khóa | 403 ACCOUNT_DISABLED |

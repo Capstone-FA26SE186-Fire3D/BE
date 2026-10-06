@@ -93,7 +93,7 @@ Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. 
 
 ## 2. Authentication
 
-Luồng và bằng chứng source chi tiết tại [authentication.md](authentication.md): cả Trainee và OrganizationUser dùng form → OTP → proof → register → login; JWT chỉ được cấp tại login/refresh hoặc Google UID đã liên kết. Bảng dưới liệt kê API, không dùng số endpoint lịch sử để kết luận auth hoàn tất.
+Luồng và bằng chứng source chi tiết tại [authentication.md](authentication.md): cả Trainee và OrganizationUser dùng form → OTP → proof → register → login; JWT được cấp tại login/refresh, Google UID đã liên kết hoặc lần complete Google onboarding đầu tiên. Bảng dưới liệt kê API, không dùng số endpoint lịch sử để kết luận auth hoàn tất.
 
 [Checklist 28 endpoint auth](auth-api-checklist.md) tách code/test/provider và có contract test đối chiếu OpenAPI. Swagger source hiện hiển thị đúng field PATCH/null semantics, multipart `file`, enum tên, registrationToken và header bắt buộc. Production Swagger chỉ đổi sau deploy binary này; không suy từ Markdown rằng deployment đã cập nhật. [Avatar test và signed S3 URL](avatar-manual-test.md).
 
@@ -109,7 +109,7 @@ Luồng và bằng chứng source chi tiết tại [authentication.md](authentic
 | POST | `/api/auth/login` | Public | 200 LoginResponse |
 | POST | `/api/auth/login-firebase` | Public | 200 GoogleExchangeResponse; 401 invalid identity; 409 explicit link/race; 503 provider unavailable |
 | POST | `/api/me/link-google` | Live User + currentPassword + Google ID token | 200 GoogleLinkResponse + ETag; first link revokes sessions; 400/401/403/409/503 |
-| POST | `/api/auth/google/onboarding/complete` | Public + onboarding proof | 201 AccountResponse; replay 200; 400 validation/expiry; 409 input/identity conflict |
+| POST | `/api/auth/google/onboarding/complete` | Public + onboarding proof | 201 Authenticated + authentication; replay409 ONBOARDING_ALREADY_COMPLETED;400 field/invalid/expired;409 input/identity conflict;503 retry |
 | POST | `/api/auth/refresh` | Public | 200 TokenResponse |
 | POST | `/api/auth/logout` | User | 204 |
 | POST | `/api/auth/logout-all` | User | 204 |
@@ -213,12 +213,12 @@ Frontend đăng nhập Google bằng Firebase SDK, lấy Firebase ID token rồi
 BE dùng Firebase Admin SDK kiểm chữ ký/expiry/revocation, `email_verified=true` và `firebase.sign_in_provider=google.com`; không dùng email claim đơn lẻ làm bằng chứng Google. Input rỗng/quá 16384 ký tự: 400; token/provider sai, expired hoặc revoked: 401 INVALID_FIREBASE_TOKEN. Deadline 15 giây, timeout/lỗi mạng/certificate fetch trả 503 GOOGLE_PROVIDER_UNAVAILABLE; request cancellation được giữ nguyên. Lỗi/log không chứa token, claim hoặc thông điệp nhạy cảm của SDK.
 
 - UID đã liên kết: dùng hồ sơ/role DB.
-- UID/email mới: trả `OnboardingRequired` kèm onboardingToken15 phút; complete mới tạo user/organization atomic, không cấp session.
+- UID/email mới: trả `OnboardingRequired` kèm nested onboarding15 phút (email/displayName đã verified), chưa tạo account/session; complete tạo identity và session atomic, trả201 Authenticated.
 - Email thuộc tài khoản khác/chưa liên kết UID này: 409 ACCOUNT_LINK_REQUIRED; không tự ghép chỉ vì trùng email.
 - UID đã thay đổi trong lúc lấy khóa: 409 ACCOUNT_CHANGED; tài khoản/tổ chức bị khóa 403 ACCOUNT_DISABLED.
 - Dưới khóa lifecycle/user, BE kiểm lại cả user ID sở hữu UID, role/tenant và pending legacy trước khi ghi session/audit. Account pending chưa verified/hết hạn vẫn trả403 EMAIL_NOT_VERIFIED/REGISTRATION_EXPIRED.
 
-Google identity mới trả `{status:"OnboardingRequired", onboardingToken:"<proof>", expiresAt:"<UTC>"}` và chưa tạo tài khoản. `/api/auth/google/onboarding/complete` nhận proof + accountType và field theo loại, trả201 AccountResponse hoặc replay200 trong24 giờ. Exchange tiếp theo cấp phiên. UID đã liên kết trả `{status:"Authenticated", authentication:TokenResponse}`. Chi tiết/test tay: [google-auth-manual-test.md](google-auth-manual-test.md).
+Google identity mới trả `{status:"OnboardingRequired", onboarding:{token:"<proof>",expiresAt:"<UTC>",email:"verified@example.test",displayName:null}}`, chưa tạo tài khoản. Root onboardingToken/expiresAt giữ cùng giá trị nhưng deprecated. Complete nhận proof + accountType canonical trainee/organization (alias Trainee/OrganizationUser), trả201 `{status:"Authenticated",authentication:TokenResponse}`. Không nhận client email/UID/tenant/password. Replay cùng input24 giờ trả409 ONBOARDING_ALREADY_COMPLETED; mất response/AlreadyCompleted thì exchange token Firebase hợp lệ, không phát lại JWT từ receipt. Khác input409 IDEMPOTENCY_KEY_CONFLICT. Proof sai/hết hạn400 ONBOARDING_TOKEN_INVALID/ONBOARDING_TOKEN_EXPIRED. Validation lỗi không consume proof; errors theo field. Quota429 và lock timeout503 có Retry-After. UID đã liên kết trả `{status:"Authenticated", authentication:TokenResponse}`. Chi tiết/test tay: [google-auth-manual-test.md](google-auth-manual-test.md).
 
 Response thành công cho UID đã liên kết là GoogleExchangeResponse, `authentication` chứa TokenResponse **không có expiresAt**:
 
@@ -658,7 +658,7 @@ Chi tiết và acceptance tại [implementation checklist](api-implementation-ch
 
 ### Google, admin và tenant
 
-1. Firebase Google → JSON string ID token: UID đã link trả Authenticated; UID mới trả OnboardingRequired + proof15 phút, chưa tạo account. Complete chọn Trainee/OrganizationUser, replay24 giờ, exchange lại để login. Explicit `/api/me/link-google` yêu cầu Bearer/local password + Google token, giữ role/tenant và revoke phiên/reset proof khi link mới. Firebase email/password provider không dùng được ở exchange/link này.
+1. Firebase Google → JSON string ID token: UID đã link trả Authenticated; UID mới trả OnboardingRequired + proof15 phút, chưa tạo account. Complete chọn trainee/organization, trả201 authentication; cùng input24 giờ trả409 AlreadyCompleted, exchange lại để phục hồi nếu mất response. Explicit `/api/me/link-google` yêu cầu Bearer/local password + Google token, giữ role/tenant và revoke phiên/reset proof khi link mới. Firebase email/password provider không dùng được ở exchange/link này.
 2. Local account trùng email Google chưa liên kết → 409, không tự ghép/nâng quyền.
 3. Admin tạo organization → 201; tạo OrganizationUser → 201; login local tài khoản vừa tạo.
 4. Trainee gọi Editor → 403; OrganizationUser đọc revision/job tổ chức khác → 404; kiểm PlatformAdmin riêng cho Editor.

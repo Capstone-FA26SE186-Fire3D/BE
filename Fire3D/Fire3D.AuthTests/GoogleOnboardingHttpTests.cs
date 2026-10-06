@@ -28,9 +28,9 @@ public sealed class GoogleOnboardingHttpTests
         await using var db = await BillingDatabase.Create(false); await GoogleOnboardingPostgresTests.Prepare(db);
         await using var context = db.Context();
         var store = new AuthStore(context);
-        var service = new GoogleOnboardingService(context, store, TimeProvider.System);
+        var service = new GoogleOnboardingService(context, store, TimeProvider.System, GoogleOnboardingTestDoubles.Tokens());
         var provider = ResetProxy.For<IIdentityProvider>((_, _) => Task.FromResult(new VerifiedIdentity("http-google", "http@example.test")));
-        var tokens = ResetProxy.For<ITokenService>((_, _) => throw new Exception("Onboarding must not issue sessions"));
+        var tokens = GoogleOnboardingTestDoubles.Tokens();
         var handler = new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, service);
         var sender = ResetProxy.For<ISender>((_, args) => handler.Handle((ExchangeFirebaseTokenCommand)args[0]!, (CancellationToken)args[1]!));
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -61,9 +61,9 @@ public sealed class GoogleOnboardingHttpTests
         var request = new { onboardingToken = proof.OnboardingToken, accountType = "Trainee", username = "http_user" };
         var first = await client.PostAsJsonAsync("/api/auth/google/onboarding/complete", request);
         var replay = await client.PostAsJsonAsync("/api/auth/google/onboarding/complete", request);
-        Assert.Equal(201, (int)first.StatusCode); Assert.Equal(200, (int)replay.StatusCode);
+        Assert.Equal(201, (int)first.StatusCode); Assert.Equal(409, (int)replay.StatusCode);
         var body = await first.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("passwordHash", body); Assert.DoesNotContain("accessToken", body);
-        Assert.Equal(3L, await db.Scalar("SELECT count(*) FROM auth_refresh_tokens"));
+        Assert.DoesNotContain("passwordHash", body); Assert.Contains("accessToken", body);
+        Assert.Equal(4L, await db.Scalar("SELECT count(*) FROM auth_refresh_tokens"));
     }
 }

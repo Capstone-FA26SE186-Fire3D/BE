@@ -32,8 +32,9 @@ public sealed class ExchangeFirebaseTokenCommandHandler(IAuthStore store, IToken
                 return AuthResult<GoogleExchangeResponse>.Fail("ACCOUNT_LINK_REQUIRED","Sign in with your existing account. Explicit Google linking is required.",409);
             var proof = await onboarding.BeginAsync(identity, ct);
             if (!proof.IsSuccess)
-                return AuthResult<GoogleExchangeResponse>.Fail(proof.Error!.Code, proof.Error.Message, proof.Error.Status, proof.Error.Errors);
-            return AuthResult<GoogleExchangeResponse>.Ok(new("OnboardingRequired", OnboardingToken: proof.Value!.Token, ExpiresAt: proof.Value.ExpiresAt));
+                return AuthResult<GoogleExchangeResponse>.Fail(proof.Error!.Code, proof.Error.Message, proof.Error.Status, proof.Error.Errors, proof.Error.RetryAfterSeconds);
+            return AuthResult<GoogleExchangeResponse>.Ok(new("OnboardingRequired", OnboardingToken: proof.Value!.Token, ExpiresAt: proof.Value.ExpiresAt,
+                Onboarding: new(proof.Value.Token, proof.Value.ExpiresAt, email, identity.DisplayName)));
         }
         await using var tx = await store.BeginUserTransactionAsync(existing.Id,ct);
         var user = await store.FindUserByFirebaseUidAsync(identity.Uid,ct);

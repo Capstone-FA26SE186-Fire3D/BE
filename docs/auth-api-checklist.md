@@ -25,7 +25,7 @@ Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn th
 | POST | `/api/auth/forgot-password` | ✅ | Public; email; 202 chung, Google-only không tự tạo password |
 | POST | `/api/auth/reset-password` | ✅ | Public; reset token + newPassword; one-use/revoke/audit |
 | POST | `/api/auth/change-password` | ✅ | Bearer + currentPassword/newPassword; live family kiểm dưới khóa |
-| POST | `/api/auth/google/onboarding/complete` | ✅ | Public + proof15m; chỉ Trainee/OrganizationUser; login riêng |
+| POST | `/api/auth/google/onboarding/complete` | ✅ | Public + proof15m; trainee/organization (alias tên role);201 authentication; cùng input replay409 AlreadyCompleted → exchange recovery |
 | POST | `/api/me/link-google` | ✅ | Bearer + currentPassword + Google token; giữ role/tenant/email |
 | GET | `/api/organizations/me` | ✅ | OrganizationUser; profile tổ chức + ETag |
 | PATCH | `/api/organizations/me` | ✅ | OrganizationUser + If-Match; name/address/phoneNumber |
@@ -41,7 +41,7 @@ Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn th
 | --- | --- | --- |
 | Local auth/password | ✅ PostgreSQL restricted role, replay, family/lifecycle, rollback và HTTP regression | ❌ Migration password gate/deployment, Mailgun thật và latency Azure của binary mới |
 | OTP/register | ✅ Form → OTP → proof → account → login, quota/cooldown/collision có regression | ❌ FE form hoàn chỉnh và inbox OTP trên bản deploy mới |
-| Google | ✅ Proof/link/onboarding, ownership/race/replay, provider timeout giả lập | ❌ Migration onboarding Supabase, Firebase project thật, FE/Mobile integration |
+| Google | ✅ Nested proof + alias; session atomic; bearer/refresh/recovery HTTP; RLS/race/rollback/lock timeout PostgreSQL; provider giả | ❌ Migration onboarding Supabase, Firebase project thật, FE/Mobile integration |
 | Profile/organization | ✅ Converter giữ omitted/null; OpenAPI có field, header và role đúng; ETag regression | ❌ Client/deployment PATCH trên binary mới |
 | Avatar | ✅ Decoder, pin ETag, bounded/fragmented stream; PG lease/rollback/recovery/cleanup/race và SDK signing offline | ❌ IAM/CORS/object AWS thật, crash/timeout production, tab ẩn danh đọc ảnh thật |
 | Device | ✅ Installation proof/family/rotate/revoke có source/test | ❌ FCM thật và client secure installation storage |
