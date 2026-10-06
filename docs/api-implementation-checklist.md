@@ -216,3 +216,7 @@ Google onboarding/link: source/DI/controller + PostgreSQL migration/constraints/
 ## Building mutation — code và test trong đợt API được chọn
 
 POST body `organizationId`/alias query, admin PUT/DELETE derive tenant, validation nested theo field đã triển khai. Unit/HTTP và PostgreSQL chạy migration history thật, gồm runtime audit INSERT-only, rollback audit và race khóa lifecycle được ghi trong `building-manual-test.md`. Access/participation, IFC worker, readiness/approval, playtest và package build vẫn là các task riêng; không suy hoàn tất từ Building CRUD. Supabase/deployment chưa cập nhật trong đợt này.
+
+### Selected scope Task 2 — bound IFC upload (source/test; deployment pending)
+
+Hai route initiate dùng chung intent/receipt và SHA-256 dự kiến. Complete kiểm owner/tenant/key/size/hash thực, lưu candidate trước copy, adopt atomic; cleanup có lease/retry và tombstone để xử lý late write. Migration additive `AddBoundIfcUploads` giữ source legacy unverified. Xem `ifc-upload-manual-test.md`. Test PostgreSQL isolated + HTTP/storage fake; không đánh dấu pipeline IFC/Blender/Unity hoặc Supabase/S3 production hoàn tất.

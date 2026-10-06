@@ -411,7 +411,7 @@ Revision list nhận page/pageSize; detail nhận ID. Editor scope, Trainee 403,
 
 Trainings trả mảng, không phân trang: id, releaseId, name, description nullable, status, startDate/endDate nullable, allowedModes (string[]), createdAt. Query lọc training Active và release Published, chưa lọc khoảng ngày. Đây là Editor API, không phải danh sách học public/Trainee.
 
-Upload-url cũ là route tương thích và dùng cùng `InitiateIfcUploadCommand` với `/api/buildings/{buildingId}/ifc`. Hai route nhận cùng body, tạo revision Draft và trả cùng response `revisionId`, `uploadUrl`, `objectKey`; client mới nên dùng route IFC. Không gọi đồng thời cả hai route cho cùng một file vì mỗi lần gọi tạo một revision mới.
+Upload-url là alias của `/api/buildings/{buildingId}/ifc`, dùng chung handler/receipt, request và response. Cùng actor/key/input trả cùng revision; không kéo dài TTL khi replay.
 
 ## 5. IFC commands — 6 endpoint
 
@@ -428,37 +428,31 @@ Tất cả cần Editor, rate limit administration. Storage phải được cấ
 
 ### 5.1 Initiate → upload → finalize
 
-Initiate yêu cầu size dương, tên file kết thúc .ifc (không phân biệt hoa/thường), versionLabel không trống:
+Cả hai route initiate dùng chung receipt. Bắt buộc `Idempotency-Key` (1–128 ký tự, không whitespace/control), size dương trong giới hạn cấu hình, tên `.ifc`, versionLabel và SHA-256 từ file thật:
 
 ```json
-{ "fileSizeBytes": 1048576, "originalFilename": "demo-building.ifc", "versionLabel": "v1" }
+{ "fileSizeBytes": 1048576, "originalFilename": "demo-building.ifc", "versionLabel": "v1", "sha256Hash": "<64 hexadecimal characters computed from the file>" }
 ```
 
-Không gửi MIME/hash ở bước initiate. Response:
-
-```json
-{
-  "revisionId": "33333333-3333-4333-8333-333333333333",
-  "uploadUrl": "https://storage.example.com/presigned-upload",
-  "objectKey": "<server-generated object key>"
-}
-```
-
-Upload bytes trực tiếp lên presigned URL, với Content-Type application/octet-stream như lúc ký URL; thời hạn URL được yêu cầu 60 phút. Không gửi multipart file vào BE hay JWT Fire3D sang storage. Giữ revisionId/objectKey cho finalize:
+Intent/audit được lưu trước khi ký URL; response `{revisionId, uploadUrl, objectKey}`. Cùng actor/key/input trả cùng revision kể cả đổi route; khác input trả 409. URL PUT tối đa 60 phút; replay không kéo dài TTL. Upload trực tiếp với `Content-Type: application/octet-stream`, không gửi JWT sang storage. Complete:
 
 ```json
 {
   "objectKey": "<objectKey from initiate>",
   "fileSizeBytes": 1048576,
   "mimeType": "application/octet-stream",
-  "sha256Hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "sha256Hash": "<same SHA-256 as initiation>",
   "originalFilename": "demo-building.ifc"
 }
 ```
 
-Hash cần tính từ file thật. Handler kiểm objectKey/hash không trống, size dương và object tồn tại/đúng size trên storage. **Chưa kiểm hash nội dung file tại handler**, chưa ràng buộc đầy đủ objectKey với lần initiate. Đây là khoảng trống validation, không phải quyền dùng key bất kỳ.
+BE kiểm owner/tenant/input trước S3. BE đọc có giới hạn, pin ETag, tính SHA-256 thật; ghi candidate riêng trước copy; kiểm bytes bản copy rồi finalize source/provenance/audit/cleanup atomic. Không giữ DB transaction khi chờ S3. Replay complete đã commit trả 204, không tạo source mới. Source legacy không được tự gắn nhãn verified.
 
-Lỗi chính: 400 input sai; 404 building/revision không thấy hoặc ngoài phạm vi; 409 đã finalize; 422 storage không xác minh được object. Initiate ghi revision trước khi lấy URL, nên lỗi storage có thể để lại revision; không coi retry POST là idempotent.
+Lỗi: 400 `VALIDATION_ERROR` theo field/key sai; 404 resource ngoài scope; 409 input conflict/source thay đổi; 410 intent hết hạn; 422 bytes/size/hash lệch; 503 chưa cấu hình, S3 unavailable hoặc attempt đang chạy (`Retry-After: 1`). TTL không làm mất receipt đã commit.
+
+Mặc định upload tắt. Trước khi bật: áp `AddBoundIfcUploads`, đặt `IfcUpload:Enabled=true`, `IfcUpload:MaxBytes=<giới hạn deployment quyết định>`, `IfcUpload:CleanupEnabled=true` và S3. MaxBytes không có giá trị nghiệp vụ mặc định. Cleanup lease/retry giữ job đang được bảo vệ và tombstone đã xóa để tìm copy timeout hoàn thành muộn. Có thể tắt upload mới trong khi giữ cleanup bật.
+
+Hiện kiểm chứng PostgreSQL cô lập + storage giả lập; chưa áp Supabase/S3 thật. Xem [test IFC upload](ifc-upload-manual-test.md).
 
 ### 5.2 Process, retry, confirm
 
@@ -622,7 +616,7 @@ Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 40
 | --- | --- |
 | Building CRUD | Mutation kiểm DB actor/tenant và audit atomic; admin dùng query organizationId. Read list/detail vẫn dựa scope organization claim, body chưa nhận organizationId; chưa coi admin read toàn nền tảng đã hoàn thiện. |
 | Upload-url cũ | Đã là alias tương thích của initiation IFC; client mới dùng `/api/buildings/{buildingId}/ifc` |
-| IFC finalize | Chưa ràng buộc đủ key với revision/upload; chưa kiểm hash nội dung; validation MIME/tên/hash hạn chế |
+| IFC finalize | Intent/receipt, bounded stream, ETag/hash thật, candidate trước copy và cleanup lease/retry đã có; PostgreSQL/storage giả lập đã kiểm tra. Supabase/S3 thật chưa nghiệm thu. |
 | IFC process | Process/confirm đã Include Building; Process gọi enqueue_integration_outbox_event schema 1, hash canonical JSONB và tenant suy từ DB, job/audit/outbox atomic. Migration AddIfcIntegrationOutbox giao table/function/grants còn thiếu. Dispatcher/worker delivery, attempt/result gates và provenance production chưa hoàn chỉnh. Xem [IFC outbox](ifc-outbox.md). |
 | Draft editor | GET draft state/version đã có. Kiểm tra response ETag/xmin trước khi tích hợp; không coi đây là API còn thiếu. |
 | Playtest prepare | Runtime hiện fail-closed 503 `ENTITLEMENT_UNAVAILABLE`; entitlement/trial, compatibility và launch grant chưa triển khai. Store legacy không được DI đăng ký. |

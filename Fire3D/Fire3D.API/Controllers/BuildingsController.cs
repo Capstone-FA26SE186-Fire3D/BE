@@ -1,4 +1,4 @@
-using Fire3D.API.Authorization;
+﻿using Fire3D.API.Authorization;
 using Fire3D.Application.Administration;
 using Fire3D.Application.Buildings;
 using Fire3D.Application.Buildings.Commands.CreateBuilding;
@@ -77,22 +77,23 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<ActionResult<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>> GetUploadUrl(
-        Guid id, Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadRequest request, CancellationToken ct)
+        Guid id, Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadRequest request,
+        [FromHeader(Name = "Idempotency-Key")] string? key, CancellationToken ct)
     {
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadCommand(
-            User.GetActorId(), id, request), ct);
+            User.GetActorId(), id, request, key), ct);
         return result.IsSuccess
             ? Created($"/api/revisions/{result.Value!.RevisionId}", result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
-    /// <summary>Danh sÃ¡ch revision IFC cá»§a Building, cÃ³ phÃ¢n trang.</summary>
+    /// <summary>Danh sÃƒÂ¡ch revision IFC cÃ¡Â»Â§a Building, cÃƒÂ³ phÃƒÂ¢n trang.</summary>
     /// <remarks>
-    /// OrganizationUser chá»‰ xem tá»• chá»©c cá»§a mÃ¬nh; PlatformAdmin Ä‘Æ°á»£c xem Building Ä‘Ã­ch.
-    /// Role/tenant láº¥y tá»« DB; Trainee bá»‹ tá»« chá»‘i. page máº·c Ä‘á»‹nh 1; pageSize máº·c Ä‘á»‹nh 20, tá»‘i Ä‘a 100.
-    /// Response gá»“m items,totalCount,page,pageSize. Building há»£p lá»‡ chÆ°a cÃ³ revision tráº£ items rá»—ng.
-    /// Building khÃ´ng tá»“n táº¡i, bá»‹ archive hoáº·c khÃ¡c tenant tráº£ 404. KhÃ´ng tráº£ raw IFC/storage key.
+    /// OrganizationUser chÃ¡Â»â€° xem tÃ¡Â»â€¢ chÃ¡Â»Â©c cÃ¡Â»Â§a mÃƒÂ¬nh; PlatformAdmin Ã„â€˜Ã†Â°Ã¡Â»Â£c xem Building Ã„â€˜ÃƒÂ­ch.
+    /// Role/tenant lÃ¡ÂºÂ¥y tÃ¡Â»Â« DB; Trainee bÃ¡Â»â€¹ tÃ¡Â»Â« chÃ¡Â»â€˜i. page mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh 1; pageSize mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh 20, tÃ¡Â»â€˜i Ã„â€˜a 100.
+    /// Response gÃ¡Â»â€œm items,totalCount,page,pageSize. Building hÃ¡Â»Â£p lÃ¡Â»â€¡ chÃ†Â°a cÃƒÂ³ revision trÃ¡ÂºÂ£ items rÃ¡Â»â€”ng.
+    /// Building khÃƒÂ´ng tÃ¡Â»â€œn tÃ¡ÂºÂ¡i, bÃ¡Â»â€¹ archive hoÃ¡ÂºÂ·c khÃƒÂ¡c tenant trÃ¡ÂºÂ£ 404. KhÃƒÂ´ng trÃ¡ÂºÂ£ raw IFC/storage key.
     /// </remarks>
     [HttpGet("{id:guid}/revisions")]
     [ProducesResponseType<PageResponse<RevisionResponse>>(200)]
@@ -107,7 +108,7 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
         var result = await sender.Send(new Fire3D.Application.Buildings.Queries.ListRevisions.ListRevisionsQuery(
             actorId, id, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
-            title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+            title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>
@@ -128,3 +129,4 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 }
+

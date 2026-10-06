@@ -48,6 +48,12 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Ifc.IPreviewDownloadSigner, Fire3D.Infrastructure.Storage.S3PreviewDownloadSigner>();
         services.AddScoped<Fire3D.Application.Ifc.IAnnotationStore, Fire3D.Infrastructure.Ifc.AnnotationStore>();
         services.AddScoped<Fire3D.Application.Ifc.IIfcWriteStore, Fire3D.Infrastructure.Ifc.IfcWriteStore>();
+        services.AddOptions<Fire3D.Application.Ifc.IfcUploadOptions>().Bind(configuration.GetSection("IfcUpload"))
+            .Validate(o => !o.Enabled || (o.MaxBytes is > 0 && o.CleanupEnabled), "IfcUpload requires explicit positive MaxBytes and CleanupEnabled=true when enabled.").ValidateOnStart();
+        services.AddScoped<Fire3D.Application.Ifc.IIfcUploadStore, Fire3D.Infrastructure.Ifc.IfcUploadStore>();
+        services.AddScoped<Fire3D.Application.Ifc.IIfcSourceInspector, Fire3D.Infrastructure.Storage.IfcSourceInspector>();
+        services.AddScoped<Fire3D.Application.Ifc.IIfcUploadService, Fire3D.Application.Ifc.IfcUploadService>();
+        services.AddHostedService<Fire3D.Infrastructure.Ifc.IfcUploadCleanupWorker>();
         services.AddScoped<Fire3D.Application.Scenarios.IScenarioWriteStore, Fire3D.Infrastructure.Scenarios.ScenarioWriteStore>();
         services.AddScoped<Fire3D.Application.Scenarios.IScenarioReadStore, Fire3D.Infrastructure.Scenarios.ScenarioReadStore>();
         services.AddScoped<Fire3D.Application.Scenarios.Commands.RejectScenarioVersion.IScenarioReviewStore, Fire3D.Infrastructure.Scenarios.ScenarioReviewStore>();

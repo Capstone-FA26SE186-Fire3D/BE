@@ -1,4 +1,4 @@
-using Fire3D.API.Authorization;
+﻿using Fire3D.API.Authorization;
 using Fire3D.Application.Ifc;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -12,7 +12,7 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore=true,Location=ResponseCacheLocation.None)]
 public sealed class IfcCommandsController(ISender sender) : ControllerBase
 {
-    /// <summary>Records a rejection for one revision–scenario version pair without changing the shared revision status.</summary>
+    /// <summary>Records a rejection for one revisionâ€“scenario version pair without changing the shared revision status.</summary>
     [HttpPost("revisions/{revisionId:guid}/reviews")]
     [ProducesResponseType(201)]
     [ProducesResponseType<ProblemDetails>(400)]
@@ -27,16 +27,16 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
             new Fire3D.Application.Scenarios.Commands.RejectScenarioVersion.RejectScenarioVersionCommand(actor, revisionId, request), ct);
         return result.IsSuccess ? Created($"/api/revisions/{revisionId}/reviews/{result.Value}", new { Id = result.Value })
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
-    /// <summary>Requeue một processing job Failed qua gate database và transactional outbox.</summary>
+    /// <summary>Requeue má»™t processing job Failed qua gate database vÃ  transactional outbox.</summary>
     /// <remarks>
-    /// OrganizationUser đúng tenant hoặc PlatformAdmin. Body: requestId (UUID mới cho một ý định retry),
-    /// reason (1-1000 ký tự). Gửi lại đúng requestId/reason trả AlreadyRequeued, kể cả job đã chạy xong sau retry.
-    /// Cùng key khác job/reason trả 409; key mới chỉ dùng với Failed. Cancelled/Succeeded không tự chạy lại.
-    /// Response 202 có jobId/outcome và Location theo dõi job. 202 xác nhận giao việc bền vững, chưa xác nhận worker hoàn tất.
-    /// Cần gate requeue_processing_job, outbox và quyền DB theo v6.7; không ghi trực tiếp status để bỏ qua gate.
+    /// OrganizationUser Ä‘Ãºng tenant hoáº·c PlatformAdmin. Body: requestId (UUID má»›i cho má»™t Ã½ Ä‘á»‹nh retry),
+    /// reason (1-1000 kÃ½ tá»±). Gá»­i láº¡i Ä‘Ãºng requestId/reason tráº£ AlreadyRequeued, ká»ƒ cáº£ job Ä‘Ã£ cháº¡y xong sau retry.
+    /// CÃ¹ng key khÃ¡c job/reason tráº£ 409; key má»›i chá»‰ dÃ¹ng vá»›i Failed. Cancelled/Succeeded khÃ´ng tá»± cháº¡y láº¡i.
+    /// Response 202 cÃ³ jobId/outcome vÃ  Location theo dÃµi job. 202 xÃ¡c nháº­n giao viá»‡c bá»n vá»¯ng, chÆ°a xÃ¡c nháº­n worker hoÃ n táº¥t.
+    /// Cáº§n gate requeue_processing_job, outbox vÃ  quyá»n DB theo v6.7; khÃ´ng ghi trá»±c tiáº¿p status Ä‘á»ƒ bá» qua gate.
     /// </remarks>
     [HttpPost("processing-jobs/{jobId:guid}/retry")]
     [ProducesResponseType<RetryProcessingJobResponse>(202)]
@@ -60,13 +60,14 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<ActionResult<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>> InitiateUpload(Guid buildingId,
-        Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadRequest request, CancellationToken ct)
+        Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadRequest request,
+        [FromHeader(Name = "Idempotency-Key")] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();
-        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadCommand(actor, buildingId, request), ct);
+        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadCommand(actor, buildingId, request, key), ct);
         return result.IsSuccess ? Created($"/api/revisions/{result.Value!.RevisionId}", result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     [HttpPost("revisions/{revisionId:guid}/upload-complete")]
@@ -75,14 +76,17 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(422)]
+    [ProducesResponseType<ProblemDetails>(410)]
+    [ProducesResponseType<ProblemDetails>(503)]
     public async Task<IActionResult> FinalizeUpload(Guid revisionId,
         Fire3D.Application.Ifc.Commands.FinalizeUpload.FinalizeIfcUploadRequest request, CancellationToken ct)
     {
         var actor = User.GetActorId();
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.FinalizeUpload.FinalizeIfcUploadCommand(actor, revisionId, request), ct);
+        if (result.Error?.RetryAfterSeconds is int retry) Response.Headers.RetryAfter = retry.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return result.IsSuccess ? NoContent()
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     [HttpPost("revisions/{revisionId:guid}/process")]
@@ -96,7 +100,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ProcessRevision.ProcessRevisionCommand(actor, revisionId), ct);
         return result.IsSuccess ? Accepted($"/api/processing-jobs/{result.Value}", new { JobId = result.Value })
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>
@@ -117,3 +121,4 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
     }
 }
+

@@ -110,11 +110,12 @@ public sealed partial class AuthIntegrationTests
         Id = id, OrganizationId = organization, Name = "Office", TotalFloors = 1, IsActive = true,
         CreatedBy = adminId, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
     };
+    private static readonly Npgsql.NameTranslation.NpgsqlNullNameTranslator BuildingEnumNames = new();
     private static Fire3DDbContext BuildingContext(string connection)
     {
         var options = new DbContextOptionsBuilder<Fire3DDbContext>().UseNpgsql(connection, pg =>
         {
-            var names = new Npgsql.NameTranslation.NpgsqlNullNameTranslator();
+            var names = BuildingEnumNames;
             pg.MapEnum<Fire3D.Domain.Enums.UserRole>("user_role_enum", nameTranslator: names);
             pg.MapEnum<Fire3D.Domain.Enums.AuditAction>("audit_action_enum", nameTranslator: names);
         }).Options;
