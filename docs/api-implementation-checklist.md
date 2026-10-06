@@ -18,7 +18,7 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 
 ## Baseline và trạng thái
 
-Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATION_PHONE_EXISTS`, field error đúng DTO; [preflight chỉ đọc](../database/006_organization_phone_preflight.sql) và migration additive chặn duplicate canonical trên mọi tổ chức, không sửa phone/revision legacy. PostgreSQL disposable kiểm cross-flow, race, proof rollback/retry, lifecycle, runtime role và migration history. Supabase index/binary deployment chưa nghiệm thu; [kịch bản test tay](organization-phone-manual-test.md) tách riêng các bước này. Không áp uniqueness cho phone cá nhân.
+Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATION_PHONE_EXISTS`, field error đúng DTO; [preflight chỉ đọc](../database/006_organization_phone_preflight.sql) và migration additive chặn duplicate canonical trên mọi tổ chức, không sửa phone/revision legacy. PostgreSQL disposable kiểm cross-flow, race, proof rollback/retry, lifecycle, runtime role và migration history. Supabase đã áp migration/index ngày 06/10/2026 sau khi người dùng xử lý phone legacy thànhNULL; binary deployment/FE chưa nghiệm thu. [Kịch bản test tay và bằng chứng DB](organization-phone-manual-test.md) tách riêng các bước này. Không áp uniqueness cho phone cá nhân.
 
 Đồng bộ contract ngày 04/10/2026 theo [Docs v7](../../Docs/schema_v7_contract.md), Docs commit `2b56ba3`; đối chiếu source BE `origin/develop` tại `e42a2eb`. Các kết quả test/deployment ngày 02–03/10 giữ baseline và giới hạn riêng. Trước khi triển khai mỗi work item phải xác nhận lại source; lần rà tài liệu này không chạy lại application tests hoặc provider.
 

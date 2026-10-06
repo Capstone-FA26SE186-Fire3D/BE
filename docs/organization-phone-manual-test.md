@@ -36,7 +36,7 @@ WHERE schemaname = 'public' AND tablename = 'organizations'
   AND indexname = 'organizations_phone_normalized_key';
 ```
 
-Không chạy cả schema Docs đè database. Không mở thêm quyền API hoặc reset dữ liệu. Migration mới chưa được áp lên Supabase trong task implementation này; fixture disposable không chứng minh deployment.
+Không chạy cả schema Docs đè database. Không mở thêm quyền API hoặc reset dữ liệu. Fixture disposable không chứng minh deployment; bằng chứng áp Supabase trong bước deployment riêng được ghi ở cuối tài liệu.
 
 ## Test trong Swagger
 
@@ -53,6 +53,16 @@ Không chạy cả schema Docs đè database. Không mở thêm quyền API ho�
 
 - Source: mapping ở store chung, handler/controller field errors, Swagger409 và policy; không pre-check thay DB constraint.
 - Test: PostgreSQL disposable, runtime role hạn chế quyền, cross-flow HTTP, direct concurrent writes, registration↔PATCH, rollback audit, proof retry, lifecycle, normalization parity, migration/history preservation và preflight blocking.
-- Chưa nghiệm thu Supabase index, binary Azure, Firebase/Mailgun thật hoặc FE. Chỉ tick deployment sau khi history/index và các response trên môi trường đích đã được kiểm tra; không lấy build/mock pass thay bằng chứng này.
+- Supabase index/history đã được xác minh trong bước deployment riêng bên dưới. Chưa nghiệm thu binary Azure, Firebase/Mailgun thật hoặc FE; DB update không chứng minh response trên môi trường đích đúng mapping mới.
 
 Preflight Supabase chỉ đọc ngày 06/10/2026: 6 tổ chức, 0 phone NULL; có 2 nhóm duplicate canonical (3 và 2 tổ chức), không thấy phone sai định dạng. Index/history migration phone chưa có. **Migration bị chặn bởi dữ liệu trùng**, không có DDL/DML, gộp/xóa hoặc đổi phone. Báo cáo ID/lifecycle/số che được giữ local trong kênh vận hành; không commit PII. Cần quyết định xử lý các tổ chức trùng rồi chạy lại preflight; số liệu này chỉ mô tả snapshot lúc kiểm tra, không bảo đảm dữ liệu chưa đổi sau đó.
+
+### Deployment Supabase — 06/10/2026
+
+Sau snapshot bị chặn ở trên, người dùng tự xóa giá trị phone rồi đặt cả 6 ô thành SQL NULL. Preflight mới xác nhận 6 tổ chức/6 NULL/0 rỗng, không duplicate hoặc invalid. Theo yêu cầu áp migration, dùng SQL được EF sinh đúng phạm vi `20261006090000_AddGoogleOnboardingDisplayName` → `20261006110000_AddOrganizationPhoneUniqueness`, không chạy các migration khác. Script kiểm đúng project/database/dependency, khóa ghi, dùng guard thực tế và xác minh digest toàn bộ representation organizations trước/sau trong transaction.
+
+- ✅ History có `20261006110000_AddOrganizationPhoneUniqueness`, ProductVersion 10.0.12.
+- ✅ Index `organizations_phone_normalized_key` unique/valid/ready, canonical expression và partial `phone IS NOT NULL` đúng contract.
+- ✅ Cả 6 organizations và representation phone/revision/lifecycle được giữ nguyên trong lúc migration. Không UPDATE/DELETE organizations, không reset, không đổi grants hoặc tạo tài khoản/gửi mail thử trên DB chung.
+- ✅ Kết nối mới read-only xác nhận preflight rỗng, index/history tồn tại.
+- ❌ Binary/FE deploy vẫn cần chứa mapping lỗi mới và smoke test cross-flow/PATCH/proof retry; không lấy index thành công làm bằng chứng HTTP409 production.

@@ -43,7 +43,7 @@ Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn th
 | OTP/register | ✅ Form → OTP → proof → account → login, quota/cooldown/collision có regression | ❌ FE form hoàn chỉnh và inbox OTP trên bản deploy mới |
 | Google | ✅ Nested proof + alias; session atomic; bearer/refresh/recovery HTTP; RLS/race/rollback/lock timeout PostgreSQL; provider giả | ❌ Migration onboarding Supabase, Firebase project thật, FE/Mobile integration |
 | Profile/organization | ✅ Converter giữ omitted/null; OpenAPI có field, header và role đúng; ETag regression | ❌ Client/deployment PATCH trên binary mới |
-| Organization phone | ✅ Cả email/Google/PATCH map đúng constraint; PostgreSQL migration/history, runtime role, race/rollback/proof retry và lifecycle có test | ❌ Preflight/index Supabase và smoke test binary đích; không suy từ source rằng DB đã áp index |
+| Organization phone | ✅ Cả email/Google/PATCH map đúng constraint; PostgreSQL migration/history, runtime role, race/rollback/proof retry và lifecycle có test; Supabase preflight/index/history đã xác minh 06/10/2026 | ❌ Smoke test binary đích/FE cho409 và proof retry; DB update không chứng minh binary có mapping mới |
 | Avatar | ✅ Decoder, pin ETag, bounded/fragmented stream; PG lease/rollback/recovery/cleanup/race và SDK signing offline | ❌ IAM/CORS/object AWS thật, crash/timeout production, tab ẩn danh đọc ảnh thật |
 | Device | ✅ Installation proof/family/rotate/revoke có source/test | ❌ FCM thật và client secure installation storage |
 | Swagger | ✅ Schema PATCH/multipart/proof/enum/headers và security metadata; relative server `/`; HTTP contract checks | ❌ OpenAPI/binary deploy mới; không chứng minh provider hoạt động |
