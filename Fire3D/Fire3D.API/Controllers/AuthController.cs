@@ -18,7 +18,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     /// <summary>Đăng nhập email/password do BE quản lý. Không cần Bearer.</summary>
     /// <remarks>Body: email, password. BE kiểm tra hash trong PostgreSQL; không gọi Firebase.
     /// 200: accessToken, refreshToken, user; 400: dữ liệu sai; 401: sai email/mật khẩu;
-    /// 403: tài khoản/tổ chức bị vô hiệu hóa; 429: vượt giới hạn yêu cầu.</remarks>
+    /// 403: tài khoản/tổ chức bị vô hiệu hóa hoặc email chưa xác thực. Route này chưa có rate-limit policy riêng.</remarks>
     [HttpPost("login")]
     [AllowAnonymous]
     [ProducesResponseType<LoginResponse>(200)]

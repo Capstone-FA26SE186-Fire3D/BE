@@ -6,7 +6,7 @@ Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn th
 
 | Method | Route | Code | Quyền/input chính |
 | --- | --- | --- | --- |
-| POST | `/api/auth/login` | ✅ | Public; email/password; không áp quy tắc password mới vào login |
+| POST | `/api/auth/login` | ✅ | Public; email/password; không áp quy tắc password mới vào login; chưa có rate-limit riêng; audit chỉ cần INSERT, không SELECT |
 | POST | `/api/auth/login-firebase` | ✅ | Public; Firebase ID token JSON string; Google verified/revocation |
 | POST | `/api/auth/register` | ✅ | Alias Trainee; deprecated, cùng proof/validation |
 | POST | `/api/auth/register/trainee` | ✅ | Public; toàn bộ form + registrationToken; server gán role |
