@@ -60,6 +60,8 @@ BE kiểm live family/account/tổ chức, Google provider/email verified/revoca
 
 ## Kiểm tra trước deployment
 
+- Organization completion dùng phone canonical unique giữa mọi tổ chức, cả inactive/deleted. Trùng trả409 `ORGANIZATION_PHONE_EXISTS`/`errors.organizationPhoneNumber`, không tạo owner/org/receipt/session/audit. Sửa số rồi dùng lại proof còn hạn thành công; receipt đã commit vẫn giữ AlreadyCompleted/input conflict. [Cross-flow và hướng dẫn preflight](organization-phone-manual-test.md). Không suy `0…` tương đương `+84…`; phone cá nhân độc lập.
+
 - Regression timeout kiểm cả advisory lock và unique-index wait lúc EF ghi user/organization: trả503/Retry-After:1, rollback receipt và retry sau khi gỡ contention không tạo trùng account/session.
 - Chạy migration với identity migration, xác minh login API kế thừa `fire3d_api` hoặc `fet3d_backend_executor`, có đúng quyền trên onboarding/users/organizations/audit. `anon`/`authenticated` không truy cập proof.
 - Kiểm startup/DI và OpenAPI ở artifact mới. HTTP pass với fixture không chứng minh Firebase production hoạt động.

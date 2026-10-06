@@ -17,6 +17,7 @@
         <EmbeddedResource Include="Persistence/Sql/RefreshCleanupGate.sql" LogicalName="Fire3D.Infrastructure.Persistence.RefreshCleanupGate.sql" />
         <EmbeddedResource Include="Persistence/Sql/PasswordRecoveryGate.sql" LogicalName="Fire3D.Infrastructure.Persistence.PasswordRecoveryGate.sql" />
         <EmbeddedResource Include="Persistence/Sql/GoogleOnboarding.sql" LogicalName="Fire3D.Infrastructure.Persistence.GoogleOnboarding.sql" />
+        <EmbeddedResource Include="../../database/006_organization_phone_preflight.sql" LogicalName="Fire3D.Infrastructure.Persistence.OrganizationPhonePreflight.sql" />
         <EmbeddedResource Include="Billing/Schema.sql" LogicalName="Fire3D.Infrastructure.Billing.Schema.sql" />
         <EmbeddedResource Include="Billing/Hardening.sql" LogicalName="Fire3D.Infrastructure.Billing.Hardening.sql" />
         <EmbeddedResource Include="Billing/PayosRuntime.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosRuntime.sql" />

@@ -86,6 +86,11 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     }
 
     /// <summary>Registers a new organization and its initial OrganizationUser owner atomically.</summary>
+    /// <remarks>Requires the OTP registrationToken and a valid organization phone. Canonical phone is unique
+    /// across all organizations, including inactive/deleted; no country-code equivalence is inferred.
+    /// Duplicate phone returns 409 ORGANIZATION_PHONE_EXISTS with errors.organizationPhoneNumber.
+    /// The failed registration does not consume the proof or create an organization/owner/audit;
+    /// correct the phone and retry with the same unexpired proof.</remarks>
     [HttpPost("register/organization")]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]

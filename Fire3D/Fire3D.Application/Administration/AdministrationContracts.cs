@@ -66,7 +66,7 @@ public sealed class UpdateOrganizationProfileRequestJsonConverter : JsonConverte
         writer.WriteEndObject();
     }
 }
-public enum OrganizationProfileUpdateResult { Updated, PreconditionFailed, Unavailable }
+public enum OrganizationProfileUpdateResult { Updated, PreconditionFailed, Unavailable, PhoneTaken }
 public sealed record ManagedAccountResponse(Guid Id, string Email, string? FullName, UserRole Role,
     Guid? OrganizationId, bool IsActive, DateTime? LastLoginAt, DateTime CreatedAt, DateTime UpdatedAt);
 public sealed record PageResponse<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);

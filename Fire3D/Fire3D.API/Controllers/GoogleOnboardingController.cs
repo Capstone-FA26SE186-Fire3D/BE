@@ -16,7 +16,9 @@ public sealed class GoogleOnboardingController(IGoogleOnboardingService onboardi
     /// Server creates a Google-only account; no password, role/tenant override or session is accepted.
     /// 201 returns authentication after atomic account/session creation. Same input replay within 24 hours
     /// returns 409 ONBOARDING_ALREADY_COMPLETED; recover by exchanging a valid Firebase ID token.
-    /// Different input returns 409 IDEMPOTENCY_KEY_CONFLICT.</remarks>
+    /// Different input returns 409 IDEMPOTENCY_KEY_CONFLICT. Organization phone must be unique across
+    /// all organizations including inactive/deleted. Duplicate phone returns 409 ORGANIZATION_PHONE_EXISTS
+    /// with errors.organizationPhoneNumber; rollback preserves the unexpired proof for a corrected request.</remarks>
     [HttpPost("complete")]
     [AllowAnonymous]
     [ProducesResponseType<GoogleExchangeResponse>(201)]

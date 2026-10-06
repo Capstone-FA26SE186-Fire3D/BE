@@ -31,11 +31,17 @@ public sealed class OrganizationProfileController(ISender sender) : ControllerBa
         return Ok(result.Value);
     }
 
+    /// <summary>Updates the current organization's name, address or phone with If-Match.</summary>
+    /// <remarks>Omitted fields are unchanged; explicit null/empty is invalid. Keeping the current phone is valid.
+    /// Phone reserved by another organization (including inactive/deleted) returns 409 ORGANIZATION_PHONE_EXISTS
+    /// with errors.phoneNumber; revision/audit remain unchanged. Missing If-Match returns 428,
+    /// malformed 400, stale 412. Canonical normalization does not infer country codes.</remarks>
     [HttpPatch]
     [ProducesResponseType<OrganizationProfileResponse>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
     public async Task<ActionResult<OrganizationProfileResponse>> Update([FromBody] UpdateOrganizationProfileRequest request,
@@ -43,7 +49,7 @@ public sealed class OrganizationProfileController(ISender sender) : ControllerBa
     {
         var result = await sender.Send(new UpdateMyOrganizationCommand(User.GetActorId(), ifMatch, request), ct);
         if (!result.IsSuccess) return Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
         Response.Headers.ETag = ProfileEtag.Format(result.Value!.ProfileRevision);
         return Ok(result.Value);
     }
