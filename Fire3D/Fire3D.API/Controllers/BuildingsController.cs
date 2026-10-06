@@ -124,9 +124,8 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
 
         var result = await sender.Send(new Fire3D.Application.Buildings.Queries.GetTrainings.GetTrainingsQuery(actor, id), ct);
 
-        return result.IsSuccess 
+        return result.IsSuccess
             ? Ok(result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 }
-

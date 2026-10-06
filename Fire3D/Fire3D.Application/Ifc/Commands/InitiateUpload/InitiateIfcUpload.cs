@@ -10,7 +10,7 @@ public sealed record InitiateIfcUploadRequest(long FileSizeBytes, string Origina
 
 public sealed record InitiateIfcUploadResponse(Guid RevisionId, string UploadUrl, string ObjectKey);
 
-public sealed record InitiateIfcUploadCommand(Guid ActorId, Guid BuildingId, InitiateIfcUploadRequest Request, string? IdempotencyKey = null) 
+public sealed record InitiateIfcUploadCommand(Guid ActorId, Guid BuildingId, InitiateIfcUploadRequest Request, string? IdempotencyKey = null)
     : IRequest<AuthResult<InitiateIfcUploadResponse>>;
 
 public sealed class InitiateIfcUploadHandler(IAuthStore accounts, IIfcUploadService uploads)

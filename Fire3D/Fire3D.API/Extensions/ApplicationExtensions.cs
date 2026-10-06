@@ -47,6 +47,19 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Ifc.IEditorPreviewStore, Fire3D.Infrastructure.Ifc.EditorPreviewStore>();
         services.AddScoped<Fire3D.Application.Ifc.IPreviewDownloadSigner, Fire3D.Infrastructure.Storage.S3PreviewDownloadSigner>();
         services.AddScoped<Fire3D.Application.Ifc.IAnnotationStore, Fire3D.Infrastructure.Ifc.AnnotationStore>();
+        services.AddOptions<Fire3D.Application.Ifc.ProcessingWorkerOptions>().Bind(configuration.GetSection("ProcessingWorker"))
+            .Validate(o => o.PollSeconds is >= 1 and <= 60, "ProcessingWorker PollSeconds must be 1-60.")
+            .Validate(o => !(o.WorkerApiEnabled || o.DispatcherEnabled) || o.MachineKey.Length is >= 32 and <= 512, "Processing worker requires a separate machine key of 32-512 characters.")
+            .Validate(o => !o.WorkerApiEnabled || (!string.IsNullOrWhiteSpace(configuration.GetConnectionString("ProcessingExecutor")) && o.AllowedToolchains.Length > 0), "Worker API requires restricted ProcessingExecutor connection and an explicit toolchain allowlist.")
+            .Validate(o => !o.DispatcherEnabled || (Uri.TryCreate(o.WorkerUrl,UriKind.Absolute,out var url) && url.Scheme=="https" && string.IsNullOrEmpty(url.UserInfo)), "Dispatcher requires a configured HTTPS worker URL.")
+            .ValidateOnStart();
+        services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions,Fire3D.API.Authorization.ProcessingWorkerAuthentication>(Fire3D.API.Authorization.ProcessingWorkerAuthentication.SchemeName,_=>{});
+        services.AddScoped<Fire3D.Infrastructure.Ifc.ProcessingRuntimeStore>();
+        services.AddScoped<Fire3D.Application.Ifc.IRevisionProcessingStore>(p=>p.GetRequiredService<Fire3D.Infrastructure.Ifc.ProcessingRuntimeStore>());
+        services.AddScoped<Fire3D.Application.Ifc.IProcessingWorkerGate>(p=>p.GetRequiredService<Fire3D.Infrastructure.Ifc.ProcessingRuntimeStore>());
+        services.AddScoped<Fire3D.Application.Ifc.IProcessingDispatchGate>(p=>p.GetRequiredService<Fire3D.Infrastructure.Ifc.ProcessingRuntimeStore>());
+        services.AddHttpClient("processing-worker").ConfigurePrimaryHttpMessageHandler(()=>new HttpClientHandler { AllowAutoRedirect=false });
+        services.AddHostedService<Fire3D.Infrastructure.Ifc.ProcessingDispatcher>();
         services.AddScoped<Fire3D.Application.Ifc.IIfcWriteStore, Fire3D.Infrastructure.Ifc.IfcWriteStore>();
         services.AddOptions<Fire3D.Application.Ifc.IfcUploadOptions>().Bind(configuration.GetSection("IfcUpload"))
             .Validate(o => !o.Enabled || (o.MaxBytes is > 0 && o.CleanupEnabled), "IfcUpload requires explicit positive MaxBytes and CleanupEnabled=true when enabled.").ValidateOnStart();

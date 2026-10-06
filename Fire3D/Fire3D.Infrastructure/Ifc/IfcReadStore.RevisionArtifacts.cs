@@ -11,6 +11,6 @@ public sealed partial class IfcReadStore
                 'createdAt',x.created_at) AS item
             FROM public.revision_artifacts x JOIN scoped_revision r ON r.id=x.revision_id
             JOIN public.processing_jobs j ON j.id=x.job_id AND j.revision_id=x.revision_id
-            JOIN public.processing_job_attempts a ON a.id=x.attempt_id AND a.processing_job_id=j.id AND a.input_hash=j.input_hash
+            JOIN public.processing_job_attempts a ON a.id=x.attempt_id AND a.processing_job_id=j.id AND a.input_hash=j.input_hash AND a.status='Succeeded' AND j.status='Succeeded' AND a.id=j.current_attempt_id
             """, revisionId, organizationId, page, pageSize, ct);
 }

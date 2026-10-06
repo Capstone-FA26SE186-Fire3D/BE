@@ -456,7 +456,7 @@ Hiện kiểm chứng PostgreSQL cô lập + storage giả lập; chưa áp Supa
 
 ### 5.2 Process, retry, confirm
 
-Process cần SourceDocument; thiếu source 400; đã có job cho revision 409. Contract thành công là 202 với jobId và Location trỏ job detail. **Xem blocker mục 9 trước khi coi process chạy được**. Dùng GET job để poll, không coi 202 là IFC đã xử lý xong.
+Process yêu cầu `Idempotency-Key`, chỉ nhận source đã verified. 202 `{jobId}`/Location xác nhận job/audit/outbox/receipt bền vững; chưa chứng minh worker đã chạy. Cùng input/key replay; nhiều key đồng thời không tạo nhiều logical job. Legacy source chưa verified trả 422. Dispatcher mặc định tắt, worker HTTP/machine gates xem [processing worker](processing-worker.md).
 
 Retry job Failed:
 

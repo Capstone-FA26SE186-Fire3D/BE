@@ -11,6 +11,6 @@ public sealed partial class IfcReadStore
     public Task<ValidationRunResponse?> GetValidationAsync(Guid validationRunId, Guid? organizationId, CancellationToken ct) =>
         ReadJsonAsync<ValidationRunResponse>("SELECT " + ValidationJson + "::text FROM public.validation_runs v " +
             "JOIN public.processing_jobs j ON j.id=v.processing_job_id AND j.revision_id=v.revision_id " +
-            "JOIN public.processing_job_attempts a ON a.id=v.processing_attempt_id AND a.processing_job_id=j.id AND a.input_hash=j.input_hash " +
+            "JOIN public.processing_job_attempts a ON a.id=v.processing_attempt_id AND a.processing_job_id=j.id AND a.input_hash=j.input_hash AND a.status='Succeeded' AND j.status='Succeeded' AND a.id=j.current_attempt_id " +
             ScopeJoins + " WHERE v.id=@id AND " + ScopePredicate, validationRunId, organizationId, ct);
 }

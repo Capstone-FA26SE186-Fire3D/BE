@@ -94,10 +94,10 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
-    public async Task<IActionResult> ProcessRevision(Guid revisionId, CancellationToken ct)
+    public async Task<IActionResult> ProcessRevision(Guid revisionId, [FromHeader(Name = "Idempotency-Key")] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();
-        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ProcessRevision.ProcessRevisionCommand(actor, revisionId), ct);
+        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ProcessRevision.ProcessRevisionCommand(actor, revisionId, key), ct);
         return result.IsSuccess ? Accepted($"/api/processing-jobs/{result.Value}", new { JobId = result.Value })
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
@@ -121,4 +121,3 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
     }
 }
-

@@ -13,6 +13,6 @@ public sealed partial class IfcReadStore
             FROM public.validation_issues i JOIN scoped_revision r ON r.id=i.revision_id
             JOIN public.validation_runs v ON v.id=i.validation_run_id AND v.revision_id=i.revision_id
             JOIN public.processing_jobs j ON j.id=v.processing_job_id AND j.revision_id=v.revision_id
-            JOIN public.processing_job_attempts a ON a.id=v.processing_attempt_id AND a.processing_job_id=j.id AND a.input_hash=j.input_hash
+            JOIN public.processing_job_attempts a ON a.id=v.processing_attempt_id AND a.processing_job_id=j.id AND a.input_hash=j.input_hash AND a.status='Succeeded' AND j.status='Succeeded' AND a.id=j.current_attempt_id
             """, revisionId, organizationId, page, pageSize, ct);
 }

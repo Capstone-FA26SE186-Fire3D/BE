@@ -220,3 +220,7 @@ POST body `organizationId`/alias query, admin PUT/DELETE derive tenant, validati
 ### Selected scope Task 2 — bound IFC upload (source/test; deployment pending)
 
 Hai route initiate dùng chung intent/receipt và SHA-256 dự kiến. Complete kiểm owner/tenant/key/size/hash thực, lưu candidate trước copy, adopt atomic; cleanup có lease/retry và tombstone để xử lý late write. Migration additive `AddBoundIfcUploads` giữ source legacy unverified. Xem `ifc-upload-manual-test.md`. Test PostgreSQL isolated + HTTP/storage fake; không đánh dấu pipeline IFC/Blender/Unity hoặc Supabase/S3 production hoàn tất.
+
+### Selected scope Task 3 — processing/outbox/HTTP worker (source/test; provider pending)
+
+Process dùng verified source + Idempotency-Key và SQL gate atomic. Machine-only claim/renew/output/complete/fail, restricted executor, dispatcher receipt-before-ACK, lease fencing/recovery và retry gate đã triển khai. Artifacts/QA/issues chỉ lấy current accepted attempt; alias additive giữ các cột legacy. Xem `processing-worker.md`. Worker nghiệm thu bằng fake HTTP, chưa có IFC/Blender/Unity thật; dispatcher mặc định tắt. Readiness/approval/package runtime/playtest và publish chưa được suy hoàn tất từ kết quả này.
