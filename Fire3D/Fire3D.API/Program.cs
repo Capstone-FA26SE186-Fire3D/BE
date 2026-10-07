@@ -34,7 +34,8 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
     .AddDocumentTransformer<GoogleOnboardingDocumentTransformer>()
     .AddSchemaTransformer<AuthProfileSchemaTransformer>()
     .AddOperationTransformer<AuthOperationTransformer>()
-    .AddOperationTransformer<BillingOperationTransformer>());
+    .AddOperationTransformer<BillingOperationTransformer>()
+    .AddOperationTransformer<AuthoringOperationTransformer>());
 builder.Services.AddHealthChecks();
 
 // Cấu hình Firebase Admin SDK

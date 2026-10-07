@@ -10,7 +10,7 @@ public partial class PlaytestSession
     public Guid RevisionId { get; set; }
     public Guid? ScenarioDraftId { get; set; }
     public Guid ScenarioVersionId { get; set; }
-    public Guid ServiceEntitlementId { get; set; }
+    public Guid? ServiceEntitlementId { get; set; }
     public Guid CreatedBy { get; set; }
     public string PackageHash { get; set; } = null!;
     public string ProtocolVersion { get; set; } = null!;

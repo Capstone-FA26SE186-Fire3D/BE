@@ -101,11 +101,10 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 - **Sửa code:** PlatformAdmin maintain template/rubric mẫu/metadata thiết bị có version; OrganizationUser đọc trong console để author. Template tùy chọn, capability chỉ chọn runtime hỗ trợ; tách Learn và kho riêng tenant.
 - **Nghiệm thu:** Organization không quản trị library; sửa mẫu không sửa bài đã phát hành; private IFC/scenario không tự vào thư viện; capability không hỗ trợ bị từ chối.
 
-### APPROVAL-01 — P1 · GAP · Duyệt scenario/rubric (FR-SCENARIO-03)
+### APPROVAL-01 — P1 · SOURCE/DB TESTED · Duyệt scenario/rubric (FR-SCENARIO-03)
 
-- **Contract/current:** Readiness/ConfirmForTraining hiện có không thay approval nội dung của PlatformAdmin; chưa thấy `scenario_content_reviews` v7 trong source.
-- **Sửa code:** Submit đóng băng version/rubric và content hash; Admin approve/reject đúng hash, reject có lý do; sửa tạo version/review mới. Publish pin approval cùng readiness và package provenance.
-- **Nghiệm thu:** Hash lệch, thiếu approval hoặc readiness không đạt chặn publish; sửa version submitted bị chặn; approval không áp sang version khác. Learn giữ editorial lifecycle riêng, không thêm approval Learn.
+- **Contract/current:** Exact immutable scenario/rubric submission and Admin approve/reject implemented with receipt, audit and live tenant/lifecycle checks. Technical readiness is independent. See [scenario-readiness.md](scenario-readiness.md).
+- **Remaining acceptance:** Real client/deployment and integration into the release/publish gate. Legacy versions receive no fabricated approval.
 
 ### IFC-01 — P0 · GAP · Outbox và worker result
 
@@ -113,11 +112,10 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 - **Sửa code còn lại:** Nối dispatcher/consumer và worker result qua gate kiểm current attempt/lease/provenance. Commit business effect và receipt trước ACK; worker không có DML trực tiếp. Gate retry/provenance/full schema v7 phải được giao và nghiệm thu riêng.
 - **Nghiệm thu:** Hash/envelope hợp lệ; duplicate delivery idempotent; sai hash, lease cũ hoặc attempt cũ bị từ chối; crash trước ACK replay không nhân đôi kết quả.
 
-### IFC-02 — P1 · GAP · Readiness theo revision/version
+### IFC-02 — P1 · SOURCE/DB TESTED · Readiness theo revision/version
 
-- **Contract/current:** `ConfirmForTrainingAsync` hiện đổi trạng thái toàn revision; API không gắn confirmation với scenario version. Docs yêu cầu readiness theo cặp revision–scenario version.
-- **Sửa code:** Đổi command/API/persistence/review để ghi và kiểm tra đúng cặp; release phải tham chiếu confirmation tương ứng.
-- **Nghiệm thu:** Confirm một cặp không làm sẵn sàng scenario khác; version không thuộc revision hoặc tenant sai bị từ chối; audit/replay giữ đúng cặp.
+- **Contract/current:** Confirm requires exact scenarioVersionId/validationRunId/annotationSetId, accepted current worker attempt/artifact, matching hashes, Passed/runtime ready and no Error/Critical blocker. Returns reviewId, atomic receipt/audit; technical rejection preserves history.
+- **Remaining acceptance:** Release must consume that exact confirmation in Task 7. Fake worker evidence is not geometry/Unity acceptance.
 
 ### SCENARIO-01 — P1 · VERIFY · Draft ETag và snapshot
 
@@ -125,11 +123,10 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 - **Sửa code:** Giữ GET draft trả ETag; kiểm tra PUT `If-Match`, snapshot bất biến, liên kết version với đúng scenario/revision và review reject đúng cặp.
 - **Nghiệm thu:** GET draft lấy ETag ban đầu; lưu với ETag hiện tại thành công; thiếu/cũ ETag bị từ chối; hai editor không ghi đè nhau; snapshot cũ không đổi.
 
-### PLAYTEST-01 — P1 · GAP · Tenant và entitlement
+### PLAYTEST-01 — P1 · SOURCE/HTTP/DB TESTED · Tenant, entitlement and launch
 
-- **Contract/current:** Runtime dùng [FailClosedPlaytestWriteStore](../Fire3D/Fire3D.Infrastructure/Scenarios/FailClosedPlaytestWriteStore.cs): prepare trả 503 thay vì tạo session khi entitlement gate chưa deployed; start kiểm owner. Legacy store còn source nhưng không được DI đăng ký. Launch grant vẫn chưa có.
-- **Sửa code:** Dùng gate/schema entitlement đích: OrganizationUser đúng tenant, Trial còn quota hoặc entitlement Active của Building; pin version/package/runtime và cấp playtest grant/session type riêng. Bỏ nuốt lỗi và ID rỗng thay cho dữ liệu bắt buộc.
-- **Nghiệm thu:** Trial còn/hết quota, Active/Expired, tenant sai, DB lỗi, thiếu version và replay đều fail-closed/đúng trạng thái. Playtest không dùng QR Trainee, không ghi learner analytics; session đã bắt đầu vẫn sync theo contract.
+- **Contract/current:** OrganizationUser owner/session only; preparation pins accepted immutable package without entitlement/quota/grant; start checks current runtime + exact Building entitlement and consumes Trial atomically with receipt/audit. Separate five-minute grant and replay implemented. [Manual tests](playtest-manual-test.md).
+- **Remaining acceptance:** Production configuration, real IFC/Unity/runtime client; no automatic Trial is provisioned. No playtest completion/sync/result API or learner analytics is claimed. Publish stays contained.
 
 ### RELEASE-01 — P1 · GAP · Publish gates
 
@@ -231,3 +228,5 @@ Scenario authoring: implemented durable create/snapshot/package-build receipts, 
 ### Selected scope Task 5 — exact readiness and content approval
 
 Source + PostgreSQL/HTTP tests implemented: exact revision/version/run/annotation/artifact provenance, Passed/blocker/runtime gate, separate immutable Submitted→Approved/Rejected content review, server hashes, live tenant/lifecycle, receipt and audit rollback. See [scenario-readiness.md](scenario-readiness.md). Tests use fake worker outputs, not Unity. Publish/learner sessions remain incomplete. Supabase Tasks 2–4 plus dependency EXECUTE repair were applied 2026-10-07; existing row counts were preserved. Older "deployment pending" notes describe their original implementation evidence, not the subsequent schema rollout.
+
+Task 6: isolated actual-history PostgreSQL + HTTP/OpenAPI + fake runtime/package/paid-provider fixture verified; migrations are additive and preserve legacy sessions. Selected work stops at Task 6; release/Training/access, support and final whole-route documentation remain Tasks 7–9.

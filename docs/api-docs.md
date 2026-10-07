@@ -518,8 +518,8 @@ Tất cả cần Editor. Đây là luồng tác giả thiết kế/thử kịch 
 | GET | `/api/scenarios/{scenarioId}/versions` | page, pageSize | 200 Page<ScenarioVersionSummaryResponse> |
 | GET | `/api/scenario-versions/{versionId}` | Không body | 200 ScenarioVersionDetailResponse |
 | GET | `/api/scenario-interactions/catalog` | Không body | 200 RuntimeCatalogDto[] |
-| POST | `/api/scenarios/{scenarioId}/playtests` | Query buildingId + body | 201 {id} |
-| POST | `/api/playtests/{playtestId}/start` | Không body | 200 rỗng |
+| POST | `/api/scenarios/{scenarioId}/playtests` | Optional buildingId; exact draft/version + Idempotency-Key; OrganizationUser | 201 PlaytestPreparation |
+| POST | `/api/playtests/{playtestId}/start` | runtimeVersion + Idempotency-Key; OrganizationUser owner | 200 PlaytestLaunch with 5-minute grant |
 | POST | `/api/revisions/{revisionId}/reviews` | scenarioVersionId, validationRunId, reviewMessage, annotationSetId nullable | 201 {id} |
 
 ### 7.1 Scenario/draft
@@ -577,23 +577,7 @@ Snapshot không body, trả 201 id ScenarioVersion. Đây là snapshot state, kh
 
 Catalog trả mảng `{runtimeVersion, protocolVersion, manifestSchemaVersion, capabilities}`; capabilities là JSON. Dùng giá trị catalog/package thực tế khi tích hợp runtime.
 
-Prepare cần `?buildingId=<building UUID>` cùng scenarioId trên path:
-
-```json
-{
-  "revisionId": "33333333-3333-4333-8333-333333333333",
-  "scenarioDraftId": null,
-  "scenarioVersionId": "66666666-6666-4666-8666-666666666666",
-  "packageHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "protocolVersion": "<from catalog>",
-  "manifestSchemaVersion": "<from catalog>",
-  "runtimeVersion": null
-}
-```
-
-Handler yêu cầu ít nhất một draftId/versionId; client nên gửi đúng một. Hiện chưa reject cả hai và store ưu tiên kiểm version. Revision/scenario phải thuộc building; draft/version thuộc scenario. Thiếu nguồn 400, quan hệ không thấy 404. Package hash phải lấy từ package thật.
-
-Prepare hiện trả 503 `ENTITLEMENT_UNAVAILABLE`: API đang fail-closed cho đến khi Building entitlement/trial gate được migrate. Start giữ 404 cho session không thuộc actor; một session Created hợp lệ từ dữ liệu cũ mới có thể chuyển Created → Running. Không trả launch token, manifest hay URL package. 200 không chứng minh Unity đã khởi chạy hoặc đã ghi kết quả huấn luyện.
+Playtest prepare/start use the session-bound PostgreSQL gate: exact accepted immutable PlaytestPackage, live OrganizationUser owner/tenant, runtime catalog compatibility and Building entitlement. Preparation assigns no entitlement and consumes no Trial; start does. See [requests, configuration and manual tests](playtest-manual-test.md). The legacy unrestricted store is not registered and refuses mutations without session proof.
 
 ## 8. Release lifecycle — 4 endpoint
 
@@ -619,8 +603,8 @@ Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 40
 | IFC finalize | Intent/receipt, bounded stream, ETag/hash thật, candidate trước copy và cleanup lease/retry đã có; PostgreSQL/storage giả lập đã kiểm tra. Supabase/S3 thật chưa nghiệm thu. |
 | IFC process | Process/confirm đã Include Building; Process gọi enqueue_integration_outbox_event schema 1, hash canonical JSONB và tenant suy từ DB, job/audit/outbox atomic. Migration AddIfcIntegrationOutbox giao table/function/grants còn thiếu. Dispatcher/worker delivery, attempt/result gates và provenance production chưa hoàn chỉnh. Xem [IFC outbox](ifc-outbox.md). |
 | Draft editor | GET draft state/version đã có. Kiểm tra response ETag/xmin trước khi tích hợp; không coi đây là API còn thiếu. |
-| Playtest prepare | Runtime hiện fail-closed 503 `ENTITLEMENT_UNAVAILABLE`; entitlement/trial, compatibility và launch grant chưa triển khai. Store legacy không được DI đăng ký. |
-| Playtest start | Runtime kiểm owner session trước khi delegate trạng thái/audit; chưa trả launch grant. |
+| Playtest prepare | Pins exact accepted immutable package/version/run without Trial consumption or grant; requires OrganizationUser live session and Idempotency-Key. |
+| Playtest start | Live session/owner/tenant/runtime/Building entitlement gate, atomic Trial and receipt/audit; dedicated 5-minute grant. Real Unity integration remains unverified. |
 | Release/training | Đã có create-Built/read/revoke; runtime publish fail-closed 503 `PUBLISH_GATE_UNAVAILABLE` cho đến khi có gate. Còn thiếu package-build job và vòng đời Training/session. |
 | Auth | Form → OTP → proof → register → login cho Trainee/OrganizationUser; OrganizationUser route chưa nhận username cá nhân. Request/verify OTP không tạo identity; verify-email link chỉ cho pending legacy. Profile cá nhân/tổ chức và avatar mutation dùng ETag; logout-all đã có. AvatarService reserve candidate trước conditional S3 copy, có cleanup/recovery source; provider/deployment cần kiểm riêng. Google onboarding completion và explicit link đã có. Xem [Google contract/test tay](google-auth-manual-test.md); Firebase/client/deployment chưa kiểm chứng. |
 | Token response | Login local, Firebase login và refresh đều không trả expiresAt |
@@ -727,3 +711,5 @@ PUT khóa revision, kiểm tra version rồi append annotation_sets + audit_logs
 Authoring hardening: draft PUT/snapshot require quoted xmin If-Match (428/400/412); scenario/draft/snapshot/package-build use durable idempotency receipts. V7 snapshots require explicit rubric/learner fields; structural validation does not establish readiness. See [scenario authoring](scenario-authoring.md). Isolated PostgreSQL/HTTP/fake package tests ran; real Unity and deployment remain unverified.
 
 Readiness/content approval: [contract and manual tests](scenario-readiness.md). Submit/approve/reject use Idempotency-Key and exact immutable content/rubric hashes; technical readiness remains separate.
+
+Selected Task 6 source/HTTP/isolated PostgreSQL/runtime-fake evidence: [playtest-manual-test.md](playtest-manual-test.md). No learner plays or publish completion is inferred.

@@ -16,7 +16,7 @@ public sealed partial class AuthIntegrationTests
         {
             var result=await client.PostAsJsonAsync(path,new{});Assert.Equal(HttpStatusCode.Unauthorized,result.StatusCode);
         }
-    }    private async Task<(Guid Owner,Guid Revision,Guid Version,Guid Run,Guid Artifact)> SeedReadyPackage(string kind="ReleasePackage",bool blocker=false)
+    }    private async Task<(Guid Owner,Guid Revision,Guid Version,Guid Run,Guid Artifact)> SeedReadyPackage(string kind="ReleasePackage",bool blocker=false,string minRuntimeVersion="1.0.0",string[]? requiredCapabilities=null,string manifestProtocolVersion="1")
     {
         var revision=await SeedVerifiedIfcRevision();var building=(Guid)(await ScalarAsync($"SELECT building_id FROM revisions WHERE id='{revision}'"))!;var org=(Guid)(await ScalarAsync($"SELECT organization_id FROM revisions WHERE id='{revision}'"))!;var owner=Guid.NewGuid();
         await ExecuteAsync($"INSERT INTO users(id,organization_id,email,full_name,role,is_active,email_verified_at,created_at,updated_at) VALUES('{owner}','{org}','owner-{owner:N}@example.test','Owner','OrganizationUser',true,now(),now(),now())");
@@ -36,7 +36,7 @@ public sealed partial class AuthIntegrationTests
             foreach(var type in new[]{"unity_package","manifest"})
             {
                 var issues=blocker?new object[]{new{severity="Critical",code="BLOCKER",message="Fixture blocker",details=new{}}}:Array.Empty<object>();
-                var output=new{artifactType=type,objectKey=claim.Value.GetProperty("outputPrefix").GetString()+type,sha256Hash=IfcHash,sizeBytes=100L,schemaVersion="1",metadata=new{buildTarget="Windows",minRuntimeVersion="1.0.0",protocolVersion="1",manifestSchemaVersion="1",requiredCapabilities=Array.Empty<string>()},validatorVersion="fake-validator-v1",outcome="Passed",issues};
+                var output=new{artifactType=type,objectKey=claim.Value.GetProperty("outputPrefix").GetString()+type,sha256Hash=IfcHash,sizeBytes=100L,schemaVersion="1",metadata=new{buildTarget="Windows",minRuntimeVersion,protocolVersion=type=="manifest"?manifestProtocolVersion:"1",manifestSchemaVersion="1",requiredCapabilities=requiredCapabilities??Array.Empty<string>()},validatorVersion="fake-validator-v1",outcome="Passed",issues};
                 var registered=await store.ExecuteAsync("Output",job,WorkerInput(new{attemptId=attempt,leaseToken=lease,output}),default);Assert.True(registered.IsSuccess,registered.Error?.Code);outputHash=registered.Value.GetProperty("outputHash").GetString();if(type=="unity_package")artifact=registered.Value.GetProperty("artifactId").GetGuid();
             }
             var completed=await store.ExecuteAsync("Complete",job,WorkerInput(new{attemptId=attempt,leaseToken=lease,outputHash}),default);Assert.True(completed.IsSuccess,completed.Error?.Code);run=completed.Value.GetProperty("validationRunId").GetGuid();

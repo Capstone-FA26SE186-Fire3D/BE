@@ -191,39 +191,43 @@ public class ScenariosController(ISender sender) : ControllerBase
     }
 
     /// <summary>
-    /// Prepares a new VR Playtest Session (D14).
+    /// Pins an accepted immutable PlaytestPackage without consuming Trial or issuing a grant. Idempotency-Key required.
     /// </summary>
+    [Authorize(Roles="OrganizationUser")]
     [HttpPost("{scenarioId:guid}/playtests")]
-    [ProducesResponseType(201)]
+    [ProducesResponseType<Fire3D.Application.Scenarios.PlaytestPreparation>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> PreparePlaytestSession(Guid scenarioId, [FromQuery] Guid buildingId, [FromBody] Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestRequest request, CancellationToken ct)
+    public async Task<IActionResult> PreparePlaytestSession(Guid scenarioId, [FromQuery] Guid? buildingId, [FromBody] Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestRequest request, [FromHeader(Name="Idempotency-Key")] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestSessionCommand(actor, buildingId, scenarioId, request), ct);
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestSessionCommand(actor, User.GetSessionFamilyId(), buildingId, scenarioId, request, key), ct);
 
         return result.IsSuccess 
-            ? Created($"/api/playtests/{result.Value}", new { Id = result.Value })
+            ? Created($"/api/playtests/{result.Value!.Id}", result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>
-    /// Starts a prepared VR Playtest Session (D15).
+    /// OrganizationUser owner starts with an active session, compatible runtime and Building entitlement. Atomic Trial consumption; returns a dedicated five-minute launch grant.
     /// </summary>
+    [Authorize(Roles="OrganizationUser")]
     [HttpPost("/api/playtests/{playtestId:guid}/start")]
-    [ProducesResponseType(200)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(503)]
+    [ProducesResponseType<Fire3D.Application.Scenarios.PlaytestLaunch>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> StartPlaytestSession(Guid playtestId, CancellationToken ct)
+    public async Task<IActionResult> StartPlaytestSession(Guid playtestId, [FromBody] Fire3D.Application.Scenarios.StartPlaytestRequest request, [FromHeader(Name="Idempotency-Key")] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.StartPlaytestSession.StartPlaytestSessionCommand(actor, playtestId), ct);
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.StartPlaytestSession.StartPlaytestSessionCommand(actor, User.GetSessionFamilyId(), playtestId, request, key), ct);
 
         return result.IsSuccess 
-            ? Ok()
+            ? Ok(result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }

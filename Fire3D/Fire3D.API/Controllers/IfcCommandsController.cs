@@ -117,7 +117,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ConfirmForTraining.ConfirmForTrainingCommand(actor, revisionId, request), ct);
 
         return result.IsSuccess 
-            ? Ok(new { reviewId = result.Value }) 
+            ? Ok(new { reviewId = result.Value })
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,extensions:new Dictionary<string,object?>{["code"]=result.Error.Code,["errors"]=result.Error.Errors});
     }
 }
