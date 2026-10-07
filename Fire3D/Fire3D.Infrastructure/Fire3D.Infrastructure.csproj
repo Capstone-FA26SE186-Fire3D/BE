@@ -12,6 +12,7 @@
 
 
 	<ItemGroup>
+        <EmbeddedResource Include="Persistence/Sql/SupportCommands.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.SupportCommands.sql" />
         <EmbeddedResource Include="Persistence/Sql/ReleaseAccess.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ReleaseAccess.sql" />
         <EmbeddedResource Include="Persistence/Sql/PlaytestLifecycle.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PlaytestLifecycle.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReadiness.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ScenarioReadiness.sql" />

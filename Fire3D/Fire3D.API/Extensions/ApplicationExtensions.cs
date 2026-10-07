@@ -23,7 +23,7 @@ public static class ApplicationExtensions
             .Validate(options => !options.Enabled || (PayosHttps(options.ReturnUrl) && PayosHttps(options.CancelUrl)), "PayOS ReturnUrl and CancelUrl must be absolute non-loopback HTTPS URLs.")
             .Validate(options => !(options.Enabled || options.WorkerEnabled) ||
                 (!string.IsNullOrWhiteSpace(configuration.GetConnectionString("PayosRequestExecutor")) && !string.IsNullOrWhiteSpace(configuration.GetConnectionString("PayosWebhookExecutor"))), "PayOS requires separate least-privilege request and webhook executor connections.")
-            .Validate(options => options.PollSeconds is >= 5 and <= 300, "PayOS PollSeconds must be 5–300.")
+            .Validate(options => options.PollSeconds is >= 5 and <= 300, "PayOS PollSeconds must be 5â€“300.")
             .ValidateOnStart();
         services.AddScoped<Fire3D.Application.Billing.IPayosProvider,Fire3D.Infrastructure.Billing.PayosSdkProvider>();
         services.AddHttpClient("fet3d-payos");
@@ -77,6 +77,7 @@ public static class ApplicationExtensions
             .Validate(o=>!o.Enabled || (System.Text.Encoding.UTF8.GetByteCount(o.SigningKey) is >=32 and <=512 && !string.IsNullOrWhiteSpace(o.Issuer) && o.Issuer.Length<=200 && !string.IsNullOrWhiteSpace(o.Audience) && o.Audience.Length<=200 && o.SigningKey!=configuration["Jwt:SigningKey"] && o.Audience!=configuration["Jwt:Audience"]),"Enabled Playtest requires a separate signing key of at least 32 bytes, issuer and audience.").ValidateOnStart();
         services.AddScoped<Fire3D.Application.Scenarios.IPlaytestLifecycle,Fire3D.Infrastructure.Scenarios.PlaytestLifecycle>();
         services.AddScoped<Fire3D.Application.Releases.IReleaseStore, Fire3D.Infrastructure.Releases.FailClosedReleaseStore>();
+        services.AddScoped<Fire3D.Application.Support.ISupportService,Fire3D.Infrastructure.Support.SupportService>();
         services.AddScoped<Fire3D.Application.Buildings.IBuildingAccessService,Fire3D.Infrastructure.Buildings.BuildingAccessService>();
         services.AddScoped<Fire3D.Application.Buildings.IBuildingStore, Fire3D.Infrastructure.Buildings.BuildingStore>();
         services.AddScoped<Fire3D.Application.Buildings.Queries.GetTrainings.ITrainingReadStore, Fire3D.Infrastructure.Buildings.TrainingReadStore>();
@@ -87,10 +88,10 @@ public static class ApplicationExtensions
             if (!string.IsNullOrWhiteSpace(licenseKey)) options.LicenseKey = licenseKey;
         });
 
-        // Email – Mailgun
+        // Email â€“ Mailgun
         services.AddOptions<MailgunOptions>()
             .Bind(configuration.GetSection(MailgunOptions.SectionName))
-            .Validate(o => o.IsValid(), "Mailgun: ApiKey, Domain và From là bắt buộc.")
+            .Validate(o => o.IsValid(), "Mailgun: ApiKey, Domain vÃ  From lÃ  báº¯t buá»™c.")
             .ValidateOnStart();
         services.AddHttpClient<IEmailService, MailgunEmailService>();
 
