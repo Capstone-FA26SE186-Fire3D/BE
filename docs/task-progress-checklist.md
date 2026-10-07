@@ -2,17 +2,17 @@
 
 ## Redis processing — phạm vi bổ sung 07/10/2026
 
-Nhánh `feature/redis-processing-streams` giữ Http mặc định và PostgreSQL làm nguồn sự thật. Các trạng thái Supabase của Tasks1–9 bên dưới thuộc đợt trước; không áp dụng cho ba migration Redis mới.
+Nhánh `feature/redis-processing-streams` giữ Http mặc định và PostgreSQL làm nguồn sự thật. Ba migration Redis đã áp Supabase ngày07/10/2026 sau preflight và kiểm tra quyền/dữ liệu; binary và kết nối Redis Azure cần nghiệm thu riêng.
 
 | Phần | Source/test | Deployment còn chờ |
 | --- | --- | --- |
-| Kết nối/config | ✅ TLS, singleton reconnect, validate khi bật; không eager-connect chặn auth | Azure TCP/TLS và secret/network đúng môi trường |
-| Publisher | ✅ Outbox lease → XADD ngoài transaction → mark Published; replay giữ event/hash | Migration Delivery và dispatcher login/grants |
-| Consumer | ✅ Đối chiếu envelope/scope; receipt atomic rồi ACK; mất response/ACK replay an toàn | Migration Consumption và HTTP worker thật |
-| Recovery/retention | ✅ Reclaim/replay/backoff/fencing; giữ pending/unread/chưa bàn giao | Migration Recovery; Azure HA/AOF/NoEviction |
+| Kết nối/config | ✅ TLS, singleton reconnect, validate khi bật; Azure dev TCP/TLS/key/Streams smoke pass | Binary/dispatcher connection và HA/persistence |
+| Publisher | ✅ Outbox lease → XADD ngoài transaction → mark Published; replay giữ event/hash; Delivery migration đã áp | Dispatcher login/connection và binary |
+| Consumer | ✅ Đối chiếu envelope/scope; receipt atomic rồi ACK; mất response/ACK replay an toàn; Consumption migration đã áp | HTTP worker thật và binary |
+| Recovery/retention | ✅ Reclaim/replay/backoff/fencing; giữ pending/unread/chưa bàn giao; Recovery migration đã áp | Azure HA/AOF/NoEviction |
 | Swagger/docs | ✅ Process/package-build vẫn202; phân biệt Published/handoff/output; không thêm public API | Binary và client/toolchain thật |
 
-PostgreSQL/Redis Docker dùng tài nguyên disposable, HTTP worker giả lập. Azure dev smoke chưa qua: TCP tới endpoint port10000 không kết nối được, chưa XADD; không suy lỗi key hoặc thay Azure config. Không áp Supabase, bật production hoặc merge main. Hướng dẫn cấu hình, preflight và rollback tại [redis-processing.md](redis-processing.md).
+PostgreSQL/Redis Docker dùng tài nguyên disposable, HTTP worker giả lập. Azure dev smoke ban đầu bị chặn TCP; sau khi người dùng bật public network access, TCP/TLS/key và publish/read/ACK stream dev riêng đã pass; stream test đã xóa. INFO policy làvolatile-lru, chưa đạtNoEviction; HA/AOF cần kiểm Portal, không suy resource AOF từ INFO trên primary. Supabase chỉ nhận migration được cho phép; chưa bật production hoặc merge main. Hướng dẫn tại [redis-processing.md](redis-processing.md).
 
 Kết quả cuối: Auth **452 passed/0 failed/0 skipped** (19 case Redis); IFC **110 passed/0 failed/0 skipped**; build **0 warning/error**. Lượt Auth trước có một failure PayOS partial provisioning; chạy riêng và chạy lại toàn bộ đều pass, không sửa code/assertion PayOS. Không cộng các lượt target trùng vào tổng. Restart Redis Docker/AOF giữ stream/group test; Azure HA/reconnect thật chưa được chứng minh.
 
