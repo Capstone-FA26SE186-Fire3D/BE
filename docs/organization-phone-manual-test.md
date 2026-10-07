@@ -1,6 +1,6 @@
 # Test trùng số điện thoại tổ chức
 
-Phạm vi: email/OTP registration, Google organization onboarding và PATCH organization. Giữ flow OTP/password/username/session/Google recovery hiện có. Không có endpoint mới hoặc uniqueness cho phone cá nhân.
+Phạm vi: email/OTP registration, Google organization onboarding và PATCH organization. Giữ flow OTP/password/username/session/Google recovery hiện có. Không có endpoint mới. [Số cá nhân có uniqueness riêng](personal-phone-uniqueness.md), không so chéo với số tổ chức.
 
 ## Policy và response
 

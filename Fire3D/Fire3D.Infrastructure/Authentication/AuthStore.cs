@@ -62,10 +62,11 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg
             && pg.SqlState == PostgresErrorCodes.UniqueViolation
-            && pg.ConstraintName is "users_username_lower_key" or "users_email_key" or "users_email_normalized_key")
+            && pg.ConstraintName is "users_username_lower_key" or "users_email_key" or "users_email_normalized_key" or "users_phone_normalized_key")
         {
             db.Entry(user).State = EntityState.Detached;
-            return pg.ConstraintName == "users_username_lower_key"
+            return pg.ConstraintName == "users_phone_normalized_key" ? RegisterConflict.PhoneTaken
+                : pg.ConstraintName == "users_username_lower_key"
                 ? RegisterConflict.UsernameTaken
                 : RegisterConflict.EmailTaken;
         }
@@ -99,9 +100,9 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
                     .SetProperty(x => x.UpdatedAt, now), ct);
             return changed == 1 ? ProfileUpdateResult.Updated : ProfileUpdateResult.PreconditionFailed;
         }
-        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation && ex.ConstraintName == "users_username_lower_key")
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation && ex.ConstraintName is "users_username_lower_key" or "users_phone_normalized_key")
         {
-            return ProfileUpdateResult.UsernameTaken;
+            return ex.ConstraintName == "users_phone_normalized_key" ? ProfileUpdateResult.PhoneTaken : ProfileUpdateResult.UsernameTaken;
         }
     }
 
@@ -353,11 +354,12 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg
             && pg.SqlState == PostgresErrorCodes.UniqueViolation
-            && pg.ConstraintName is "organizations_slug_key" or "users_username_lower_key" or "users_email_key" or "users_email_normalized_key" or "organizations_phone_normalized_key")
+            && pg.ConstraintName is "organizations_slug_key" or "users_username_lower_key" or "users_email_key" or "users_email_normalized_key" or "organizations_phone_normalized_key" or "users_phone_normalized_key")
         {
             db.Entry(organization).State = EntityState.Detached;
             db.Entry(user).State = EntityState.Detached;
-            return pg.ConstraintName == "organizations_phone_normalized_key"
+            return pg.ConstraintName == "users_phone_normalized_key" ? RegisterConflict.PhoneTaken
+                : pg.ConstraintName == "organizations_phone_normalized_key"
                 ? RegisterConflict.OrganizationPhoneTaken
                 : pg.ConstraintName == "organizations_slug_key"
                     ? RegisterConflict.SlugTaken

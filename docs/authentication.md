@@ -1,5 +1,7 @@
 # Xác thực và tài khoản BE
 
+Personal phone policy bổ sung07/10/2026: canonical phone unique giữa mọi user (kể cả inactive/deleted), NULL tùy chọn; không unique chéo organizations. Register email/Google và PATCH cá nhân map đúng index thành409 `PHONE_NUMBER_EXISTS`/`errors.phoneNumber`, giữ proof khi conflict. [Contract, migration và test tay](personal-phone-uniqueness.md).
+
 ## Chuẩn sản phẩm
 
 Đọc [FR-AUTH](../../Docs/fire_evacuation_requirements.md), [workflow đăng ký/profile](../../Docs/fire-evacuation-training-workflows.md) và [technology contract](../../Docs/fire-evacuation-training-technology.md). Chuẩn hiện hành là:

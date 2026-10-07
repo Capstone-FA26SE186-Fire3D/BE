@@ -48,8 +48,8 @@ public interface IAuthStore
     Task EnqueuePasswordResetAsync(string email, CancellationToken ct);
 }
 
-public enum RegisterConflict { None, SlugTaken, EmailTaken, UsernameTaken, OrganizationPhoneTaken }
-public enum ProfileUpdateResult { Updated, PreconditionFailed, UsernameTaken }
+public enum RegisterConflict { None, SlugTaken, EmailTaken, UsernameTaken, OrganizationPhoneTaken, PhoneTaken }
+public enum ProfileUpdateResult { Updated, PreconditionFailed, UsernameTaken, PhoneTaken }
 public enum DeviceRegistrationResult { Registered, InstallationKeyMismatch, TokenAlreadyBound }
 public enum DeviceRevokeResult { Revoked, InstallationKeyMismatch }
 

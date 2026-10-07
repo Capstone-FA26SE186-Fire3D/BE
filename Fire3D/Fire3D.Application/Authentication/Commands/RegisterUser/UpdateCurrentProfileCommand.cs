@@ -151,6 +151,9 @@ public sealed class UpdateCurrentProfileCommandHandler(IAuthStore store, TimePro
             return AuthResult<AccountResponse>.Fail("PRECONDITION_FAILED", "The profile changed. Reload it and retry.", 412);
         if (result == ProfileUpdateResult.UsernameTaken)
             return AuthResult<AccountResponse>.Fail("USERNAME_EXISTS", "Username is already registered.", 409);
+        if (result == ProfileUpdateResult.PhoneTaken)
+            return AuthResult<AccountResponse>.Fail("PHONE_NUMBER_EXISTS", "Số điện thoại cá nhân đã được sử dụng.", 409,
+                new Dictionary<string, string[]> { ["phoneNumber"] = ["Chọn số điện thoại cá nhân khác."] });
 
         user.FullName = name ?? user.FullName;
         user.Username = username ?? user.Username;
