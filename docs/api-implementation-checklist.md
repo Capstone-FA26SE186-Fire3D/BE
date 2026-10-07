@@ -106,16 +106,14 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 - **Contract/current:** Exact immutable scenario/rubric submission and Admin approve/reject implemented with receipt, audit and live tenant/lifecycle checks. Technical readiness is independent. See [scenario-readiness.md](scenario-readiness.md).
 - **Remaining acceptance:** Real client/deployment and integration into the release/publish gate. Legacy versions receive no fabricated approval.
 
-### IFC-01 — P0 · GAP · Outbox và worker result
+### IFC-01 — SOURCE/HTTP/DB TESTED · Bound source/outbox/worker contract
 
-- **Contract/current:** [IfcWriteStore](../Fire3D/Fire3D.Infrastructure/Ifc/IfcWriteStore.cs) đã gọi canonical enqueue schema `1`; migration `AddIfcIntegrationOutbox` giao table/function/grants, tenant suy từ job và hash do PostgreSQL tính. Test PostgreSQL kiểm process, replay/conflict và rollback job/audit khi enqueue lỗi. [Chi tiết](ifc-outbox.md). **PARTIAL:** chưa đồng nghĩa worker/pipeline đã chạy.
-- **Sửa code còn lại:** Nối dispatcher/consumer và worker result qua gate kiểm current attempt/lease/provenance. Commit business effect và receipt trước ACK; worker không có DML trực tiếp. Gate retry/provenance/full schema v7 phải được giao và nghiệm thu riêng.
-- **Nghiệm thu:** Hash/envelope hợp lệ; duplicate delivery idempotent; sai hash, lease cũ hoặc attempt cũ bị từ chối; crash trước ACK replay không nhân đôi kết quả.
+Verified immutable intent/source, canonical transactional outbox, HTTP dispatcher, machine-authenticated leased/fenced worker gates, accepted provenance, retry and recovery implemented and tested on isolated migration history with fake S3/HTTP worker. Supabase schema through Task6 applied; no real IFC/Blender/Unity output/deployed worker certification. See [processing-worker.md](processing-worker.md), [selected checklist](selected-api-contract.md).
 
 ### IFC-02 — P1 · SOURCE/DB TESTED · Readiness theo revision/version
 
 - **Contract/current:** Confirm requires exact scenarioVersionId/validationRunId/annotationSetId, accepted current worker attempt/artifact, matching hashes, Passed/runtime ready and no Error/Critical blocker. Returns reviewId, atomic receipt/audit; technical rejection preserves history.
-- **Remaining acceptance:** Release must consume that exact confirmation in Task 7. Fake worker evidence is not geometry/Unity acceptance.
+- **Remaining acceptance:** Built release consumes that exact confirmation and matching immutable approval/provenance. Fake worker evidence is not geometry/Unity acceptance.
 
 ### SCENARIO-01 — P1 · VERIFY · Draft ETag và snapshot
 
@@ -229,9 +227,13 @@ Scenario authoring: implemented durable create/snapshot/package-build receipts, 
 
 Source + PostgreSQL/HTTP tests implemented: exact revision/version/run/annotation/artifact provenance, Passed/blocker/runtime gate, separate immutable Submitted→Approved/Rejected content review, server hashes, live tenant/lifecycle, receipt and audit rollback. See [scenario-readiness.md](scenario-readiness.md). Tests use fake worker outputs, not Unity. Publish/learner sessions remain incomplete. Supabase Tasks 2–4 plus dependency EXECUTE repair were applied 2026-10-07; existing row counts were preserved. Older "deployment pending" notes describe their original implementation evidence, not the subsequent schema rollout.
 
-Task 6: isolated actual-history PostgreSQL + HTTP/OpenAPI + fake runtime/package/paid-provider fixture verified; migrations are additive and preserve legacy sessions. Selected work stops at Task 6; release/Training/access, support and final whole-route documentation remain Tasks 7–9.
+Task 6: isolated actual-history PostgreSQL + HTTP/OpenAPI + fake runtime/package/paid-provider fixture verified; migrations are additive and preserve legacy sessions. Tasks7–9 now have source/test/docs: release/Training/access, support receipts/ETag/paging and OpenAPI inventory. Their two new migrations await shared deployment.
 
 
 ### Schema rollout 2026-10-07
 
-Supabase migrations through `20261006160000_AddPlaytestLifecycle` have been applied and postchecked; see [ifc-authoring-deployment.md](ifc-authoring-deployment.md). Existing 8 users/6 organizations/2 buildings were preserved. Earlier deployment-pending notes are historical evidence for their original task commits. Readiness/playtest source and isolated tests are verified; matching deployed API binary, production worker and runtime client remain unchecked. Tasks 7-9 and real publish/learner flows are still incomplete.
+Supabase migrations through `20261006160000_AddPlaytestLifecycle` have been applied and postchecked; see [ifc-authoring-deployment.md](ifc-authoring-deployment.md). Existing 8 users/6 organizations/2 buildings were preserved. Earlier deployment-pending notes are historical evidence for their original task commits. Readiness/playtest source and isolated tests are verified; matching deployed API binary, production worker and runtime client remain unchecked. Tasks7–9 source/isolated tests are recorded in [selected-api-contract.md](selected-api-contract.md); new release/access and support migrations are not applied to Supabase. Real publish/learner flows remain incomplete.
+
+## Selected scope Tasks7–9
+
+[Current route checklist and evidence](selected-api-contract.md) replaces historical selected-API gap descriptions. [Generated route inventory](api-route-inventory.md) counts OpenAPI methods, not completed capabilities. Built/access/support are source/test verified; production migration/binary/client and real workers are separate. Publish, learner start/sync/result remain incomplete.

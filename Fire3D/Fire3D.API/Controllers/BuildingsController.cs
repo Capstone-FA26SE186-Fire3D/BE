@@ -70,6 +70,7 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
+    [Authorize(Roles="OrganizationUser,PlatformAdmin")]
     [HttpPost("{id:guid}/revisions/upload-url")]
     [ProducesResponseType<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
@@ -115,6 +116,7 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     /// Gets a list of Published trainings for a given building (D18).
     /// </summary>
     [HttpGet("{id:guid}/trainings")]
+    [Authorize(Roles="Trainee,OrganizationUser,PlatformAdmin")]
     [ProducesResponseType<List<Fire3D.Application.Buildings.Queries.GetTrainings.TrainingDto>>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]

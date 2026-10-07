@@ -7,3 +7,5 @@ public interface IBuildingAccessService
 {
  Task<AuthResult<JsonElement>> Execute(string action,Guid actor,Guid family,Guid building,object input,long? expected,CancellationToken ct);
 }
+
+public sealed record BuildingAccessResponse(Guid BuildingId,string Visibility,long AccessRevision,bool HasParticipationCode,string? Code=null);

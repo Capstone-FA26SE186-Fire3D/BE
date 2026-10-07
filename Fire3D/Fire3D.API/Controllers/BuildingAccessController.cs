@@ -8,15 +8,15 @@ namespace Fire3D.API.Controllers;
 [ApiController][Authorize][ResponseCache(NoStore=true,Location=ResponseCacheLocation.None)]
 public sealed class BuildingAccessController(IBuildingAccessService service):ControllerBase
 {
- [HttpGet("api/buildings/{id:guid}/access")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
+ [ProducesResponseType(typeof(BuildingAccessResponse),200)][HttpGet("api/buildings/{id:guid}/access")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
  public Task<IActionResult> Get(Guid id,CancellationToken ct)=>Run("GetAccess",id,new{},null,ct);
- [HttpPatch("api/buildings/{id:guid}/access")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
+ [ProducesResponseType(typeof(BuildingAccessResponse),200)][HttpPatch("api/buildings/{id:guid}/access")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
  public Task<IActionResult> Update(Guid id,BuildingAccessRequest request,[FromHeader(Name="If-Match")]string? match,CancellationToken ct)=>Run("Access",id,request,match,ct);
- [HttpPost("api/buildings/{id:guid}/participation-code/rotate")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
+ [ProducesResponseType(typeof(BuildingAccessResponse),200)][HttpPost("api/buildings/{id:guid}/participation-code/rotate")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
  public Task<IActionResult> Rotate(Guid id,[FromHeader(Name="If-Match")]string? match,CancellationToken ct)=>Run("Rotate",id,new{},match,ct);
- [HttpDelete("api/buildings/{id:guid}/participation-code")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
+ [ProducesResponseType(typeof(BuildingAccessResponse),200)][HttpDelete("api/buildings/{id:guid}/participation-code")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
  public Task<IActionResult> Revoke(Guid id,[FromHeader(Name="If-Match")]string? match,CancellationToken ct)=>Run("RevokeCode",id,new{},match,ct);
- [HttpPost("api/buildings/{id:guid}/participation/verify")][Authorize(Roles="Trainee")]
+ [ProducesResponseType(typeof(BuildingAccessResponse),200)][HttpPost("api/buildings/{id:guid}/participation/verify")][Authorize(Roles="Trainee")]
  public Task<IActionResult> Verify(Guid id,ParticipationCodeRequest request,CancellationToken ct)=>Run("Verify",id,request,null,ct);
  private async Task<IActionResult> Run(string action,Guid id,object input,string? match,CancellationToken ct)
  {

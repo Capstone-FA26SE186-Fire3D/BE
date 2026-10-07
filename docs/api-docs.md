@@ -13,7 +13,11 @@ OpenAPI tại host Azure tự báo build `d785937e5948f31486df66740a1f31ccd9ce25
 - Schema enum UserGender/UserRole đang mô tả integer trong khi JSON runtime cấu hình enum theo tên; gửi tên enum theo contract.
 - `registrationToken` của register và `If-Match` của Avatar upload chưa đánh dấu required; BE vẫn yêu cầu chúng. GET trạng thái PayOS chưa mô tả response thành công đầy đủ.
 
-Đây là các lỗi ghi nhận trên binary deployment ngày 03/10. Source auth ngày 05/10 đã sửa schema/metadata cho PATCH, multipart, enum, proof và header; xem [checklist auth](auth-api-checklist.md). Chưa kiểm OpenAPI sau khi deploy binary mới; response PayOS và module ngoài auth không thuộc đợt sửa này. [Kết quả Azure và cấu hình CORS](payos-deployment.md) phân biệt kiểm tra HTTP với nghiệm thu provider thật.
+Đây là các lỗi ghi nhận trên binary deployment ngày 03/10. Source auth ngày 05/10 đã sửa schema/metadata cho PATCH, multipart, enum, proof và header; xem [checklist auth](auth-api-checklist.md). Chưa kiểm OpenAPI sau khi deploy binary mới; Metadata GET PayOS và các API được chọn đã cập nhật source; xem [contract hiện tại](selected-api-contract.md). Deployment mới vẫn phải nghiệm thu riêng. [Kết quả Azure và cấu hình CORS](payos-deployment.md) phân biệt kiểm tra HTTP với nghiệm thu provider thật.
+
+## Contract Building/IFC/scenario/release/support hiện tại
+
+[Checklist/API inventory sinh từ OpenAPI](api-route-inventory.md), [phạm vi và bằng chứng](selected-api-contract.md), [release/access](release-building-access.md), [support/test tay](support-api.md). Các bằng chứng deployment tháng 09/03-10 phía trên là lịch sử, không mô tả binary mới.
 
 ## 1. Quy ước tích hợp
 
@@ -56,7 +60,7 @@ Endpoint bảo vệ cần `Authorization: Bearer <Fire3D accessToken>`. Firebase
 | User | Phiên Fire3D hợp lệ |
 | Admin | PlatformAdmin; handler kiểm tra lại tài khoản |
 | Editor | OrganizationUser trong tổ chức mình hoặc PlatformAdmin qua `IfcAccess`; Trainee bị 403 |
-| Building CRUD | Controller chỉ có Authorize, store lọc organization_id của JWT; có giới hạn bên dưới |
+| Building CRUD | Mutation kiểm actor/tenant DB, body organizationId cho admin create; query deprecated. Read scope DB; lifecycle/Building locks, atomic location/contact/audit. |
 
 Ba role hiện có: `PlatformAdmin`, `OrganizationUser`, `Trainee`. Không có `OrganizationAdmin`. OrganizationUser phải có tổ chức hoạt động; hai role còn lại không có organizationId. Public register không cho chọn role/tổ chức. JWT được kiểm tra cả tài khoản, tổ chức và phiên DB; chưa tới exp vẫn có thể mất hiệu lực khi phiên bị thu hồi.
 
@@ -318,7 +322,7 @@ Endpoint cần `Authorization: Bearer <Fire3D accessToken>` và không nhận `a
 
 Thành công trả 204. Trong cùng transaction khóa lifecycle/user, BE kiểm lại family lấy từ JWT, account và organization rồi cập nhật `password_hash`, đánh dấu token reset local/legacy đã dùng, thu hồi toàn bộ refresh session và ghi audit. Family đã revoke trả401 ngay cả khi request đã qua middleware trước đó; phiên login mới không bị request cũ thu hồi. Legacy invalidation gọi gate giới hạn quyền, không DELETE lịch sử. Access JWT hiện tại sẽ không còn được chấp nhận; client phải đăng nhập lại. Endpoint không gửi email, không thay đổi password Google/Firebase và không nhận Firebase oobCode.
 
-## 3. Accounts và Organizations — 8 endpoint
+## 3. Accounts và Organizations
 
 Tất cả cần Admin: thiếu JWT 401, sai role 403. Tạo/đổi trạng thái trả header X-Correlation-ID do server tạo để đối chiếu audit.
 
@@ -367,7 +371,7 @@ Name trim, bắt buộc, tối đa 200; slug trim/lowercase tối đa 100, regex
 
 OrganizationResponse: id, name, slug, isActive, createdAt, updatedAt. List nhận page/pageSize/search/isActive. Chưa có route sửa tên/slug/xóa. Vô hiệu tổ chức ảnh hưởng quyền OrganizationUser, không xóa dữ liệu nghiệp vụ.
 
-## 4. Buildings và Revision detail — 9 endpoint
+## 4. Buildings và Revision detail
 
 | Method | Path | Quyền | Thành công |
 | --- | --- | --- | --- |
@@ -378,7 +382,7 @@ OrganizationResponse: id, name, slug, isActive, createdAt, updatedAt. List nhậ
 | DELETE | `/api/buildings/{id}` | Building CRUD | 200 BuildingSummaryResponse |
 | POST | `/api/buildings/{id}/revisions/upload-url` | Editor | 201 InitiateIfcUploadResponse |
 | GET | `/api/buildings/{id}/revisions` | Editor | 200 Page<RevisionResponse> |
-| GET | `/api/buildings/{id}/trainings` | Editor | 200 TrainingDto[] |
+| GET | `/api/buildings/{id}/trainings` | Trainee/OrganizationUser/PlatformAdmin | 200 TrainingDto[] |
 | GET | `/api/revisions/{id}` | Editor | 200 RevisionResponse |
 
 POST/PUT dùng các trường Building dưới đây; POST thêm `organizationId` tùy chọn trong body. PlatformAdmin bắt buộc chọn tổ chức đích; OrganizationUser mặc định dùng tenant lấy từ DB. PUT không phải partial PATCH:
@@ -409,11 +413,11 @@ List nhận page/pageSize/search/isActive. DELETE chỉ đặt isActive=false, *
 
 Revision list nhận page/pageSize; detail nhận ID. Editor scope, Trainee 403, tài nguyên không thấy/ngoài phạm vi hoặc building archive có thể 404. RevisionResponse: id, buildingId, versionLabel, status, createdAt, sourceDocument nullable. SourceDocumentResponse: id, originalFilename, fileSizeBytes, quarantineStatus, createdAt; không object key/download URL.
 
-Trainings trả mảng, không phân trang: id, releaseId, name, description nullable, status, startDate/endDate nullable, allowedModes (string[]), createdAt. Query lọc training Active và release Published, chưa lọc khoảng ngày. Đây là Editor API, không phải danh sách học public/Trainee.
+Trainings trả mảng DTO. Trainee cần login, Building Public hoặc grant hiện hành; chỉ thấy Active Training trong lịch với Published release và approval đã pin. OrganizationUser chỉ tenant mình; admin scope rõ ràng. Không cấp seat/start/grant từ list. [Building access](release-building-access.md).
 
 Upload-url là alias của `/api/buildings/{buildingId}/ifc`, dùng chung handler/receipt, request và response. Cùng actor/key/input trả cùng revision; không kéo dài TTL khi replay.
 
-## 5. IFC commands — 6 endpoint
+## 5. IFC commands
 
 Tất cả cần Editor, rate limit administration. Storage phải được cấu hình thật; có route không đồng nghĩa worker IFC đã hoạt động.
 
@@ -452,7 +456,7 @@ Lỗi: 400 `VALIDATION_ERROR` theo field/key sai; 404 resource ngoài scope; 409
 
 Mặc định upload tắt. Trước khi bật: áp `AddBoundIfcUploads`, đặt `IfcUpload:Enabled=true`, `IfcUpload:MaxBytes=<giới hạn deployment quyết định>`, `IfcUpload:CleanupEnabled=true` và S3. MaxBytes không có giá trị nghiệp vụ mặc định. Cleanup lease/retry giữ job đang được bảo vệ và tombstone đã xóa để tìm copy timeout hoàn thành muộn. Có thể tắt upload mới trong khi giữ cleanup bật.
 
-Hiện kiểm chứng PostgreSQL cô lập + storage giả lập; chưa áp Supabase/S3 thật. Xem [test IFC upload](ifc-upload-manual-test.md).
+Kiểm chứng PostgreSQL cô lập + storage giả lập; migration upload đã áp Supabase 07/10, S3/worker/binary thật chưa nghiệm thu. Xem [test IFC upload](ifc-upload-manual-test.md).
 
 ### 5.2 Process, retry, confirm
 
@@ -469,9 +473,9 @@ Retry job Failed:
 
 requestId là UUID khác Guid.Empty; reason không trống, tối đa 1000, được trim. Response gồm jobId và outcome `Requeued`/`AlreadyRequeued`, status 202 và Location job detail. Gửi lại cùng key/input không requeue lặp. Key cũ/input khác: 409 IDEMPOTENCY_CONFLICT. Key mới khi job không thể retry: 409 JOB_CONFLICT hoặc JOB_NOT_CLAIMABLE. Tạo key mới cho một lần retry chủ động mới.
 
-Confirm chuyển ReadyForScenario → ConfirmedForTraining. Trạng thái khác: 400 INVALID_STATE; không thấy/ngoài phạm vi: 404; thành công 200 rỗng. Không tự tạo release/training.
+Confirm tạo technical review đúng revision–scenarioVersion–validationRun–annotation/artifact đã accept, Passed và không Error/Critical blocker. Thành công 200 {reviewId}; mismatch/blocker 409. Không tự tạo release/training hoặc approval nội dung. Xem [readiness và approval](scenario-readiness.md).
 
-## 6. IFC queries — 8 endpoint
+## 6. IFC queries
 
 Tất cả cần Editor; list nhận page/pageSize. Sai filter/Guid.Empty 400, sai role 403, không thấy/ngoài tổ chức 404.
 
@@ -501,7 +505,7 @@ Job mới có thể chưa có currentAttempt. QA chỉ lấy validation của at
 
 Issues/artifacts có dữ liệu lịch sử: đọc isCurrentAttempt. isRuntimeReady không phải URL tải file. Các DTO đọc không có raw object key, signed download URL, worker lease/credential. Không hardcode schema bên trong summary/metadata/evidence/qualityFlags khi DTO chỉ cam kết kiểu JSON.
 
-## 7. Scenario, catalog, playtest and review — 14 endpoints
+## 7. Scenario, catalog, playtest and review
 
 Tất cả cần Editor. Đây là luồng tác giả thiết kế/thử kịch bản, không phải phiên học và thống kê Trainee.
 
@@ -559,17 +563,17 @@ PUT nhận trực tiếp ScenarioDraftStateDto, không bọc state hoặc expect
 }
 ```
 
-Type Fire, các số và route chỉ minh họa DTO; chưa có validation đầy đủ catalog/đơn vị/khoảng giá trị/khả năng chạy Unity. Không thay bằng nodes/edges tự định nghĩa.
+Body trên minh họa cấu trúc cơ bản, chưa đủ rubric/learningObjectives/learnerInstructions cho snapshot v7. Dùng [scenario-authoring.md](scenario-authoring.md) để lấy request đầy đủ; structural validation kiểm anchor/capability/catalog/reference nhưng không chứng minh geometry QA hay Unity thật.
 
-- Thiếu/sai If-Match, ví dụ `*` hoặc weak ETag: 412.
-- Version cũ/concurrent update: 409 CONFLICT.
+- If-Match: thiếu428, malformed400, stale412; dùng ETag từ GET.
+- Snapshot cũng yêu cầu If-Match và Idempotency-Key. Create scenario/draft yêu cầu Idempotency-Key; numbering được khóa và DB unique constraint bảo vệ.
 - Thành công: 204 với `ETag: "<newVersion>"`; giữ version mới cho lần lưu tiếp.
 
 Version dựa trên PostgreSQL xmin, **không mặc định là 1**. GET draft trả state và `ETag: "<version>"`; dùng ETag đó cho lần PUT tiếp theo.
 
 Snapshot không body, trả 201 id ScenarioVersion. Đây là snapshot state, không publish hoặc tự tạo runtime package.
 
-`POST /api/scenario-drafts/{draftId}/validate` trả `{draftId, version, isValid, issues}`. Mỗi issue có `code`, đường dẫn JSON `path`, và `message`. Hiện endpoint đồng bộ kiểm tra cấu trúc draft: spawn point, hazard/position, scoring và evacuation route. Nó **không** xác nhận geometry IFC hoặc runtime capability vì hai kiểm tra này cần worker pipeline/catalog thực tế; response hợp lệ không phải confirmation-for-training.
+`POST /api/scenario-drafts/{draftId}/validate` trả `{draftId, version, isValid, issues}`. Mỗi issue có `code`, đường dẫn JSON `path`, và `message`. Hiện endpoint đồng bộ kiểm tra cấu trúc draft: spawn point, hazard/position, scoring và evacuation route. Nó kiểm runtime reference/capability catalog và IFC anchors từ dữ liệu đã accept, nhưng không chứng nhận geometry QA/Unity thật; response hợp lệ không phải confirmation-for-training.
 
 `POST /api/revisions/{revisionId}/reviews` chỉ tạo review `Rejected` cho một cặp revision–scenario version. Body phải đưa validation run cùng cặp đó và lý do 1–4000 ký tự; annotation set là tùy chọn nhưng nếu có phải thuộc revision. Server ghi review và audit trong một transaction, không chuyển trạng thái chung của revision sang Rejected. Version đã có review trả 409 `CONFLICT`.
 
@@ -579,33 +583,32 @@ Catalog trả mảng `{runtimeVersion, protocolVersion, manifestSchemaVersion, c
 
 Playtest prepare/start use the session-bound PostgreSQL gate: exact accepted immutable PlaytestPackage, live OrganizationUser owner/tenant, runtime catalog compatibility and Building entitlement. Preparation assigns no entitlement and consumes no Trial; start does. See [requests, configuration and manual tests](playtest-manual-test.md). The legacy unrestricted store is not registered and refuses mutations without session proof.
 
-## 8. Release lifecycle — 4 endpoint
+## 8. Release lifecycle và Building access
 
-| Method | Path | Quyền | Input | Thành công |
-| --- | --- | --- | --- | --- |
-| POST | `/api/releases` | Editor | BuildReleaseRequest | 201 ReleaseResponse + Location |
-| GET | `/api/releases/{releaseId}` | Editor | Không body | 200 ReleaseResponse |
-| POST | `/api/releases/{releaseId}/publish` | Editor | Không body | 204 |
-| POST | `/api/releases/{releaseId}/revoke` | Editor | `{ "reason": "..." }` | 204 |
+POST /api/releases: OrganizationUser/PlatformAdmin, Idempotency-Key, revisionId/scenarioVersionId/confirmationReviewId/candidateArtifactId; metadata legacy nullable chỉ được nhận khi khớp output worker. Gate kiểm Approved content/rubric và technical confirmation đúng cặp, current accepted ReleasePackage/manifest và runtime contract; tạo Built/package/provenance/Training/receipt/audit atomic. Replay cùng key/input trả cùng response201; khác input409. Không chứng minh Unity thật.
 
-`POST /api/releases` ghi nhận một Unity/package build đã hoàn tất và tạo nguyên tử release trạng thái Built, package metadata và audit. Request pin revision, scenarioVersion, ConfirmForTraining review, candidate artifact, safetyThresholds JSON object, manifest/package private object key, hai SHA-256 64 ký tự, packageSizeBytes dương, minRuntimeVersion, schemaVersion và buildTarget. Revision phải ConfirmedForTraining; Building/tổ chức phải active; review và artifact phải khớp revision/version. Một cặp revision + scenarioVersion chỉ có một release; trùng trả 409 RELEASE_EXISTS.
+GET /api/releases/{releaseId} trả ReleaseResponse; POST /revoke nhận reason và trả204, atomic/replay không thêm audit. POST /publish vẫn503 PUBLISH_GATE_UNAVAILABLE.
 
-Create/build được gộp vì schema bắt buộc release mới được tạo ở trạng thái Built; API không chạy Unity trong request. Worker phải upload và kiểm chứng artifact trước khi gọi API này. GET trả release cùng package metadata, không trả signed download URL. Publish hiện trả 503 `PUBLISH_GATE_UNAVAILABLE` cho đến khi entitlement, validation, issue, runtime compatibility và Training gate được triển khai. Revoke nhận reason 1–1000 ký tự, cho Built/Published → Revoked, ghi actor/time/reason/audit; gọi lại release đã Revoked vẫn trả 204.
+GET/PATCH /api/buildings/{id}/access, POST /participation-code/rotate, DELETE /participation-code dùng tenant/role server và If-Match cho mutation. POST /participation/verify chỉ Trainee, grant gắn account/revision. Xem [contract/test release–access](release-building-access.md).
 
-Các lỗi chung: 400 validation, 401 account không hợp lệ, 403 Trainee, 404 không thấy/khác tenant, 409 state hoặc release đã tồn tại. PlatformAdmin có thể đọc/thao tác liên tổ chức theo policy hiện tại. Publish vẫn phụ thuộc gate QA/runtime/entitlement/Training của schema triển khai; chưa tự tạo Training hoặc khởi chạy Unity build job.
+## 8.1 Feedback/support và PayOS metadata
+
+[Support](support-api.md): create/message Idempotency-Key; admin PATCH If-Match; detail ETag; list và message history phân trang20/max100. User chỉ tài nguyên do mình tạo; admin kiểm live role; mutation/receipt/audit atomic.
+
+GET /api/payments/payos/checkouts/{id} khai báo200 PayosCheckoutResponse; GET /requests/{id} khai báo200 PayosPaymentResponse. OrganizationUser cùng tenant hoặc PlatformAdmin. Checkout, payment và provisioning riêng: Paid không đồng nghĩa mọi dòng đã được provision. Nghiệp vụ PayOS không đổi.
 
 ## 9. Giới hạn thấy khi đối chiếu source
 
 | Phần | Hiện trạng và ảnh hưởng |
 | --- | --- |
-| Building CRUD | Mutation kiểm DB actor/tenant và audit atomic; admin dùng query organizationId. Read list/detail vẫn dựa scope organization claim, body chưa nhận organizationId; chưa coi admin read toàn nền tảng đã hoàn thiện. |
+| Building CRUD | Mutation kiểm actor/tenant DB, body organizationId cho admin create; query deprecated. Read scope DB; lifecycle/Building locks, atomic location/contact/audit. |
 | Upload-url cũ | Đã là alias tương thích của initiation IFC; client mới dùng `/api/buildings/{buildingId}/ifc` |
-| IFC finalize | Intent/receipt, bounded stream, ETag/hash thật, candidate trước copy và cleanup lease/retry đã có; PostgreSQL/storage giả lập đã kiểm tra. Supabase/S3 thật chưa nghiệm thu. |
-| IFC process | Process/confirm đã Include Building; Process gọi enqueue_integration_outbox_event schema 1, hash canonical JSONB và tenant suy từ DB, job/audit/outbox atomic. Migration AddIfcIntegrationOutbox giao table/function/grants còn thiếu. Dispatcher/worker delivery, attempt/result gates và provenance production chưa hoàn chỉnh. Xem [IFC outbox](ifc-outbox.md). |
+| IFC finalize | Bound intent/source, bounded stream/ETag/hash thật và cleanup recovery; fake S3/PostgreSQL tested. Upload migration đã áp, S3/binary thật chưa nghiệm thu. |
+| IFC process | Verified source; canonical schema1 outbox/hash/tenant/job/audit/receipt atomic. Leased HTTP dispatcher/machine worker gates/retry/fencing đã test giả lập; IFC/Unity thật chưa nghiệm thu. |
 | Draft editor | GET draft state/version đã có. Kiểm tra response ETag/xmin trước khi tích hợp; không coi đây là API còn thiếu. |
 | Playtest prepare | Pins exact accepted immutable package/version/run without Trial consumption or grant; requires OrganizationUser live session and Idempotency-Key. |
 | Playtest start | Live session/owner/tenant/runtime/Building entitlement gate, atomic Trial and receipt/audit; dedicated 5-minute grant. Real Unity integration remains unverified. |
-| Release/training | Đã có create-Built/read/revoke; runtime publish fail-closed 503 `PUBLISH_GATE_UNAVAILABLE` cho đến khi có gate. Còn thiếu package-build job và vòng đời Training/session. |
+| Release/training | Built checks approval/readiness/current ReleasePackage, derives package, creates Training atomic. Participation/access and authorized listing implemented. Publish503; learner start/sync/result chưa có. |
 | Auth | Form → OTP → proof → register → login cho Trainee/OrganizationUser; OrganizationUser route chưa nhận username cá nhân. Request/verify OTP không tạo identity; verify-email link chỉ cho pending legacy. Profile cá nhân/tổ chức và avatar mutation dùng ETag; logout-all đã có. AvatarService reserve candidate trước conditional S3 copy, có cleanup/recovery source; provider/deployment cần kiểm riêng. Google onboarding completion và explicit link đã có. Xem [Google contract/test tay](google-auth-manual-test.md); Firebase/client/deployment chưa kiểm chứng. |
 | Token response | Login local, Firebase login và refresh đều không trả expiresAt |
 | Device | Installation proof và family session được kiểm khi bind/revoke; FCM send chỉ dùng binding active. Không coi test mock là bằng chứng FCM production delivery. |
@@ -617,7 +620,7 @@ Số endpoint không phản ánh mức độ hoàn thiện luồng. Cập nhật
 | Capability đích | Việc cần triển khai trong checklist |
 | --- | --- |
 | Organization Library / Admin approval | LIBRARY-01, APPROVAL-01: template/rubric/thiết bị version hóa; duyệt scenario/rubric đúng hash, tách readiness kỹ thuật. |
-| Private Building | ACCESS-01: grant gắn account/access revision, rotate/revoke mã và visibility vô hiệu grant cũ; QR không tạo tenant membership. |
+| Private Building | Access/participation/list có source/test; migration/binary/client còn phải triển khai. Learner start gate và canonical QR vẫn backlog. |
 | Seats / session / Assessment | CAPACITY-01, SESSION-01, ASSESSMENT-01: distinct user/Building/kỳ tại start, pin entitlement/review/rubric, kết quả riêng completion; sync sau expiry/revoke. |
 | Gói 6/12 tháng / AI prepaid | BILLING-02, AI-01: snapshot seats/quota/policy, provisioning replay sau expiry; top-up không gia hạn Building, không invoice AI cuối kỳ. |
 | Learner-safe RAG | RAG-01: chỉ name/objectives/instructions approved/published; kiểm quyền mỗi retrieval và chặn AI trong Assessment. |

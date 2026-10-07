@@ -1,7 +1,7 @@
 # IFC API implementation progress
 
-Current task branch: fix/auth-registration (continued IFC work). Earlier entries below are historical evidence, not current deployment certification.
-Target: section 4 of the 88-operation checklist (13 endpoints).
+Current selected implementation: [contract and evidence](selected-api-contract.md). Earlier entries below are historical. Earlier entries below are historical evidence, not current deployment certification.
+Route counts are generated in [api-route-inventory.md](api-route-inventory.md); older counts below are historical.
 Historical implementation schema reference: Docs v6.7. Current design target is [Docs v7](../../Docs/schema_v7_contract.md); this report does not establish v7 approval/start gates or deployed schema. Use the [current checklist](api-implementation-checklist.md) for remaining work.
 
 | Endpoint | Implementation | Validation |
