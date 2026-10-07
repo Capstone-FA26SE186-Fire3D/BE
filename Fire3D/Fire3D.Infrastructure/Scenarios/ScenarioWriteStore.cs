@@ -1,151 +1,57 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Fire3D.Application.Authentication;
 using Fire3D.Application.Scenarios;
 using Fire3D.Application.Scenarios.Commands.CreateScenario;
 using Fire3D.Application.Scenarios.Commands.CreateScenarioDraft;
+using Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft;
+using Fire3D.Application.Scenarios.Dto;
 using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-
+using Npgsql;
+using NpgsqlTypes;
 namespace Fire3D.Infrastructure.Scenarios;
-
-public sealed class ScenarioWriteStore(Fire3DDbContext db) : IScenarioWriteStore
+public sealed class ScenarioWriteStore(Fire3DDbContext db) : IScenarioWriteStore, IScenarioPackageBuildStore
 {
-    public async Task<AuthResult<Guid>> CreateScenarioAsync(Guid actorId, Guid buildingId, Guid organizationId, CreateScenarioRequest request, CancellationToken ct)
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    public Task<AuthResult<Guid>> CreateScenarioAsync(Guid actorId, Guid buildingId, Guid? organizationId, CreateScenarioRequest request, CancellationToken ct, string? key=null)
+        => IdAsync("CreateScenario",actorId,buildingId,new{name=request.Name},key,null,ct);
+    public Task<AuthResult<Guid>> CreateScenarioDraftAsync(Guid actorId, Guid scenarioId, Guid? organizationId, CreateScenarioDraftRequest request, CancellationToken ct, string? key=null)
+        => IdAsync("CreateDraft",actorId,scenarioId,request,key,null,ct);
+    public async Task<AuthResult<uint>> UpdateScenarioDraftAsync(Guid actorId, Guid draftId, uint expectedVersion, ScenarioDraftStateDto state, Guid? organizationId, CancellationToken ct)
     {
-        var building = await db.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId && b.IsActive && b.DeletedAt == null, ct);
-        if (building == null || (organizationId != Guid.Empty && building.OrganizationId != organizationId))
-            return AuthResult<Guid>.Fail("NOT_FOUND", "Building not found or access denied.", 404);
-
-        var scenario = new Fire3D.Domain.Entities.Scenario
-        {
-            Id = Guid.NewGuid(),
-            BuildingId = buildingId,
-            OrganizationId = building.OrganizationId,
-            Name = request.Name,
-            CreatedBy = actorId,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        db.Scenarios.Add(scenario);
-        await db.SaveChangesAsync(ct);
-        return AuthResult<Guid>.Ok(scenario.Id);
+        var result=await GateAsync("UpdateDraft",actorId,draftId,state,null,expectedVersion,ct);
+        return result.IsSuccess ? AuthResult<uint>.Ok(result.Value.GetProperty("revision").GetUInt32()) : new(default,result.Error);
     }
-
-    public async Task<AuthResult<Guid>> CreateScenarioDraftAsync(Guid actorId, Guid scenarioId, Guid organizationId, CreateScenarioDraftRequest request, CancellationToken ct)
+    public async Task<AuthResult<Guid>> SnapshotScenarioDraftAsync(Guid actorId,Guid draftId,Guid? organizationId,CancellationToken ct,string? key=null,uint? expectedVersion=null)
     {
-        var scenario = await db.Scenarios.FirstOrDefaultAsync(s => s.Id == scenarioId, ct);
-        if (scenario == null || (organizationId != Guid.Empty && scenario.OrganizationId != organizationId))
-            return AuthResult<Guid>.Fail("NOT_FOUND", "Scenario not found or access denied.", 404);
-
-        var revision = await db.Revisions.FirstOrDefaultAsync(r => r.Id == request.RevisionId, ct);
-        if (revision == null || revision.BuildingId != scenario.BuildingId)
-            return AuthResult<Guid>.Fail("VALIDATION_ERROR", "Revision not found or does not belong to the same building.", 400);
-
-        // Find max draft number
-        var maxDraft = await db.ScenarioDrafts
-            .Where(d => d.ScenarioId == scenarioId)
-            .MaxAsync(d => (int?)d.DraftNumber, ct) ?? 0;
-
-        var draft = new Fire3D.Domain.Entities.ScenarioDraft
+        // Read only the authorized state. Gate rechecks xmin under lock before adopting it.
+        var draft=await db.ScenarioDrafts.AsNoTracking().Where(x=>x.Id==draftId && (!organizationId.HasValue || x.OrganizationId==organizationId)).SingleOrDefaultAsync(ct);
+        if(draft is null) return AuthResult<Guid>.Fail("NOT_FOUND","Draft not found in scope.",404);
+        if (draft.Version==expectedVersion)
         {
-            Id = Guid.NewGuid(),
-            ScenarioId = scenarioId,
-            RevisionId = request.RevisionId,
-            OrganizationId = scenario.OrganizationId,
-            BuildingId = scenario.BuildingId,
-            DraftNumber = maxDraft + 1,
-            State = new JsonObject(),
-            Source = "manual",
-            CreatedBy = actorId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow,
-            Version = 1
-        };
-
-        db.ScenarioDrafts.Add(draft);
-        await db.SaveChangesAsync(ct);
-        return AuthResult<Guid>.Ok(draft.Id);
-    }
-
-    public async Task<AuthResult<uint>> UpdateScenarioDraftAsync(Guid actorId, Guid draftId, uint expectedVersion, Fire3D.Application.Scenarios.Dto.ScenarioDraftStateDto state, Guid organizationId, CancellationToken ct)
-    {
-        var draft = await db.ScenarioDrafts.FirstOrDefaultAsync(d => d.Id == draftId, ct);
-        if (draft == null || (organizationId != Guid.Empty && draft.OrganizationId != organizationId))
-            return AuthResult<uint>.Fail("NOT_FOUND", "Scenario draft not found or access denied.", 404);
-
-        if (draft.Version != expectedVersion)
-            return AuthResult<uint>.Fail("CONFLICT", "The draft has been modified by someone else. Please reload.", 409);
-
-        // Serialize state to JsonNode
-        var stateJson = System.Text.Json.JsonSerializer.Serialize(state);
-        draft.State = System.Text.Json.Nodes.JsonNode.Parse(stateJson)!;
-        draft.UpdatedAt = DateTime.UtcNow;
-        // CreatedBy shouldn't be overwritten, but we could track LastUpdatedBy if needed
-
-        try
-        {
-            await db.SaveChangesAsync(ct);
+            var issues=ScenarioDraftStructuralValidator.Validate(draft.State);
+            if(issues.Count>0) return AuthResult<Guid>.Fail("VALIDATION_ERROR","Draft structure is not valid.",400,issues.GroupBy(x=>x.Path).ToDictionary(x=>x.Key,x=>x.Select(y=>y.Message).ToArray()));
         }
-        catch (DbUpdateConcurrencyException)
-        {
-            return AuthResult<uint>.Fail("CONFLICT", "The draft was modified concurrently. Please reload.", 409);
-        }
-
-        // Fetch the updated version (xmin changes on update in postgres, EF updates it automatically)
-        return AuthResult<uint>.Ok(draft.Version);
+        return await IdAsync("Snapshot",actorId,draftId,new{},key,expectedVersion,ct);
     }
-
-    public async Task<AuthResult<Guid>> SnapshotScenarioDraftAsync(Guid actorId, Guid draftId, Guid organizationId, CancellationToken ct)
+    public Task<AuthResult<Guid>> BuildAsync(Guid actor,Guid version,PackageBuildRequest request,string? key,CancellationToken ct)
+        => IdAsync("BuildPackage",actor,version,request,key,null,ct);
+    private async Task<AuthResult<Guid>> IdAsync(string action,Guid actor,Guid resource,object input,string? key,uint? revision,CancellationToken ct)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-
-        var draft = await db.ScenarioDrafts.FirstOrDefaultAsync(d => d.Id == draftId, ct);
-        if (draft == null || (organizationId != Guid.Empty && draft.OrganizationId != organizationId))
-            return AuthResult<Guid>.Fail("NOT_FOUND", "Scenario draft not found or access denied.", 404);
-
-        // Calculate a simple SHA256 hash of the JSON state for the snapshot
-        var stateJson = draft.State.ToJsonString();
-        var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(stateJson));
-        var stateHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
-
-        // Check max version number
-        var maxVersion = await db.ScenarioVersions
-            .Where(v => v.ScenarioId == draft.ScenarioId)
-            .MaxAsync(v => (int?)v.VersionNumber, ct) ?? 0;
-
-        var snapshotId = Guid.NewGuid();
-        var snapshot = new Fire3D.Domain.Entities.ScenarioVersion
-        {
-            Id = snapshotId,
-            ScenarioId = draft.ScenarioId,
-            RevisionId = draft.RevisionId,
-            OrganizationId = draft.OrganizationId,
-            BuildingId = draft.BuildingId,
-            VersionNumber = maxVersion + 1,
-            Name = $"Snapshot {maxVersion + 1}",
-            SchemaVersion = "v1",
-            AlgorithmVersion = "v1",
-            RandomSeed = 0,
-            TimeLimitSeconds = draft.State["scoringConfig"]?["timeLimitSeconds"]?.GetValue<int>() ?? 0,
-            SpawnConfig = draft.State["spawnPoints"]?.ToJsonString() ?? "[]",
-            GoalConfig = draft.State["goals"]?.ToJsonString() ?? "[]",
-            FireSourceConfig = draft.State["hazards"]?.ToJsonString() ?? "[]",
-            NpcConfig = draft.State["npcs"]?.ToJsonString() ?? "[]",
-            BlockedElements = draft.State["blockedElements"]?.ToJsonString() ?? "[]",
-            RoutingConfig = draft.State["routingConfig"]?.ToJsonString() ?? "{}",
-            ScoringConfig = draft.State["scoringConfig"]?.ToJsonString() ?? "{}",
-            ModePolicy = draft.State["modePolicy"]?.ToJsonString() ?? "{}",
-            SafetyThresholds = draft.State["safetyThresholds"]?.ToJsonString() ?? "{}",
-            ReplanIntervalSeconds = draft.State["replanIntervalSeconds"]?.GetValue<int>() ?? 0,
-            ScenarioHash = stateHash,
-            CreatedBy = actorId,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        db.ScenarioVersions.Add(snapshot);
-        await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-
-        return AuthResult<Guid>.Ok(snapshotId);
+        var value=await GateAsync(action,actor,resource,input,key,revision,ct);
+        return value.IsSuccess?AuthResult<Guid>.Ok(value.Value.GetProperty("id").GetGuid()):new(default,value.Error);
+    }
+    private async Task<AuthResult<JsonElement>> GateAsync(string action,Guid actor,Guid resource,object input,string? key,uint? revision,CancellationToken ct)
+    {
+        await db.Database.OpenConnectionAsync(ct);
+        await using var command=new NpgsqlCommand("SELECT scenario_authoring_gate(@action,@actor,@resource,@input,@key,@revision)::text",(NpgsqlConnection)db.Database.GetDbConnection());
+        command.Parameters.AddWithValue("action",action);command.Parameters.AddWithValue("actor",actor);command.Parameters.AddWithValue("resource",resource);
+        command.Parameters.AddWithValue("input",NpgsqlDbType.Jsonb,JsonSerializer.Serialize(input,Json));
+        command.Parameters.AddWithValue("key",NpgsqlDbType.Text,(object?)key??DBNull.Value);command.Parameters.AddWithValue("revision",NpgsqlDbType.Bigint,revision.HasValue?(object)(long)revision.Value:DBNull.Value);
+        using var response=JsonDocument.Parse((string)(await command.ExecuteScalarAsync(ct))!);var value=response.RootElement;
+        if(value.GetProperty("code").GetString()=="OK")return AuthResult<JsonElement>.Ok(value.Clone());
+        var errors=value.TryGetProperty("errors",out var fields)?fields.Deserialize<Dictionary<string,string[]>>():null;
+        return AuthResult<JsonElement>.Fail(value.GetProperty("code").GetString()!,"Authoring request was rejected. Check scope, fields and current revision.",value.GetProperty("status").GetInt32(),errors);
     }
 }

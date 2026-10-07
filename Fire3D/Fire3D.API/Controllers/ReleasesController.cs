@@ -8,11 +8,11 @@ namespace Fire3D.API.Controllers;
 
 [ApiController]
 [Route("api/releases")]
-[Authorize]
+[Authorize(Roles="OrganizationUser,PlatformAdmin")]
 public class ReleasesController(ISender sender) : ControllerBase
 {
     /// <summary>Creates a Built release and pins its immutable package metadata.</summary>
-    /// <remarks>The revision and scenario version must have a matching ConfirmForTraining review. This operation records the completed build; it does not run Unity inside the HTTP request.</remarks>
+    /// <remarks>Requires Idempotency-Key, immutable Approved content/rubric, exact revision/version confirmation and accepted current ReleasePackage/manifest provenance. Optional legacy metadata must match server output. Built/package/Training/receipt/audit commit atomically; same input replays the original response. No real Unity build is certified by this API.</remarks>
     [HttpPost]
     [ProducesResponseType<ReleaseResponse>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
@@ -20,9 +20,9 @@ public class ReleasesController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
-    public async Task<ActionResult<ReleaseResponse>> BuildRelease(BuildReleaseRequest request, CancellationToken ct)
+    public async Task<ActionResult<ReleaseResponse>> BuildRelease(BuildReleaseRequest request, CancellationToken ct, [FromHeader(Name="Idempotency-Key")]string? key=null)
     {
-        var result = await sender.Send(new BuildReleaseCommand(User.GetActorId(), request), ct);
+        var result = await sender.Send(new BuildReleaseCommand(User.GetActorId(), request,key,User.GetSessionFamilyId()), ct);
         return result.IsSuccess
             ? Created($"/api/releases/{result.Value!.Id}", result.Value)
             : ReleaseProblem(result.Error!);
@@ -41,9 +41,10 @@ public class ReleasesController(ISender sender) : ControllerBase
     }
 
     /// <summary>
-    /// Publishes a release (D17).
+    /// Publish remains contained: returns503 PUBLISH_GATE_UNAVAILABLE until the separate publish gate is complete.
     /// </summary>
     [HttpPost("{releaseId:guid}/publish")]
+    [ProducesResponseType<ProblemDetails>(503)]
     [ProducesResponseType(204)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
@@ -67,11 +68,11 @@ public class ReleasesController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> RevokeRelease(Guid releaseId, RevokeReleaseRequest request, CancellationToken ct)
     {
-        var result = await sender.Send(new RevokeReleaseCommand(User.GetActorId(), releaseId, request), ct);
+        var result = await sender.Send(new RevokeReleaseCommand(User.GetActorId(), releaseId, request,User.GetSessionFamilyId()), ct);
         return result.IsSuccess ? NoContent() : ReleaseProblem(result.Error!);
     }
 
     private ObjectResult ReleaseProblem(Fire3D.Application.Authentication.AuthError error) =>
         Problem(statusCode: error.Status, title: error.Message,
-            extensions: new Dictionary<string, object?> { ["code"] = error.Code });
+            extensions: new Dictionary<string, object?> { ["code"] = error.Code,["errors"]=error.Errors });
 }

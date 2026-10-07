@@ -10,7 +10,7 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 - ✅ API local tạo checkout/QR PayOS thật 100.000 VND, create201/replay200 cùng checkout/order; chưa chuyển tiền.
 - ✅ Azure Swagger/OpenAPI/health/return/cancel200; preflight OTP và PayOS cho cả hai domain FE204, có CORS đúng. Create thiếu Bearer401, webhook thiếu chữ ký400, OTP/resend email sai400 có lỗi theo field.
 - ❌ Chưa nghiệm thu worker/executor trên Azure, gửi OTP thật, webhook hợp lệ, Paid/Applied và provisioning/entitlement thật.
-- Finding Swagger tại baseline deployment 03/10: multipart/PATCH/enum/proof/header sai hoặc thiếu. Phần **auth** đã sửa source bằng schema/operation transformer và có contract test ngày 05/10; binary/OpenAPI deployment mới chưa kiểm chứng. Response GET PayOS và các module ngoài auth không thuộc đợt này.
+- Finding Swagger tại baseline deployment 03/10: multipart/PATCH/enum/proof/header sai hoặc thiếu. Phần **auth** đã sửa source bằng schema/operation transformer và có contract test ngày 05/10; binary/OpenAPI deployment mới chưa kiểm chứng. Ghi chú này thuộc đợt auth; GET PayOS response200 và metadata API được chọn đã có bản sửa/test trong đợt Tasks1–9 bên dưới.
 
 ## Cập nhật auth source/test — 05/10/2026
 
@@ -89,11 +89,11 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 
 ## C. Building, IFC, authoring và release
 
-### ACCESS-01 — P1 · GAP · Quyền tham gia Building (FR-TRAINING-04)
+### ACCESS-01 — SOURCE/HTTP/DB TESTED · Quyền tham gia Building (FR-TRAINING-04)
 
-- **Contract/current:** V7 mặc định Building Private; source chưa có capability participation grant/access revision tương ứng.
-- **Sửa code:** List/package/prepare kiểm Trainee đăng nhập và quyền Building; verify mã hiện hành tạo account-bound grant. Rotate/revoke mã hoặc đổi visibility tăng access revision, vô hiệu grant cũ. Public vẫn cần Trainee đăng nhập; QR không tạo tenant membership.
-- **Nghiệm thu:** Mã sai hoặc grant user khác bị từ chối; grant cũ mất hiệu lực sau thay đổi; start recheck quyền. Phiên đã start giữ quyền sync theo snapshot.
+- **Contract/current:** Building mặc định Private; visibility/access revision/code hash và account-bound participation grant đã có. Rotate/revoke/code hoặc visibility change vô hiệu grant cũ; Public vẫn yêu cầu đăng nhập. Training list Trainee kiểm current Building access và Active/Published/pinned approval. Không tạo tenant membership hoặc learner seat.
+- **Kiểm chứng:** HTTP/PostgreSQL với runtime gate-only roles kiểm code sai, grant user khác, rotation/revoke, tenant và atomic audit. Supabase schema/ACL đã áp; binary/client chưa smoke test.
+- **Còn chờ:** Learner package/preparation/start recheck và sync theo started snapshot thuộc SESSION-01; list/grant không chứng minh pipeline này đã có.
 
 ### LIBRARY-01 — P1 · LATER · Thư viện Organization (FR-LIBRARY-01–02)
 
@@ -101,39 +101,34 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 - **Sửa code:** PlatformAdmin maintain template/rubric mẫu/metadata thiết bị có version; OrganizationUser đọc trong console để author. Template tùy chọn, capability chỉ chọn runtime hỗ trợ; tách Learn và kho riêng tenant.
 - **Nghiệm thu:** Organization không quản trị library; sửa mẫu không sửa bài đã phát hành; private IFC/scenario không tự vào thư viện; capability không hỗ trợ bị từ chối.
 
-### APPROVAL-01 — P1 · GAP · Duyệt scenario/rubric (FR-SCENARIO-03)
+### APPROVAL-01 — P1 · SOURCE/DB TESTED · Duyệt scenario/rubric (FR-SCENARIO-03)
 
-- **Contract/current:** Readiness/ConfirmForTraining hiện có không thay approval nội dung của PlatformAdmin; chưa thấy `scenario_content_reviews` v7 trong source.
-- **Sửa code:** Submit đóng băng version/rubric và content hash; Admin approve/reject đúng hash, reject có lý do; sửa tạo version/review mới. Publish pin approval cùng readiness và package provenance.
-- **Nghiệm thu:** Hash lệch, thiếu approval hoặc readiness không đạt chặn publish; sửa version submitted bị chặn; approval không áp sang version khác. Learn giữ editorial lifecycle riêng, không thêm approval Learn.
+- **Contract/current:** Exact immutable scenario/rubric submission and Admin approve/reject implemented with receipt, audit and live tenant/lifecycle checks. Technical readiness is independent. See [scenario-readiness.md](scenario-readiness.md).
+- **Remaining acceptance:** Real client/deployment and publish gate. Built release now checks the exact approval/readiness/package provenance; legacy versions receive no fabricated approval.
 
-### IFC-01 — P0 · GAP · Outbox và worker result
+### IFC-01 — SOURCE/HTTP/DB TESTED · Bound source/outbox/worker contract
 
-- **Contract/current:** [IfcWriteStore](../Fire3D/Fire3D.Infrastructure/Ifc/IfcWriteStore.cs) đã gọi canonical enqueue schema `1`; migration `AddIfcIntegrationOutbox` giao table/function/grants, tenant suy từ job và hash do PostgreSQL tính. Test PostgreSQL kiểm process, replay/conflict và rollback job/audit khi enqueue lỗi. [Chi tiết](ifc-outbox.md). **PARTIAL:** chưa đồng nghĩa worker/pipeline đã chạy.
-- **Sửa code còn lại:** Nối dispatcher/consumer và worker result qua gate kiểm current attempt/lease/provenance. Commit business effect và receipt trước ACK; worker không có DML trực tiếp. Gate retry/provenance/full schema v7 phải được giao và nghiệm thu riêng.
-- **Nghiệm thu:** Hash/envelope hợp lệ; duplicate delivery idempotent; sai hash, lease cũ hoặc attempt cũ bị từ chối; crash trước ACK replay không nhân đôi kết quả.
+Verified immutable intent/source, canonical transactional outbox, HTTP dispatcher, machine-authenticated leased/fenced worker gates, accepted provenance, retry and recovery implemented and tested on isolated migration history with fake S3/HTTP worker. Supabase schema through Task6 applied; no real IFC/Blender/Unity output/deployed worker certification. See [processing-worker.md](processing-worker.md), [selected checklist](selected-api-contract.md).
 
-### IFC-02 — P1 · GAP · Readiness theo revision/version
+### IFC-02 — P1 · SOURCE/DB TESTED · Readiness theo revision/version
 
-- **Contract/current:** `ConfirmForTrainingAsync` hiện đổi trạng thái toàn revision; API không gắn confirmation với scenario version. Docs yêu cầu readiness theo cặp revision–scenario version.
-- **Sửa code:** Đổi command/API/persistence/review để ghi và kiểm tra đúng cặp; release phải tham chiếu confirmation tương ứng.
-- **Nghiệm thu:** Confirm một cặp không làm sẵn sàng scenario khác; version không thuộc revision hoặc tenant sai bị từ chối; audit/replay giữ đúng cặp.
+- **Contract/current:** Confirm requires exact scenarioVersionId/validationRunId/annotationSetId, accepted current worker attempt/artifact, matching hashes, Passed/runtime ready and no Error/Critical blocker. Returns reviewId, atomic receipt/audit; technical rejection preserves history.
+- **Remaining acceptance:** Built release consumes that exact confirmation and matching immutable approval/provenance. Fake worker evidence is not geometry/Unity acceptance.
 
-### SCENARIO-01 — P1 · VERIFY · Draft ETag và snapshot
+### SCENARIO-01 — SOURCE/HTTP/DB TESTED · Draft ETag và immutable snapshot
 
-- **Contract/current:** Draft GET/PUT, ETag dựa trên xmin và snapshot/version đã có. Không cần tạo API GET draft mới.
-- **Sửa code:** Giữ GET draft trả ETag; kiểm tra PUT `If-Match`, snapshot bất biến, liên kết version với đúng scenario/revision và review reject đúng cặp.
-- **Nghiệm thu:** GET draft lấy ETag ban đầu; lưu với ETag hiện tại thành công; thiếu/cũ ETag bị từ chối; hai editor không ghi đè nhau; snapshot cũ không đổi.
+- **Contract/current:** Draft GET/PUT xmin ETag, 428/400/412, locked draft/version numbering, immutable canonical snapshot/rubric/learner fields, receipt/audit và package-build job đã có. Không cần tạo GET draft mới.
+- **Kiểm chứng:** HTTP/PostgreSQL actual migrations kiểm concurrent numbering, stale ETag, replay, rollback và geometry/runtime references. Anchor phải thuộc current Geometry attempt có Passed validation không Error/Critical; Failed QA hoặc stale attempt bị chặn ở validate/snapshot.
+- **Còn chờ:** Package/toolchain Unity thật và matching binary/client deployment. Structural validation không thay geometry/package QA hoặc readiness.
 
-### PLAYTEST-01 — P1 · GAP · Tenant và entitlement
+### PLAYTEST-01 — P1 · SOURCE/HTTP/DB TESTED · Tenant, entitlement and launch
 
-- **Contract/current:** Runtime dùng [FailClosedPlaytestWriteStore](../Fire3D/Fire3D.Infrastructure/Scenarios/FailClosedPlaytestWriteStore.cs): prepare trả 503 thay vì tạo session khi entitlement gate chưa deployed; start kiểm owner. Legacy store còn source nhưng không được DI đăng ký. Launch grant vẫn chưa có.
-- **Sửa code:** Dùng gate/schema entitlement đích: OrganizationUser đúng tenant, Trial còn quota hoặc entitlement Active của Building; pin version/package/runtime và cấp playtest grant/session type riêng. Bỏ nuốt lỗi và ID rỗng thay cho dữ liệu bắt buộc.
-- **Nghiệm thu:** Trial còn/hết quota, Active/Expired, tenant sai, DB lỗi, thiếu version và replay đều fail-closed/đúng trạng thái. Playtest không dùng QR Trainee, không ghi learner analytics; session đã bắt đầu vẫn sync theo contract.
+- **Contract/current:** OrganizationUser owner/session only; preparation pins accepted immutable package without entitlement/quota/grant; start checks current runtime + exact Building entitlement and consumes Trial atomically with receipt/audit. Separate five-minute grant and replay implemented. [Manual tests](playtest-manual-test.md).
+- **Remaining acceptance:** Production configuration, real IFC/Unity/runtime client; no automatic Trial is provisioned. No playtest completion/sync/result API or learner analytics is claimed. Publish stays contained.
 
 ### RELEASE-01 — P1 · GAP · Publish gates
 
-- **Contract/current:** Runtime dùng [FailClosedReleaseStore](../Fire3D/Fire3D.Infrastructure/Releases/FailClosedReleaseStore.cs): publish trả 503 thay vì bỏ qua gate. Create Built, GET và revoke vẫn delegate implementation hiện có.
+- **Contract/current:** Runtime dùng [FailClosedReleaseStore](../Fire3D/Fire3D.Infrastructure/Releases/FailClosedReleaseStore.cs): publish trả 503 thay vì bỏ qua gate. Create Built derive metadata từ accepted ReleasePackage và kiểm exact readiness/Approved hashes qua restricted gate; package/Training/receipt/audit atomic. GET/revoke giữ route hiện có. Publish chưa triển khai đầy đủ.
 - **Sửa code:** Tách ghi nhận build hoàn tất khỏi việc chạy Unity. Trước publish kiểm approval đúng scenario/rubric hash (APPROVAL-01), readiness đúng revision/version, package/manifest hash, artifact, validation Passed, blocker, runtime compatibility, Training và entitlement theo Docs.
 - **Nghiệm thu:** Provenance/review sai, QA lỗi hoặc còn blocker, runtime không tương thích, entitlement không Active đều không publish. Retry/revoke/audit đúng; create Built không bị mô tả là đã chạy Unity.
 
@@ -198,7 +193,7 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 ### REPORT-01 — P2 · PARTIAL · Analytics/support/audit views
 
 - **Contract/current:** Có feedback/ticket/message cho user và admin, audit metadata admin-only, cùng operations analytics cho platform/organization. Operations analytics không phải learner analytics; chỉ số plays, active sessions, completion/duration chưa có nguồn session chuẩn.
-- **Còn thiếu:** Idempotency receipt/ETag cho support mutation, pagination/filter support và PostgreSQL integration tests cho tenant/race. Learner analytics chỉ được thêm sau start/heartbeat/result chuẩn.
+- **Support đã sửa:** Canonical receipts, ETag/428/400/412, lifecycle/owner/admin locks, bounded pagination/filter và append-only messages; HTTP/PostgreSQL race/replay/rollback tests có bằng chứng. Supabase migration/ACL đã áp. **Còn chờ:** Support binary/client smoke test; audit-view/operations analytics mở rộng và learner analytics không thuộc đợt này, learner metrics cần start/heartbeat/result chuẩn.
 - **Nghiệm thu:** Playtest/preparation không tính learner play; dashboard/API dùng chung định nghĩa; người dùng không đọc tenant khác; dữ liệu nhạy cảm được che.
 
 ## E. Thứ tự phụ thuộc và cách hoàn tất task
@@ -209,6 +204,38 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 4. **SESSION-01, ASSESSMENT-01:** start/launch grant, pin rubric, offline sync và kết quả theo mode.
 5. **AI-01, LEARN-01, RAG-01, REPORT-01:** request/quota và retrieval đã cấp quyền; indexing cần approved/published version, analytics cần session/result chuẩn.
 
-Task chỉ hoàn tất khi contract, handler/store/schema/gate và role/tenant đúng; có kiểm tra happy path cùng lỗi/race/replay phù hợp trên database test; tài liệu API phản ánh source mới; và PR ghi lệnh, kết quả, phần bị mock/bỏ qua, cùng giới hạn provider. Không coi build, route tồn tại hoặc mock test là bằng chứng provider/production đã hoạt động. Đợt đồng bộ này chỉ cập nhật BE docs; không sửa bộ `Docs` chuẩn.
+Task chỉ hoàn tất khi contract, handler/store/schema/gate và role/tenant đúng; có kiểm tra happy path cùng lỗi/race/replay phù hợp trên database test; tài liệu API phản ánh source mới; và PR ghi lệnh, kết quả, phần bị mock/bỏ qua, cùng giới hạn provider. Không coi build, route tồn tại hoặc mock test là bằng chứng provider/production đã hoạt động. Đợt selected API này đồng bộ cả BE docs và hồ sơ triển khai trong nhánh Docs riêng; không suy toàn bộ v7 đã triển khai.
 
 Google onboarding/link: source/DI/controller + PostgreSQL migration/constraints/RLS, atomic create/replay/race/rollback đã có kiểm thử; Firebase thật, client và deployment chưa kiểm chứng. Migration chưa áp Supabase. Hướng dẫn: [google-auth-manual-test.md](google-auth-manual-test.md).
+
+## Building mutation — code và test trong đợt API được chọn
+
+POST body `organizationId`/alias query, admin PUT/DELETE derive tenant, validation nested theo field đã triển khai. Unit/HTTP và PostgreSQL chạy migration history thật, gồm runtime audit INSERT-only, rollback audit và race khóa lifecycle được ghi trong `building-manual-test.md`. Access/participation, IFC worker, readiness/approval, playtest và package build vẫn là các task riêng; không suy hoàn tất từ Building CRUD. Supabase schema/ACL đã kiểm trong rollout selected API; binary/client deployment chưa smoke test.
+
+### Selected scope Task 2 — bound IFC upload (source/test/schema; provider pending)
+
+Hai route initiate dùng chung intent/receipt và SHA-256 dự kiến. Complete kiểm owner/tenant/key/size/hash thực, lưu candidate trước copy, adopt atomic; cleanup có lease/retry và tombstone để xử lý late write. Migration additive `AddBoundIfcUploads` giữ source legacy unverified. Xem `ifc-upload-manual-test.md`. Test PostgreSQL isolated + HTTP/storage fake; schema Supabase đã áp và kiểm; không đánh dấu pipeline IFC/Blender/Unity, S3 hoặc binary production hoàn tất.
+
+### Selected scope Task 3 — processing/outbox/HTTP worker (source/test; provider pending)
+
+Process dùng verified source + Idempotency-Key và SQL gate atomic. Machine-only claim/renew/output/complete/fail, restricted executor, dispatcher receipt-before-ACK, lease fencing/recovery và retry gate đã triển khai. Artifacts/QA/issues chỉ lấy current accepted attempt; alias additive giữ các cột legacy. Xem `processing-worker.md`. Worker nghiệm thu bằng fake HTTP, chưa có IFC/Blender/Unity thật; dispatcher mặc định tắt. Readiness/approval/package runtime/playtest và publish chưa được suy hoàn tất từ kết quả này.
+
+
+Scenario authoring: implemented durable create/snapshot/package-build receipts, draft ETag 428/400/412, locked numbering, immutable canonical v7 snapshot/rubric/learner fields and accepted geometry/runtime references. PostgreSQL actual-history plus fake package output tests ran; real Unity and deployment remain unchecked. See scenario-authoring.md. Structural validation alone is not readiness.
+
+### Selected scope Task 5 — exact readiness and content approval
+
+Source + PostgreSQL/HTTP tests implemented: exact revision/version/run/annotation/artifact provenance, Passed/blocker/runtime gate, separate immutable Submitted→Approved/Rejected content review, server hashes, live tenant/lifecycle, receipt and audit rollback. See [scenario-readiness.md](scenario-readiness.md). Tests use fake worker outputs, not Unity. Publish/learner sessions remain incomplete. Supabase Tasks 2–4 plus dependency EXECUTE repair were applied 2026-10-07; existing row counts were preserved. Older "deployment pending" notes describe their original implementation evidence, not the subsequent schema rollout.
+
+Task 6: isolated actual-history PostgreSQL + HTTP/OpenAPI + fake runtime/package/paid-provider fixture verified; migrations are additive and preserve legacy sessions. Tasks7–9 now have source/test/docs: release/Training/access, support receipts/ETag/paging and OpenAPI inventory. Their migrations and final gate repairs have been applied/postchecked on Supabase; matching binary/client deployment remains pending.
+
+
+### Schema rollout 2026-10-07
+
+Supabase migrations through `20261007140000_RequirePassedGeometryAnchors` have been applied and postchecked; see [ifc-authoring-deployment.md](ifc-authoring-deployment.md). Existing 8 users/6 organizations/2 buildings were preserved. Earlier deployment-pending notes are historical evidence for their original task commits. Readiness/playtest source and isolated tests are verified; matching deployed API binary, production worker and runtime client remain unchecked. Tasks7–9 source/isolated tests are recorded in [selected-api-contract.md](selected-api-contract.md); release/access, support, privilege repair and final IFC/scenario function migrations are applied on Supabase. Real publish/learner flows remain incomplete.
+
+## Selected scope Tasks7–9
+
+[Current route checklist and evidence](selected-api-contract.md) replaces historical selected-API gap descriptions. [Generated route inventory](api-route-inventory.md) counts OpenAPI methods, not completed capabilities. Built/access/support are source/test/schema verified; deployed binary/client and real workers remain separate acceptance. Publish, learner start/sync/result remain incomplete.
+
+Final selected review: IFC receipt Building binding259b6b5 and Passed geometry anchors5377654 committed/pushed. Selected HTTP/PostgreSQL regression36passed, supported IFC105passed, build0warning/error; Docker-only legacy IFC groups excluded. See task-progress-checklist.md and ifc-authoring-deployment.md for test/schema versus provider limits.

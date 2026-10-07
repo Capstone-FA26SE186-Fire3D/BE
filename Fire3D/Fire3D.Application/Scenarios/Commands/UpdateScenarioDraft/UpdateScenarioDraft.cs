@@ -18,6 +18,6 @@ public sealed class UpdateScenarioDraftHandler(IAuthStore accounts, IScenarioWri
         if (command.State == null)
             return AuthResult<uint>.Fail("VALIDATION_ERROR", "Draft state is required.", 400);
 
-        return await store.UpdateScenarioDraftAsync(command.ActorId, command.DraftId, command.ExpectedVersion, command.State, scope.Value!.OrganizationId ?? Guid.Empty, ct);
+        return await store.UpdateScenarioDraftAsync(command.ActorId, command.DraftId, command.ExpectedVersion, command.State, scope.Value!.OrganizationId, ct);
     }
 }

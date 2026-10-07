@@ -6,7 +6,7 @@ namespace Fire3D.Application.Scenarios.Commands.CreateScenarioDraft;
 
 public sealed record CreateScenarioDraftRequest(Guid RevisionId);
 
-public sealed record CreateScenarioDraftCommand(Guid ActorId, Guid ScenarioId, CreateScenarioDraftRequest Request) : IRequest<AuthResult<Guid>>;
+public sealed record CreateScenarioDraftCommand(Guid ActorId, Guid ScenarioId, CreateScenarioDraftRequest Request, string? IdempotencyKey = null) : IRequest<AuthResult<Guid>>;
 
 public sealed class CreateScenarioDraftHandler(IAuthStore accounts, IScenarioWriteStore store)
     : IRequestHandler<CreateScenarioDraftCommand, AuthResult<Guid>>
@@ -19,6 +19,6 @@ public sealed class CreateScenarioDraftHandler(IAuthStore accounts, IScenarioWri
         if (command.Request == null || command.Request.RevisionId == Guid.Empty)
             return AuthResult<Guid>.Fail("VALIDATION_ERROR", "RevisionId is required.", 400);
 
-        return await store.CreateScenarioDraftAsync(command.ActorId, command.ScenarioId, scope.Value!.OrganizationId ?? Guid.Empty, command.Request, ct);
+        return await store.CreateScenarioDraftAsync(command.ActorId, command.ScenarioId, scope.Value!.OrganizationId, command.Request, ct, command.IdempotencyKey);
     }
 }

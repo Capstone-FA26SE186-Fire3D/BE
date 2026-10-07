@@ -16,7 +16,7 @@ public sealed class FailClosedReleaseStore(Fire3DDbContext db, TimeProvider cloc
         Guid actorId,
         Guid? organizationId,
         BuildReleaseRequest request,
-        CancellationToken ct) => inner.BuildAsync(actorId, organizationId, request, ct);
+        CancellationToken ct,string? key=null,Guid? family=null) => inner.BuildAsync(actorId, organizationId, request, ct,key,family);
 
     public Task<ReleaseResponse?> GetAsync(Guid releaseId, Guid? organizationId, CancellationToken ct) =>
         inner.GetAsync(releaseId, organizationId, ct);
@@ -32,5 +32,5 @@ public sealed class FailClosedReleaseStore(Fire3DDbContext db, TimeProvider cloc
         Guid releaseId,
         Guid? organizationId,
         string reason,
-        CancellationToken ct) => inner.RevokeAsync(actorId, releaseId, organizationId, reason, ct);
+        CancellationToken ct,Guid? family=null) => inner.RevokeAsync(actorId, releaseId, organizationId, reason, ct,family);
 }

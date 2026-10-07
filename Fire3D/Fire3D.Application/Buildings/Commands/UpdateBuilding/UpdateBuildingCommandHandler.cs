@@ -12,18 +12,19 @@ internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, IAuthSt
         var request = command.Request;
         var name = request.Name?.Trim();
         
-        if (string.IsNullOrEmpty(name) || name.Length > 200 || request.TotalFloors < 1 || (request.Contact is not null && string.IsNullOrWhiteSpace(request.Contact.ContactName)))
-            return AuthResult<BuildingResponse>.Fail("VALIDATION_ERROR", "Name is required (max 200) and TotalFloors must be >= 1.", 400);
-        if (!await BuildingAuthorization.CanMutateAsync(accounts, command.ActorId, command.OrganizationId, ct))
-            return AuthResult<BuildingResponse>.Fail("FORBIDDEN", "An active organization scope is required.", 403);
-
-        var building = await store.FindBuildingAsync(command.BuildingId, command.OrganizationId, ct);
+        var errors = BuildingValidation.Validate(name, request.BuildingType, request.TotalFloors, request.Location, request.Contact);
+        if (errors.Count > 0)
+            return AuthResult<BuildingResponse>.Fail("VALIDATION_ERROR", "Building validation failed.", 400, errors);
+        var scope = await BuildingAuthorization.ResolveScopeAsync(accounts, command.ActorId, command.OrganizationId, ct);
+        if (!scope.IsSuccess) return AuthResult<BuildingResponse>.Fail(scope.Error!.Code, scope.Error.Message, scope.Error.Status);
+        var building = await store.FindBuildingAsync(command.BuildingId, scope.Value, ct);
         if (building == null)
             return AuthResult<BuildingResponse>.Fail("NOT_FOUND", "Building not found.", 404);
-
+        if (!await BuildingAuthorization.CanMutateAsync(accounts, command.ActorId, building.OrganizationId, ct))
+            return AuthResult<BuildingResponse>.Fail("FORBIDDEN", "An active organization scope is required.", 403);
         var now = clock.GetUtcNow().UtcDateTime;
         
-        building.Name = name;
+        building.Name = name!;
         building.BuildingType = request.BuildingType?.Trim();
         building.TotalFloors = request.TotalFloors;
         building.UpdatedAt = now;
@@ -67,7 +68,7 @@ internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, IAuthSt
             return AuthResult<BuildingResponse>.Fail("BUILDING_MUTATION_FAILED", "Building could not be updated.", 409);
 
         // Fetch again to get the updated nested entities with their actual IDs
-        var updatedBuilding = await store.FindBuildingAsync(command.BuildingId, command.OrganizationId, ct);
+        var updatedBuilding = await store.FindBuildingAsync(command.BuildingId, building.OrganizationId, ct);
         
         BuildingLocationResponse? locationResponse = updatedBuilding!.BuildingLocation != null 
             ? new BuildingLocationResponse(updatedBuilding.BuildingLocation.Id, updatedBuilding.BuildingLocation.Address, updatedBuilding.BuildingLocation.City, updatedBuilding.BuildingLocation.District, updatedBuilding.BuildingLocation.Latitude, updatedBuilding.BuildingLocation.Longitude, updatedBuilding.BuildingLocation.Geojson) 

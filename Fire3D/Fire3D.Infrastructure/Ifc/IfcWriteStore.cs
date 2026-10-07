@@ -34,6 +34,7 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         Guid actorId, Guid jobId, Guid requestId, string reason, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await ScalarAsync("SELECT pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management',0))",ct);
         var tenant = await ScalarAsync(JobScopeSql, ct, ("actor",actorId), ("job",jobId));
         if (tenant is not Guid organizationId)
             return AuthResult<RetryProcessingJobResponse>.Fail("NOT_FOUND", "Processing job is unavailable in this scope.", 404);
@@ -59,7 +60,6 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
                 INSERT INTO public.audit_logs(user_id,organization_id,actor_type,action,target_entity,target_id,new_values)
                 VALUES (@actor,@tenant,'User','Update','processing_jobs',@job,
                     jsonb_build_object('operation','Retry','requestId',@request,'reason',@reason))
-                RETURNING id
                 """,ct,("actor",actorId),("tenant",organizationId),("job",jobId),("request",requestId),("reason",reason));
         await transaction.CommitAsync(ct);
         return AuthResult<RetryProcessingJobResponse>.Ok(new(jobId,outcome));

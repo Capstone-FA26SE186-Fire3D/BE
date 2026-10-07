@@ -28,7 +28,7 @@ public class ValidationRunTests
 public sealed partial class IfcReadSqlTests
 {
     [IfcPostgresFact]
-    public async Task Validation_has_attempt_provenance_and_history_is_scoped()
+    public async Task Validation_has_accepted_current_attempt_provenance_and_rejects_failed_history()
     {
         await using var db=database.Context();
         var store=new IfcReadStore(db);
@@ -36,7 +36,7 @@ public sealed partial class IfcReadSqlTests
         Assert.NotNull(current); Assert.Equal(database.Attempt,current.ProcessingAttemptId);
         Assert.Equal("Passed",current.Status);
         Assert.Null(await store.GetValidationAsync(database.Validation,database.OtherTenant,default));
-        Assert.NotNull(await store.GetValidationAsync(database.PreviousValidation,database.Tenant,default));
+        Assert.Null(await store.GetValidationAsync(database.PreviousValidation,database.Tenant,default));
         Assert.NotNull(await store.GetValidationAsync(database.Validation,null,default));
     }
 }

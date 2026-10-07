@@ -4,4 +4,4 @@ using MediatR;
 
 namespace Fire3D.Application.Buildings.Queries.ListBuildings;
 
-public sealed record ListBuildingsQuery(Guid ActorId, Guid OrganizationId, BuildingFilter Filter) : IRequest<AuthResult<PageResponse<BuildingSummaryResponse>>>;
+public sealed record ListBuildingsQuery(Guid ActorId, Guid? OrganizationId, BuildingFilter Filter) : IRequest<AuthResult<PageResponse<BuildingSummaryResponse>>>;

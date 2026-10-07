@@ -1723,7 +1723,7 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("scenario_version_id");
 
-                    b.Property<Guid>("ServiceEntitlementId")
+                    b.Property<Guid?>("ServiceEntitlementId")
                         .HasColumnType("uuid")
                         .HasColumnName("service_entitlement_id");
 

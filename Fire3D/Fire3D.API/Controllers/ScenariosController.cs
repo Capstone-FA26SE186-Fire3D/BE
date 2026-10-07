@@ -14,7 +14,7 @@ namespace Fire3D.API.Controllers;
 
 [ApiController]
 [Route("api/scenarios")]
-[Authorize]
+[Authorize(Roles = "OrganizationUser,PlatformAdmin")]
 public class ScenariosController(ISender sender) : ControllerBase
 {
     /// <summary>Validates draft structure. IFC geometry and runtime capability checks require the worker pipeline and are not run by this synchronous endpoint.</summary>
@@ -29,7 +29,7 @@ public class ScenariosController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ValidateScenarioDraftCommand(actor, draftId), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>Loads one immutable scenario snapshot with its complete configuration.</summary>
@@ -43,7 +43,7 @@ public class ScenariosController(ISender sender) : ControllerBase
         var actor = User.GetActorId();
         var result = await sender.Send(new GetScenarioVersionQuery(actor, versionId), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>Lists immutable snapshots for a scenario, newest version first.</summary>
@@ -58,7 +58,7 @@ public class ScenariosController(ISender sender) : ControllerBase
         var actor = User.GetActorId();
         var result = await sender.Send(new ListScenarioVersionsQuery(actor, scenarioId, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>Loads a draft state and returns its version as an ETag for the next update.</summary>
@@ -68,7 +68,7 @@ public class ScenariosController(ISender sender) : ControllerBase
         var actor = User.GetActorId();
         var result = await sender.Send(new GetScenarioDraftQuery(actor, draftId), ct);
         if (!result.IsSuccess) return Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
         Response.Headers.ETag = $"\"{result.Value!.Version}\"";
         return Ok(result.Value);
     }
@@ -84,7 +84,7 @@ public class ScenariosController(ISender sender) : ControllerBase
         var actor = User.GetActorId();
         var result = await sender.Send(new GetScenarioQuery(actor, scenarioId), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>Lists scenarios that belong to a building in the caller's organization scope.</summary>
@@ -99,7 +99,7 @@ public class ScenariosController(ISender sender) : ControllerBase
         var actor = User.GetActorId();
         var result = await sender.Send(new ListBuildingScenariosQuery(actor, buildingId, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>
@@ -109,16 +109,16 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> CreateScenario([FromBody] CreateScenarioRequest request, CancellationToken ct)
+    public async Task<IActionResult> CreateScenario([FromBody] CreateScenarioRequest request, CancellationToken ct, [FromHeader(Name = "Idempotency-Key")] string? key = null)
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new CreateScenarioCommand(actor, request), ct);
+        var result = await sender.Send(new CreateScenarioCommand(actor, request, key), ct);
         
         return result.IsSuccess 
             ? Created($"/api/scenarios/{result.Value}", new { Id = result.Value })
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>
@@ -128,16 +128,16 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> CreateScenarioDraft(Guid scenarioId, [FromBody] CreateScenarioDraftRequest request, CancellationToken ct)
+    public async Task<IActionResult> CreateScenarioDraft(Guid scenarioId, [FromBody] CreateScenarioDraftRequest request, CancellationToken ct, [FromHeader(Name = "Idempotency-Key")] string? key = null)
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new CreateScenarioDraftCommand(actor, scenarioId, request), ct);
+        var result = await sender.Send(new CreateScenarioDraftCommand(actor, scenarioId, request, key), ct);
 
         return result.IsSuccess 
             ? Created($"/api/scenario-drafts/{result.Value}", new { Id = result.Value })
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>
@@ -149,21 +149,20 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(412)]
+    [ProducesResponseType<ProblemDetails>(428)]
     public async Task<IActionResult> UpdateScenarioDraft(Guid draftId, [FromBody] Fire3D.Application.Scenarios.Dto.ScenarioDraftStateDto state, [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
     {
         var actor = User.GetActorId();
 
-        if (string.IsNullOrWhiteSpace(ifMatch) || !uint.TryParse(ifMatch.Trim('"'), out var expectedVersion))
-        {
-            return Problem(statusCode: 412, title: "Precondition Failed", detail: "If-Match header with expected version is required.");
-        }
+        var precondition = DraftPrecondition(ifMatch, out var expectedVersion);
+        if (precondition is not null) return precondition;
 
         var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.UpdateScenarioDraft.UpdateScenarioDraftCommand(actor, draftId, expectedVersion, state), ct);
 
         if (!result.IsSuccess)
         {
             return Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
         }
 
         Response.Headers["ETag"] = $"\"{result.Value}\"";
@@ -177,54 +176,69 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> SnapshotScenarioDraft(Guid draftId, CancellationToken ct)
+    public async Task<IActionResult> SnapshotScenarioDraft(Guid draftId, CancellationToken ct, [FromHeader(Name = "If-Match")] string? ifMatch = null, [FromHeader(Name = "Idempotency-Key")] string? key = null)
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.SnapshotScenarioDraft.SnapshotScenarioDraftCommand(actor, draftId), ct);
+        var precondition = DraftPrecondition(ifMatch, out var expectedVersion);
+        if (precondition is not null) return precondition;
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.SnapshotScenarioDraft.SnapshotScenarioDraftCommand(actor, draftId, expectedVersion, key), ct);
 
         return result.IsSuccess 
             ? Created($"/api/scenario-versions/{result.Value}", new { Id = result.Value })
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>
-    /// Prepares a new VR Playtest Session (D14).
+    /// Pins an accepted immutable PlaytestPackage without consuming Trial or issuing a grant. Idempotency-Key required.
     /// </summary>
+    [Authorize(Roles="OrganizationUser")]
     [HttpPost("{scenarioId:guid}/playtests")]
-    [ProducesResponseType(201)]
+    [ProducesResponseType<Fire3D.Application.Scenarios.PlaytestPreparation>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> PreparePlaytestSession(Guid scenarioId, [FromQuery] Guid buildingId, [FromBody] Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestRequest request, CancellationToken ct)
+    public async Task<IActionResult> PreparePlaytestSession(Guid scenarioId, [FromQuery] Guid? buildingId, [FromBody] Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestRequest request, [FromHeader(Name="Idempotency-Key")] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestSessionCommand(actor, buildingId, scenarioId, request), ct);
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestSessionCommand(actor, User.GetSessionFamilyId(), buildingId, scenarioId, request, key), ct);
 
         return result.IsSuccess 
-            ? Created($"/api/playtests/{result.Value}", new { Id = result.Value })
+            ? Created($"/api/playtests/{result.Value!.Id}", result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>
-    /// Starts a prepared VR Playtest Session (D15).
+    /// OrganizationUser owner starts with an active session, compatible runtime and Building entitlement. Atomic Trial consumption; returns a dedicated five-minute launch grant.
     /// </summary>
+    [Authorize(Roles="OrganizationUser")]
     [HttpPost("/api/playtests/{playtestId:guid}/start")]
-    [ProducesResponseType(200)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(503)]
+    [ProducesResponseType<Fire3D.Application.Scenarios.PlaytestLaunch>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> StartPlaytestSession(Guid playtestId, CancellationToken ct)
+    public async Task<IActionResult> StartPlaytestSession(Guid playtestId, [FromBody] Fire3D.Application.Scenarios.StartPlaytestRequest request, [FromHeader(Name="Idempotency-Key")] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.StartPlaytestSession.StartPlaytestSessionCommand(actor, playtestId), ct);
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.StartPlaytestSession.StartPlaytestSessionCommand(actor, User.GetSessionFamilyId(), playtestId, request, key), ct);
 
         return result.IsSuccess 
-            ? Ok()
+            ? Ok(result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
+    private IActionResult? DraftPrecondition(string? value, out uint revision)
+    {
+        revision = 0;
+        if (string.IsNullOrWhiteSpace(value)) return Problem(statusCode:428, title:"If-Match is required.", extensions:new Dictionary<string,object?>{["code"]="PRECONDITION_REQUIRED"});
+        if (value.Length < 3 || value[0]!='"' || value[^1]!='"' || !uint.TryParse(value.AsSpan(1,value.Length-2),System.Globalization.NumberStyles.None,System.Globalization.CultureInfo.InvariantCulture,out revision) || revision==0)
+            return Problem(statusCode:400,title:"If-Match must be one quoted draft revision.", extensions:new Dictionary<string,object?>{["code"]="INVALID_IF_MATCH"});
+        return null;
+    }
+
 }
 

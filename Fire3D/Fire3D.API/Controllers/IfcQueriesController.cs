@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 namespace Fire3D.API.Controllers;
 [ApiController]
-[Authorize]
+[Authorize(Roles="OrganizationUser,PlatformAdmin")]
 [Route("api")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class IfcQueriesController(ISender sender) : ControllerBase

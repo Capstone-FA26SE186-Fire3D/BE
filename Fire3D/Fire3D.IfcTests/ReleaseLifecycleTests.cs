@@ -103,9 +103,9 @@ public sealed class ReleaseLifecycleTests
 
     private static ReleaseResponse Response(BuildReleaseRequest request, Guid organizationId) => new(
         Guid.NewGuid(), request.RevisionId, request.ScenarioVersionId, Guid.NewGuid(), organizationId,
-        request.ConfirmationReviewId, "Built", request.SafetyThresholds, null, null, null, null, null,
+        request.ConfirmationReviewId, "Built", request.SafetyThresholds!, null, null, null, null, null,
         DateTime.UtcNow, DateTime.UtcNow,
-        new(Guid.NewGuid(), request.CandidateArtifactId, request.ManifestUrl, request.ManifestSha256,
-            request.PackageUrl, request.ChecksumSha256, request.PackageSizeBytes, request.MinRuntimeVersion,
-            request.SchemaVersion, request.BuildTarget));
+        new(Guid.NewGuid(), request.CandidateArtifactId, request.ManifestUrl!, request.ManifestSha256!,
+            request.PackageUrl!, request.ChecksumSha256!, request.PackageSizeBytes!.Value, request.MinRuntimeVersion!,
+            request.SchemaVersion!, request.BuildTarget!));
 }

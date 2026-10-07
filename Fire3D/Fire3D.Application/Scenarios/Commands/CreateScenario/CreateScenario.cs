@@ -6,7 +6,7 @@ namespace Fire3D.Application.Scenarios.Commands.CreateScenario;
 
 public sealed record CreateScenarioRequest(Guid BuildingId, string Name);
 
-public sealed record CreateScenarioCommand(Guid ActorId, CreateScenarioRequest Request) : IRequest<AuthResult<Guid>>;
+public sealed record CreateScenarioCommand(Guid ActorId, CreateScenarioRequest Request, string? IdempotencyKey = null) : IRequest<AuthResult<Guid>>;
 
 public sealed class CreateScenarioHandler(IAuthStore accounts, IScenarioWriteStore store)
     : IRequestHandler<CreateScenarioCommand, AuthResult<Guid>>
@@ -19,6 +19,6 @@ public sealed class CreateScenarioHandler(IAuthStore accounts, IScenarioWriteSto
         if (command.Request == null || command.Request.BuildingId == Guid.Empty || string.IsNullOrWhiteSpace(command.Request.Name))
             return AuthResult<Guid>.Fail("VALIDATION_ERROR", "BuildingId and Name are required.", 400);
 
-        return await store.CreateScenarioAsync(command.ActorId, command.Request.BuildingId, scope.Value!.OrganizationId ?? Guid.Empty, command.Request, ct);
+        return await store.CreateScenarioAsync(command.ActorId, command.Request.BuildingId, scope.Value!.OrganizationId, command.Request, ct, command.IdempotencyKey);
     }
 }

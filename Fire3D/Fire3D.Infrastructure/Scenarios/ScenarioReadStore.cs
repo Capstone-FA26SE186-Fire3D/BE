@@ -2,11 +2,23 @@ using Fire3D.Application.Administration;
 using Fire3D.Application.Scenarios;
 using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using NpgsqlTypes;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft;
 
 namespace Fire3D.Infrastructure.Scenarios;
 
 public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
 {
+    public async Task<IReadOnlyList<ScenarioDraftValidationIssue>> ValidateReferencesAsync(Guid revision,JsonNode state,CancellationToken ct)
+    {
+        await db.Database.OpenConnectionAsync(ct);
+        await using var command=new NpgsqlCommand("SELECT scenario_reference_issues(@revision,@state)::text",(NpgsqlConnection)db.Database.GetDbConnection());
+        command.Parameters.AddWithValue("revision",revision);command.Parameters.AddWithValue("state",NpgsqlDbType.Jsonb,state.ToJsonString());
+        return JsonSerializer.Deserialize<List<ScenarioDraftValidationIssue>>((string)(await command.ExecuteScalarAsync(ct))!,new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+    }
     public async Task<ScenarioVersionDetailResponse?> GetScenarioVersionAsync(
         Guid versionId, Guid? organizationId, CancellationToken ct)
     {
@@ -17,6 +29,10 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
             .SingleOrDefaultAsync(ct);
         if (version is null) return null;
 
+        await db.Database.OpenConnectionAsync(ct);
+        await using var snapshotCommand=new NpgsqlCommand("SELECT jsonb_build_object('state',state_snapshot,'rubric',rubric,'objectives',learning_objectives,'instructions',learner_instructions)::text FROM scenario_versions WHERE id=@id",(NpgsqlConnection)db.Database.GetDbConnection());
+        snapshotCommand.Parameters.AddWithValue("id",version.Id);
+        var extra=JsonNode.Parse((string)(await snapshotCommand.ExecuteScalarAsync(ct))!)!;
         return new ScenarioVersionDetailResponse(version.Id, version.ScenarioId, version.RevisionId, version.BuildingId,
             version.OrganizationId, version.VersionNumber, version.Name, version.SchemaVersion, version.AlgorithmVersion,
             version.RandomSeed, version.TimeLimitSeconds, version.ReplanIntervalSeconds, version.ScenarioHash,
@@ -30,7 +46,7 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
                 System.Text.Json.Nodes.JsonNode.Parse(version.ScoringConfig)!,
                 System.Text.Json.Nodes.JsonNode.Parse(version.ModePolicy)!,
                 System.Text.Json.Nodes.JsonNode.Parse(version.SafetyThresholds)!),
-            version.CreatedAt);
+            version.CreatedAt,extra["state"],extra["rubric"],extra["objectives"],extra["instructions"]?.GetValue<string>());
     }
 
     public async Task<PageResponse<ScenarioVersionSummaryResponse>?> ListScenarioVersionsAsync(

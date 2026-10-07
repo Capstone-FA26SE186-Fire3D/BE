@@ -130,3 +130,17 @@ Khi có Docs bên cạnh, đối chiếu `fire_evacuation_schema.sql`, `fire_eva
 - Processing workers register artifact/validation/issues through lease-bound `register_processing_output`; they do not receive direct provenance-table DML. Prepaid provisioning uses `provision_ai_topup_v7` and `provision_building_line_v7`; request quota reserve/settle remains replay-safe.
 - These are target SQL/contract changes only; permission, concurrency, recovery and runtime execution tests remain unrun.
 - Quotation target lifecycle records `accepted_at` once on `Issued → Accepted`; quotation lines cannot move between quotations after creation. The design grants the PayOS ledger owner only the row-lock privilege it needs, gives the processing owner attempt INSERT, and gives the backend executor the minimum auth/profile/Building write path; these privileges still require database execution tests.
+
+
+### Selected Building/IFC/scenario/playtest/release/support implementation
+
+- Building tenant/validation, verified immutable IFC intent/source, leased HTTP worker/outbox/retry, immutable v7 scenario authoring, exact technical readiness, separate immutable content approval and session-bound playtest start/grant are implemented. Transport for this implementation is PostgreSQL outbox → authenticated HTTP worker, without Redis; target Redis Streams remains a separate architecture profile.
+- Built release now derives immutable accepted ReleasePackage/manifest metadata, checks exact readiness and Approved content/rubric and creates package/provenance/matching Training/receipt/audit atomically. Built does not certify Unity execution. Publish stays503 PUBLISH_GATE_UNAVAILABLE.
+- Building defaults Private. Random participation code is stored hashed; account-bound grants pin access revision and are invalidated by visibility/code changes. Logged-in Trainee Training list requires current access plus Active/Published/pinned approval. Listing never grants learner seat/start.
+- Support service/store rechecks lifecycle/session/owner/admin under locks. Create/message use canonical receipts, PATCH If-Match, detail ETag, append-only message history and bounded pages. Resource tenant is used for audit.
+- Use docs/selected-api-contract.md, docs/api-route-inventory.md and per-feature manuals for source/test versus shared schema/provider/deployment evidence. Migrations must precede matching binary; grant-only changes can break old direct-write handlers. Do not turn fake worker/provider output into production acceptance.
+- Learner start/sync/result, real IFC/Blender/Unity pipeline and publish gates remain incomplete. Auth/OTP/Avatar/payment business contracts are unchanged by this selected work.
+
+- Final selected API review: IFC receipt replay checks the persisted Building ID in SQL, preserving existing canonical hashes; the HTTP store already included Building ID. Scenario object anchors require a current Succeeded Geometry attempt with matching Passed validation and no Error/Critical blocker. Forward-only migrations 20261007130000/20261007140000 preserve existing data and gate ownership/ACL; rollout evidence belongs in docs/ifc-authoring-deployment.md.
+
+- Selected final verification 2026-10-07: 36 selected HTTP/PostgreSQL tests and 105 supported IFC tests passed; solution build0 warnings/errors. Supabase history now20261007140000 with final read-only ACL/count checks. Real providers, binary/client smoke tests, publish and learner pipeline remain uncertified.

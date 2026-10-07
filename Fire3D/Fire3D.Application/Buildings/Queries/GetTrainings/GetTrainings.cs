@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace Fire3D.Application.Buildings.Queries.GetTrainings;
 
-public sealed record GetTrainingsQuery(Guid ActorId, Guid BuildingId) : IRequest<AuthResult<List<TrainingDto>>>;
+public sealed record GetTrainingsQuery(Guid ActorId, Guid BuildingId, Guid? Family = null) : IRequest<AuthResult<List<TrainingDto>>>;
 
 public sealed record TrainingDto(
     Guid Id,
@@ -21,7 +21,7 @@ public sealed record TrainingDto(
 
 public interface ITrainingReadStore
 {
-    Task<AuthResult<List<TrainingDto>>> GetTrainingsByBuildingAsync(Guid actorId, Guid buildingId, Guid organizationId, CancellationToken ct);
+    Task<AuthResult<List<TrainingDto>>> GetTrainingsByBuildingAsync(Guid actorId, Guid buildingId, Guid? organizationId, CancellationToken ct, Guid? family=null);
 }
 
 public sealed class GetTrainingsHandler(IAuthStore accounts, ITrainingReadStore store)
@@ -29,9 +29,9 @@ public sealed class GetTrainingsHandler(IAuthStore accounts, ITrainingReadStore 
 {
     public async Task<AuthResult<List<TrainingDto>>> Handle(GetTrainingsQuery request, CancellationToken ct)
     {
-        var scope = await IfcAccess.ResolveAsync(accounts, request.ActorId, ct);
-        if (!scope.IsSuccess) return new(default, scope.Error);
-
-        return await store.GetTrainingsByBuildingAsync(request.ActorId, request.BuildingId, scope.Value!.OrganizationId ?? Guid.Empty, ct);
+        var actor=await accounts.FindUserAsync(request.ActorId,ct);
+        if(actor is null || !actor.IsActive || actor.DeletedAt.HasValue)return AuthResult<List<TrainingDto>>.Fail("UNAUTHORIZED","Active account required.",401);
+        if(actor.Role is not (Fire3D.Domain.Enums.UserRole.Trainee or Fire3D.Domain.Enums.UserRole.OrganizationUser or Fire3D.Domain.Enums.UserRole.PlatformAdmin))return AuthResult<List<TrainingDto>>.Fail("FORBIDDEN","Role cannot list Training.",403);
+        return await store.GetTrainingsByBuildingAsync(request.ActorId,request.BuildingId,actor.Role==Fire3D.Domain.Enums.UserRole.OrganizationUser?actor.OrganizationId:null,ct,request.Family);
     }
 }
