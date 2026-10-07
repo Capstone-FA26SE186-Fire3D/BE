@@ -122,7 +122,7 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new Fire3D.Application.Buildings.Queries.GetTrainings.GetTrainingsQuery(actor, id), ct);
+        var result = await sender.Send(new Fire3D.Application.Buildings.Queries.GetTrainings.GetTrainingsQuery(actor, id,User.GetSessionFamilyId()), ct);
 
         return result.IsSuccess
             ? Ok(result.Value)

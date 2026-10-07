@@ -20,9 +20,9 @@ public class ReleasesController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
-    public async Task<ActionResult<ReleaseResponse>> BuildRelease(BuildReleaseRequest request, CancellationToken ct)
+    public async Task<ActionResult<ReleaseResponse>> BuildRelease(BuildReleaseRequest request, CancellationToken ct, [FromHeader(Name="Idempotency-Key")]string? key=null)
     {
-        var result = await sender.Send(new BuildReleaseCommand(User.GetActorId(), request), ct);
+        var result = await sender.Send(new BuildReleaseCommand(User.GetActorId(), request,key,User.GetSessionFamilyId()), ct);
         return result.IsSuccess
             ? Created($"/api/releases/{result.Value!.Id}", result.Value)
             : ReleaseProblem(result.Error!);
@@ -67,11 +67,11 @@ public class ReleasesController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> RevokeRelease(Guid releaseId, RevokeReleaseRequest request, CancellationToken ct)
     {
-        var result = await sender.Send(new RevokeReleaseCommand(User.GetActorId(), releaseId, request), ct);
+        var result = await sender.Send(new RevokeReleaseCommand(User.GetActorId(), releaseId, request,User.GetSessionFamilyId()), ct);
         return result.IsSuccess ? NoContent() : ReleaseProblem(result.Error!);
     }
 
     private ObjectResult ReleaseProblem(Fire3D.Application.Authentication.AuthError error) =>
         Problem(statusCode: error.Status, title: error.Message,
-            extensions: new Dictionary<string, object?> { ["code"] = error.Code });
+            extensions: new Dictionary<string, object?> { ["code"] = error.Code,["errors"]=error.Errors });
 }

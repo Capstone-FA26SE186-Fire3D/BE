@@ -11,15 +11,15 @@ public sealed record BuildReleaseRequest(
     Guid ScenarioVersionId,
     Guid ConfirmationReviewId,
     Guid CandidateArtifactId,
-    string SafetyThresholds,
-    string ManifestUrl,
-    string ManifestSha256,
-    string PackageUrl,
-    string ChecksumSha256,
-    long PackageSizeBytes,
-    string MinRuntimeVersion,
-    string SchemaVersion,
-    string BuildTarget);
+    string? SafetyThresholds = null,
+    string? ManifestUrl = null,
+    string? ManifestSha256 = null,
+    string? PackageUrl = null,
+    string? ChecksumSha256 = null,
+    long? PackageSizeBytes = null,
+    string? MinRuntimeVersion = null,
+    string? SchemaVersion = null,
+    string? BuildTarget = null);
 
 public sealed record RevokeReleaseRequest(string Reason);
 
@@ -55,15 +55,15 @@ public sealed record ReleaseResponse(
 
 public interface IReleaseStore
 {
-    Task<AuthResult<ReleaseResponse>> BuildAsync(Guid actorId, Guid? organizationId, BuildReleaseRequest request, CancellationToken ct);
+    Task<AuthResult<ReleaseResponse>> BuildAsync(Guid actorId, Guid? organizationId, BuildReleaseRequest request, CancellationToken ct, string? key = null, Guid? family = null);
     Task<ReleaseResponse?> GetAsync(Guid releaseId, Guid? organizationId, CancellationToken ct);
     Task<AuthResult<bool>> PublishAsync(Guid actorId, Guid releaseId, Guid? organizationId, CancellationToken ct);
-    Task<AuthResult<bool>> RevokeAsync(Guid actorId, Guid releaseId, Guid? organizationId, string reason, CancellationToken ct);
+    Task<AuthResult<bool>> RevokeAsync(Guid actorId, Guid releaseId, Guid? organizationId, string reason, CancellationToken ct, Guid? family = null);
 }
 
-public sealed record BuildReleaseCommand(Guid ActorId, BuildReleaseRequest Request) : IRequest<AuthResult<ReleaseResponse>>;
+public sealed record BuildReleaseCommand(Guid ActorId, BuildReleaseRequest Request, string? Key = null, Guid? Family = null) : IRequest<AuthResult<ReleaseResponse>>;
 public sealed record GetReleaseQuery(Guid ActorId, Guid ReleaseId) : IRequest<AuthResult<ReleaseResponse>>;
-public sealed record RevokeReleaseCommand(Guid ActorId, Guid ReleaseId, RevokeReleaseRequest Request) : IRequest<AuthResult<bool>>;
+public sealed record RevokeReleaseCommand(Guid ActorId, Guid ReleaseId, RevokeReleaseRequest Request, Guid? Family = null) : IRequest<AuthResult<bool>>;
 
 public sealed class BuildReleaseHandler(IAuthStore accounts, IReleaseStore store)
     : IRequestHandler<BuildReleaseCommand, AuthResult<ReleaseResponse>>
@@ -74,7 +74,7 @@ public sealed class BuildReleaseHandler(IAuthStore accounts, IReleaseStore store
         if (!scope.IsSuccess) return new(default, scope.Error);
         if (!ReleaseValidation.IsValid(command.Request))
             return AuthResult<ReleaseResponse>.Fail("VALIDATION_ERROR", "Release package metadata is invalid.", 400);
-        return await store.BuildAsync(command.ActorId, scope.Value!.OrganizationId, command.Request, ct);
+        return await store.BuildAsync(command.ActorId, scope.Value!.OrganizationId, command.Request, ct, command.Key, command.Family);
     }
 }
 
@@ -104,7 +104,7 @@ public sealed class RevokeReleaseHandler(IAuthStore accounts, IReleaseStore stor
         var reason = command.Request?.Reason?.Trim();
         if (command.ReleaseId == Guid.Empty || string.IsNullOrWhiteSpace(reason) || reason.Length > 1000)
             return AuthResult<bool>.Fail("VALIDATION_ERROR", "A revoke reason between 1 and 1000 characters is required.", 400);
-        return await store.RevokeAsync(command.ActorId, command.ReleaseId, scope.Value!.OrganizationId, reason, ct);
+        return await store.RevokeAsync(command.ActorId, command.ReleaseId, scope.Value!.OrganizationId, reason, ct, command.Family);
     }
 }
 
@@ -117,19 +117,18 @@ internal static partial class ReleaseValidation
     {
         if (request is null || request.RevisionId == Guid.Empty || request.ScenarioVersionId == Guid.Empty
             || request.ConfirmationReviewId == Guid.Empty || request.CandidateArtifactId == Guid.Empty
-            || request.PackageSizeBytes <= 0 || !Sha256Regex().IsMatch(request.ManifestSha256 ?? "")
-            || !Sha256Regex().IsMatch(request.ChecksumSha256 ?? "")
-            || !ValidText(request.SafetyThresholds, 20000)
-            || !ValidText(request.ManifestUrl, 2048) || !ValidText(request.PackageUrl, 2048)
-            || !ValidText(request.MinRuntimeVersion, 50) || !ValidText(request.SchemaVersion, 50)
-            || !ValidText(request.BuildTarget, 50)) return false;
-        try
-        {
-            using var json = JsonDocument.Parse(request.SafetyThresholds);
-            return json.RootElement.ValueKind == JsonValueKind.Object;
-        }
-        catch (JsonException) { return false; }
+            || request.PackageSizeBytes is <= 0
+            || request.ManifestSha256 is not null && !Sha256Regex().IsMatch(request.ManifestSha256)
+            || request.ChecksumSha256 is not null && !Sha256Regex().IsMatch(request.ChecksumSha256)
+            || !OptionalText(request.ManifestUrl,2048) || !OptionalText(request.PackageUrl,2048)
+            || !OptionalText(request.MinRuntimeVersion,50) || !OptionalText(request.SchemaVersion,50)
+            || !OptionalText(request.BuildTarget,50)) return false;
+        if(request.SafetyThresholds is null)return true;
+        if(!ValidText(request.SafetyThresholds,20000))return false;
+        try{using var json=JsonDocument.Parse(request.SafetyThresholds);return json.RootElement.ValueKind==JsonValueKind.Object;}
+        catch(JsonException){return false;}
     }
+    private static bool OptionalText(string? value,int max)=>value is null || ValidText(value,max);
 
     private static bool ValidText(string? value, int max) =>
         !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= max;
