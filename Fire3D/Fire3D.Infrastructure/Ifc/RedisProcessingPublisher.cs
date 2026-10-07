@@ -36,6 +36,7 @@ public sealed class RedisProcessingPublisher(IServiceScopeFactory scopes, IProce
             var id = await stream.PublishAsync(envelope, ct);
             var result = await gate.ExecuteAsync("Published", JsonSerializer.SerializeToElement(new
                 { eventKey = envelope.EventKey, leaseToken, streamName = stream.StreamName, streamId = id }), ct);
+            log.LogInformation("Redis publication: EventKey={EventKey}, JobId={JobId}, StreamId={StreamId}, Result={Result}", envelope.EventKey, envelope.AggregateId, id, result.GetProperty("code").GetString());
             return result.GetProperty("code").GetString() == "OK";
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }

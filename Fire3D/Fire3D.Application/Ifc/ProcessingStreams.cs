@@ -20,6 +20,7 @@ public sealed class RedisProcessingOptions
 public sealed record ProcessingEnvelope(string EventKey, string EventType, string SchemaVersion,
     string AggregateType, Guid AggregateId, Guid OrganizationId, JsonElement Payload, string PayloadHash);
 public sealed record ProcessingStreamMessage(string Id, string Envelope);
+public sealed record ProcessingStreamBacklog(long Length, long Pending);
 
 public interface IProcessingStreamDispatchGate
 {
@@ -27,6 +28,11 @@ public interface IProcessingStreamDispatchGate
 }
 
 public interface IProcessingStreamConsumerGate
+{
+    Task<JsonElement> ExecuteAsync(string action, JsonElement input, CancellationToken ct);
+}
+
+public interface IProcessingStreamRecoveryGate
 {
     Task<JsonElement> ExecuteAsync(string action, JsonElement input, CancellationToken ct);
 }
@@ -39,4 +45,6 @@ public interface IProcessingStream
     Task<IReadOnlyList<ProcessingStreamMessage>> ReclaimAsync(string consumer, CancellationToken ct);
     Task AcknowledgeAsync(string id, CancellationToken ct);
     Task<bool> ConnectedAsync(CancellationToken ct);
+    Task<int> TrimAsync(Func<ProcessingStreamMessage, CancellationToken, Task<bool>> handedOff, CancellationToken ct);
+    Task<ProcessingStreamBacklog> BacklogAsync(CancellationToken ct);
 }

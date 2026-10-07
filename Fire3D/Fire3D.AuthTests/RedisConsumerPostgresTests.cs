@@ -117,6 +117,8 @@ internal sealed class AckFaultStream(IProcessingStream inner) : IProcessingStrea
     public Task<string> PublishAsync(ProcessingEnvelope envelope, CancellationToken ct) => inner.PublishAsync(envelope, ct);
     public Task<IReadOnlyList<ProcessingStreamMessage>> ReadAsync(string consumer, CancellationToken ct) => inner.ReadAsync(consumer, ct);
     public Task<IReadOnlyList<ProcessingStreamMessage>> ReclaimAsync(string consumer, CancellationToken ct) => inner.ReclaimAsync(consumer, ct);
+    public Task<int> TrimAsync(Func<ProcessingStreamMessage, CancellationToken, Task<bool>> handedOff, CancellationToken ct) => inner.TrimAsync(handedOff, ct);
+    public Task<ProcessingStreamBacklog> BacklogAsync(CancellationToken ct) => inner.BacklogAsync(ct);
     public Task<bool> ConnectedAsync(CancellationToken ct) => inner.ConnectedAsync(ct);
     public Task AcknowledgeAsync(string id, CancellationToken ct) => ThrowAck ? throw new IOException("Simulated Redis ACK failure") : inner.AcknowledgeAsync(id, ct);
 }

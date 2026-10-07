@@ -75,6 +75,8 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Ifc.IProcessingStreamConsumerGate>(p => p.GetRequiredService<Fire3D.Infrastructure.Ifc.ProcessingStreamStore>());
         services.AddHostedService<Fire3D.Infrastructure.Ifc.RedisProcessingPublisher>();
         services.AddHostedService<Fire3D.Infrastructure.Ifc.RedisProcessingConsumer>();
+        services.AddScoped<Fire3D.Application.Ifc.IProcessingStreamRecoveryGate>(p => p.GetRequiredService<Fire3D.Infrastructure.Ifc.ProcessingStreamStore>());
+        services.AddHostedService<Fire3D.Infrastructure.Ifc.RedisProcessingRecovery>();
         services.AddScoped<Fire3D.Application.Ifc.IIfcWriteStore, Fire3D.Infrastructure.Ifc.IfcWriteStore>();
         services.AddOptions<Fire3D.Application.Ifc.IfcUploadOptions>().Bind(configuration.GetSection("IfcUpload"))
             .Validate(o => !o.Enabled || (o.MaxBytes is > 0 && o.CleanupEnabled), "IfcUpload requires explicit positive MaxBytes and CleanupEnabled=true when enabled.").ValidateOnStart();

@@ -17,7 +17,7 @@ public sealed partial class AuthIntegrationTests
         await WithProcessingRuntime(async (api, worker) =>
         {
             var apiUser = new NpgsqlConnectionStringBuilder(api).Username;
-            await ExecuteAsync($"GRANT EXECUTE ON FUNCTION processing_stream_consumer_gate(text,jsonb) TO {apiUser}");
+            await ExecuteAsync($"GRANT EXECUTE ON FUNCTION processing_stream_consumer_gate(text,jsonb),processing_stream_recovery_gate(text,jsonb) TO {apiUser}");
             var dispatcher = "redis_dispatch_test_" + Guid.NewGuid().ToString("N");
             await ExecuteAsync($"CREATE ROLE {dispatcher} LOGIN NOSUPERUSER NOBYPASSRLS; GRANT USAGE ON SCHEMA public TO {dispatcher}; GRANT fet3d_dispatcher_executor TO {dispatcher}");
             try
@@ -43,6 +43,7 @@ public sealed partial class AuthIntegrationTests
         var services = new ServiceCollection();
         services.AddScoped<IProcessingStreamDispatchGate>(_ => new ProcessingStreamStore(config));
         services.AddScoped<IProcessingStreamConsumerGate>(_ => new ProcessingStreamStore(config));
+        services.AddScoped<IProcessingStreamRecoveryGate>(_ => new ProcessingStreamStore(config));
         return services.BuildServiceProvider();
     }
 
@@ -110,5 +111,7 @@ internal sealed class MemoryProcessingStream : IProcessingStream
     public Task<IReadOnlyList<ProcessingStreamMessage>> ReadAsync(string consumer, CancellationToken ct) => Task.FromResult<IReadOnlyList<ProcessingStreamMessage>>([]);
     public Task<IReadOnlyList<ProcessingStreamMessage>> ReclaimAsync(string consumer, CancellationToken ct) => Task.FromResult<IReadOnlyList<ProcessingStreamMessage>>([]);
     public Task AcknowledgeAsync(string id, CancellationToken ct) => Task.CompletedTask;
+    public Task<int> TrimAsync(Func<ProcessingStreamMessage, CancellationToken, Task<bool>> handedOff, CancellationToken ct) => Task.FromResult(0);
+    public Task<ProcessingStreamBacklog> BacklogAsync(CancellationToken ct) => Task.FromResult(new ProcessingStreamBacklog(Published.Count, 0));
     public Task<bool> ConnectedAsync(CancellationToken ct) => Task.FromResult(true);
 }

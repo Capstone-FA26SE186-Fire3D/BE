@@ -6,12 +6,14 @@ using NpgsqlTypes;
 
 namespace Fire3D.Infrastructure.Ifc;
 
-public sealed class ProcessingStreamStore(IConfiguration configuration) : IProcessingStreamDispatchGate, IProcessingStreamConsumerGate
+public sealed class ProcessingStreamStore(IConfiguration configuration) : IProcessingStreamDispatchGate, IProcessingStreamConsumerGate, IProcessingStreamRecoveryGate
 {
     Task<JsonElement> IProcessingStreamDispatchGate.ExecuteAsync(string action, JsonElement input, CancellationToken ct) =>
         ExecuteAsync("DispatcherExecutor", "processing_stream_dispatch_gate", action, input, ct);
     Task<JsonElement> IProcessingStreamConsumerGate.ExecuteAsync(string action, JsonElement input, CancellationToken ct) =>
         ExecuteAsync("DefaultConnection", "processing_stream_consumer_gate", action, input, ct);
+    Task<JsonElement> IProcessingStreamRecoveryGate.ExecuteAsync(string action, JsonElement input, CancellationToken ct) =>
+        ExecuteAsync("DefaultConnection", "processing_stream_recovery_gate", action, input, ct);
 
     private async Task<JsonElement> ExecuteAsync(string connectionName, string function, string action, JsonElement input, CancellationToken ct)
     {
