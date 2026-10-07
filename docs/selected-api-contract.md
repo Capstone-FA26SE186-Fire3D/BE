@@ -43,6 +43,6 @@ Task1–6 đã có bằng chứng trước đó tại [ifc-authoring-deployment.
 
 Tests dùng PostgreSQL native disposable với actual EF history và nonsuperuser gate-only roles, fake S3/HTTP/package/runtime. Bằng chứng Tasks7–9: release/access3 tests, support5 tests, OpenAPI1 test; release unit6 tests. Regression cuối nhánh được ghi riêng khi chạy xong. Ba migration mới, gồm bản sửa quyền20261007120000, đã áp và postcheck trên Supabase; chưa test provider/binary/client thật. Không sửa auth/OTP/Avatar/payment business hoặc WMS.
 
-## Review còn chờ
+## Bản sửa sau review
 
-Receipt IFC initiate cần đối chiếu Building khi replay; structural anchor validation cần chỉ chấp nhận Passed geometry run không có Error/Critical. Hai finding chưa được đóng bởi rollout schema. Quyền Building access và custom runtime DML đã được sửa bằng migration forward riêng; xem [tiến độ](task-progress-checklist.md).
+IFC gate đối chiếu Building đã lưu trong receipt khi replay. HTTP handler đã hash Building ID; kiểm tra SQL bổ sung bảo vệ payload legacy hoặc caller của gate, giữ nguyên hash receipt cũ. Scenario anchor chỉ lấy từ current Geometry attempt Succeeded có validation Passed cùng job/revision/attempt và không có Error/Critical. Worker Succeeded không đồng nghĩa QA Passed. Hai thay đổi có migration forward riêng, không sửa migration đã áp hoặc dữ liệu legacy. Quyền Building access và custom runtime DML đã được sửa trước đó; bằng chứng rollout/test ghi tại [tiến độ](task-progress-checklist.md).

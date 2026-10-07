@@ -1,6 +1,6 @@
 # Selected API database rollout — 2026-10-07
 
-Scope: Tasks 1-9 (schema; two source review findings remain) on `feature/ifc-authoring-support-hardening`. Supabase schema rollout is verified; deployed API artifact and real IFC/Blender/Unity/S3 clients are not certified by it. No database reset, automatic duplicate repair or synthetic production Trial was performed.
+Scope: Tasks 1-9 (source/tests and schema, including final review repairs) on `feature/ifc-authoring-support-hardening`. Supabase schema rollout is verified; deployed API artifact and real IFC/Blender/Unity/S3 clients are not certified by it. No database reset, automatic duplicate repair or synthetic production Trial was performed.
 
 ## Applied migrations
 
@@ -50,6 +50,23 @@ Applied in one transaction, from verified history ending20261006160000:
 
 Read-only postcheck after commit verified all three history entries, RLS, runtime EXECUTE, no direct protected DML and preserved legacy Building name INSERT/UPDATE. Gate owner stays NOLOGIN/NOSUPERUSER/NOBYPASSRLS and without schema CREATE. Client anon/authenticated and PUBLIC cannot execute release/support gates. Counts remain users8, organizations6, buildings2, feedback/tickets/messages/releases/trainings0; both existing Buildings Private/access revision1. No reset or provider call.
 
-Tests before rollout: 15 targeted Release/Support/ACL tests passed; strengthened ACL test passed with actual migrations under a nonsuperuser migration identity, custom/inherited grants, restored membership and future overgrant attempts. Broad regression before the privilege repair: Auth428 passed, IFC105 passed (Docker-only legacy IFC fixtures excluded). Binary/client/provider deployment is separate. IFC cross-Building receipt and Failed geometry anchor findings remain open; see [progress checklist](task-progress-checklist.md).
+Tests before rollout: 15 targeted Release/Support/ACL tests passed; strengthened ACL test passed with actual migrations under a nonsuperuser migration identity, custom/inherited grants, restored membership and future overgrant attempts. Broad regression before the privilege repair: Auth428 passed, IFC105 passed (Docker-only legacy IFC fixtures excluded). Binary/client/provider deployment is separate. The IFC gate receipt scope and Failed geometry anchor findings were still open at that rollout; both are closed by the final repair section below.
 
 Post-repair verification: 4 Building HTTP/PostgreSQL lifecycle/audit regression tests passed; solution build0 warnings/0 errors. Raw provider tests and deployed API smoke tests were not run.
+
+## Final IFC/scenario gate repair rollout — 2026-10-07
+
+After regression and review, applied in one transaction from verified history20261007120000:
+
+| Migration | Change |
+|---|---|
+|20261007130000_BindIfcReceiptBuilding|IFC initiate gate also checks persisted receipt Building. HTTP input already hashes Building ID; SQL defense preserves legacy input hashes and correct-resource replay.|
+|20261007140000_RequirePassedGeometryAnchors|Scenario anchors require the current Succeeded Geometry attempt and matching Passed validation without Error/Critical blockers; failed QA output cannot validate or snapshot anchors.|
+
+These replace functions only; no column/table deletion, data backfill or legacy hash rewrite. Before-commit assertions checked history, unchanged counts, retained owner/security/runtime EXECUTE, no PUBLIC/anon/authenticated EXECUTE, no expanded gate-owner privileges and restored temporary membership. A separate read-only postcheck confirmed both history rows/definitions/ACLs and users8/organizations6/buildings2, intents/jobs/versions0.
+
+Final selected API PostgreSQL/HTTP regression:36 passed,0 failed,0 skipped. Final IFC regression:105 passed,0 failed,0 skipped; Docker-only IfcWriteSqlTests, ScenarioStoreTests and PlaytestEntitlementContainmentTests excluded because Docker unavailable. Final solution build:0 warnings,0 errors. Fresh scoped read-only review reported no remaining P1/P2 finding in these repairs; it was not a provider/deployment test. Source repair commits259b6b5 and5377654 pushed on the feature branch.
+
+Initial wider run had one test-fixture version-label collision; the race now uses a distinct label for its new idempotency key while both competitors keep identical input. The business unique constraint and all scope/race assertions remain. The final36-test rerun passed. No real provider or shared-database test fixture was used.
+
+Deploy the matching binary and configure external worker/runtime separately before end-to-end use. Publish containment, learner pipeline and real toolchain acceptance remain pending.
