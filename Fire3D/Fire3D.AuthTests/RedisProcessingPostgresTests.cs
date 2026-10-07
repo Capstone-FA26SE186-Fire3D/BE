@@ -92,6 +92,32 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal(1L, await ScalarAsync("SELECT count(*) FROM processing_stream_deliveries"));
         });
     }
+
+    [PostgresFact]
+    public async Task Redis_XADD_success_then_publication_DB_failure_preserves_event_for_replay()
+    {
+        var revision = await SeedVerifiedIfcRevision();
+        await WithRedisRuntime(async config =>
+        {
+            await using var context = BuildingContext(config.GetConnectionString("DefaultConnection")!);
+            var job = (await new ProcessingRuntimeStore(context, config).RequestAsync(adminId, revision, "redis-mark-failure", default)).Value;
+            using var scopes = RedisScope(config);
+            var stream = new MemoryProcessingStream();
+            var publisher = new RedisProcessingPublisher(scopes.GetRequiredService<IServiceScopeFactory>(), stream, Options.Create(new ProcessingWorkerOptions()), NullLogger<RedisProcessingPublisher>.Instance);
+            await ExecuteAsync("CREATE FUNCTION reject_test_publication() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected publication failure'; END $$; CREATE TRIGGER reject_test_publication BEFORE INSERT ON processing_stream_deliveries FOR EACH ROW EXECUTE FUNCTION reject_test_publication()");
+            Assert.False(await publisher.RunOnceAsync(default));
+            Assert.Single(stream.Published);
+            Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM processing_stream_deliveries"));
+            Assert.Equal("Pending", await ScalarAsync("SELECT status::text FROM integration_outbox_events"));
+            await ExecuteAsync("DROP TRIGGER reject_test_publication ON processing_stream_deliveries;DROP FUNCTION reject_test_publication();UPDATE integration_outbox_events SET available_at=now()-interval '1 second'");
+            Assert.True(await publisher.RunOnceAsync(default));
+            Assert.Equal(2, stream.Published.Count);
+            Assert.Equal(stream.Published[0].EventKey, stream.Published[1].EventKey);
+            Assert.Equal(stream.Published[0].PayloadHash, stream.Published[1].PayloadHash);
+            Assert.Equal(1L, await ScalarAsync("SELECT count(*) FROM processing_stream_deliveries"));
+            Assert.Equal(1L, await ScalarAsync($"SELECT count(*) FROM processing_jobs WHERE id='{job}'"));
+        });
+    }
 }
 
 internal sealed class MemoryProcessingStream : IProcessingStream
