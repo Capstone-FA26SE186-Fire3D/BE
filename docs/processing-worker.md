@@ -43,3 +43,9 @@ Delivery endpoint responds 2xx with `{eventKey,payloadHash,receiptId}` only afte
 ## Acceptance evidence and limits
 
 Tests `AuthIntegrationTests.Ifc_process_*`, `Ifc_worker_*`, `Ifc_http_worker_*` use actual EF history, restricted API/machine executor logins and simulated HTTP provider. They cover process idempotency, source rejection, concurrent claim, lost ACK, stale lease, output hash rejection, audit rollback and retry. Provider/toolchain and deployment remain separate. Publish remains fail-closed; no learner grant/start or auto Trial is added here.
+
+## Read-contract regression
+
+Accepted-output read fixtures must seed both the job and current attempt as Succeeded. Validation, QA, artifacts and issues exclude Running/Failed/stale attempts; failed historical validation is not exposed as accepted output. Preview tests explicitly begin with a Running attempt and then accept it. The legacy processing-log column is quoted `"AttemptNumber"`, matching the real migration.
+
+2026-10-07: 105 IFC tests passed with explicit loopback `FIRE3D_IFC_TEST_CONNECTION`, including 11 PostgreSQL read/editor tests. These read/editor fixtures use partial DDL; selected write/worker/readiness/playtest tests in AuthTests separately run actual EF migration history with restricted roles. Docker-only IFC write/store/legacy containment fixtures were not run because Docker was unavailable. No real IFC/Blender/Unity/provider execution is implied.

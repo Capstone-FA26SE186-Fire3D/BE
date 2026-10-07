@@ -72,6 +72,7 @@ public sealed class EditorApiSqlTests(IfcReadDatabase database) : IClassFixture<
                 action text,target_entity text,target_id uuid,new_values jsonb);
             """);
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO users VALUES ({actor},{database.Tenant},'OrganizationUser',true,null),({other},{database.OtherTenant},'OrganizationUser',true,null)");
+        await db.Database.ExecuteSqlRawAsync("UPDATE processing_job_attempts SET status='Running'");
         var preview=new EditorPreviewStore(db);
         Assert.Null((await preview.ReadAsync(database.Building,database.Revision,database.Tenant,default))!.ArtifactId);
         Assert.Null(await preview.ReadAsync(database.Building,database.Revision,database.OtherTenant,default));
