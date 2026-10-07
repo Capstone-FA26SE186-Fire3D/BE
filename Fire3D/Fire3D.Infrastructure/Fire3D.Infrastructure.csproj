@@ -12,6 +12,9 @@
 
 
 	<ItemGroup>
+        <EmbeddedResource Include="Persistence/Sql/ProcessingRedisDelivery.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ProcessingRedisDelivery.sql" />
+        <EmbeddedResource Include="Persistence/Sql/ProcessingRedisConsumption.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ProcessingRedisConsumption.sql" />
+        <EmbeddedResource Include="Persistence/Sql/ProcessingRedisRecovery.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ProcessingRedisRecovery.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioAcceptedGeometry.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ScenarioAcceptedGeometry.sql" />
         <EmbeddedResource Include="Persistence/Sql/IfcUploadReceiptScope.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.IfcUploadReceiptScope.sql" />
         <EmbeddedResource Include="Persistence/Sql/SelectedGatePrivileges.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.SelectedGatePrivileges.sql" />
@@ -50,6 +53,7 @@
 		</PackageReference>
 		<PackageReference Include="MiniExcel" Version="*" />
 		<PackageReference Include="payOS" Version="2.1.0" />
+        <PackageReference Include="StackExchange.Redis" Version="3.3.1" />
 		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="*" />
 		<PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.12" />
 		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />

@@ -8,4 +8,4 @@ The NOLOGIN integration owner has only the required table permissions. Backend r
 
 Source: Docs `fire_evacuation_schema.sql` durable handoff and enqueue gates; this implementation uses PostgreSQL's built-in SHA-256 to avoid assuming where pgcrypto is installed, with the same UTF-8 JSONB digest.
 
-Verified with disposable PostgreSQL: process creates scoped canonical event/audit, duplicate/conflict, invalid payload/hash and rollback on enqueue failure. These tests do not prove dispatcher, Redis delivery, worker lease/results, provider or production processing. Those remain separate pipeline work; this migration does not claim full schema v7 or retry-gate delivery.
+Verified with disposable PostgreSQL: process creates scoped canonical event/audit, duplicate/conflict, invalid payload/hash and rollback on enqueue failure. The original migration tests alone do not prove transport or processing. Subsequent [HTTP worker](processing-worker.md) and [Redis delivery](redis-processing.md) tests cover isolated delivery/receipt/recovery contracts; provider/toolchain and production processing remain separate. This migration does not claim full schema v7.

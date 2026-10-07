@@ -29,6 +29,13 @@ public sealed partial class AuthIntegrationTests
    Assert.Contains("OrganizationUser",operation.GetProperty("description").GetString());Assert.Contains("PlatformAdmin",operation.GetProperty("description").GetString());
   }
   Assert.Equal("/",root.GetProperty("servers")[0].GetProperty("url").GetString());
+  foreach(var path in new[]{"/api/revisions/{revisionId}/process","/api/scenario-versions/{id}/package-builds"})
+  {
+   var operation=paths.GetProperty(path).GetProperty("post");
+   Assert.True(operation.GetProperty("responses").TryGetProperty("202",out _));
+   Assert.Contains("RedisStreams",operation.GetProperty("description").GetString());
+   Assert.Contains("handoff",operation.GetProperty("description").GetString());
+  }
   Assert.True(!paths.GetProperty("/api/auth/registration/request-otp").GetProperty("post").TryGetProperty("security",out var security)||security.GetArrayLength()==0);
   foreach(var path in new[]{"/api/feedback","/api/support/tickets","/api/buildings/"+Guid.NewGuid()+"/trainings"})
    Assert.Equal(HttpStatusCode.Unauthorized,(await client.GetAsync(path)).StatusCode);

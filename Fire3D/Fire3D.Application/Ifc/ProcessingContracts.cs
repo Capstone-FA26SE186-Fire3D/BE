@@ -5,6 +5,8 @@ public sealed class ProcessingWorkerOptions
 {
     public bool DispatcherEnabled { get; set; }
     public bool WorkerApiEnabled { get; set; }
+    public string Transport { get; set; } = "Http";
+    public bool ConsumerEnabled { get; set; }
     public string WorkerUrl { get; set; } = "";
     public string MachineKey { get; set; } = "";
     public string[] AllowedToolchains { get; set; } = [];

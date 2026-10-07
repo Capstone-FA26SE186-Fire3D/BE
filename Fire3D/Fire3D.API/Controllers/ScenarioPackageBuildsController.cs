@@ -8,6 +8,7 @@ namespace Fire3D.API.Controllers;
 public sealed class ScenarioPackageBuildsController(IScenarioPackageBuildStore store):ControllerBase
 {
     /// <summary>Queues a package build from a verified source and immutable v7 version. A queued job is not an accepted Unity package.</summary>
+    /// <remarks>202 confirms the PostgreSQL job/outbox. Http is the default transport; RedisStreams is optional. Publication and durable handoff are separate from accepted package output.</remarks>
     [HttpPost("/api/scenario-versions/{id:guid}/package-builds")]
     [ProducesResponseType(202)]
     [ProducesResponseType<ProblemDetails>(400)]

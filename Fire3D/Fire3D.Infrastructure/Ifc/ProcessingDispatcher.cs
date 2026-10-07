@@ -10,7 +10,7 @@ public sealed class ProcessingDispatcher(IServiceScopeFactory scopes,IHttpClient
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if(!options.Value.DispatcherEnabled)return;
+        if(!options.Value.DispatcherEnabled || options.Value.Transport != "Http")return;
         using var timer=new PeriodicTimer(TimeSpan.FromSeconds(options.Value.PollSeconds));
         do { try { await RunOnceAsync(stoppingToken); } catch(OperationCanceledException) when(stoppingToken.IsCancellationRequested) { break; }
             catch(Exception ex) { log.LogWarning("Processing dispatcher failed: {ErrorType}",ex.GetType().Name); }

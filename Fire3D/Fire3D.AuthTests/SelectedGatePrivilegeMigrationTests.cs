@@ -30,8 +30,11 @@ public sealed class SelectedGatePrivilegeMigrationTests
    Assert.True(await Bool($"SELECT has_table_privilege('{login}','support_tickets','INSERT')"));
    // Supabase's migration identity is not a superuser. Owner membership used
    // for gate grants must be restored, not inherited by runtime logins.
-   await Sql($"CREATE ROLE {migrationLogin} LOGIN NOSUPERUSER NOBYPASSRLS CREATEROLE;GRANT USAGE,CREATE ON SCHEMA public TO {migrationLogin};GRANT fet3d_ifc_upload_owner TO {migrationLogin} WITH ADMIN TRUE,SET FALSE,INHERIT FALSE;");
-   foreach(var table in new[]{"buildings","releases","release_packages","trainings","building_participation_grants","release_build_provenance","release_command_receipts","feedback","support_tickets","support_ticket_messages","support_command_receipts","__EFMigrationsHistory"}) await Sql($"ALTER TABLE \"{table}\" OWNER TO {migrationLogin}");
+   await Sql($"CREATE ROLE {migrationLogin} LOGIN NOSUPERUSER NOBYPASSRLS CREATEROLE;GRANT USAGE,CREATE ON SCHEMA public TO {migrationLogin} WITH GRANT OPTION;GRANT fet3d_ifc_upload_owner TO {migrationLogin} WITH ADMIN TRUE,SET FALSE,INHERIT FALSE;");
+   // Redis adds FK references, an RLS policy and trusted handoff backfill on these
+   // existing tables. Its migration identity must own the affected schema objects;
+   // CREATEROLE alone cannot bypass table ownership or REFERENCES permissions.
+   foreach(var table in new[]{"buildings","releases","release_packages","trainings","building_participation_grants","release_build_provenance","release_command_receipts","feedback","support_tickets","support_ticket_messages","support_command_receipts","integration_outbox_events","integration_event_consumptions","processing_delivery_receipts","__EFMigrationsHistory"}) await Sql($"ALTER TABLE \"{table}\" OWNER TO {migrationLogin}");
    await using(var restricted=new Fire3DDbContext(new DbContextOptionsBuilder<Fire3DDbContext>().UseNpgsql(new NpgsqlConnectionStringBuilder(source.ConnectionString){Username=migrationLogin}.ConnectionString).Options)) await restricted.Database.MigrateAsync();
    Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','fet3d_ifc_upload_owner','USAGE')"));
    Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','fet3d_ifc_upload_owner','SET')"));
