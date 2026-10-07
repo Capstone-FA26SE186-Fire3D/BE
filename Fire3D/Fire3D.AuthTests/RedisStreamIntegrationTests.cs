@@ -17,6 +17,16 @@ public sealed class RedisFactAttribute : FactAttribute
     }
 }
 
+public sealed class RedisPostgresFactAttribute : FactAttribute
+{
+    public RedisPostgresFactAttribute()
+    {
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FIRE3D_TEST_ADMIN_CONNECTION")) ||
+            !int.TryParse(Environment.GetEnvironmentVariable("FIRE3D_TEST_REDIS_PORT"), out _))
+            Skip = "Set disposable loopback PostgreSQL and Redis test environment variables.";
+    }
+}
+
 public sealed class RedisStreamIntegrationTests
 {
     internal static RedisProcessingOptions TestOptions() => new()

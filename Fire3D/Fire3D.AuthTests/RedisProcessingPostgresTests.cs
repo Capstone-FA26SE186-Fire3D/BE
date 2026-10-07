@@ -16,6 +16,8 @@ public sealed partial class AuthIntegrationTests
     {
         await WithProcessingRuntime(async (api, worker) =>
         {
+            var apiUser = new NpgsqlConnectionStringBuilder(api).Username;
+            await ExecuteAsync($"GRANT EXECUTE ON FUNCTION processing_stream_consumer_gate(text,jsonb) TO {apiUser}");
             var dispatcher = "redis_dispatch_test_" + Guid.NewGuid().ToString("N");
             await ExecuteAsync($"CREATE ROLE {dispatcher} LOGIN NOSUPERUSER NOBYPASSRLS; GRANT USAGE ON SCHEMA public TO {dispatcher}; GRANT fet3d_dispatcher_executor TO {dispatcher}");
             try
