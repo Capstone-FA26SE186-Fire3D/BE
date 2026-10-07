@@ -58,6 +58,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     }
 
     /// <summary>Deprecated Trainee registration alias. New clients should use /api/auth/register/trainee.</summary>
+    /// <remarks>Optional personal phone is unique across users, including inactive/deleted accounts. Duplicate returns 409 PHONE_NUMBER_EXISTS with errors.phoneNumber.</remarks>
     [HttpPost("register")]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]
@@ -68,6 +69,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
         CancellationToken ct) => RegisterTrainee(command, ct);
 
     /// <summary>Registers a Trainee with a globally unique lowercase username.</summary>
+    /// <remarks>Optional personal phone is unique across users, including inactive/deleted accounts. Duplicate returns 409 PHONE_NUMBER_EXISTS with errors.phoneNumber; correct the phone and retry with the same unexpired OTP proof.</remarks>
     [HttpPost("register/trainee")]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]
@@ -89,6 +91,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     /// <remarks>Requires the OTP registrationToken and a valid organization phone. Canonical phone is unique
     /// across all organizations, including inactive/deleted; no country-code equivalence is inferred.
     /// Duplicate phone returns 409 ORGANIZATION_PHONE_EXISTS with errors.organizationPhoneNumber.
+    /// Personal phone is independently unique across users; conflict returns 409 PHONE_NUMBER_EXISTS with errors.phoneNumber. No user/organization cross-uniqueness or country-code equivalence is inferred.
     /// The failed registration does not consume the proof or create an organization/owner/audit;
     /// correct the phone and retry with the same unexpired proof.</remarks>
     [HttpPost("register/organization")]
@@ -221,6 +224,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     }
 
     /// <summary>Updates the current account profile. Role, organization, identity provider and password are not mutable here.</summary>
+    /// <remarks>Personal phone is independently unique across all users. Conflict returns 409 PHONE_NUMBER_EXISTS with errors.phoneNumber, without changing profile revision or audit. Keeping your own number is allowed; omitted preserves it and null clears it.</remarks>
     [HttpPatch("me")]
     [Authorize]
     [ProducesResponseType<AccountResponse>(200)]

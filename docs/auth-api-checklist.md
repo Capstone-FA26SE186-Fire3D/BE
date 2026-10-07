@@ -19,7 +19,7 @@ Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn th
 | POST | `/api/auth/logout` | ✅ | Bearer; revoke family hiện hành |
 | POST | `/api/auth/logout-all` | ✅ | Bearer; revoke mọi family và push binding |
 | GET | `/api/auth/me` | ✅ | Bearer; profile + ETag; signed URL avatar nếu có |
-| PATCH | `/api/auth/me` | ✅ | Bearer + If-Match; fullName/username/dob/gender/phoneNumber |
+| PATCH | `/api/auth/me` | ✅ | Bearer + If-Match; fullName/username/dob/gender/phoneNumber; personal phone conflict409/errors.phoneNumber |
 | PUT | `/api/auth/devices` | ✅ | Bearer + X-Installation-Key; UUID/token binding |
 | DELETE | `/api/auth/devices/{deviceUuid}` | ✅ | Bearer + X-Installation-Key; revoke push binding |
 | POST | `/api/auth/forgot-password` | ✅ | Public; email; 202 chung, Google-only không tự tạo password |
@@ -54,6 +54,7 @@ Không đánh dấu toàn bộ audit hoàn tất từ bảng này. Google unlink
 
 - [Google onboarding/link](google-auth-manual-test.md).
 - [Trùng số điện thoại tổ chức, proof retry và PATCH ETag](organization-phone-manual-test.md).
+- [Trùng số cá nhân độc lập, proof retry, PATCH ETag và migration](personal-phone-uniqueness.md). Supabase index đã áp07/10/2026; binary/FE cần nghiệm thu409 riêng.
 - [Local password recovery/Google exchange](auth-local-google-manual-test.md).
 - [OTP/register cả hai loại tài khoản](registration-payos-manual-test.md) — chỉ dùng phần register khi test auth.
 - [Avatar và link S3 trong tab ẩn danh](avatar-manual-test.md).

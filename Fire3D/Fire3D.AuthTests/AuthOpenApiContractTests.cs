@@ -13,6 +13,23 @@ namespace Fire3D.AuthTests;
 public sealed class AuthOpenApiContractTests
 {
     [BillingPostgresFact]
+    public async Task Personal_phone_conflict_is_documented_for_registration_google_and_profile()
+    {
+        await using var db = await BillingDatabase.Create(false); using var factory = Factory(db);
+        using var client = factory.CreateClient(); using var json = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
+        foreach (var (route, method) in new[] {
+            ("/api/auth/register", "post"), ("/api/auth/register/trainee", "post"),
+            ("/api/auth/register/organization", "post"), ("/api/auth/google/onboarding/complete", "post"),
+            ("/api/auth/me", "patch") })
+        {
+            var operation = Operation(json.RootElement, route, method);
+            Assert.True(operation.GetProperty("responses").TryGetProperty("409", out _));
+            Assert.Contains("PHONE_NUMBER_EXISTS", operation.GetProperty("description").GetString());
+            Assert.Contains("errors.phoneNumber", operation.GetProperty("description").GetString());
+        }
+    }
+
+    [BillingPostgresFact]
     public async Task Organization_phone_conflict_contract_is_exposed_for_both_registration_flows_and_profile()
     {
         await using var db = await BillingDatabase.Create(false); using var factory = Factory(db);

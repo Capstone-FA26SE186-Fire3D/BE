@@ -1,5 +1,7 @@
 # Fire3D — Hướng dẫn tích hợp API hiện tại
 
+Phone cá nhân bổ sung: register Trainee/OrganizationUser/alias, Google completion và PATCH `/api/auth/me` trả409 `PHONE_NUMBER_EXISTS`/`errors.phoneNumber` khi trùng canonical giữa user. NULL tùy chọn; không unique chéo số tổ chức, không suy0…/+84…; conflict giữ proof/profile revision/audit. [Contract và test tay](personal-phone-uniqueness.md).
+
 Cập nhật contract **04/10/2026** theo [Docs v7](../../Docs/schema_v7_contract.md) và rà source BE `e42a2eb`. Các mục endpoint/editor bắt đầu từ baseline `946017d` ngày 23/09, có bổ sung auth/billing tháng 10; số endpoint ở heading là danh mục lịch sử, cần kiểm controller khi tích hợp. Đây là hướng dẫn API source hiện có, không chứng minh toàn bộ capability v7 đã hoàn thành.
 
 Các phần dưới có baseline lịch sử riêng; không dùng số endpoint cũ để suy mức hoàn thiện hiện tại. Bổ sung **02/10/2026**: catalog, quotation Building và enterprise contact request tại [billing.md](billing.md), gồm route/quyền, If-Match, Idempotency-Key, ví dụ và luồng checkout PayOS, webhook, entitlement/reconcile đã có code/test. Cập nhật **03/10/2026**: migration PayOS/email và login giới hạn quyền đã áp vào Supabase; API local tạo link/QR provider thật thành công, chưa chuyển tiền. Azure đã phục vụ Swagger/OpenAPI/return/cancel và CORS FE, nhưng worker/executor/webhook/Paid/provisioning deployment vẫn chưa nghiệm thu. Đối chiếu OpenAPI/source và [implementation checklist](api-implementation-checklist.md) khi tích hợp; endpoint tồn tại không chứng minh provider đã hoạt động.

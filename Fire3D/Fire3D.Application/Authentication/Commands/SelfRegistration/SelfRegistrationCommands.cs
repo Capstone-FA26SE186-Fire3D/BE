@@ -177,6 +177,8 @@ internal static class SelfRegistrationValidation
 
     internal static AuthResult<T> Conflict<T>(RegisterConflict conflict) => conflict switch
     {
+        RegisterConflict.PhoneTaken => AuthResult<T>.Fail("PHONE_NUMBER_EXISTS", "Số điện thoại cá nhân đã được sử dụng.", 409,
+            new Dictionary<string, string[]> { ["phoneNumber"] = ["Chọn số điện thoại cá nhân khác."] }),
         RegisterConflict.OrganizationPhoneTaken => AuthResult<T>.Fail("ORGANIZATION_PHONE_EXISTS", "Số điện thoại đã được một tổ chức sử dụng.", 409,
             new Dictionary<string, string[]> { ["organizationPhoneNumber"] = ["Chọn số điện thoại khác cho tổ chức."] }),
         RegisterConflict.UsernameTaken => AuthResult<T>.Fail("USERNAME_EXISTS", "Username is already registered.", 409,

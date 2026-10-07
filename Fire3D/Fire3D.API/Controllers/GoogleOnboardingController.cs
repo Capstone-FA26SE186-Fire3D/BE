@@ -18,7 +18,9 @@ public sealed class GoogleOnboardingController(IGoogleOnboardingService onboardi
     /// returns 409 ONBOARDING_ALREADY_COMPLETED; recover by exchanging a valid Firebase ID token.
     /// Different input returns 409 IDEMPOTENCY_KEY_CONFLICT. Organization phone must be unique across
     /// all organizations including inactive/deleted. Duplicate phone returns 409 ORGANIZATION_PHONE_EXISTS
-    /// with errors.organizationPhoneNumber; rollback preserves the unexpired proof for a corrected request.</remarks>
+    /// with errors.organizationPhoneNumber; rollback preserves the unexpired proof for a corrected request.
+    /// Optional personal phone is independently unique across all users, including inactive/deleted accounts;
+    /// duplicate returns 409 PHONE_NUMBER_EXISTS with errors.phoneNumber and does not consume proof.</remarks>
     [HttpPost("complete")]
     [AllowAnonymous]
     [ProducesResponseType<GoogleExchangeResponse>(201)]
