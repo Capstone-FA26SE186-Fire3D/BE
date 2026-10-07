@@ -10,8 +10,8 @@ Contract hiện tại trong nhánh triển khai; dấu tick chỉ xác nhận so
 |4|Scenario/draft create, PUT/validate/snapshot; ETag/receipt/numbering/hash/audit; package-build job|✅|✅|Migration áp; Unity thật ❌ |
 |5|confirm-for-training/reviews đúng cặp; submit/admin approve/reject content/rubric|✅|✅|Migration áp; binary/client chưa kiểm |
 |6|Playtest prepare/start, immutable pins, quota and5-minute grant|✅|✅|Migration áp; runtime thật ❌ |
-|7|POST /api/releases Built; GET /api/buildings/{id}/trainings; access/participation dependencies|✅|✅|New migration/binary/client chưa kiểm |
-|8|Feedback/support owner/admin create/list/detail/message/PATCH; receipts/ETag/paging|✅|✅|New migration/binary/client chưa kiểm |
+|7|POST /api/releases Built; GET /api/buildings/{id}/trainings; access/participation dependencies|✅|✅|Migration áp; binary/client chưa kiểm |
+|8|Feedback/support owner/admin create/list/detail/message/PATCH; receipts/ETag/paging|✅|✅|Migration áp; binary/client chưa kiểm |
 |9|PayOS GET200 DTO; role/header/security metadata; relative server; OpenAPI-generated inventory/docs|✅|✅|Deployed OpenAPI chưa kiểm |
 |Backlog|Publish, learner start/sync/result/training analytics, real IFC/Blender/Unity pipeline|❌|❌|❌|
 
@@ -41,4 +41,8 @@ Contract hiện tại trong nhánh triển khai; dấu tick chỉ xác nhận so
 
 Task1–6 đã có bằng chứng trước đó tại [ifc-authoring-deployment.md](ifc-authoring-deployment.md). Tasks7–8 thêm 20261007100000_AddReleaseAndBuildingAccess và20261007110000_AddSupportCommandContracts: additive, không attest legacy, không reset. Migrate trước binary, preflight support phải giữ dữ liệu; gate EXECUTE và no direct support/release provenance DML cần kiểm lại trên target.
 
-Tests dùng PostgreSQL native disposable với actual EF history và nonsuperuser gate-only roles, fake S3/HTTP/package/runtime. Bằng chứng Tasks7–9: release/access3 tests, support5 tests, OpenAPI1 test; release unit6 tests. Regression cuối nhánh được ghi riêng khi chạy xong. Chưa áp hai migration mới vào Supabase; chưa test provider/binary/client thật. Không sửa auth/OTP/Avatar/payment business hoặc WMS.
+Tests dùng PostgreSQL native disposable với actual EF history và nonsuperuser gate-only roles, fake S3/HTTP/package/runtime. Bằng chứng Tasks7–9: release/access3 tests, support5 tests, OpenAPI1 test; release unit6 tests. Regression cuối nhánh được ghi riêng khi chạy xong. Ba migration mới, gồm bản sửa quyền20261007120000, đã áp và postcheck trên Supabase; chưa test provider/binary/client thật. Không sửa auth/OTP/Avatar/payment business hoặc WMS.
+
+## Review còn chờ
+
+Receipt IFC initiate cần đối chiếu Building khi replay; structural anchor validation cần chỉ chấp nhận Passed geometry run không có Error/Critical. Hai finding chưa được đóng bởi rollout schema. Quyền Building access và custom runtime DML đã được sửa bằng migration forward riêng; xem [tiến độ](task-progress-checklist.md).

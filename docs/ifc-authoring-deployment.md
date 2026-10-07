@@ -1,6 +1,6 @@
 # Selected API database rollout — 2026-10-07
 
-Scope: Tasks 1-6 on `feature/ifc-authoring-support-hardening`. Supabase schema rollout is verified; deployed API artifact and real IFC/Blender/Unity/S3 clients are not certified by it. No database reset, automatic duplicate repair or synthetic production Trial was performed.
+Scope: Tasks 1-9 (schema; two source review findings remain) on `feature/ifc-authoring-support-hardening`. Supabase schema rollout is verified; deployed API artifact and real IFC/Blender/Unity/S3 clients are not certified by it. No database reset, automatic duplicate repair or synthetic production Trial was performed.
 
 ## Applied migrations
 
@@ -36,4 +36,20 @@ See [scenario-readiness.md](scenario-readiness.md), [playtest-manual-test.md](pl
 
 Initial regression failures were retained in local logs: Testing host lacked early DefaultConnection, then a read fixture still seeded Running output and a pre-migration column spelling. Scoped local-only placeholder configuration and corrected accepted-output fixtures resolved them; no account/provider validation assertion was removed and shared User Secrets were not used as test data. Native isolated PostgreSQL 17 was used because Docker was unavailable.
 
-Tasks 7-9 remain pending: Built release/Training/Building access, support hardening, final whole-route Swagger/Docs reconciliation. Publish, learner start/sync/result, real IFC/Unity and production runtime acceptance remain unfinished. No push or main merge was performed in this rollout.
+Tasks 7-9 source has been committed. Task 7/8 schema rollout is recorded below. Publish, learner start/sync/result, real IFC/Unity and production runtime acceptance remain unfinished. No main merge was performed.
+
+## Tasks 7–8 additive rollout and privilege repair — 2026-10-07
+
+Applied in one transaction, from verified history ending20261006160000:
+
+| Migration | Changes |
+|---|---|
+|20261007100000_AddReleaseAndBuildingAccess|Building visibility/default Private, access revision/code hash; account-bound participation grants; immutable release package/provenance, Build receipts and authorized gate; no legacy approval invented.|
+|20261007110000_AddSupportCommandContracts|Feedback/ticket revision, content constraints, command receipts, pagination indexes, append-only messages and atomic support gate; no message content rewritten.|
+|20261007120000_HardenSelectedGatePrivileges|Convert inherited/direct table-wide Building INSERT/UPDATE grants to legacy-column grants; remove protected access-column and custom-login support/release DML grants; restrict client EXECUTE; add access-writer trigger. Temporary gate-owner membership restored.|
+
+Read-only postcheck after commit verified all three history entries, RLS, runtime EXECUTE, no direct protected DML and preserved legacy Building name INSERT/UPDATE. Gate owner stays NOLOGIN/NOSUPERUSER/NOBYPASSRLS and without schema CREATE. Client anon/authenticated and PUBLIC cannot execute release/support gates. Counts remain users8, organizations6, buildings2, feedback/tickets/messages/releases/trainings0; both existing Buildings Private/access revision1. No reset or provider call.
+
+Tests before rollout: 15 targeted Release/Support/ACL tests passed; strengthened ACL test passed with actual migrations under a nonsuperuser migration identity, custom/inherited grants, restored membership and future overgrant attempts. Broad regression before the privilege repair: Auth428 passed, IFC105 passed (Docker-only legacy IFC fixtures excluded). Binary/client/provider deployment is separate. IFC cross-Building receipt and Failed geometry anchor findings remain open; see [progress checklist](task-progress-checklist.md).
+
+Post-repair verification: 4 Building HTTP/PostgreSQL lifecycle/audit regression tests passed; solution build0 warnings/0 errors. Raw provider tests and deployed API smoke tests were not run.
