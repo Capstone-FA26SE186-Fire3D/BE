@@ -227,3 +227,7 @@ Process dùng verified source + Idempotency-Key và SQL gate atomic. Machine-onl
 
 
 Scenario authoring: implemented durable create/snapshot/package-build receipts, draft ETag 428/400/412, locked numbering, immutable canonical v7 snapshot/rubric/learner fields and accepted geometry/runtime references. PostgreSQL actual-history plus fake package output tests ran; real Unity and deployment remain unchecked. See scenario-authoring.md. Structural validation alone is not readiness.
+
+### Selected scope Task 5 — exact readiness and content approval
+
+Source + PostgreSQL/HTTP tests implemented: exact revision/version/run/annotation/artifact provenance, Passed/blocker/runtime gate, separate immutable Submitted→Approved/Rejected content review, server hashes, live tenant/lifecycle, receipt and audit rollback. See [scenario-readiness.md](scenario-readiness.md). Tests use fake worker outputs, not Unity. Publish/learner sessions remain incomplete. Supabase Tasks 2–4 plus dependency EXECUTE repair were applied 2026-10-07; existing row counts were preserved. Older "deployment pending" notes describe their original implementation evidence, not the subsequent schema rollout.

@@ -1,4 +1,4 @@
-﻿using Fire3D.API.Authorization;
+using Fire3D.API.Authorization;
 using Fire3D.Application.Ifc;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 namespace Fire3D.API.Controllers;
 [ApiController]
-[Authorize]
+[Authorize(Roles="OrganizationUser,PlatformAdmin")]
 [EnableRateLimiting("administration")]
 [Route("api")]
 [ResponseCache(NoStore=true,Location=ResponseCacheLocation.None)]
@@ -104,20 +104,20 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     }
 
     /// <summary>
-    /// Confirms a revision as Ready for Scenario Training (D16).
+    /// Records technical readiness for the exact revision/version/validation/artifact pair; it does not approve content.
     /// </summary>
     [HttpPost("revisions/{revisionId:guid}/confirm-for-training")]
     [ProducesResponseType(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> ConfirmForTraining(Guid revisionId, CancellationToken ct)
+    public async Task<IActionResult> ConfirmForTraining(Guid revisionId, [FromBody] Fire3D.Application.Scenarios.ConfirmTrainingRequest request, CancellationToken ct)
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ConfirmForTraining.ConfirmForTrainingCommand(actor, revisionId), ct);
+        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ConfirmForTraining.ConfirmForTrainingCommand(actor, revisionId, request), ct);
 
         return result.IsSuccess 
-            ? Ok() 
-            : Problem(statusCode: result.Error!.Status, title: result.Error.Message);
+            ? Ok(new { reviewId = result.Value }) 
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,extensions:new Dictionary<string,object?>{["code"]=result.Error.Code,["errors"]=result.Error.Errors});
     }
 }

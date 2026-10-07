@@ -423,7 +423,7 @@ Tất cả cần Editor, rate limit administration. Storage phải được cấ
 | POST | `/api/revisions/{revisionId}/upload-complete` | FinalizeIfcUploadRequest | 204 |
 | POST | `/api/revisions/{revisionId}/process` | Không body | 202 {jobId} |
 | POST | `/api/processing-jobs/{jobId}/retry` | requestId, reason | 202 RetryProcessingJobResponse |
-| POST | `/api/revisions/{revisionId}/confirm-for-training` | Không body | 200 rỗng |
+| POST | `/api/revisions/{revisionId}/confirm-for-training` | scenarioVersionId, validationRunId, annotationSetId | 200 {reviewId}; exact technical attestation |
 | POST | `/api/revisions/{revisionId}/reviews` | scenarioVersionId, action, validationRunId, message | 201 reviewId |
 
 ### 5.1 Initiate → upload → finalize
@@ -725,3 +725,5 @@ PUT khóa revision, kiểm tra version rồi append annotation_sets + audit_logs
 
 
 Authoring hardening: draft PUT/snapshot require quoted xmin If-Match (428/400/412); scenario/draft/snapshot/package-build use durable idempotency receipts. V7 snapshots require explicit rubric/learner fields; structural validation does not establish readiness. See [scenario authoring](scenario-authoring.md). Isolated PostgreSQL/HTTP/fake package tests ran; real Unity and deployment remain unverified.
+
+Readiness/content approval: [contract and manual tests](scenario-readiness.md). Submit/approve/reject use Idempotency-Key and exact immutable content/rubric hashes; technical readiness remains separate.
