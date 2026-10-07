@@ -21,6 +21,16 @@ public sealed record ProcessingEnvelope(string EventKey, string EventType, strin
     string AggregateType, Guid AggregateId, Guid OrganizationId, JsonElement Payload, string PayloadHash);
 public sealed record ProcessingStreamMessage(string Id, string Envelope);
 
+public interface IProcessingStreamDispatchGate
+{
+    Task<JsonElement> ExecuteAsync(string action, JsonElement input, CancellationToken ct);
+}
+
+public interface IProcessingStreamConsumerGate
+{
+    Task<JsonElement> ExecuteAsync(string action, JsonElement input, CancellationToken ct);
+}
+
 public interface IProcessingStream
 {
     string StreamName { get; }

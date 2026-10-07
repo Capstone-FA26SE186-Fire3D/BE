@@ -44,7 +44,7 @@ public sealed class RedisProcessingOptionsTests
     [Fact]
     public void Redis_publisher_does_not_require_HTTP_worker_but_consumer_does()
     {
-        var settings = new Dictionary<string, string?> { ["Redis:Enabled"] = "true", ["ProcessingWorker:Transport"] = "RedisStreams", ["ProcessingWorker:DispatcherEnabled"] = "true" };
+        var settings = new Dictionary<string, string?> { ["Redis:Enabled"] = "true", ["ProcessingWorker:Transport"] = "RedisStreams", ["ProcessingWorker:DispatcherEnabled"] = "true", ["ConnectionStrings:DispatcherExecutor"] = "Host=localhost;Database=test" };
         using (var publisher = Provider(settings)) Assert.Equal("RedisStreams", publisher.GetRequiredService<IOptions<ProcessingWorkerOptions>>().Value.Transport);
         settings["ProcessingWorker:ConsumerEnabled"] = "true";
         using var consumer = Provider(settings);

@@ -58,6 +58,7 @@ public static class ApplicationExtensions
             .Validate(o => o.Transport is "Http" or "RedisStreams", "Use Http or RedisStreams processing transport.")
             .Validate(o => !o.ConsumerEnabled || o.Transport == "RedisStreams", "Processing consumer requires RedisStreams transport.")
             .Validate(o => !(o.Transport == "RedisStreams" && (o.DispatcherEnabled || o.ConsumerEnabled)) || configuration.GetValue<bool>("Redis:Enabled"), "RedisStreams transport requires Redis:Enabled=true.")
+            .Validate(o => !(o.DispatcherEnabled && o.Transport == "RedisStreams") || !string.IsNullOrWhiteSpace(configuration.GetConnectionString("DispatcherExecutor")), "Redis publisher requires a restricted DispatcherExecutor connection.")
             .Validate(o => !(o.WorkerApiEnabled || o.ConsumerEnabled || o.DispatcherEnabled && o.Transport == "Http") || o.MachineKey.Length is >= 32 and <= 512, "Processing worker requires a separate machine key of 32-512 characters.")
             .Validate(o => !o.WorkerApiEnabled || (!string.IsNullOrWhiteSpace(configuration.GetConnectionString("ProcessingExecutor")) && o.AllowedToolchains.Length > 0), "Worker API requires restricted ProcessingExecutor connection and an explicit toolchain allowlist.")
             .Validate(o => !(o.ConsumerEnabled || o.DispatcherEnabled && o.Transport == "Http") || (Uri.TryCreate(o.WorkerUrl,UriKind.Absolute,out var url) && url.Scheme=="https" && string.IsNullOrEmpty(url.UserInfo)), "HTTP delivery requires a configured HTTPS worker URL.")
@@ -69,6 +70,10 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Ifc.IProcessingDispatchGate>(p=>p.GetRequiredService<Fire3D.Infrastructure.Ifc.ProcessingRuntimeStore>());
         services.AddHttpClient("processing-worker").ConfigurePrimaryHttpMessageHandler(()=>new HttpClientHandler { AllowAutoRedirect=false });
         services.AddHostedService<Fire3D.Infrastructure.Ifc.ProcessingDispatcher>();
+        services.AddScoped<Fire3D.Infrastructure.Ifc.ProcessingStreamStore>();
+        services.AddScoped<Fire3D.Application.Ifc.IProcessingStreamDispatchGate>(p => p.GetRequiredService<Fire3D.Infrastructure.Ifc.ProcessingStreamStore>());
+        services.AddScoped<Fire3D.Application.Ifc.IProcessingStreamConsumerGate>(p => p.GetRequiredService<Fire3D.Infrastructure.Ifc.ProcessingStreamStore>());
+        services.AddHostedService<Fire3D.Infrastructure.Ifc.RedisProcessingPublisher>();
         services.AddScoped<Fire3D.Application.Ifc.IIfcWriteStore, Fire3D.Infrastructure.Ifc.IfcWriteStore>();
         services.AddOptions<Fire3D.Application.Ifc.IfcUploadOptions>().Bind(configuration.GetSection("IfcUpload"))
             .Validate(o => !o.Enabled || (o.MaxBytes is > 0 && o.CleanupEnabled), "IfcUpload requires explicit positive MaxBytes and CleanupEnabled=true when enabled.").ValidateOnStart();
