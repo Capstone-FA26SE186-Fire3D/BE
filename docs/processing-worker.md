@@ -1,6 +1,6 @@
 # Processing gates and HTTP worker (selected scope)
 
-Transport in this branch is PostgreSQL transactional outbox → configured HTTP worker, not Redis Streams. It implements BE delivery/provenance contracts with a simulated worker; it does not implement IFC/Blender/Unity toolchains.
+Transport defaults to PostgreSQL transactional outbox → configured HTTP worker. Optional RedisStreams inserts a Redis publisher and BE bridge before the same HTTP worker; see [Redis processing](redis-processing.md). It implements BE delivery/provenance contracts with a simulated worker; it does not implement IFC/Blender/Unity toolchains.
 
 ## Enablement
 

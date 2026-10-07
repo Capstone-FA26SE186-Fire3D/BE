@@ -20,7 +20,7 @@ Contract hiện tại trong nhánh triển khai; dấu tick chỉ xác nhận so
 - IFC/scenario create, snapshot/package-build, process, playtest prepare/start, release Build và support create/message dùng Idempotency-Key. Retry processing dùng requestId/reason hiện có. Keys không đổi để retry cùng command.
 - Draft PUT/snapshot, Building access/code mutation và support PATCH dùng If-Match; thiếu428, malformed400, stale412. Draft GET/PUT dùng xmin ETag, Building access dùng "access-N", support dùng "support-N"; không dùng ETag khác resource.
 - Confirm trả reviewId cho exact revision/version/run/annotation/artifact, không dùng revision.status làm bằng chứng version khác. Technical rejection khác approval nội dung.
-- Worker là machine authentication X-Worker-Key, JWT user không cấp quyền worker. Transport triển khai: PostgreSQL outbox → HTTP worker giả lập; Redis Streams trong kiến trúc đích chưa triển khai.
+- Worker là machine authentication X-Worker-Key, JWT user không cấp quyền worker. Transport mặc định Http; tùy chọn RedisStreams dùng PostgreSQL outbox → Redis → BE bridge → HTTP worker. [Hướng dẫn Redis](redis-processing.md) tách Published, durable handoff/ACK và Succeeded; provider/toolchain thật chưa nghiệm thu.
 - Playtest preparation không grant/quota; start pin actor/family/package/runtime, Trial consumption hoặc entitlement đúng Building. Không seed Trial tự động.
 - Release Built derive metadata/provenance từ accepted ReleasePackage và Approved content/rubric; create matching Training atomic. Publish vẫn503.
 - Paid/checkout/provisioning trong GET PayOS là ba trạng thái riêng. Chỉ sửa metadata GET, không thay thanh toán.

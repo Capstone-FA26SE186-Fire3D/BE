@@ -1,5 +1,21 @@
 # Checklist tiến độ API đã chọn
 
+## Redis processing — phạm vi bổ sung 07/10/2026
+
+Nhánh `feature/redis-processing-streams` giữ Http mặc định và PostgreSQL làm nguồn sự thật. Các trạng thái Supabase của Tasks1–9 bên dưới thuộc đợt trước; không áp dụng cho ba migration Redis mới.
+
+| Phần | Source/test | Deployment còn chờ |
+| --- | --- | --- |
+| Kết nối/config | ✅ TLS, singleton reconnect, validate khi bật; không eager-connect chặn auth | Azure TCP/TLS và secret/network đúng môi trường |
+| Publisher | ✅ Outbox lease → XADD ngoài transaction → mark Published; replay giữ event/hash | Migration Delivery và dispatcher login/grants |
+| Consumer | ✅ Đối chiếu envelope/scope; receipt atomic rồi ACK; mất response/ACK replay an toàn | Migration Consumption và HTTP worker thật |
+| Recovery/retention | ✅ Reclaim/replay/backoff/fencing; giữ pending/unread/chưa bàn giao | Migration Recovery; Azure HA/AOF/NoEviction |
+| Swagger/docs | ✅ Process/package-build vẫn202; phân biệt Published/handoff/output; không thêm public API | Binary và client/toolchain thật |
+
+PostgreSQL/Redis Docker dùng tài nguyên disposable, HTTP worker giả lập. Azure dev smoke chưa qua: TCP tới endpoint port10000 không kết nối được, chưa XADD; không suy lỗi key hoặc thay Azure config. Không áp Supabase, bật production hoặc merge main. Hướng dẫn cấu hình, preflight và rollback tại [redis-processing.md](redis-processing.md).
+
+Kết quả cuối: Auth **452 passed/0 failed/0 skipped** (19 case Redis); IFC **110 passed/0 failed/0 skipped**; build **0 warning/error**. Lượt Auth trước có một failure PayOS partial provisioning; chạy riêng và chạy lại toàn bộ đều pass, không sửa code/assertion PayOS. Không cộng các lượt target trùng vào tổng. Restart Redis Docker/AOF giữ stream/group test; Azure HA/reconnect thật chưa được chứng minh.
+
 Cập nhật: 07/10/2026. Nhánh BE: `feature/ifc-authoring-support-hardening`.
 
 Đã hoàn tất 9 task trong phạm vi source, test BE và migration Supabase. Worker/provider thật, binary deployment và FE/Mobile/Unity vẫn cần nghiệm thu riêng. PostgreSQL tests dùng database disposable; không suy production hoạt động từ fixture.

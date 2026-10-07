@@ -89,6 +89,8 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
+    /// <summary>Queues verified IFC processing durably in PostgreSQL.</summary>
+    /// <remarks>202 does not mean processing succeeded. Deployment selects Http or RedisStreams transport. Redis Published means publication; ACK means durable worker handoff. Neither means accepted output.</remarks>
     [HttpPost("revisions/{revisionId:guid}/process")]
     [ProducesResponseType(202)]
     [ProducesResponseType<ProblemDetails>(400)]
