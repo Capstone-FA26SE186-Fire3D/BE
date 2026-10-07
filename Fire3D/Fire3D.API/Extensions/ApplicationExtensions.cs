@@ -47,11 +47,20 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Ifc.IEditorPreviewStore, Fire3D.Infrastructure.Ifc.EditorPreviewStore>();
         services.AddScoped<Fire3D.Application.Ifc.IPreviewDownloadSigner, Fire3D.Infrastructure.Storage.S3PreviewDownloadSigner>();
         services.AddScoped<Fire3D.Application.Ifc.IAnnotationStore, Fire3D.Infrastructure.Ifc.AnnotationStore>();
+        services.AddOptions<Fire3D.Application.Ifc.RedisProcessingOptions>().Bind(configuration.GetSection("Redis"))
+            .Validate(o => !o.Enabled || (!string.IsNullOrWhiteSpace(o.Host) && Uri.CheckHostName(o.Host) != UriHostNameType.Unknown && o.Port is >= 1 and <= 65535 && !string.IsNullOrWhiteSpace(o.Password)), "Enabled Redis requires Host, Port and Password.")
+            .Validate<Microsoft.Extensions.Hosting.IHostEnvironment>((o, env) => !o.Enabled || o.Ssl || env.IsDevelopment(), "Redis requires TLS outside Development.")
+            .Validate(o => o.PendingIdleSeconds is >= 60 and <= 3600 && o.RecoverySeconds is >= 5 and <= 300 && o.HandoffTimeoutSeconds is >= 60 and <= 3600 && o.RetentionDays is >= 1 and <= 90 && o.Group == "fet3d-processing-bridge-v1", "Redis processing recovery settings are invalid.")
+            .ValidateOnStart();
+        services.AddSingleton<Fire3D.Application.Ifc.IProcessingStream, Fire3D.Infrastructure.Ifc.RedisProcessingStream>();
         services.AddOptions<Fire3D.Application.Ifc.ProcessingWorkerOptions>().Bind(configuration.GetSection("ProcessingWorker"))
             .Validate(o => o.PollSeconds is >= 1 and <= 60, "ProcessingWorker PollSeconds must be 1-60.")
-            .Validate(o => !(o.WorkerApiEnabled || o.DispatcherEnabled) || o.MachineKey.Length is >= 32 and <= 512, "Processing worker requires a separate machine key of 32-512 characters.")
+            .Validate(o => o.Transport is "Http" or "RedisStreams", "Use Http or RedisStreams processing transport.")
+            .Validate(o => !o.ConsumerEnabled || o.Transport == "RedisStreams", "Processing consumer requires RedisStreams transport.")
+            .Validate(o => !(o.Transport == "RedisStreams" && (o.DispatcherEnabled || o.ConsumerEnabled)) || configuration.GetValue<bool>("Redis:Enabled"), "RedisStreams transport requires Redis:Enabled=true.")
+            .Validate(o => !(o.WorkerApiEnabled || o.ConsumerEnabled || o.DispatcherEnabled && o.Transport == "Http") || o.MachineKey.Length is >= 32 and <= 512, "Processing worker requires a separate machine key of 32-512 characters.")
             .Validate(o => !o.WorkerApiEnabled || (!string.IsNullOrWhiteSpace(configuration.GetConnectionString("ProcessingExecutor")) && o.AllowedToolchains.Length > 0), "Worker API requires restricted ProcessingExecutor connection and an explicit toolchain allowlist.")
-            .Validate(o => !o.DispatcherEnabled || (Uri.TryCreate(o.WorkerUrl,UriKind.Absolute,out var url) && url.Scheme=="https" && string.IsNullOrEmpty(url.UserInfo)), "Dispatcher requires a configured HTTPS worker URL.")
+            .Validate(o => !(o.ConsumerEnabled || o.DispatcherEnabled && o.Transport == "Http") || (Uri.TryCreate(o.WorkerUrl,UriKind.Absolute,out var url) && url.Scheme=="https" && string.IsNullOrEmpty(url.UserInfo)), "HTTP delivery requires a configured HTTPS worker URL.")
             .ValidateOnStart();
         services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions,Fire3D.API.Authorization.ProcessingWorkerAuthentication>(Fire3D.API.Authorization.ProcessingWorkerAuthentication.SchemeName,_=>{});
         services.AddScoped<Fire3D.Infrastructure.Ifc.ProcessingRuntimeStore>();
