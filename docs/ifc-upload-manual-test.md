@@ -8,3 +8,5 @@
 6. Kiểm source cuối có `upload_verified_at`, hash thực và key riêng mỗi attempt. Lỗi copy/DB/audit giữ candidate + cleanup; retry sau lease dùng key mới, cleanup không xóa source đã adopt. S3 NotFound là cleanup thành công; provider lỗi được retry. Object được bảo vệ vẫn giữ job.
 
 Bằng chứng tự động: tests `IfcUploadBindingTests`, `IfcSourceInspectorTests`, `AuthIntegrationTests.Ifc_*` chạy actual migration history, API HTTP và restricted gate role; fake S3 bao phủ overwrite, cạnh tranh, replay mất response, lỗi audit sau copy, cleanup lỗi/retry và late orphan write. Không chứng minh S3/worker IFC/deployment thật. Process/readiness/worker là các task tiếp theo.
+
+Replay scope: one actor/key is bound to the original Building as well as metadata. Reusing the key for another authorized Building returns409 IDEMPOTENCY_KEY_CONFLICT on both aliases, without another revision, cleanup or audit. C# already includes Building ID in the hash; forward migration20261007130000_BindIfcReceiptBuilding additionally checks persisted intent.building_id inside the SQL gate, preserving hashes of legacy receipts.
