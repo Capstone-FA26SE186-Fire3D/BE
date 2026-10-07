@@ -90,7 +90,7 @@ public class ServiceRegistrationTests
     }
 
     [Fact]
-    public void Authentication_handlers_have_registered_dependencies()
+    public async Task Authentication_handlers_have_registered_dependencies()
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> {
             ["ConnectionStrings:DefaultConnection"] = "Host=127.0.0.1;Database=unused;Username=test",
@@ -100,10 +100,11 @@ public class ServiceRegistrationTests
         }).Build();
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(RedisStreamIntegrationTests.TestEnvironment("Test"));
         services.AddDatabase(config);
         services.AddApplication(config);
         services.AddAccountAuthentication(config);
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IIdentityProvider>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IGoogleOnboardingService>());

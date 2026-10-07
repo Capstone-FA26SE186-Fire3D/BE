@@ -18,6 +18,7 @@ public sealed class IfcPostgresFactAttribute : FactAttribute
 
 public sealed class IfcReadDatabase : IAsyncLifetime
 {
+    private static readonly NpgsqlNullNameTranslator Names = new();
     private readonly string name = "fire3d_ifc_test_" + Guid.NewGuid().ToString("N");
     private string? adminConnection;
     private string? connection;
@@ -81,8 +82,8 @@ public sealed class IfcReadDatabase : IAsyncLifetime
         if(connection is null) throw new InvalidOperationException("Test database not initialized.");
         var options = new DbContextOptionsBuilder<Fire3DDbContext>().UseNpgsql(connection, pg =>
         {
-            pg.MapEnum<RevisionStatus>("revision_status_enum",nameTranslator:new NpgsqlNullNameTranslator());
-            pg.MapEnum<QuarantineStatus>("quarantine_status_enum",nameTranslator:new NpgsqlNullNameTranslator());
+            pg.MapEnum<RevisionStatus>("revision_status_enum",nameTranslator:Names);
+            pg.MapEnum<QuarantineStatus>("quarantine_status_enum",nameTranslator:Names);
         }).Options;
         var context = new Fire3DDbContext(options);
         Assert.Equal(name,context.Database.GetDbConnection().Database);
