@@ -35,7 +35,7 @@ Package response exposes `commercialVersion`, capacity/quota/policy, `pricingBas
 
 Migration `20261008090000_AddBillingV7Catalog` retains legacy rows unchanged with version 1 and nullable v7 fields. Legacy packages remain readable with `isPurchasable=false`; configure all required fields to sell as v7. SQL constraints protect v7 configuration, and a trigger prevents policy update/delete. API has SELECT/INSERT on policies; browser database roles receive no access.
 
-Rollout schema before the compatible binary. Do not enable v7 sales until quotation and provisioning tasks are accepted on all worker instances. The migration has not been applied to Supabase in this implementation phase.
+Rollout schema before the compatible binary. Do not enable v7 sales until quotation and provisioning tasks are accepted on all worker instances. The six additive migrations were applied to Supabase on 2026-10-08; schema verification is recorded below. This does not establish binary or provider acceptance.
 
 ## Quotation snapshots and fixed service intervals
 
@@ -76,3 +76,22 @@ Replay returns existing provenance before expiry checks and does not grant again
 `Publishing__Enabled=false` is the default. Apply `AddReleasePublishGate` before enabling it on every API instance. `POST /api/releases/{releaseId}/publish` returns 204 only after checking the live session, actor/tenant lifecycle, active matching Training, current paid Building entitlement, exact content/rubric approval, revision/version validation and accepted package/manifest provenance. Trial cannot publish. Valid legacy paid entitlements remain eligible without invented seats/quota.
 
 Missing business prerequisites return 409 (`BUILDING_ENTITLEMENT_REQUIRED`, `CONTENT_APPROVAL_REQUIRED`, `RELEASE_READINESS_REQUIRED`, `PACKAGE_COMPATIBILITY_REQUIRED`, `TRAINING_INACTIVE`, `RELEASE_NOT_BUILT`). Disabled rollout returns 503 `PUBLISH_GATE_UNAVAILABLE`. An authorized replay of an already Published release returns 204 without another receipt/audit; Revoked cannot be republished. Publication, receipt and audit commit together. No Unity/S3/provider call occurs in this transaction; publish does not certify a real Unity build or grant a learner seat.
+
+## Supabase schema verification — 2026-10-08
+
+At the user's request, applied these migrations in one reviewed transaction after a read-only preflight:
+
+| Migration | Schema change |
+|---|---|
+| `20261008090000_AddBillingV7Catalog` | Immutable quota policy versions and conditional v7 package capacity/quota constraints. |
+| `20261008090100_SyncBillingV7CatalogModel` | EF model/history synchronization; no data change. |
+| `20261008091000_AddBillingV7QuotationSnapshots` | Commercial snapshots and fixed service intervals on quotation lines. |
+| `20261008092000_AddBillingV7Provisioning` | Non-overlapping service reservations, immutable quota grants, entitlement capacity and restricted provisioning gates; `btree_gist`. |
+| `20261008093000_AddReleasePublishGate` | Restricted transactional publication gate. |
+| `20261008094000_AddReportingReadPermissions` | Trusted backend SELECT policies for the reporting queries. |
+
+History advanced from `20261007160000_AddPersonalPhoneUniqueness` (51 entries) to `20261008094000_AddReportingReadPermissions` (57 entries). Preflight found no overlapping paid service history. A separate read-only postcheck confirmed validated constraints, the reservation exclusion constraint, eight reporting SELECT policies, retained gate owners and restored temporary role/schema permissions. API/request/webhook roles have no direct INSERT into the ledger, quota grants or reservations; API also has no direct UPDATE on those tables.
+
+Before/after counts agree: users 12, organizations 7, Buildings 2, packages 2, quotations 1, entitlements 0 and payment transactions 0. Both packages remain legacy version 1; policy/grant/reservation tables are empty. No commercial values, dates or application records were seeded, rewritten or removed.
+
+Only schema deployment is verified. The compatible API/worker binary, real PayOS/webhook, frontend and Unity acceptance remain pending. `Publishing:Enabled` remains false by default; no Azure feature flag was changed. Deploy every compatible API/worker instance before enabling v7 sales or publication, and use the [manual acceptance guide](publish-billing-v7-manual-test.md).
