@@ -3,14 +3,128 @@ using Fire3D.Application.Authentication.Avatar;
 using Fire3D.Application.Storage;
 using Fire3D.Domain.Entities;
 using Fire3D.Domain.Enums;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using SkiaSharp;
 using Xunit;
 
 namespace Fire3D.AuthTests;
 
 public sealed class AvatarServiceTests
 {
+    [Theory]
+    [InlineData(SKEncodedImageFormat.Png, "image/png")]
+    [InlineData(SKEncodedImageFormat.Jpeg, "image/jpeg")]
+    [InlineData(SKEncodedImageFormat.Webp, "image/webp")]
+    public async Task Complete_decodes_each_supported_format(SKEncodedImageFormat format, string mime)
+    {
+        var bytes = CreateImageBytes(format, 2, 2);
+        var (service, user, store, storage) = ImageFixture(bytes, mime);
+        var upload = await service.CreateUploadIntentAsync(user.Id, new(mime, bytes.Length), default);
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+        Assert.True(result.IsSuccess);
+        Assert.True(store.Finalized);
+        Assert.True(storage.Copied);
+    }
+
+    [Theory]
+    [InlineData(4097, 1)]
+    [InlineData(1, 4097)]
+    public async Task Complete_rejects_oversized_dimensions_before_copy(int width, int height)
+    {
+        var bytes = CreateImageBytes(SKEncodedImageFormat.Png, width, height);
+        var (service, user, store, storage) = ImageFixture(bytes, "image/png");
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", bytes.Length), default);
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+        Assert.Equal("INVALID_AVATAR_CONTENT", result.Error?.Code);
+        Assert.False(store.Finalized);
+        Assert.False(storage.Copied);
+    }
+
+    [Fact]
+    public async Task Complete_rejects_truncated_pixels_even_with_valid_header_and_matching_metadata()
+    {
+        var bytes = CreateImageBytes(SKEncodedImageFormat.Png, 16, 16)[..45];
+        var (service, user, store, storage) = ImageFixture(bytes, "image/png");
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", bytes.Length), default);
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+        Assert.Equal("INVALID_AVATAR_CONTENT", result.Error?.Code);
+        Assert.False(store.Finalized);
+        Assert.False(storage.Copied);
+    }
+
+    private static (AvatarService Service, User User, AvatarStoreFake Store, AvatarStorageFake Storage)
+        ImageFixture(byte[] bytes, string mime)
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
+        var store = new AvatarStoreFake();
+        var storage = new AvatarStorageFake { Bytes = bytes, Prefix = bytes.Take(12).ToArray(), MetadataMime = mime, MetadataSize = bytes.Length };
+        return (new AvatarService(new AvatarAuthStoreFake(user), store, new AvatarCleanupStoreFake(), storage, TimeProvider.System), user, store, storage);
+    }
+
+    [Fact]
+    public async Task Complete_rejects_multiple_png_frames()
+    {
+        var png = CreatePngBytes();
+        using var animated = new MemoryStream();
+        animated.Write(png.AsSpan(0, 33)); // Signature and IHDR.
+        WritePngChunk(animated, "acTL", [0, 0, 0, 2, 0, 0, 0, 0]);
+        byte[] frame = [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 10, 0, 0];
+        WritePngChunk(animated, "fcTL", frame);
+        using var compressed = new MemoryStream();
+        for (var offset = 33; offset < png.Length;)
+        {
+            var length = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(offset, 4));
+            var type = System.Text.Encoding.ASCII.GetString(png, offset + 4, 4);
+            if (type == "IDAT")
+            {
+                animated.Write(png.AsSpan(offset, length + 12));
+                compressed.Write(png.AsSpan(offset + 8, length));
+            }
+            offset += length + 12;
+        }
+        frame[3] = 1;
+        WritePngChunk(animated, "fcTL", frame);
+        WritePngChunk(animated, "fdAT", [0, 0, 0, 2, .. compressed.ToArray()]);
+        WritePngChunk(animated, "IEND", []);
+        var bytes = animated.ToArray();
+        var (service, user, store, storage) = ImageFixture(bytes, "image/png");
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", bytes.Length), default);
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+        Assert.Equal("INVALID_AVATAR_CONTENT", result.Error?.Code);
+        Assert.False(store.Finalized);
+        Assert.False(storage.Copied);
+    }
+
+    [Fact]
+    public async Task Complete_checks_decoded_mime_even_when_signature_and_metadata_claim_png()
+    {
+        var jpeg = CreateImageBytes(SKEncodedImageFormat.Jpeg, 2, 2);
+        var (service, user, store, _) = ImageFixture(jpeg, "image/png");
+        var storage = new AvatarStorageFake { Bytes = jpeg, MetadataSize = jpeg.Length };
+        service = new AvatarService(new AvatarAuthStoreFake(user), store, new AvatarCleanupStoreFake(), storage, TimeProvider.System);
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", jpeg.Length), default);
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+        Assert.Equal("INVALID_AVATAR_CONTENT", result.Error?.Code);
+        Assert.False(store.Finalized);
+        Assert.False(storage.Copied);
+    }
+
+    private static void WritePngChunk(Stream output, string type, byte[] payload)
+    {
+        Span<byte> number = stackalloc byte[4];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(number, (uint)payload.Length);
+        output.Write(number);
+        byte[] body = [.. System.Text.Encoding.ASCII.GetBytes(type), .. payload];
+        output.Write(body);
+        uint crc = uint.MaxValue;
+        foreach (var value in body)
+        {
+            crc ^= value;
+            for (var bit = 0; bit < 8; bit++) crc = (crc >> 1) ^ ((crc & 1) == 0 ? 0U : 0xedb88320U);
+        }
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(number, ~crc);
+        output.Write(number);
+    }
+
     [Fact]
     public async Task Create_upload_intent_uses_a_server_owned_staging_key_and_a_five_minute_url()
     {
@@ -244,6 +358,9 @@ public sealed class AvatarServiceTests
         public string UploadContentType { get; private set; } = "";
         public TimeSpan UploadExpiration { get; private set; }
         public byte[] Prefix { get; init; } = [137, 80, 78, 71, 13, 10, 26, 10];
+        public byte[]? Bytes { get; init; }
+        public string MetadataMime { get; init; } = "image/png";
+        public long? MetadataSize { get; init; }
         public bool Copied { get; private set; }
         public bool UploadedDirectly { get; private set; }
         public long UploadedLength { get; private set; }
@@ -261,10 +378,10 @@ public sealed class AvatarServiceTests
         }
         public Task<string> GeneratePresignedUploadUrlAsync(string objectKey, string mimeType, TimeSpan expiration, CancellationToken ct) { UploadedKey = objectKey; UploadContentType = mimeType; UploadExpiration = expiration; return Task.FromResult("https://storage.test/upload"); }
         public Task<bool> VerifyObjectExistsAsync(string objectKey, long expectedSizeBytes, CancellationToken ct) => Task.FromResult(true);
-        public Task<StorageObjectMetadata?> GetObjectMetadataAsync(string objectKey, CancellationToken ct) => Task.FromResult<StorageObjectMetadata?>(new(UploadedLength == 0 ? 1024 : UploadedLength, "image/png", "etag"));
+        public Task<StorageObjectMetadata?> GetObjectMetadataAsync(string objectKey, CancellationToken ct) => Task.FromResult<StorageObjectMetadata?>(new(MetadataSize ?? (UploadedLength == 0 ? 1024 : UploadedLength), MetadataMime, "etag"));
         public Task<byte[]?> ReadObjectPrefixAsync(string objectKey, int length, string expectedETag, CancellationToken ct) => Task.FromResult<byte[]?>(Prefix);
         public Task<byte[]?> ReadObjectAsync(string objectKey, long maxBytes, string expectedETag, CancellationToken ct) =>
-            Task.FromResult<byte[]?>(CreatePngBytes());
+            Task.FromResult<byte[]?>(Bytes ?? CreatePngBytes());
         public Task<bool> CopyObjectIfUnchangedAsync(string sourceKey, string sourceETag, string destinationKey, string contentType, CancellationToken ct)
         {
             Copied = true;
@@ -294,11 +411,14 @@ public sealed class AvatarServiceTests
         public override DateTimeOffset GetUtcNow() => now;
     }
 
-    private static byte[] CreatePngBytes()
+    private static byte[] CreatePngBytes() => CreateImageBytes(SKEncodedImageFormat.Png, 1, 1);
+
+    private static byte[] CreateImageBytes(SKEncodedImageFormat format, int width, int height)
     {
-        using var image = new Image<Rgba32>(1, 1);
-        using var output = new MemoryStream();
-        image.SaveAsPng(output);
-        return output.ToArray();
+        using var bitmap = new SKBitmap(width, height);
+        bitmap.Erase(SKColors.Transparent);
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(format, 100);
+        return data.ToArray();
     }
 }
