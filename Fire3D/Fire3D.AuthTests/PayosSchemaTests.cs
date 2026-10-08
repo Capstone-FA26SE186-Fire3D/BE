@@ -13,6 +13,8 @@ public sealed class PayosSchemaTests
         Assert.Equal(false,await db.Scalar("SELECT has_schema_privilege('fet3d_payos_ledger_owner','public','CREATE')"));
         Assert.Equal("Accepted",await db.Scalar($"SELECT status::text FROM quotations WHERE id='{quote}'"));
         Assert.Equal(true,await db.Scalar("SELECT has_function_privilege('fet3d_payos_webhook_executor','process_payos_inbox(uuid,uuid)','EXECUTE')"));
+        Assert.Equal(true,await db.Scalar("SELECT has_function_privilege('fire3d_api','reserve_payos_service_periods(uuid,uuid,uuid)','EXECUTE')"));
+        Assert.Equal(false,await db.Scalar("SELECT has_table_privilege('fire3d_api','billing_ai_quota_grants','INSERT')"));
     }
     [BillingPostgresFact]
     public async Task Runtime_migration_adds_durable_input_fencing_and_preserves_users()

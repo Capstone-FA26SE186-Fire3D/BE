@@ -222,6 +222,8 @@ public sealed class NotificationDelivery
 [Table("service_entitlements")]
 public sealed class ServiceEntitlement
 {
+    [Column("commercial_version")] public int CommercialVersion { get; set; }=1;
+    [Column("learner_limit")] public int? LearnerLimit { get; set; }
     [Column("id")]
     public Guid Id { get; set; }
     [Column("organization_id")]

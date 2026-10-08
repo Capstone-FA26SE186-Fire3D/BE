@@ -20,7 +20,7 @@ public sealed class PayosCancellationReplayTests
         var checkout=await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(quote)));
         var id=checkout.GetProperty("paymentRequestId").GetGuid();var order=checkout.GetProperty("orderCode").GetInt64();
         Assert.Equal(HttpStatusCode.OK,(await owner.SendAsync(Cancel(id))).StatusCode);
-        Assert.Equal(HttpStatusCode.OK,(await webhook.PostAsJsonAsync("/api/payments/payos/webhook",new VerifiedPayosEvent(order,2000,"VND","link"+order,"late-cancel-replay","2026-10-02 18:00:00"))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,(await webhook.PostAsJsonAsync("/api/payments/payos/webhook",new VerifiedPayosEvent(order,12000,"VND","link"+order,"late-cancel-replay","2026-10-02 18:00:00"))).StatusCode);
         await PayosWebhookTests.Recover(factory,db);
         var audits=await db.Scalar("SELECT count(*) FROM audit_logs");var gets=provider.Gets;var cancels=provider.Cancels;
         var replay=await owner.SendAsync(Cancel(id));Assert.Equal(HttpStatusCode.OK,replay.StatusCode);
@@ -28,10 +28,11 @@ public sealed class PayosCancellationReplayTests
         Assert.Equal(gets,provider.Gets);Assert.Equal(cancels,provider.Cancels);
         Assert.Equal(audits,await db.Scalar("SELECT count(*) FROM audit_logs"));
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payment_transactions WHERE status='Applied'"));
-        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
+        Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
+        Assert.Equal("NeedsReconcile",await db.Scalar("SELECT status FROM payment_provisioning_records"));
         var newCancel=await owner.SendAsync(Cancel(id,"new-cancel"));Assert.Equal(HttpStatusCode.Conflict,newCancel.StatusCode);
         Assert.Equal("PAYMENT_ALREADY_PAID",(await newCancel.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
-        var secondQuote=await PayosCheckoutTests.Accepted(db,"Renewal");
+        var secondQuote=await PayosCheckoutTests.Accepted(db);
         var second=await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(secondQuote,"second")));
         var conflict=await owner.SendAsync(Cancel(second.GetProperty("paymentRequestId").GetGuid()));Assert.Equal(HttpStatusCode.Conflict,conflict.StatusCode);
         Assert.Equal("IDEMPOTENCY_KEY_CONFLICT",(await conflict.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());

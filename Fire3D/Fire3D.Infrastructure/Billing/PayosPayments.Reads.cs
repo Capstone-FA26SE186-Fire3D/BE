@@ -27,7 +27,7 @@ public sealed partial class PayosPayments
             where (!org.HasValue||e.OrganizationId==org)&&(!building.HasValue||e.BuildingId==building)
             select new{e,IsActive=b.IsActive&&b.DeletedAt==null,OrgActive=o.IsActive&&o.DeletedAt==null};
         var total=await query.CountAsync(ct);var now=Now;var list=await query.OrderByDescending(x=>x.e.CreatedAt).ThenBy(x=>x.e.Id).Skip((page-1)*size).Take(size).ToListAsync(ct);
-        return new(list.Select(x=>new EntitlementResponse(x.e.Id,x.e.BuildingId,x.e.Status,x.e.Status=="Active"&&x.IsActive&&x.OrgActive&&x.e.StartsAt<=now&&x.e.EndsAt>now,x.e.StartsAt,x.e.EndsAt,x.e.PaymentTransactionId)).ToArray(),total,page,size);
+        return new(list.Select(x=>new EntitlementResponse(x.e.Id,x.e.BuildingId,x.e.Status,x.e.Status=="Active"&&x.IsActive&&x.OrgActive&&x.e.StartsAt<=now&&x.e.EndsAt>now,x.e.StartsAt,x.e.EndsAt,x.e.PaymentTransactionId,x.e.CommercialVersion,x.e.LearnerLimit)).ToArray(),total,page,size);
     }
     public async Task Reconcile(Guid actorId,Guid family,Guid id,CancellationToken ct)
     {

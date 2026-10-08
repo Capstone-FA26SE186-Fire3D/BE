@@ -38,13 +38,18 @@ public sealed class PayosProvisioningTests
         Assert.Equal(DateTimeKind.Utc,start.Kind);Assert.Equal(DateTimeOffset.Parse(expected).UtcDateTime,end);
     }
     [BillingPostgresFact]
-    public async Task Two_renewal_payments_concurrently_form_contiguous_periods_without_duplicate_grants()
+    public async Task Competing_fixed_renewals_allow_one_checkout_then_a_new_quotation_forms_a_contiguous_period()
     {
         await using var db=await BillingDatabase.Create();using var factory=new BillingApiTests.Factory(db,new FakePayos());
         var first=await PayosCheckoutTests.Accepted(db);await Paid(factory,first,"first");await PayosWebhookTests.Recover(factory,db);
         var a=await PayosCheckoutTests.Accepted(db,"Renewal");var b=await PayosCheckoutTests.Accepted(db,"Renewal");
-        await Task.WhenAll(Paid(factory,a,"renew-a"),Paid(factory,b,"renew-b"));
+        using var owner=factory.As(BillingDatabase.Owner);using var webhook=factory.CreateClient();
+        var results=await Task.WhenAll(owner.SendAsync(PayosCheckoutTests.Create(a,"renew-a")),owner.SendAsync(PayosCheckoutTests.Create(b,"renew-b")));
+        Assert.Single(results,x=>x.StatusCode==HttpStatusCode.Created);Assert.Single(results,x=>x.StatusCode==HttpStatusCode.Conflict);
+        var winner=await PayosCheckoutTests.Json(results.Single(x=>x.IsSuccessStatusCode));var order=winner.GetProperty("orderCode").GetInt64();
+        Assert.Equal(HttpStatusCode.OK,(await webhook.PostAsJsonAsync("/api/payments/payos/webhook",new VerifiedPayosEvent(order,12000,"VND","link"+order,"renew-winner","2026-10-02 18:00:00"))).StatusCode);
         await Task.WhenAll(PayosWebhookTests.Recover(factory,db),PayosWebhookTests.Recover(factory,db));
+        var next=await PayosCheckoutTests.Accepted(db,"Renewal");await Paid(factory,next,"next");await PayosWebhookTests.Recover(factory,db);
         Assert.Equal(3L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM (SELECT starts_at,lag(ends_at) OVER(ORDER BY starts_at) previous_end FROM service_entitlements) periods WHERE previous_end IS NOT NULL AND starts_at<>previous_end"));
         Assert.Equal(3L,await db.Scalar("SELECT count(*) FROM payment_provisioning_records WHERE status='Succeeded'"));
@@ -81,7 +86,7 @@ public sealed class PayosProvisioningTests
         var renewal=await PayosCheckoutTests.Accepted(db,"Renewal");await Paid(factory,renewal,"renew");await PayosWebhookTests.Recover(factory,db);
         Assert.Equal(3L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
         Assert.Equal(last,await db.Scalar($"SELECT starts_at FROM service_entitlements WHERE building_id='{BillingDatabase.Building}' ORDER BY starts_at DESC LIMIT 1"));
-        Assert.Equal(last.AddMonths(1),await db.Scalar($"SELECT ends_at FROM service_entitlements WHERE building_id='{BillingDatabase.Building}' ORDER BY starts_at DESC LIMIT 1"));
+        Assert.Equal(last.AddMonths(6),await db.Scalar($"SELECT ends_at FROM service_entitlements WHERE building_id='{BillingDatabase.Building}' ORDER BY starts_at DESC LIMIT 1"));
         await PayosWebhookTests.Recover(factory,db);Assert.Equal(3L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
         var entitlements=await PayosCheckoutTests.Json(await other.GetAsync("/api/billing/entitlements"));Assert.Equal(0,entitlements.GetProperty("total").GetInt32());
     }

@@ -17,7 +17,7 @@ public sealed record CheckoutResult(PayosCheckoutResponse Value,int HttpStatus);
 public sealed record ProvisioningLineResponse(Guid QuotationItemId,Guid BuildingId,string Status,Guid? EntitlementId,string? ErrorCode);
 public sealed record PayosPaymentResponse(Guid Id,Guid QuotationId,long OrderCode,decimal Amount,string Currency,
     string PaymentStatus,DateTime? PaidAt,Guid? TransactionId,string? TransactionStatus,string ProvisioningStatus,IReadOnlyList<ProvisioningLineResponse> Items);
-public sealed record EntitlementResponse(Guid Id,Guid BuildingId,string Status,bool IsEffective,DateTime StartsAt,DateTime EndsAt,Guid? PaymentTransactionId);
+public sealed record EntitlementResponse(Guid Id,Guid BuildingId,string Status,bool IsEffective,DateTime StartsAt,DateTime EndsAt,Guid? PaymentTransactionId,int CommercialVersion=1,int? LearnerLimit=null);
 public interface IPayosPayments
 {
     Task<CheckoutResult> Create(Guid actor,Guid family,CreatePayosRequest request,string? key,CancellationToken ct);

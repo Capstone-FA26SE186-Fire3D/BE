@@ -55,7 +55,8 @@ public sealed class PayosCheckoutTests
         await using var context=db.Context();var billing=new Fire3D.Infrastructure.Billing.BillingService(context);
         var package=await billing.SavePackage(BillingDatabase.Admin,null,new("P"+Guid.NewGuid().ToString("N"),"Test",2000,6,true,null,20,0),null,default);
         var quote=await billing.CreateQuotation(BillingDatabase.Owner,BillingDatabase.Owner,new((buildings??[BillingDatabase.Building]).Select(id=>new QuotationItemRequest(id,package.Id,action)).ToArray()),Guid.NewGuid().ToString("N"),default);
-        quote=await billing.IssueQuotation(BillingDatabase.Admin,BillingDatabase.Admin,quote.Id,new(0,"Test terms",DateTimeOffset.UtcNow.AddDays(1),quote.Items.Select(x=>new QuotationPeriodRequest(x.Id,action=="Renewal"?null:DateTimeOffset.UtcNow.AddDays(2))).ToArray()),BillingETag.Format(quote.Id,quote.Revision),default);
+        var start=DateTimeOffset.UtcNow.Date.AddDays(2);
+        quote=await billing.IssueQuotation(BillingDatabase.Admin,BillingDatabase.Admin,quote.Id,new(0,"Test terms",DateTimeOffset.UtcNow.AddDays(1),quote.Items.Select(x=>new QuotationPeriodRequest(x.Id,action=="Renewal"?null:new DateTimeOffset(start,TimeSpan.Zero))).ToArray()),BillingETag.Format(quote.Id,quote.Revision),default);
         await billing.AcceptQuotation(BillingDatabase.Owner,BillingDatabase.Owner,quote.Id,BillingETag.Format(quote.Id,quote.Revision),default);return quote.Id;
     }
     internal static HttpRequestMessage Create(Guid id,string key="checkout-1")

@@ -59,7 +59,7 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
         var idempotency=Key(key);var hash=Hash(request);BillingCheckoutOperation op;
         await using(var tx=await db.Database.BeginTransactionAsync(ct))
         {
-            await Identity(ct);var actor=await ActorFor(actorId,true,ct);await Family(actorId,family,ct);
+            await Identity(ct);await Lock("fire3d:auth:"+actorId,ct);var actor=await ActorFor(actorId,true,ct);await Family(actorId,family,ct);
             await Lock($"fet3d:payos:create:{actorId}:{idempotency}",ct);
             var receipt=await db.Set<BillingCommandReceipt>().AsNoTracking().SingleOrDefaultAsync(x=>x.ActorId==actorId&&x.Operation=="PayosCreate"&&x.IdempotencyKey==idempotency,ct);
             if(receipt is not null)
@@ -82,6 +82,8 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
             var isNew=op is null;
             if(isNew)
             {
+                if(quote.CommercialVersion!=7||lines.Any(x=>x.CommercialVersion!=7||x.StartsAt is null||x.EndsAt is null||x.LearnerLimit is null||x.AiQuotaUnits is null))
+                    throw Conflict("QUOTATION_V7_REQUIRED","New checkout requires a complete v7 quotation. Existing legacy operations remain recoverable.");
                 var order=await db.Database.SqlQueryRaw<long>("SELECT nextval('fet3d_payos_order_code') AS \"Value\"").SingleAsync(ct);
                 var expires=Now.AddMinutes(30);if(quote.ValidUntil<expires)expires=quote.ValidUntil;
                 var input=new PayosCreateInput(order,checked((long)quote.TotalAmount),"FET3D",options.Value.ReturnUrl,options.Value.CancelUrl,expires);
@@ -91,7 +93,14 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
                 db.Add(op);Audit(actorId,quote.OrganizationId,"CheckoutReserved",op.Id);
             }
             db.Add(new BillingCommandReceipt{Id=Guid.NewGuid(),ActorId=actorId,Operation="PayosCreate",IdempotencyKey=idempotency,InputHash=hash,ResourceId=op!.Id,CreatedAt=Now});
-            await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);
+            await db.SaveChangesAsync(ct);
+            if(isNew)
+            {
+                try{await db.Database.ExecuteSqlInterpolatedAsync($"SELECT reserve_payos_service_periods({op.Id},{actorId},{family})",ct);}
+                catch(Npgsql.PostgresException ex) when(ex.SqlState=="P0001"&&ex.MessageText is "PAYOS_SERVICE_PERIOD_RESERVED" or "PAYOS_SERVICE_PERIOD_INVALID")
+                {throw Conflict(ex.MessageText,"The quoted service period is unavailable. Create a current quotation.");}
+            }
+            await tx.CommitAsync(ct);
             if(!isNew)return new(View(op),op.PaymentRequestId.HasValue?200:202);
         }
         db.ChangeTracker.Clear();await RunCheckout(op!,true,ct);
