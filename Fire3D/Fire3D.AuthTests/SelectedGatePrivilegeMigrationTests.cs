@@ -35,7 +35,11 @@ public sealed class SelectedGatePrivilegeMigrationTests
    // existing tables. Its migration identity must own the affected schema objects;
    // CREATEROLE alone cannot bypass table ownership or REFERENCES permissions.
    // Personal phone uniqueness also requires ownership of users to create its index.
-   foreach(var table in new[]{"users","buildings","releases","release_packages","trainings","building_participation_grants","release_build_provenance","release_command_receipts","feedback","support_tickets","support_ticket_messages","support_command_receipts","integration_outbox_events","integration_event_consumptions","processing_delivery_receipts","__EFMigrationsHistory"}) await Sql($"ALTER TABLE \"{table}\" OWNER TO {migrationLogin}");
+   // The forward upgrade now also expands commercial snapshots and installs
+   // reporting policies. Model the migration identity's ownership explicitly;
+   // these privileges are never granted to the runtime login under test.
+   await Sql($"CREATE EXTENSION IF NOT EXISTS btree_gist;GRANT fet3d_payos_ledger_owner TO {migrationLogin};");
+   foreach(var table in new[]{"users","organizations","buildings","revisions","processing_jobs","audit_logs","auth_refresh_tokens","service_packages","quotations","quotation_building_items","service_entitlements","billing_checkout_operations","payos_payment_requests","payment_transactions","releases","release_packages","trainings","building_participation_grants","release_build_provenance","release_command_receipts","feedback","support_tickets","support_ticket_messages","support_command_receipts","integration_outbox_events","integration_event_consumptions","processing_delivery_receipts","__EFMigrationsHistory"}) await Sql($"ALTER TABLE \"{table}\" OWNER TO {migrationLogin}");
    await using(var restricted=new Fire3DDbContext(new DbContextOptionsBuilder<Fire3DDbContext>().UseNpgsql(new NpgsqlConnectionStringBuilder(source.ConnectionString){Username=migrationLogin}.ConnectionString).Options)) await restricted.Database.MigrateAsync();
    Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','fet3d_ifc_upload_owner','USAGE')"));
    Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','fet3d_ifc_upload_owner','SET')"));

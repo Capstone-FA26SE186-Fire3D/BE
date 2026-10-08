@@ -93,11 +93,11 @@ internal sealed class BillingDatabase : IAsyncDisposable
         catch { await result.DisposeAsync(); throw; }
     }
 
-    public Fire3DDbContext Context()
+    public Fire3DDbContext Context(string? connection=null)
     {
         var services = new ServiceCollection();
         services.AddDatabase(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>
-            { ["ConnectionStrings:DefaultConnection"] = Connection }).Build());
+            { ["ConnectionStrings:DefaultConnection"] = connection ?? Connection }).Build());
         return new Fire3DDbContext(services.BuildServiceProvider().GetRequiredService<DbContextOptions<Fire3DDbContext>>());
     }
     public async Task ApplyBilling()

@@ -58,4 +58,4 @@ Read-only postcheck xác nhận history mới, function owner/security/EXECUTE v
 - [ ] Publish gate hoàn chỉnh; hiện vẫn chặn 503.
 - [ ] Learner start/heartbeat/offline sync/result và training analytics.
 
-Tài liệu contract: [selected-api-contract.md](selected-api-contract.md), [134 HTTP operations từ OpenAPI](api-route-inventory.md), [rollout](ifc-authoring-deployment.md), [release/access](release-building-access.md), [support](support-api.md). Checklist toàn BE vẫn phân biệt phạm vi này với các nghiệp vụ còn thiếu. Bàn giao tiến độ cho người dùng bằng checklist trong chat.
+Tài liệu contract: [selected-api-contract.md](selected-api-contract.md), [inventory sinh từ OpenAPI](api-route-inventory.md), [rollout](ifc-authoring-deployment.md), [release/access](release-building-access.md), [support](support-api.md). Checklist toàn BE vẫn phân biệt phạm vi này với các nghiệp vụ còn thiếu. Bàn giao tiến độ cho người dùng bằng checklist trong chat.

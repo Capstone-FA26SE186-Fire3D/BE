@@ -16,6 +16,10 @@ public sealed class OperationsQueries(Fire3DDbContext db) : IOperationsQueries
         ["tickets"]="Tickets created in [from,to), grouped by current status; organization response only caller-created tickets.",
         ["consistency"]="Authorization and aggregates share one read-only RepeatableRead PostgreSQL snapshot."
     };
+    private static readonly IReadOnlyDictionary<string,string> OrganizationDefinitions=new Dictionary<string,string>(Definitions)
+    {
+        ["snapshot"]="Buildings in the caller's organization: current state at asOf, excludes soft-deleted, includes inactive."
+    };
     private async Task<(User? Actor,DateTime AsOf)> BeginSnapshot(Guid actor,Guid family,bool platform,CancellationToken ct)
     {
         await db.Database.ExecuteSqlRawAsync("SET TRANSACTION READ ONLY",ct);
@@ -66,6 +70,6 @@ public sealed class OperationsQueries(Fire3DDbContext db) : IOperationsQueries
         var common=await Aggregate(snapshot.Actor.OrganizationId,actor,range.From,range.To,ct);
         await tx.CommitAsync(ct);
         // No account or other-organization aggregate exists in this DTO.
-        return AuthResult<OrganizationOperations>.Ok(new(snapshot.AsOf,range.From,range.To,Definitions,common.Buildings,common.Jobs,common.Tickets,common.Created));
+        return AuthResult<OrganizationOperations>.Ok(new(snapshot.AsOf,range.From,range.To,OrganizationDefinitions,common.Buildings,common.Jobs,common.Tickets,common.Created));
     }
 }

@@ -7,7 +7,7 @@ namespace Fire3D.AuthTests;
 
 public sealed partial class AuthIntegrationTests
 {
-    private async Task SeedPublishPaidEntitlement(Guid owner,Guid building)
+    private async Task SeedPublishPaidEntitlement(Guid owner,Guid building,long order=123456,bool expired=false)
     {
         var package=Guid.NewGuid();var quote=Guid.NewGuid();var item=Guid.NewGuid();
         var org=(Guid)(await ScalarAsync($"SELECT organization_id FROM buildings WHERE id='{building}'"))!;
@@ -18,10 +18,10 @@ public sealed partial class AuthIntegrationTests
             INSERT INTO quotations(id,organization_id,requested_by,quotation_number,quantity,unit_price,subtotal_amount,tax_amount,discount_amount,total_amount,currency,valid_until,created_at,updated_at) VALUES('{{quote}}','{{org}}','{{owner}}','paid-{{quote:N}}',1,100,100,0,0,100,'VND',now()+interval '1 day',now(),now());
             INSERT INTO quotation_building_items(id,quotation_id,building_id,service_package_id,purchase_action,service_duration_months,unit_price,discount_amount,subtotal_amount,total_amount,currency,price_snapshot,terms_snapshot,discount_snapshot,line_provisioning_key,created_at,updated_at) VALUES('{{item}}','{{quote}}','{{building}}','{{package}}','New',1,100,0,100,100,'VND','{}','{}','{}','line:{{item}}',now(),now());
             UPDATE quotations SET status='Issued',issued_by='{{adminId}}',issued_at=now() WHERE id='{{quote}}';UPDATE quotations SET status='Accepted' WHERE id='{{quote}}';
-            SELECT create_pending_payos_payment_request('{{quote}}','{{owner}}','fixture-publish',123456,'https://pay.payos.vn/fixture','https://fet3d.io.vn/return','https://fet3d.io.vn/cancel',now()+interval '1 hour');
-            SELECT apply_verified_payos_webhook((SELECT id FROM payos_payment_requests WHERE quotation_id='{{quote}}'),'fake-publish','fake-publish-ref',123456,100,'VND','{}');
+            SELECT create_pending_payos_payment_request('{{quote}}','{{owner}}','fixture-publish-{{order}}',{{order}},'https://pay.payos.vn/fixture','https://fet3d.io.vn/return','https://fet3d.io.vn/cancel',now()+interval '1 hour');
+            SELECT apply_verified_payos_webhook((SELECT id FROM payos_payment_requests WHERE quotation_id='{{quote}}'),'fake-publish-{{order}}','fake-publish-ref-{{order}}',{{order}},100,'VND','{}');
             INSERT INTO service_entitlements(id,organization_id,building_id,service_package_id,quotation_id,quotation_item_id,payment_transaction_id,provisioning_key,status,starts_at,ends_at,created_by)
-            SELECT gen_random_uuid(),'{{org}}','{{building}}','{{package}}','{{quote}}','{{item}}',id,'service:{{item}}:'||id,'Active',now()-interval '1 minute',now()+interval '1 day','{{owner}}' FROM payment_transactions WHERE provider_transaction_id='fake-publish-ref' AND status='Applied';
+            SELECT gen_random_uuid(),'{{org}}','{{building}}','{{package}}','{{quote}}','{{item}}',id,'service:{{item}}:'||id,'Active',{{(expired?"now()-interval '2 months'":"now()-interval '1 minute'")}},{{(expired?"now()-interval '1 month'":"now()+interval '1 day'")}},'{{owner}}' FROM payment_transactions WHERE provider_transaction_id='fake-publish-ref-{{order}}' AND status='Applied';
             """);
     }
 

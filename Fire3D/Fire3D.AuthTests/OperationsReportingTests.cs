@@ -29,6 +29,7 @@ public sealed class OperationsReportingTests
         var response=await owner.GetAsync("/api/organizations/me/analytics/operations"+range);Assert.Equal(HttpStatusCode.OK,response.StatusCode);
         using var json=JsonDocument.Parse(await response.Content.ReadAsStringAsync());var result=json.RootElement;
         Assert.False(result.TryGetProperty("accounts",out _));Assert.Equal(1,result.GetProperty("created").GetProperty("tickets").GetInt32());
+        Assert.DoesNotContain("Accounts",result.GetProperty("definitions").GetProperty("snapshot").GetString());
         Assert.Equal(1,result.GetProperty("created").GetProperty("buildings").GetInt32()); // retained historical deleted record at lower bound
         Assert.Equal(1,result.GetProperty("buildings").EnumerateArray().Sum(x=>x.GetProperty("count").GetInt32()));
         Assert.All(result.GetProperty("processingJobs").EnumerateArray(),x=>Assert.Equal(0,x.GetProperty("count").GetInt32()));

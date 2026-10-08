@@ -106,7 +106,7 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 ### APPROVAL-01 — P1 · SOURCE/DB TESTED · Duyệt scenario/rubric (FR-SCENARIO-03)
 
 - **Contract/current:** Exact immutable scenario/rubric submission and Admin approve/reject implemented with receipt, audit and live tenant/lifecycle checks. Technical readiness is independent. See [scenario-readiness.md](scenario-readiness.md).
-- **Remaining acceptance:** Real client/deployment and publish gate. Built release now checks the exact approval/readiness/package provenance; legacy versions receive no fabricated approval.
+- **Remaining acceptance:** Real client/deployment and publish feature rollout. Built release now checks the exact approval/readiness/package provenance; legacy versions receive no fabricated approval.
 
 ### IFC-01 — SOURCE/HTTP/DB TESTED · Bound source/outbox/worker contract
 
@@ -128,12 +128,11 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 - **Contract/current:** OrganizationUser owner/session only; preparation pins accepted immutable package without entitlement/quota/grant; start checks current runtime + exact Building entitlement and consumes Trial atomically with receipt/audit. Separate five-minute grant and replay implemented. [Manual tests](playtest-manual-test.md).
 - **Remaining acceptance:** Production configuration, real IFC/Unity/runtime client; no automatic Trial is provisioned. No playtest completion/sync/result API or learner analytics is claimed. Publish stays contained.
 
-### RELEASE-01 — P1 · GAP · Publish gates
+### RELEASE-01 — SOURCE/HTTP/DB TESTED · Publish gate (rollout pending)
 
-- **Contract/current:** Runtime dùng [FailClosedReleaseStore](../Fire3D/Fire3D.Infrastructure/Releases/FailClosedReleaseStore.cs): publish trả 503 thay vì bỏ qua gate. Create Built derive metadata từ accepted ReleasePackage và kiểm exact readiness/Approved hashes qua restricted gate; package/Training/receipt/audit atomic. GET/revoke giữ route hiện có. Publish chưa triển khai đầy đủ.
-- **Sửa code:** Tách ghi nhận build hoàn tất khỏi việc chạy Unity. Trước publish kiểm approval đúng scenario/rubric hash (APPROVAL-01), readiness đúng revision/version, package/manifest hash, artifact, validation Passed, blocker, runtime compatibility, Training và entitlement theo Docs.
-- **Nghiệm thu:** Provenance/review sai, QA lỗi hoặc còn blocker, runtime không tương thích, entitlement không Active đều không publish. Retry/revoke/audit đúng; create Built không bị mô tả là đã chạy Unity.
-
+- **Source:** DI uses ReleaseWriteStore with Publishing:Enabled=false by default. Publish checks live family/lifecycle/tenant, matching Active Training, current paid Building entitlement (Trial insufficient), exact approved content/rubric, readiness revision/version/validation/annotation and accepted current package/manifest/runtime provenance.
+- **Docker evidence:** restricted executor, missing/revoked family, Trial/missing paid entitlement, stale attempt, lifecycle, concurrent publication, receipt/audit rollback and authorized replay are tested. Built does not certify real Unity output.
+- **Pending:** Supabase gate/ACL migration, matching binary and feature-flag smoke, real provider/package/runtime acceptance. Learner launch and seat allocation remain separate.
 ### SESSION-01 — P1 · LATER · QR và training session
 
 - **Contract/current:** QR Building, Training list, session preparation/start, launch grant và offline continuation/sync chưa có đủ API production.
@@ -154,7 +153,7 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 - **✅ Kiểm chứng tự động:** SDK chữ ký offline, HTTP authorization/OpenAPI, PostgreSQL disposable cho replay/race/rollback/partial recovery, UTC month-end và grants executor. Kết quả cuối đợt ghi trong billing.md; không coi test mock là provider acceptance.
 - **✅ Kiểm chứng local/provider một phần:** Sáu migration PayOS và login/grants đã áp vào Supabase cho test local; tạo link/QR provider thật và replay cùng operation đạt. Chưa chuyển tiền.
 - **❌ Chưa nghiệm thu:** Runtime executor/worker deployment Azure, đăng ký webhook/probe PayOS, giao dịch thật với bank/provider và kiểm entitlement deployed. Không tick publish/playtest/training gate từ entitlement storage.
-- **❌ Backlog riêng:** Reminder 5 ngày, revenue, package/capacity v7 và AI prepaid top-up/provisioning, hoàn tiền tự động, eInvoice và FE billing đầy đủ. Không lập AI invoice cuối kỳ hoặc overage debt.
+- **❌ Backlog riêng:** Reminder 5 ngày, revenue, Upgrade, AI top-up/consume, hoàn tiền tự động, eInvoice và FE billing đầy đủ. Không lập AI invoice cuối kỳ hoặc overage debt.
 - **Nghiệm thu:** Return URL không ghi Paid; amount/currency/link sai không được apply; webhook/recovery/replay không cấp trùng; cùng payment có mốc kích hoạt chung, renewal nối kỳ đã mua; Paid và provisioning riêng biệt.
 ### NOTIFY-01 — P1 · LATER · Nhắc hết hạn
 
@@ -174,12 +173,11 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 - **Sửa code:** Một distinct Trainee user ID chiếm một seat tại Building/entitlement khi start lần đầu; nhiều bài/lượt cùng kỳ chỉ một seat. Tòa khác/kỳ renewal mới tính riêng. Upgrade giữ kỳ và số seat đã dùng; user đã tính được start tiếp khi access/service hợp lệ.
 - **Nghiệm thu:** Hai user tranh suất cuối chỉ một thành công; retry cùng user không tăng count; login/list/prepare/playtest không tính. Upgrade không reset seats hoặc chồng kỳ cam kết.
 
-### BILLING-02 — P1 · GAP · Gói v7 và AI top-up (FR-BILLING-01,05–07,11)
+### BILLING-02 — SOURCE/HTTP/DB TESTED · New/Renewal v7; Upgrade/top-up pending
 
-- **Contract/current:** PayOS/Building billing hiện có code/test theo delivery tháng 10; chưa biểu diễn đầy đủ package 6/12 tháng, learner limit, quota policy và top-up v7.
-- **Sửa code:** Snapshot game service, seats, quota/price/terms cho từng Building line New/Renewal/Upgrade. Trước Issue, quota-bearing line pin tenant/audience/unit/policy version và grant interval hợp lệ. Provision payment/line idempotent; top-up cấp pooled AI grant riêng và không gia hạn Building. Kiểm replay đã provision trước điều kiện expiry; không chồng kỳ đã cam kết.
-- **Nghiệm thu:** Replay sau expiry trả entitlement/grant đã cấp; webhook lặp không tăng quota/seats; top-up không đổi kỳ Building; invalid policy/interval chặn Issue. Giá/expiry/rollover/công thức upgrade phải cấu hình, không mặc định từ schema.
-
+- **Source:** package6/12 months, monthly price, learnerLimit and quota/policy configuration. Quote pins capacity/quota/policy and fixed UTC service interval before Issue. New/Renewal reservations prevent overlapping checkouts; Paid/Applied provisioning adds immutable entitlement and quota grant atomically from snapshot.
+- **Docker evidence:** actual migrations, constrained grants, snapshot/catalog mutation, quota coverage, ETag/Issue concurrency, reservation/cancellation/late payment, provisioning rollback and retries. Legacy checkout recovery remains; no new sales from incomplete legacy snapshots.
+- **Pending:** rollout of all API/worker instances and real provider evidence. Upgrade, top-up, AI reserve/consume and learner seat allocation are not implemented. See billing-v7-rollout.md and publish-billing-v7-manual-test.md.
 ### RAG-01 — P1 · LATER · Learner-safe retrieval (FR-AI-03,05–06)
 
 - **Contract/current:** V7 có `scenario_knowledge_documents`; chưa thấy index/retrieval authorization production tương ứng.
@@ -195,7 +193,7 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 ### REPORT-01 — P2 · PARTIAL · Analytics/support/audit views
 
 - **Contract/current:** Có feedback/ticket/message cho user và admin, audit metadata admin-only, cùng operations analytics cho platform/organization. Operations analytics không phải learner analytics; chỉ số plays, active sessions, completion/duration chưa có nguồn session chuẩn.
-- **Support đã sửa:** Canonical receipts, ETag/428/400/412, lifecycle/owner/admin locks, bounded pagination/filter và append-only messages; HTTP/PostgreSQL race/replay/rollback tests có bằng chứng. Supabase migration/ACL đã áp. **Còn chờ:** Support binary/client smoke test; audit-view/operations analytics mở rộng và learner analytics không thuộc đợt này, learner metrics cần start/heartbeat/result chuẩn.
+- **Support đã sửa:** Canonical receipts, ETag/428/400/412, lifecycle/owner/admin locks, bounded pagination/filter và append-only messages; HTTP/PostgreSQL race/replay/rollback tests có bằng chứng. Supabase migration/ACL đã áp. **Còn chờ:** Support binary/client smoke test; audit filters/allowlist and readonly RepeatableRead operations snapshots now have source/Docker tests; deployment and learner analytics remain pending, learner metrics cần start/heartbeat/result chuẩn.
 - **Nghiệm thu:** Playtest/preparation không tính learner play; dashboard/API dùng chung định nghĩa; người dùng không đọc tenant khác; dữ liệu nhạy cảm được che.
 
 ## E. Thứ tự phụ thuộc và cách hoàn tất task
@@ -234,10 +232,10 @@ Task 6: isolated actual-history PostgreSQL + HTTP/OpenAPI + fake runtime/package
 
 ### Schema rollout 2026-10-07
 
-Supabase migrations through `20261007140000_RequirePassedGeometryAnchors` have been applied and postchecked; see [ifc-authoring-deployment.md](ifc-authoring-deployment.md). Existing 8 users/6 organizations/2 buildings were preserved. Earlier deployment-pending notes are historical evidence for their original task commits. Readiness/playtest source and isolated tests are verified; matching deployed API binary, production worker and runtime client remain unchecked. Tasks7–9 source/isolated tests are recorded in [selected-api-contract.md](selected-api-contract.md); release/access, support, privilege repair and final IFC/scenario function migrations are applied on Supabase. Real publish/learner flows remain incomplete.
+Supabase migrations through `20261007140000_RequirePassedGeometryAnchors` have been applied and postchecked; see [ifc-authoring-deployment.md](ifc-authoring-deployment.md). Existing 8 users/6 organizations/2 buildings were preserved. Earlier deployment-pending notes are historical evidence for their original task commits. Readiness/playtest source and isolated tests are verified; matching deployed API binary, production worker and runtime client remain unchecked. Tasks7–9 source/isolated tests are recorded in [selected-api-contract.md](selected-api-contract.md); release/access, support, privilege repair and final IFC/scenario function migrations are applied on Supabase. Publish gate source and disposable-database tests are implemented in the current branch; deployed feature enablement, real runtime and learner flows remain unverified.
 
 ## Selected scope Tasks7–9
 
-[Current route checklist and evidence](selected-api-contract.md) replaces historical selected-API gap descriptions. [Generated route inventory](api-route-inventory.md) counts OpenAPI methods, not completed capabilities. Built/access/support are source/test/schema verified; deployed binary/client and real workers remain separate acceptance. Publish, learner start/sync/result remain incomplete.
+[Current route checklist and evidence](selected-api-contract.md) replaces historical selected-API gap descriptions. [Generated route inventory](api-route-inventory.md) counts OpenAPI methods, not completed capabilities. Built/access/support are source/test/schema verified; deployed binary/client and real workers remain separate acceptance. Publish gate is source/test implemented with rollout disabled; learner start/sync/result remain incomplete.
 
 Final selected review: IFC receipt Building binding259b6b5 and Passed geometry anchors5377654 committed/pushed. Selected HTTP/PostgreSQL regression36passed, supported IFC105passed, build0warning/error; Docker-only legacy IFC groups excluded. See task-progress-checklist.md and ifc-authoring-deployment.md for test/schema versus provider limits.

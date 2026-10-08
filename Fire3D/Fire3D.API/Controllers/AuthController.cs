@@ -183,6 +183,8 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     [HttpPost("refresh")]
     [AllowAnonymous]
     [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("auth-refresh")]
+    [ProducesResponseType<TokenResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(429)]
     public async Task<ActionResult<TokenResponse>> Refresh(RefreshRequest request, CancellationToken ct) =>
         Respond(await sender.Send(new RefreshTokenCommand(request.RefreshToken), ct));
