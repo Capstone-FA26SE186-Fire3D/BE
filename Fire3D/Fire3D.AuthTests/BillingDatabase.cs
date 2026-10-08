@@ -34,7 +34,7 @@ internal sealed class BillingDatabase : IAsyncDisposable
     public static readonly Guid Building = Guid.Parse("30000000-0000-0000-0000-000000000001");
 
     private BillingDatabase(string admin) => this.admin = admin;
-    public static async Task<BillingDatabase> Create(bool applyBilling = true,bool applyPayos = true)
+    public static async Task<BillingDatabase> Create(bool applyBilling = true,bool applyPayos = true,bool migrationHistory=false)
     {
         var source = Environment.GetEnvironmentVariable("FET3D_BILLING_TEST_ADMIN")
             ?? throw new InvalidOperationException("An explicit test connection is required.");
@@ -51,8 +51,23 @@ internal sealed class BillingDatabase : IAsyncDisposable
         {
             await using var db = result.Context();
             Assert.Equal(result.name, db.Database.GetDbConnection().Database);
-            await db.Database.EnsureCreatedAsync();
-            if (applyBilling) {await result.ApplyBilling();if(applyPayos)await result.ApplyPayos();}
+            if(migrationHistory)
+            {
+                await using var migrationDb=new Fire3DDbContext(new DbContextOptionsBuilder<Fire3DDbContext>().UseNpgsql(result.Connection).Options);
+                await migrationDb.Database.MigrateAsync();
+            }
+            else
+            {
+                await db.Database.EnsureCreatedAsync();
+                if (applyBilling)
+                {
+                    await result.ApplyBilling();
+                    await result.Sql("DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='fire3d_api') THEN CREATE ROLE fire3d_api NOLOGIN; END IF; END $$;");
+                    foreach (var operation in new Fire3D.Infrastructure.Migrations.AddBillingV7Catalog().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
+                        await result.Sql(operation.Sql);
+                    if(applyPayos)await result.ApplyPayos();
+                }
+            }
             await result.Sql($$"""
                 INSERT INTO organizations(id,name,slug,plan,is_active,metadata,created_at,updated_at)
                 VALUES ('{{Org}}','One','one','Standard',true,'{}',now(),now()),

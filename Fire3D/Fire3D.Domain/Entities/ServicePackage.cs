@@ -5,6 +5,10 @@ namespace Fire3D.Domain.Entities;
 
 public partial class ServicePackage
 {
+    public int CommercialVersion { get; set; } = 1;
+    public int? LearnerLimit { get; set; }
+    public int? AiQuotaUnits { get; set; }
+    public Guid? AiPolicyVersionId { get; set; }
     public long Revision { get; set; } = 1;
     public Guid Id { get; set; }
 

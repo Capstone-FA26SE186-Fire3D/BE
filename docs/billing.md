@@ -1,5 +1,7 @@
 # Building billing / PayOS
 
+The current implementation work for catalog, fixed service intervals and quota snapshots is tracked in [billing v7 rollout](billing-v7-rollout.md). The historical task evidence below predates that rollout; source implementation and deployment acceptance are separate.
+
 Requirements: [Docs v7](../../Docs/schema_v7_contract.md), FR-BILLING-01..11, workflows §11, technology §9/10. Current implementation uses `building_locations.address`; v7 stores address on `buildings`. This is a mapping gap, not a second authoritative address. V7 source review baseline: BE `e42a2eb`, 2026-10-04; test/provider evidence below keeps its dated scope.
 
 ## Product v7 target and remaining implementation

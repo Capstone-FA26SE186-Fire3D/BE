@@ -19,6 +19,19 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
 {
     private Guid Actor=>User.GetActorId();
     private void ETag(Guid id,long revision)=>Response.Headers.ETag=BillingETag.Format(id,revision);
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
+    [HttpPost("api/admin/billing/quota-policies")]
+    [ProducesResponseType<QuotaPolicyResponse>(201)]
+    public async Task<ActionResult<QuotaPolicyResponse>> CreateQuotaPolicy(QuotaPolicyWriteRequest request,CancellationToken ct)
+    {var value=await billing.CreateQuotaPolicy(Actor,request,ct);return Created($"/api/admin/billing/quota-policies/{value.Id}",value);}
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
+    [HttpGet("api/admin/billing/quota-policies")]
+    [ProducesResponseType<BillingPage<QuotaPolicyResponse>>(200)]
+    public async Task<ActionResult<BillingPage<QuotaPolicyResponse>>> QuotaPolicies(int page=1,int pageSize=20,CancellationToken ct=default)=>Ok(await billing.ListQuotaPolicies(Actor,page,pageSize,ct));
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
+    [HttpGet("api/admin/billing/quota-policies/{id:guid}")]
+    [ProducesResponseType<QuotaPolicyResponse>(200)]
+    public async Task<ActionResult<QuotaPolicyResponse>> QuotaPolicy(Guid id,CancellationToken ct)=>Ok(await billing.GetQuotaPolicy(Actor,id,ct));
     /// <summary>Lists Building packages. OrganizationUser sees active packages; Admin also sees inactive packages.</summary>
     [HttpGet("api/billing/service-packages")]
     public async Task<ActionResult<IReadOnlyList<PackageResponse>>> Packages(CancellationToken ct)=>Ok(await billing.ListPackages(Actor,ct));

@@ -2,8 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace Fire3D.Application.Billing;
 
-public sealed record PackageWriteRequest(string Code,string Name,decimal UnitPrice,int DurationMonths,bool IsActive=true,string? Description=null);
-public sealed record PackageResponse(Guid Id,string Code,string Name,decimal UnitPrice,string Currency,int DurationMonths,bool IsActive,string? Description,long Revision);
+public sealed record PackageWriteRequest(string Code,string Name,decimal UnitPrice,int DurationMonths,bool IsActive=true,string? Description=null,int? LearnerLimit=null,int? AiQuotaUnits=null,Guid? AiPolicyVersionId=null);
+public sealed record PackageResponse(Guid Id,string Code,string Name,decimal UnitPrice,string Currency,int DurationMonths,bool IsActive,string? Description,long Revision,int CommercialVersion=1,int? LearnerLimit=null,int? AiQuotaUnits=null,Guid? AiPolicyVersionId=null,string PricingBasis="Monthly",bool IsPurchasable=false);
 public sealed record DiscountWriteRequest(string Code,string DiscountKind,decimal DiscountValue,int MinimumBuildings,
     [property:JsonConverter(typeof(BillingTimestampConverter))] DateTimeOffset ValidFrom,
     [property:JsonConverter(typeof(BillingTimestampConverter))] DateTimeOffset? ValidUntil=null,
@@ -24,8 +24,16 @@ public sealed record EnterpriseQuoteRequestBody(int RequestedBuildingCount,int? 
 public sealed record EnterpriseQuoteResponse(Guid Id,Guid OrganizationId,int RequestedBuildingCount,int? RequestedDurationMonths,
     string ContactName,string ContactEmail,string? ContactPhone,string? Notes,string Status,DateTime CreatedAt);
 
+public sealed record QuotaPolicyWriteRequest(string QuotaUnit,
+    [property:JsonConverter(typeof(BillingTimestampConverter))] DateTimeOffset EffectiveFrom,
+    [property:JsonConverter(typeof(BillingTimestampConverter))] DateTimeOffset? EffectiveUntil=null);
+public sealed record QuotaPolicyResponse(Guid Id,string Audience,string PolicyKind,string QuotaUnit,DateTime EffectiveFrom,DateTime? EffectiveUntil,string Rollover);
+
 public interface IBillingService
 {
+    Task<QuotaPolicyResponse> CreateQuotaPolicy(Guid actor,QuotaPolicyWriteRequest request,CancellationToken ct);
+    Task<BillingPage<QuotaPolicyResponse>> ListQuotaPolicies(Guid actor,int page,int pageSize,CancellationToken ct);
+    Task<QuotaPolicyResponse> GetQuotaPolicy(Guid actor,Guid id,CancellationToken ct);
     Task<IReadOnlyList<PackageResponse>> ListPackages(Guid actor,CancellationToken ct);
     Task<PackageResponse> SavePackage(Guid actor,Guid? id,PackageWriteRequest request,string? ifMatch,CancellationToken ct);
     Task<IReadOnlyList<DiscountResponse>> ListDiscounts(Guid actor,CancellationToken ct);
