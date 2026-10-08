@@ -21,7 +21,7 @@ public sealed class FailClosedReleaseStore(Fire3DDbContext db, TimeProvider cloc
     public Task<ReleaseResponse?> GetAsync(Guid releaseId, Guid? organizationId, CancellationToken ct) =>
         inner.GetAsync(releaseId, organizationId, ct);
 
-    public Task<AuthResult<bool>> PublishAsync(Guid actorId, Guid releaseId, Guid? organizationId, CancellationToken ct) =>
+    public Task<AuthResult<bool>> PublishAsync(Guid actorId, Guid releaseId, Guid? organizationId, CancellationToken ct, Guid? family=null) =>
         Task.FromResult(AuthResult<bool>.Fail(
             "PUBLISH_GATE_UNAVAILABLE",
             "Publishing is unavailable until the Building entitlement and readiness gate is configured.",

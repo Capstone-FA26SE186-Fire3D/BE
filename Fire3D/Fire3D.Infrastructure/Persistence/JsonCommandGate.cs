@@ -9,7 +9,7 @@ internal static class JsonCommandGate
  public static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
  public static async Task<AuthResult<JsonElement>> Execute(Fire3DDbContext db,string function,string action,Guid actor,Guid? family,Guid? resource,object input,string? key,long? expected,CancellationToken ct)
  {
-  if(function is not ("release_access_gate" or "support_command_gate"))throw new ArgumentException("Unknown gate.",nameof(function));
+  if(function is not ("release_access_gate" or "publish_release_gate" or "support_command_gate"))throw new ArgumentException("Unknown gate.",nameof(function));
   await db.Database.OpenConnectionAsync(ct);
   await using var command=new NpgsqlCommand($"SELECT {function}(@action,@actor,@family,@resource,@input,@key,@expected)::text",(NpgsqlConnection)db.Database.GetDbConnection());
   command.Parameters.AddWithValue("action",action);command.Parameters.AddWithValue("actor",actor);

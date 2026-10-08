@@ -93,7 +93,8 @@ public static class ApplicationExtensions
         services.AddOptions<Fire3D.Application.Scenarios.PlaytestOptions>().Bind(configuration.GetSection("Playtest"))
             .Validate(o=>!o.Enabled || (System.Text.Encoding.UTF8.GetByteCount(o.SigningKey) is >=32 and <=512 && !string.IsNullOrWhiteSpace(o.Issuer) && o.Issuer.Length<=200 && !string.IsNullOrWhiteSpace(o.Audience) && o.Audience.Length<=200 && o.SigningKey!=configuration["Jwt:SigningKey"] && o.Audience!=configuration["Jwt:Audience"]),"Enabled Playtest requires a separate signing key of at least 32 bytes, issuer and audience.").ValidateOnStart();
         services.AddScoped<Fire3D.Application.Scenarios.IPlaytestLifecycle,Fire3D.Infrastructure.Scenarios.PlaytestLifecycle>();
-        services.AddScoped<Fire3D.Application.Releases.IReleaseStore, Fire3D.Infrastructure.Releases.FailClosedReleaseStore>();
+        services.AddOptions<Fire3D.Application.Releases.PublishingOptions>().Bind(configuration.GetSection("Publishing"));
+        services.AddScoped<Fire3D.Application.Releases.IReleaseStore, Fire3D.Infrastructure.Releases.ReleaseWriteStore>();
         services.AddScoped<Fire3D.Application.Support.ISupportService,Fire3D.Infrastructure.Support.SupportService>();
         services.AddScoped<Fire3D.Application.Buildings.IBuildingAccessService,Fire3D.Infrastructure.Buildings.BuildingAccessService>();
         services.AddScoped<Fire3D.Application.Buildings.IBuildingStore, Fire3D.Infrastructure.Buildings.BuildingStore>();

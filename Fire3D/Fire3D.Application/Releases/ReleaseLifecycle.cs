@@ -57,7 +57,7 @@ public interface IReleaseStore
 {
     Task<AuthResult<ReleaseResponse>> BuildAsync(Guid actorId, Guid? organizationId, BuildReleaseRequest request, CancellationToken ct, string? key = null, Guid? family = null);
     Task<ReleaseResponse?> GetAsync(Guid releaseId, Guid? organizationId, CancellationToken ct);
-    Task<AuthResult<bool>> PublishAsync(Guid actorId, Guid releaseId, Guid? organizationId, CancellationToken ct);
+    Task<AuthResult<bool>> PublishAsync(Guid actorId, Guid releaseId, Guid? organizationId, CancellationToken ct, Guid? family = null);
     Task<AuthResult<bool>> RevokeAsync(Guid actorId, Guid releaseId, Guid? organizationId, string reason, CancellationToken ct, Guid? family = null);
 }
 
