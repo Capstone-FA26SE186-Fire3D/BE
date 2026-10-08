@@ -32,6 +32,7 @@ public static class ApplicationExtensions
         services.AddHostedService<Fire3D.Infrastructure.Workers.PayosRecoveryWorker>();
         services.AddScoped<IAdministrationStore, AdministrationStore>();
         services.AddScoped<Fire3D.Application.Reporting.IAuditQueries,Fire3D.Infrastructure.Reporting.AuditQueries>();
+        services.AddScoped<Fire3D.Application.Reporting.IOperationsQueries,Fire3D.Infrastructure.Reporting.OperationsQueries>();
         services.AddScoped<AvatarStore>();
         services.AddScoped<IAvatarStore>(provider => provider.GetRequiredService<AvatarStore>());
         services.AddScoped<IAvatarCleanupStore>(provider => provider.GetRequiredService<AvatarStore>());
