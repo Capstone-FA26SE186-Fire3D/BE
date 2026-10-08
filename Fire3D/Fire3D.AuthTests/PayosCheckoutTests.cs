@@ -53,10 +53,10 @@ public sealed class PayosCheckoutTests
     internal static async Task<Guid> Accepted(BillingDatabase db,string action="New",Guid[]? buildings=null)
     {
         await using var context=db.Context();var billing=new Fire3D.Infrastructure.Billing.BillingService(context);
-        var package=await billing.SavePackage(BillingDatabase.Admin,null,new("P"+Guid.NewGuid().ToString("N"),"Test",2000,1),null,default);
-        var quote=await billing.CreateQuotation(BillingDatabase.Owner,new((buildings??[BillingDatabase.Building]).Select(id=>new QuotationItemRequest(id,package.Id,action)).ToArray()),Guid.NewGuid().ToString("N"),default);
-        quote=await billing.IssueQuotation(BillingDatabase.Admin,quote.Id,new(0,"Test terms",DateTimeOffset.UtcNow.AddDays(1)),BillingETag.Format(quote.Id,quote.Revision),default);
-        await billing.AcceptQuotation(BillingDatabase.Owner,quote.Id,BillingETag.Format(quote.Id,quote.Revision),default);return quote.Id;
+        var package=await billing.SavePackage(BillingDatabase.Admin,null,new("P"+Guid.NewGuid().ToString("N"),"Test",2000,6,true,null,20,0),null,default);
+        var quote=await billing.CreateQuotation(BillingDatabase.Owner,BillingDatabase.Owner,new((buildings??[BillingDatabase.Building]).Select(id=>new QuotationItemRequest(id,package.Id,action)).ToArray()),Guid.NewGuid().ToString("N"),default);
+        quote=await billing.IssueQuotation(BillingDatabase.Admin,BillingDatabase.Admin,quote.Id,new(0,"Test terms",DateTimeOffset.UtcNow.AddDays(1),quote.Items.Select(x=>new QuotationPeriodRequest(x.Id,action=="Renewal"?null:DateTimeOffset.UtcNow.AddDays(2))).ToArray()),BillingETag.Format(quote.Id,quote.Revision),default);
+        await billing.AcceptQuotation(BillingDatabase.Owner,BillingDatabase.Owner,quote.Id,BillingETag.Format(quote.Id,quote.Revision),default);return quote.Id;
     }
     internal static HttpRequestMessage Create(Guid id,string key="checkout-1")
     {var request=new HttpRequestMessage(HttpMethod.Post,"/api/payments/payos/create"){Content=JsonContent.Create(new {quotationId=id})};request.Headers.Add("Idempotency-Key",key);return request;}

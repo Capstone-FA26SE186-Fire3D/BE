@@ -108,6 +108,14 @@ public sealed class PaymentProvisioningRecord
 [Table("quotation_building_items")]
 public sealed class QuotationBuildingItem
 {
+    [Column("commercial_version")] public int CommercialVersion { get; set; }=1;
+    [Column("package_revision")] public long? PackageRevision { get; set; }
+    [Column("learner_limit")] public int? LearnerLimit { get; set; }
+    [Column("ai_quota_units")] public int? AiQuotaUnits { get; set; }
+    [Column("ai_policy_version_id")] public Guid? AiPolicyVersionId { get; set; }
+    [Column("ai_quota_unit")] public string? AiQuotaUnit { get; set; }
+    [Column("starts_at")] public DateTime? StartsAt { get; set; }
+    [Column("ends_at")] public DateTime? EndsAt { get; set; }
     [Column("id")]
     public Guid Id { get; set; }
     [Column("quotation_id")]

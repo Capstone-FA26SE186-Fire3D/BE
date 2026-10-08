@@ -13,12 +13,16 @@ public sealed record DiscountResponse(Guid Id,string Code,string DiscountKind,de
 public sealed record QuotationItemRequest(Guid BuildingId,Guid ServicePackageId,string PurchaseAction);
 public sealed record QuotationWriteRequest(IReadOnlyList<QuotationItemRequest> Items);
 public sealed record IssueQuotationRequest(decimal? TaxAmount,string? Terms,
-    [property:JsonConverter(typeof(BillingTimestampConverter))] DateTimeOffset? ValidUntil);
+    [property:JsonConverter(typeof(BillingTimestampConverter))] DateTimeOffset? ValidUntil,
+    IReadOnlyList<QuotationPeriodRequest>? Items=null);
+public sealed record QuotationPeriodRequest(Guid QuotationItemId,
+    [property:JsonConverter(typeof(BillingTimestampConverter))] DateTimeOffset? StartsAt=null);
 public sealed record QuotationLineResponse(Guid Id,Guid BuildingId,Guid ServicePackageId,string PurchaseAction,int DurationMonths,
-    string BuildingName,string BuildingAddress,string PackageName,decimal UnitPrice,decimal SubtotalAmount,decimal DiscountAmount,decimal TotalAmount);
+    string BuildingName,string BuildingAddress,string PackageName,decimal UnitPrice,decimal SubtotalAmount,decimal DiscountAmount,decimal TotalAmount,
+    int CommercialVersion=1,long? PackageRevision=null,int? LearnerLimit=null,int? AiQuotaUnits=null,Guid? AiPolicyVersionId=null,string? AiQuotaUnit=null,DateTime? StartsAt=null,DateTime? EndsAt=null);
 public sealed record QuotationResponse(Guid Id,Guid OrganizationId,string QuotationNumber,string Status,long Revision,string Currency,
     decimal SubtotalAmount,decimal DiscountAmount,decimal TaxAmount,decimal TotalAmount,Guid? DiscountRuleId,
-    string? Terms,DateTime ValidUntil,DateTime? AcceptedAt,IReadOnlyList<QuotationLineResponse> Items);
+    string? Terms,DateTime ValidUntil,DateTime? AcceptedAt,IReadOnlyList<QuotationLineResponse> Items,int CommercialVersion=1);
 public sealed record BillingPage<T>(IReadOnlyList<T> Items,int Total,int Page,int PageSize);
 public sealed record EnterpriseQuoteRequestBody(int RequestedBuildingCount,int? RequestedDurationMonths,string ContactName,string ContactEmail,string? ContactPhone=null,string? Notes=null);
 public sealed record EnterpriseQuoteResponse(Guid Id,Guid OrganizationId,int RequestedBuildingCount,int? RequestedDurationMonths,
@@ -38,12 +42,12 @@ public interface IBillingService
     Task<PackageResponse> SavePackage(Guid actor,Guid? id,PackageWriteRequest request,string? ifMatch,CancellationToken ct);
     Task<IReadOnlyList<DiscountResponse>> ListDiscounts(Guid actor,CancellationToken ct);
     Task<DiscountResponse> SaveDiscount(Guid actor,Guid? id,DiscountWriteRequest request,string? ifMatch,CancellationToken ct);
-    Task<QuotationResponse> CreateQuotation(Guid actor,QuotationWriteRequest request,string? key,CancellationToken ct);
-    Task<QuotationResponse> UpdateDraft(Guid actor,Guid id,QuotationWriteRequest request,string? ifMatch,CancellationToken ct);
+    Task<QuotationResponse> CreateQuotation(Guid actor,Guid family,QuotationWriteRequest request,string? key,CancellationToken ct);
+    Task<QuotationResponse> UpdateDraft(Guid actor,Guid family,Guid id,QuotationWriteRequest request,string? ifMatch,CancellationToken ct);
     Task<QuotationResponse> GetQuotation(Guid actor,Guid id,CancellationToken ct);
     Task<BillingPage<QuotationResponse>> ListQuotations(Guid actor,int page,int pageSize,CancellationToken ct);
-    Task<QuotationResponse> IssueQuotation(Guid actor,Guid id,IssueQuotationRequest request,string? ifMatch,CancellationToken ct);
-    Task<QuotationResponse> AcceptQuotation(Guid actor,Guid id,string? ifMatch,CancellationToken ct);
+    Task<QuotationResponse> IssueQuotation(Guid actor,Guid family,Guid id,IssueQuotationRequest request,string? ifMatch,CancellationToken ct);
+    Task<QuotationResponse> AcceptQuotation(Guid actor,Guid family,Guid id,string? ifMatch,CancellationToken ct);
     Task<EnterpriseQuoteResponse> CreateEnterpriseRequest(Guid actor,EnterpriseQuoteRequestBody request,string? key,CancellationToken ct);
     Task<BillingPage<EnterpriseQuoteResponse>> ListEnterpriseRequests(Guid actor,int page,int pageSize,CancellationToken ct);
 }

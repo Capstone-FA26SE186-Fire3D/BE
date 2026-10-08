@@ -8,6 +8,14 @@ namespace Fire3D.Infrastructure.Billing;
 
 public sealed partial class BillingService
 {
+    private async Task<Actor> QuotationActor(Guid actor,Guid family,bool admin,CancellationToken ct)
+    {
+        await Lock("fire3d:auth:"+actor,false,ct);
+        var identity=await Authorize(actor,admin,ct);
+        if(family==Guid.Empty || !await db.Set<RefreshToken>().AnyAsync(x=>x.UserId==actor&&x.FamilyId==family&&x.RevokedAt==null&&x.ConsumedAt==null&&x.ExpiresAt>DateTime.UtcNow,ct))
+            throw new BillingException(401,"SESSION_REVOKED","The session is no longer active.");
+        return identity;
+    }
     private sealed record PriceSnapshot(string BuildingName,string BuildingAddress,string PackageName,decimal MonthlyUnitPrice,int DurationMonths,long PackageRevision);
     private static QuotationWriteRequest ValidateQuotation(QuotationWriteRequest request)
     {
@@ -33,12 +41,13 @@ public sealed partial class BillingService
         {
             var snapshot=JsonSerializer.Deserialize<PriceSnapshot>(x.PriceSnapshot);
             return new QuotationLineResponse(x.Id,x.BuildingId,x.ServicePackageId,x.PurchaseAction,x.ServiceDurationMonths,
-                snapshot?.BuildingName??"",snapshot?.BuildingAddress??"",snapshot?.PackageName??"",x.UnitPrice,x.SubtotalAmount,x.DiscountAmount,x.TotalAmount);
+                snapshot?.BuildingName??"",snapshot?.BuildingAddress??"",snapshot?.PackageName??"",x.UnitPrice,x.SubtotalAmount,x.DiscountAmount,x.TotalAmount,
+                x.CommercialVersion,x.PackageRevision,x.LearnerLimit,x.AiQuotaUnits,x.AiPolicyVersionId,x.AiQuotaUnit,x.StartsAt,x.EndsAt);
         }).ToArray();
         var terms=JsonDocument.Parse(quote.TermsSnapshot).RootElement;
         return new(quote.Id,quote.OrganizationId,quote.QuotationNumber,quote.Status.ToString(),quote.Revision,quote.Currency,
             quote.SubtotalAmount,quote.DiscountAmount,quote.TaxAmount,quote.TotalAmount,quote.DiscountRuleId,
-            terms.TryGetProperty("text",out var text)?text.GetString():null,quote.ValidUntil,quote.AcceptedAt,lines);
+            terms.TryGetProperty("text",out var text)?text.GetString():null,quote.ValidUntil,quote.AcceptedAt,lines,quote.CommercialVersion);
     }
     private async Task PriceLines(Quotation quote,IReadOnlyList<QuotationItemRequest> requested,CancellationToken ct)
     {
@@ -52,12 +61,22 @@ public sealed partial class BillingService
                 .Select(x=>new {x.Name,Address=x.BuildingLocation==null?null:x.BuildingLocation.Address}).SingleOrDefaultAsync(ct);
             if(building is null||!Text(building.Name,255)||!Text(building.Address,10000))throw Missing();
             var package=await db.ServicePackages.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==input.ServicePackageId&&x.IsActive,ct)??throw Missing();
+            if(!PackageView(package).IsPurchasable)throw new BillingException(409,"PACKAGE_NOT_PURCHASABLE","Choose a fully configured v7 package.");
+            BillingQuotaPolicy? policy=null;
+            if(package.AiPolicyVersionId.HasValue)
+            {
+                policy=await db.BillingQuotaPolicies.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==package.AiPolicyVersionId&&x.EffectiveFrom<=now&&(x.EffectiveUntil==null||x.EffectiveUntil>now),ct);
+                if(policy is null)throw new BillingException(409,"BILLING_POLICY_INVALID","Package policy is no longer effective.");
+            }
             if(package.Currency!="VND"||package.DurationMonths is null or <=0||!Money(package.UnitPrice))throw Conflict("The package is not a valid VND Building subscription.");
             var hasPaid=await db.Set<ServiceEntitlement>().AnyAsync(x=>x.BuildingId==input.BuildingId&&x.OrganizationId==quote.OrganizationId&&x.PaymentTransactionId!=null&&x.Status!="Trial",ct);
             if(hasPaid!=(input.PurchaseAction=="Renewal"))throw Conflict(hasPaid?"Choose Renewal for a previously paid Building.":"Renewal requires previous paid Building service.");
             var subtotal=package.UnitPrice*package.DurationMonths.Value;Field(Money(subtotal),"items","The line amount exceeds the supported VND range.");
             var line=existing.SingleOrDefault(x=>x.BuildingId==input.BuildingId)??new QuotationBuildingItem{Id=Guid.NewGuid(),QuotationId=quote.Id,BuildingId=input.BuildingId,CreatedAt=now};
             line.ServicePackageId=package.Id;line.PurchaseAction=input.PurchaseAction;line.ServiceDurationMonths=package.DurationMonths.Value;
+            line.CommercialVersion=7;line.PackageRevision=package.Revision;line.LearnerLimit=package.LearnerLimit;
+            line.AiQuotaUnits=package.AiQuotaUnits;line.AiPolicyVersionId=package.AiPolicyVersionId;line.AiQuotaUnit=policy?.QuotaUnit;
+            line.StartsAt=null;line.EndsAt=null;
             line.UnitPrice=package.UnitPrice;line.SubtotalAmount=subtotal;line.DiscountAmount=0;line.TotalAmount=subtotal;line.Currency="VND";
             line.PriceSnapshot=JsonSerializer.Serialize(new PriceSnapshot(building.Name,building.Address!,package.Name,package.UnitPrice,package.DurationMonths.Value,package.Revision));
             line.TermsSnapshot=quote.TermsSnapshot;line.DiscountSnapshot="{}";line.LineProvisioningKey="line:"+line.Id;line.UpdatedAt=now;
@@ -87,17 +106,17 @@ public sealed partial class BillingService
             foreach(var line in candidates.Eligible)line.DiscountSnapshot=snapshot;
         }
         foreach(var line in lines)line.TotalAmount=line.SubtotalAmount-line.DiscountAmount;
-        quote.Quantity=lines.Count;quote.UnitPrice=lines.Count==1?lines[0].UnitPrice:0;quote.Currency="VND";
+        quote.CommercialVersion=7;quote.Quantity=lines.Count;quote.UnitPrice=lines.Count==1?lines[0].UnitPrice:0;quote.Currency="VND";
         quote.SubtotalAmount=lines.Sum(x=>x.SubtotalAmount);quote.DiscountAmount=lines.Sum(x=>x.DiscountAmount);
         quote.TotalAmount=quote.SubtotalAmount-quote.DiscountAmount+quote.TaxAmount;
         Field(Money(quote.TotalAmount),"taxAmount","Quotation total exceeds the supported VND range.");
         quote.PriceSnapshot=JsonSerializer.Serialize(new {currency="VND",lineIds=lines.Select(x=>x.Id).OrderBy(x=>x).ToArray(),quote.SubtotalAmount,quote.DiscountAmount,quote.TaxAmount,quote.TotalAmount});
         quote.UpdatedAt=now;
     }
-    public async Task<QuotationResponse> CreateQuotation(Guid actor,QuotationWriteRequest request,string? key,CancellationToken ct)
+    public async Task<QuotationResponse> CreateQuotation(Guid actor,Guid family,QuotationWriteRequest request,string? key,CancellationToken ct)
     {
         request=ValidateQuotation(request);var inputHash=Hash(request);var stableKey=Key(key);
-        await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await Authorize(actor,false,ct);
+        await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await QuotationActor(actor,family,false,ct);
         if(identity.Role!=UserRole.OrganizationUser)throw new BillingException(403,"ORGANIZATION_USER_REQUIRED","An OrganizationUser creates their own Building quotation.");
         var previous=await Receipt(identity,"CreateQuotation",stableKey,inputHash,ct);
         if(previous is not null){var replay=Replay<QuotationResponse>(previous);await Scope(identity,replay.OrganizationId,ct);return replay;}
@@ -108,10 +127,10 @@ public sealed partial class BillingService
         Audit(identity,quote.OrganizationId,"quotations",quote.Id,AuditAction.Create,null,new {quote.Status,quote.Quantity,quote.TotalAmount,quote.Revision});
         await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return response;
     }
-    public async Task<QuotationResponse> UpdateDraft(Guid actor,Guid id,QuotationWriteRequest request,string? ifMatch,CancellationToken ct)
+    public async Task<QuotationResponse> UpdateDraft(Guid actor,Guid family,Guid id,QuotationWriteRequest request,string? ifMatch,CancellationToken ct)
     {
         request=ValidateQuotation(request);await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);
-        var identity=await Authorize(actor,false,ct);var quote=await Quote(identity,id,true,ct);BillingETag.Require(ifMatch,id,quote.Revision);
+        var identity=await QuotationActor(actor,family,false,ct);var quote=await Quote(identity,id,true,ct);BillingETag.Require(ifMatch,id,quote.Revision);
         if(quote.Status!=QuotationStatus.Draft)throw Conflict("Only Draft quotation lines can change.");
         var old=new {quote.Quantity,quote.TotalAmount,quote.Revision};await PriceLines(quote,request.Items,ct);quote.Revision++;
         Audit(identity,quote.OrganizationId,"quotations",id,AuditAction.Update,old,new {quote.Quantity,quote.TotalAmount,quote.Revision});
@@ -129,25 +148,26 @@ public sealed partial class BillingService
         var total=await query.CountAsync(ct);var items=await query.OrderByDescending(x=>x.CreatedAt).ThenBy(x=>x.Id).Skip((page-1)*pageSize).Take(pageSize).ToListAsync(ct);
         var result=new List<QuotationResponse>();foreach(var item in items)result.Add(await QuoteView(item,ct));return new(result,total,page,pageSize);
     }
-    public async Task<QuotationResponse> IssueQuotation(Guid actor,Guid id,IssueQuotationRequest request,string? ifMatch,CancellationToken ct)
+    public async Task<QuotationResponse> IssueQuotation(Guid actor,Guid family,Guid id,IssueQuotationRequest request,string? ifMatch,CancellationToken ct)
     {
         Field(request.TaxAmount.HasValue&&Money(request.TaxAmount.Value),"taxAmount","Supply an explicit non-negative whole VND tax amount.");
         Field(Text(request.Terms,10000),"terms","Terms are required, maximum 10,000 characters.");
         Field(request.ValidUntil.HasValue&&request.ValidUntil>DateTimeOffset.UtcNow,"validUntil","Supply a future quotation expiry with timezone.");
-        await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await Authorize(actor,true,ct);
+        await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await QuotationActor(actor,family,true,ct);
         var quote=await Quote(identity,id,true,ct);BillingETag.Require(ifMatch,id,quote.Revision);if(quote.Status!=QuotationStatus.Draft)throw Conflict("Only Draft quotations can be issued.");
         var requested=await db.Set<QuotationBuildingItem>().AsNoTracking().Where(x=>x.QuotationId==id).OrderBy(x=>x.BuildingId).Select(x=>new QuotationItemRequest(x.BuildingId,x.ServicePackageId,x.PurchaseAction)).ToListAsync(ct);
         if(requested.Count==0)throw Conflict("Legacy quotations without Building lines cannot be issued. Create a new quotation.");
         quote.TaxAmount=request.TaxAmount!.Value;quote.TermsSnapshot=JsonSerializer.Serialize(new {text=request.Terms!.Trim()});quote.ValidUntil=request.ValidUntil!.Value.UtcDateTime;
         await PriceLines(quote,requested,ct);if(quote.TotalAmount==0)throw new BillingException(409,"ZERO_AMOUNT_NOT_SUPPORTED","Zero-amount quotations do not have a supported payment/provisioning flow.");
+        await PinServicePeriods(quote,request,ct);
         // Persist line snapshots while still Draft, then transition under the same transaction/row lock.
         await db.SaveChangesAsync(ct);quote.Status=QuotationStatus.Issued;quote.IssuedBy=actor;quote.IssuedAt=DateTime.UtcNow;quote.Revision++;
         Audit(identity,quote.OrganizationId,"quotations",id,AuditAction.Update,new {status="Draft"},new {status="Issued",quote.TotalAmount,quote.Revision});
         await db.SaveChangesAsync(ct);var response=await QuoteView(quote,ct);await tx.CommitAsync(ct);return response;
     }
-    public async Task<QuotationResponse> AcceptQuotation(Guid actor,Guid id,string? ifMatch,CancellationToken ct)
+    public async Task<QuotationResponse> AcceptQuotation(Guid actor,Guid family,Guid id,string? ifMatch,CancellationToken ct)
     {
-        await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await Authorize(actor,false,ct);
+        await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await QuotationActor(actor,family,false,ct);
         if(identity.Role!=UserRole.OrganizationUser)throw new BillingException(403,"ORGANIZATION_USER_REQUIRED","Only the purchasing OrganizationUser can accept terms.");
         var quote=await Quote(identity,id,true,ct);BillingETag.Require(ifMatch,id,quote.Revision);
         if(quote.Status!=QuotationStatus.Issued||quote.ValidUntil<=DateTime.UtcNow)throw Conflict("Only an unexpired Issued quotation can be accepted.");

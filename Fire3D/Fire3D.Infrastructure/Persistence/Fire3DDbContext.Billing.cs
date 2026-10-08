@@ -8,6 +8,8 @@ public partial class Fire3DDbContext
     private static void ConfigureBilling(ModelBuilder model)
     {
         model.Entity<ServicePackage>().Property(x=>x.CommercialVersion).HasColumnName("commercial_version").HasDefaultValue(1);
+        model.Entity<Quotation>().Property(x=>x.CommercialVersion).HasColumnName("commercial_version").HasDefaultValue(1);
+        model.Entity<QuotationBuildingItem>().Property(x=>x.CommercialVersion).HasDefaultValue(1);
         model.Entity<ServicePackage>().Property(x=>x.LearnerLimit).HasColumnName("learner_limit");
         model.Entity<ServicePackage>().Property(x=>x.AiQuotaUnits).HasColumnName("ai_quota_units");
         model.Entity<ServicePackage>().Property(x=>x.AiPolicyVersionId).HasColumnName("ai_policy_version_id");

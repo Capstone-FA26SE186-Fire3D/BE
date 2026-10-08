@@ -75,7 +75,7 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     [HttpPost("api/billing/quotations")]
     [ProducesResponseType(typeof(QuotationResponse),201)]
     public async Task<ActionResult<QuotationResponse>> CreateQuote(QuotationWriteRequest request,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)
-    {var response=await billing.CreateQuotation(Actor,request,key,ct);ETag(response.Id,response.Revision);return Created($"/api/billing/quotations/{response.Id}",response);}
+    {var response=await billing.CreateQuotation(Actor,User.GetSessionFamilyId(),request,key,ct);ETag(response.Id,response.Revision);return Created($"/api/billing/quotations/{response.Id}",response);}
     [HttpGet("api/billing/quotations")]
     public async Task<ActionResult<BillingPage<QuotationResponse>>> Quotes([FromQuery]int page=1,[FromQuery]int pageSize=20,CancellationToken ct=default)=>Ok(await billing.ListQuotations(Actor,page,pageSize,ct));
     [HttpGet("api/billing/quotations/{id:guid}")]
@@ -84,16 +84,16 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     /// <summary>Replaces Draft Building selections using If-Match. Issued/Accepted lines are immutable.</summary>
     [HttpPatch("api/billing/quotations/{id:guid}")]
     public async Task<ActionResult<QuotationResponse>> UpdateDraft(Guid id,QuotationWriteRequest request,[FromHeader(Name="If-Match")]string? ifMatch,CancellationToken ct)
-    {var response=await billing.UpdateDraft(Actor,id,request,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
+    {var response=await billing.UpdateDraft(Actor,User.GetSessionFamilyId(),id,request,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
     /// <summary>Admin reprices the Draft and freezes its snapshot. Explicit taxAmount, terms, validUntil and If-Match are required.</summary>
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     [HttpPost("api/admin/quotations/{id:guid}/issue")]
     public async Task<ActionResult<QuotationResponse>> Issue(Guid id,IssueQuotationRequest request,[FromHeader(Name="If-Match")]string? ifMatch,CancellationToken ct)
-    {var response=await billing.IssueQuotation(Actor,id,request,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
+    {var response=await billing.IssueQuotation(Actor,User.GetSessionFamilyId(),id,request,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
     /// <summary>OrganizationUser accepts an unexpired Issued quotation in their tenant with If-Match. Acceptance does not charge or grant service.</summary>
     [HttpPost("api/billing/quotations/{id:guid}/accept")]
     public async Task<ActionResult<QuotationResponse>> Accept(Guid id,[FromHeader(Name="If-Match")]string? ifMatch,CancellationToken ct)
-    {var response=await billing.AcceptQuotation(Actor,id,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
+    {var response=await billing.AcceptQuotation(Actor,User.GetSessionFamilyId(),id,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
     /// <summary>OrganizationUser submits a contact request with Idempotency-Key. This does not create a payment or entitlement.</summary>
     [HttpPost("api/billing/enterprise-quote-requests")]
     [ProducesResponseType(typeof(EnterpriseQuoteResponse),201)]
