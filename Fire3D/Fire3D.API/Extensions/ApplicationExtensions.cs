@@ -97,6 +97,7 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Scenarios.IPlaytestLifecycle,Fire3D.Infrastructure.Scenarios.PlaytestLifecycle>();
         services.AddOptions<Fire3D.Application.Releases.PublishingOptions>().Bind(configuration.GetSection("Publishing"));
         services.AddScoped<Fire3D.Application.Releases.IReleaseStore, Fire3D.Infrastructure.Releases.ReleaseWriteStore>();
+        services.AddScoped<Fire3D.Application.Scenarios.IScenarioReviewQueries, Fire3D.Infrastructure.Scenarios.ScenarioReviewQueries>();
         services.AddScoped<Fire3D.Application.Support.ISupportService,Fire3D.Infrastructure.Support.SupportService>();
         services.AddScoped<Fire3D.Application.Buildings.IBuildingAccessService,Fire3D.Infrastructure.Buildings.BuildingAccessService>();
         services.AddScoped<Fire3D.Application.Buildings.IBuildingStore, Fire3D.Infrastructure.Buildings.BuildingStore>();

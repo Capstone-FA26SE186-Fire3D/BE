@@ -26,12 +26,12 @@ public sealed class ReleaseWriteStore(Fire3DDbContext db, TimeProvider clock, IO
         return release?.ReleasePackage is null ? null : ToResponse(release, release.ReleasePackage);
     }
 
-    public async Task<AuthResult<bool>> PublishAsync(Guid actorId,Guid releaseId,Guid? organizationId,CancellationToken ct,Guid? family=null)
+    public async Task<AuthResult<ReleaseResponse>> PublishAsync(Guid actorId,Guid releaseId,Guid? organizationId,CancellationToken ct,Guid? family=null,string? key=null)
     {
         if(publishing?.Value.Enabled != true)
-            return AuthResult<bool>.Fail("PUBLISH_GATE_UNAVAILABLE","Publishing is disabled until deployment gates are verified.",503);
-        var result=await JsonCommandGate.Execute(db,"publish_release_gate","Publish",actorId,family,releaseId,new{},null,null,ct);
-        return result.IsSuccess?AuthResult<bool>.Ok(true):new(default,result.Error);
+            return AuthResult<ReleaseResponse>.Fail("PUBLISH_GATE_UNAVAILABLE","Publishing is disabled until deployment gates are verified.",503);
+        var result=await JsonCommandGate.Execute(db,"publish_release_gate","Publish",actorId,family,releaseId,new{},key??releaseId.ToString(),null,ct);
+        return result.IsSuccess?AuthResult<ReleaseResponse>.Ok(result.Value.Deserialize<ReleaseResponse>(JsonCommandGate.Json)!):new(default,result.Error);
     }
     public async Task<AuthResult<bool>> RevokeAsync(Guid actorId,Guid releaseId,Guid? organizationId,string reason,CancellationToken ct,Guid? family=null)
     {

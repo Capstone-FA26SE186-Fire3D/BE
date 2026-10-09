@@ -10,14 +10,15 @@ public sealed record ScenarioDraftResponse(Guid Id, Guid ScenarioId, Guid Revisi
     DateTime CreatedAt, DateTime UpdatedAt, uint Version);
 public sealed record ScenarioVersionSummaryResponse(Guid Id, Guid ScenarioId, Guid RevisionId, Guid BuildingId,
     Guid OrganizationId, int VersionNumber, string Name, string SchemaVersion, string AlgorithmVersion,
-    int TimeLimitSeconds, string ScenarioHash, DateTime CreatedAt);
+    int TimeLimitSeconds, string ScenarioHash, DateTime CreatedAt, string ReviewStatus="NotSubmitted", Guid? ReviewId=null, string? RejectReason=null);
 public sealed record ScenarioVersionConfigurationResponse(JsonNode Spawn, JsonNode Goal, JsonNode FireSource,
     JsonNode Npc, JsonNode BlockedElements, JsonNode Routing, JsonNode Scoring, JsonNode ModePolicy,
     JsonNode SafetyThresholds);
 public sealed record ScenarioVersionDetailResponse(Guid Id, Guid ScenarioId, Guid RevisionId, Guid BuildingId,
     Guid OrganizationId, int VersionNumber, string Name, string SchemaVersion, string AlgorithmVersion,
     long RandomSeed, int TimeLimitSeconds, int ReplanIntervalSeconds, string ScenarioHash,
-    ScenarioVersionConfigurationResponse Configuration, DateTime CreatedAt, JsonNode? StateSnapshot = null, JsonNode? Rubric = null, JsonNode? LearningObjectives = null, string? LearnerInstructions = null);
+    ScenarioVersionConfigurationResponse Configuration, DateTime CreatedAt, JsonNode? StateSnapshot = null, JsonNode? Rubric = null, JsonNode? LearningObjectives = null, string? LearnerInstructions = null,
+    string ReviewStatus="NotSubmitted", Guid? ReviewId=null, string? RejectReason=null);
 
 public interface IScenarioReadStore
 {
