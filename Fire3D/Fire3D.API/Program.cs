@@ -35,7 +35,8 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
     .AddSchemaTransformer<AuthProfileSchemaTransformer>()
     .AddOperationTransformer<AuthOperationTransformer>()
     .AddOperationTransformer<BillingOperationTransformer>()
-    .AddOperationTransformer<AuthoringOperationTransformer>());
+    .AddOperationTransformer<AuthoringOperationTransformer>()
+    .AddOperationTransformer<SuccessResponseTransformer>());
 builder.Services.AddHealthChecks();
 
 // Cấu hình Firebase Admin SDK
@@ -76,7 +77,7 @@ var authEmail = app.Services.GetRequiredService<IOptions<AuthEmailOptions>>().Va
 var verificationHost = new Uri(authEmail.GetVerificationPageBaseUrl()).Authority;
 app.Logger.LogInformation(
     "FET3D startup configuration: Version={Version}, Environment={Environment}, VerificationHost={VerificationHost}, EmailWorkerEnabled={EmailWorkerEnabled}.",
-    builder.Configuration["APP_VERSION"] ?? "unknown", builder.Environment.EnvironmentName,
+    ArtifactVersion.Get(builder.Configuration), builder.Environment.EnvironmentName,
     verificationHost, authEmail.WorkerEnabled);
 
 if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
@@ -127,10 +128,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthChecks("/health");
-app.MapGet("/health/version", (IConfiguration configuration) => Results.Ok(new
-{
-    version = configuration["APP_VERSION"] ?? "unknown"
-}));
+app.MapGet("/health/version", (IConfiguration configuration) => Results.Ok(new ArtifactVersionResponse(ArtifactVersion.Get(configuration))))
+    .AllowAnonymous().Produces<ArtifactVersionResponse>(200);
 app.MapControllers();
 
 app.Run();

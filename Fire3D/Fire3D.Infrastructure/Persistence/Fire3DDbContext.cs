@@ -68,6 +68,7 @@ public partial class Fire3DDbContext : DbContext
 
     public virtual DbSet<RuntimeCompatibilityCatalog> RuntimeCompatibilityCatalogs { get; set; }
 
+    public DbSet<BillingQuotaPolicy> BillingQuotaPolicies { get; set; }
     public virtual DbSet<ServicePackage> ServicePackages { get; set; }
 
     public virtual DbSet<Session> Sessions { get; set; }

@@ -15,6 +15,7 @@ public sealed class OrganizationsController(ISender sender) : AdministrationCont
     /// Tạo mới một tổ chức (Organization) - Chỉ dành cho PlatformAdmin.
     /// </summary>
     [HttpPost]
+    [ProducesResponseType<OrganizationResponse>(201)]
     public async Task<ActionResult<OrganizationResponse>> Create(CreateOrganizationRequest request, CancellationToken ct)
     {
         var result = await sender.Send(new CreateOrganizationCommand(ActorId, request, NewCorrelationId()), ct);

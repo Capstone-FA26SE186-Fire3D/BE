@@ -31,6 +31,7 @@ public sealed class PayosController(IPayosPayments payments) : ControllerBase
     public async Task<PayosPaymentResponse> Payment(Guid id,CancellationToken ct)=>await payments.Payment(User.GetActorId(),id,ct);
     /// <summary>PlatformAdmin enqueues reconciliation; does not override amount, signature or entitlement provenance.</summary>
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)][HttpPost("api/admin/payments/payos/checkouts/{id:guid}/reconcile")]
+    [ProducesResponseType(202)]
     public async Task<IActionResult> Reconcile(Guid id,CancellationToken ct){await payments.Reconcile(User.GetActorId(),User.GetSessionFamilyId(),id,ct);return Accepted();}
     /// <summary>OrganizationUser sees own tenant. PlatformAdmin can filter organization/Building. IsEffective checks lifecycle and UTC period.</summary>
     [Authorize(Roles="OrganizationUser,PlatformAdmin")][HttpGet("api/billing/entitlements")]

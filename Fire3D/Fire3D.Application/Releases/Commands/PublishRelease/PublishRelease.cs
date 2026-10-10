@@ -5,7 +5,7 @@ using MediatR;
 
 namespace Fire3D.Application.Releases.Commands.PublishRelease;
 
-public sealed record PublishReleaseCommand(Guid ActorId, Guid ReleaseId) : IRequest<AuthResult<bool>>;
+public sealed record PublishReleaseCommand(Guid ActorId, Guid ReleaseId, Guid? FamilyId = null) : IRequest<AuthResult<bool>>;
 
 public sealed class PublishReleaseHandler(IAuthStore accounts, IReleaseStore store)
     : IRequestHandler<PublishReleaseCommand, AuthResult<bool>>
@@ -15,6 +15,6 @@ public sealed class PublishReleaseHandler(IAuthStore accounts, IReleaseStore sto
         var scope = await IfcAccess.ResolveAsync(accounts, command.ActorId, ct);
         if (!scope.IsSuccess) return new(default, scope.Error);
 
-        return await store.PublishAsync(command.ActorId, command.ReleaseId, scope.Value!.OrganizationId, ct);
+        return await store.PublishAsync(command.ActorId, command.ReleaseId, scope.Value!.OrganizationId, ct, command.FamilyId);
     }
 }

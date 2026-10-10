@@ -28,6 +28,9 @@ public class ScenarioStoreTests : IAsyncLifetime
     {
         var options = IfcTestOptions.Create(_dbContainer.GetConnectionString());
         var db = new Fire3DDbContext(options);
+        // Provision the backend identity expected by the real migration chain.
+        // Runtime grants must remain explicit rather than using the test owner as API.
+        db.Database.ExecuteSqlRaw("CREATE ROLE fire3d_api NOLOGIN NOSUPERUSER NOBYPASSRLS");
         db.Database.Migrate();
         // Seed prerequisites
         var orgId = Guid.NewGuid();

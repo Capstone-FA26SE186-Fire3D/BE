@@ -14,13 +14,13 @@ public sealed class PayosWebhookTests
         using var owner=factory.As(BillingDatabase.Owner);using var anonymous=factory.CreateClient();
         var created=await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(quote)));
         var order=created.GetProperty("orderCode").GetInt64();
-        fake.Links[order]=fake.Links[order] with {Status="Paid",AmountPaid=2000};
+        fake.Links[order]=fake.Links[order] with {Status="Paid",AmountPaid=12000};
         await db.Sql("UPDATE billing_checkout_operations SET next_attempt_at=now()");await Recover(factory,db);
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payos_payment_requests WHERE status='Pending'"));
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM payment_transactions"));
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
         Assert.Equal(HttpStatusCode.OK,(await anonymous.PostAsJsonAsync("/api/payments/payos/webhook",
-            new VerifiedPayosEvent(order,2000,"VND","link"+order,"paid-before-bind","2026-10-02 18:00:00"))).StatusCode);
+            new VerifiedPayosEvent(order,12000,"VND","link"+order,"paid-before-bind","2026-10-02 18:00:00"))).StatusCode);
         await Recover(factory,db);
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payment_transactions WHERE status='Applied'"));
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
@@ -33,7 +33,7 @@ public sealed class PayosWebhookTests
         await using var db=await BillingDatabase.Create();var quote=await PayosCheckoutTests.Accepted(db);var fake=new FakePayos();
         using var factory=new BillingApiTests.Factory(db,fake);using var owner=factory.As(BillingDatabase.Owner);using var anonymous=factory.CreateClient();
         var created=await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(quote)));var order=created.GetProperty("orderCode").GetInt64();
-        var ev=new VerifiedPayosEvent(order,2000,"VND","link"+order,"rollback-ref","2026-10-02 18:00:00");
+        var ev=new VerifiedPayosEvent(order,12000,"VND","link"+order,"rollback-ref","2026-10-02 18:00:00");
         foreach(var mismatch in new[]{ev with {Currency="USD",Reference="usd"},ev with {PaymentLinkId="wrong",Reference="link-mismatch"}})
             Assert.Equal(HttpStatusCode.OK,(await anonymous.PostAsJsonAsync("/api/payments/payos/webhook",mismatch)).StatusCode);
         await Recover(factory,db);Assert.Equal(2L,await db.Scalar("SELECT count(*) FROM payment_transactions WHERE status='Rejected'"));
@@ -57,7 +57,7 @@ public sealed class PayosWebhookTests
         await using var db=await BillingDatabase.Create();var quote=await PayosCheckoutTests.Accepted(db);var fake=new FakePayos();
         using var factory=new BillingApiTests.Factory(db,fake);using var owner=factory.As(BillingDatabase.Owner);using var anonymous=factory.CreateClient();
         var created=await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(quote)));var order=created.GetProperty("orderCode").GetInt64();
-        var ev=new VerifiedPayosEvent(order,2000,"VND","link"+order,"bank-ref-1","2026-10-02 18:00:00");
+        var ev=new VerifiedPayosEvent(order,12000,"VND","link"+order,"bank-ref-1","2026-10-02 18:00:00");
         Assert.Equal(HttpStatusCode.BadRequest,(await anonymous.PostAsJsonAsync("/api/payments/payos/webhook",new{invalidSignature=true})).StatusCode);
         Assert.Equal(HttpStatusCode.OK,(await anonymous.PostAsJsonAsync("/api/payments/payos/webhook",ev with {Amount=1999,Reference="wrong-amount"})).StatusCode);
         await Recover(factory,db);Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM payment_transactions WHERE status='Applied'"));
@@ -77,7 +77,7 @@ public sealed class PayosWebhookTests
         await using var db=await BillingDatabase.Create();var quote=await PayosCheckoutTests.Accepted(db);var fake=new FakePayos{LoseCreateResponse=true};
         using var factory=new BillingApiTests.Factory(db,fake);using var owner=factory.As(BillingDatabase.Owner);using var anonymous=factory.CreateClient();
         var created=await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(quote)));var order=created.GetProperty("orderCode").GetInt64();
-        var ev=new VerifiedPayosEvent(order,2000,"VND","link"+order,"early-reference","2026-10-02 18:00:00");
+        var ev=new VerifiedPayosEvent(order,12000,"VND","link"+order,"early-reference","2026-10-02 18:00:00");
         Assert.Equal(HttpStatusCode.OK,(await anonymous.PostAsJsonAsync("/api/payments/payos/webhook",ev)).StatusCode);
         await Recover(factory,db);Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM payment_transactions"));
         await db.Sql("UPDATE billing_checkout_operations SET next_attempt_at=now()");await Recover(factory,db);

@@ -5,10 +5,11 @@ using Fire3D.Domain.Entities;
 using Fire3D.Domain.Enums;
 using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Fire3D.Infrastructure.Releases;
 
-public sealed class ReleaseWriteStore(Fire3DDbContext db, TimeProvider clock) : IReleaseStore
+public sealed class ReleaseWriteStore(Fire3DDbContext db, TimeProvider clock, IOptions<PublishingOptions>? publishing = null) : IReleaseStore
 {
     private readonly TimeProvider legacyClock = clock;
     public async Task<AuthResult<ReleaseResponse>> BuildAsync(Guid actorId,Guid? organizationId,BuildReleaseRequest request,CancellationToken ct,string? key=null,Guid? family=null)
@@ -25,7 +26,13 @@ public sealed class ReleaseWriteStore(Fire3DDbContext db, TimeProvider clock) : 
         return release?.ReleasePackage is null ? null : ToResponse(release, release.ReleasePackage);
     }
 
-    public Task<AuthResult<bool>> PublishAsync(Guid actorId,Guid releaseId,Guid? organizationId,CancellationToken ct)=>Task.FromResult(AuthResult<bool>.Fail("PUBLISH_GATE_UNAVAILABLE","Publish requires the separately deployed entitlement/readiness gate.",503));
+    public async Task<AuthResult<bool>> PublishAsync(Guid actorId,Guid releaseId,Guid? organizationId,CancellationToken ct,Guid? family=null)
+    {
+        if(publishing?.Value.Enabled != true)
+            return AuthResult<bool>.Fail("PUBLISH_GATE_UNAVAILABLE","Publishing is disabled until deployment gates are verified.",503);
+        var result=await JsonCommandGate.Execute(db,"publish_release_gate","Publish",actorId,family,releaseId,new{},null,null,ct);
+        return result.IsSuccess?AuthResult<bool>.Ok(true):new(default,result.Error);
+    }
     public async Task<AuthResult<bool>> RevokeAsync(Guid actorId,Guid releaseId,Guid? organizationId,string reason,CancellationToken ct,Guid? family=null)
     {
         var result=await JsonCommandGate.Execute(db,"release_access_gate","Revoke",actorId,family,releaseId,new{reason},null,null,ct);

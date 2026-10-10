@@ -74,7 +74,7 @@ public sealed class BillingApiTests
     { var text=await response.Content.ReadAsStringAsync(); Assert.True(response.IsSuccessStatusCode,text); return JsonDocument.Parse(text).RootElement.Clone(); }
     private static async Task<Guid> Package(HttpClient admin,string code="MONTH",decimal price=100)
     {
-        var response=await admin.PostAsJsonAsync("/api/admin/service-packages",new {code,name="Monthly Building",unitPrice=price,durationMonths=1,isActive=true});
+        var response=await admin.PostAsJsonAsync("/api/admin/service-packages",new {code,name="Monthly Building",unitPrice=price,durationMonths=6,learnerLimit=10,aiQuotaUnits=0,isActive=true});
         Assert.Equal(HttpStatusCode.Created,response.StatusCode);
         return (await Body(response)).GetProperty("id").GetGuid();
     }
@@ -124,12 +124,13 @@ public sealed class BillingApiTests
         using var admin=factory.As(BillingDatabase.Admin); using var owner=factory.As(BillingDatabase.Owner);
         var package=await Package(admin);
         var created=await owner.SendAsync(QuoteRequest(package));var quote=await Body(created);var id=quote.GetProperty("id").GetGuid();
-        var issueBody=new {taxAmount=10,terms="One month Building service",validUntil=DateTimeOffset.UtcNow.AddDays(3)};
+        var issueBody=new {taxAmount=10,terms="Six month Building service",validUntil=DateTimeOffset.UtcNow.AddDays(3),
+            items=quote.GetProperty("items").EnumerateArray().Select(x=>new{quotationItemId=x.GetProperty("id").GetGuid(),startsAt=DateTimeOffset.UtcNow.AddDays(4)}).ToArray()};
         Assert.Equal((HttpStatusCode)428,(await admin.PostAsJsonAsync($"/api/admin/quotations/{id}/issue",issueBody)).StatusCode);
         using var issue=new HttpRequestMessage(HttpMethod.Post,$"/api/admin/quotations/{id}/issue") {Content=JsonContent.Create(issueBody)};
         issue.Headers.Add("If-Match",created.Headers.ETag!.ToString());
         var issued=await admin.SendAsync(issue); var snapshot=await Body(issued);
-        Assert.Equal("Issued",snapshot.GetProperty("status").GetString());Assert.Equal(110,snapshot.GetProperty("totalAmount").GetDecimal());
+        Assert.Equal("Issued",snapshot.GetProperty("status").GetString());Assert.Equal(610,snapshot.GetProperty("totalAmount").GetDecimal());
         using var stale=new HttpRequestMessage(HttpMethod.Post,$"/api/billing/quotations/{id}/accept");stale.Headers.Add("If-Match",created.Headers.ETag!.ToString());
         Assert.Equal(HttpStatusCode.PreconditionFailed,(await owner.SendAsync(stale)).StatusCode);
         using var accept=new HttpRequestMessage(HttpMethod.Post,$"/api/billing/quotations/{id}/accept");accept.Headers.Add("If-Match",issued.Headers.ETag!.ToString());
@@ -167,10 +168,10 @@ public sealed class BillingApiTests
             new{buildingId=BillingDatabase.Building,servicePackageId=packages[0],purchaseAction="New"},
             new{buildingId=second,servicePackageId=packages[1],purchaseAction="New"},new{buildingId=third,servicePackageId=packages[2],purchaseAction="New"}}})};
         request.Headers.Add("Idempotency-Key","multi");var quote=await Body(await owner.SendAsync(request));
-        Assert.Equal(304,quote.GetProperty("subtotalAmount").GetDecimal());Assert.Equal(101,quote.GetProperty("discountAmount").GetDecimal());
+        Assert.Equal(1824,quote.GetProperty("subtotalAmount").GetDecimal());Assert.Equal(608,quote.GetProperty("discountAmount").GetDecimal());
         Assert.Equal(percent.GetProperty("id").GetGuid(),quote.GetProperty("discountRuleId").GetGuid());
-        Assert.Equal(101,quote.GetProperty("items").EnumerateArray().Sum(x=>x.GetProperty("discountAmount").GetDecimal()));
-        Assert.Equal(203,quote.GetProperty("items").EnumerateArray().Sum(x=>x.GetProperty("totalAmount").GetDecimal()));
+        Assert.Equal(608,quote.GetProperty("items").EnumerateArray().Sum(x=>x.GetProperty("discountAmount").GetDecimal()));
+        Assert.Equal(1216,quote.GetProperty("items").EnumerateArray().Sum(x=>x.GetProperty("totalAmount").GetDecimal()));
     }
 
     [BillingPostgresFact]
@@ -195,21 +196,22 @@ public sealed class BillingApiTests
         await using var database=await BillingDatabase.Create();using var factory=new Factory(database);
         using var admin=factory.As(BillingDatabase.Admin);using var owner=factory.As(BillingDatabase.Owner);
         var package=await Package(admin);var created=await owner.SendAsync(QuoteRequest(package));
-        var id=(await Body(created)).GetProperty("id").GetGuid();
+        var body=await Body(created);var id=body.GetProperty("id").GetGuid();
         using var issue=new HttpRequestMessage(HttpMethod.Post,$"/api/admin/quotations/{id}/issue")
-        {Content=JsonContent.Create(new{taxAmount=0,terms="Frozen terms",validUntil=DateTimeOffset.UtcNow.AddDays(1)})};
+        {Content=JsonContent.Create(new{taxAmount=0,terms="Frozen terms",validUntil=DateTimeOffset.UtcNow.AddDays(1),
+            items=body.GetProperty("items").EnumerateArray().Select(x=>new{quotationItemId=x.GetProperty("id").GetGuid(),startsAt=DateTimeOffset.UtcNow.AddDays(2)}).ToArray()})};
         issue.Headers.Add("If-Match",created.Headers.ETag!.ToString());var issued=await admin.SendAsync(issue);await Body(issued);
         var current=await admin.GetAsync($"/api/billing/service-packages/{package}");
         using var edit=new HttpRequestMessage(HttpMethod.Patch,$"/api/admin/service-packages/{package}")
-        {Content=JsonContent.Create(new{code="MONTH",name="New name",unitPrice=999,durationMonths=1})};
+        {Content=JsonContent.Create(new{code="MONTH",name="New name",unitPrice=999,durationMonths=6,learnerLimit=20,aiQuotaUnits=0})};
         edit.Headers.Add("If-Match",current.Headers.ETag!.ToString());Assert.Equal(HttpStatusCode.OK,(await admin.SendAsync(edit)).StatusCode);
         HttpRequestMessage Accept(){var r=new HttpRequestMessage(HttpMethod.Post,$"/api/billing/quotations/{id}/accept");r.Headers.Add("If-Match",issued.Headers.ETag!.ToString());return r;}
         var results=await Task.WhenAll(owner.SendAsync(Accept()),owner.SendAsync(Accept()));
         Assert.Single(results,x=>x.StatusCode==HttpStatusCode.OK);Assert.Single(results,x=>x.StatusCode==HttpStatusCode.PreconditionFailed);
-        var final=await Body(await owner.GetAsync($"/api/billing/quotations/{id}"));Assert.Equal(100,final.GetProperty("totalAmount").GetDecimal());
+        var final=await Body(await owner.GetAsync($"/api/billing/quotations/{id}"));Assert.Equal(600,final.GetProperty("totalAmount").GetDecimal());
         Assert.Equal("Monthly Building",final.GetProperty("items")[0].GetProperty("packageName").GetString());
         Assert.Equal(1L,await database.Scalar($"SELECT count(*) FROM audit_logs WHERE target_id='{id}' AND new_values->>'status'='Accepted'"));
-        var replay=await Body(await owner.SendAsync(QuoteRequest(package)));Assert.Equal("Draft",replay.GetProperty("status").GetString());Assert.Equal(100,replay.GetProperty("totalAmount").GetDecimal());
+        var replay=await Body(await owner.SendAsync(QuoteRequest(package)));Assert.Equal("Draft",replay.GetProperty("status").GetString());Assert.Equal(600,replay.GetProperty("totalAmount").GetDecimal());
     }
 
     [BillingPostgresFact]

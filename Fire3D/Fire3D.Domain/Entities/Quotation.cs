@@ -60,4 +60,5 @@ public partial class Quotation
     public string PriceSnapshot { get; set; } = "{}";
     public string TermsSnapshot { get; set; } = "{}";
     public long Revision { get; set; } = 1;
+    public int CommercialVersion { get; set; } = 1;
 }

@@ -589,7 +589,7 @@ Playtest prepare/start use the session-bound PostgreSQL gate: exact accepted imm
 
 POST /api/releases: OrganizationUser/PlatformAdmin, Idempotency-Key, revisionId/scenarioVersionId/confirmationReviewId/candidateArtifactId; metadata legacy nullable chỉ được nhận khi khớp output worker. Gate kiểm Approved content/rubric và technical confirmation đúng cặp, current accepted ReleasePackage/manifest và runtime contract; tạo Built/package/provenance/Training/receipt/audit atomic. Replay cùng key/input trả cùng response201; khác input409. Không chứng minh Unity thật.
 
-GET /api/releases/{releaseId} trả ReleaseResponse; POST /revoke nhận reason và trả204, atomic/replay không thêm audit. POST /publish vẫn503 PUBLISH_GATE_UNAVAILABLE.
+GET /api/releases/{releaseId} trả ReleaseResponse; POST /revoke nhận reason và trả204, atomic/replay không thêm audit. POST /publish có gate entitlement/approval/readiness/provenance, bật bằng Publishing:Enabled;204/replay khi đủ điều kiện,409 khi thiếu gate nghiệp vụ,503 khi rollout chưa bật.
 
 GET/PATCH /api/buildings/{id}/access, POST /participation-code/rotate, DELETE /participation-code dùng tenant/role server và If-Match cho mutation. POST /participation/verify chỉ Trainee, grant gắn account/revision. Xem [contract/test release–access](release-building-access.md).
 
@@ -718,3 +718,8 @@ Authoring hardening: draft PUT/snapshot require quoted xmin If-Match (428/400/41
 Readiness/content approval: [contract and manual tests](scenario-readiness.md). Submit/approve/reject use Idempotency-Key and exact immutable content/rubric hashes; technical readiness remains separate.
 
 Selected Task 6 source/HTTP/isolated PostgreSQL/runtime-fake evidence: [playtest-manual-test.md](playtest-manual-test.md). No learner plays or publish completion is inferred.
+
+
+## Billing v7 / publish / reporting rollout (source branch)
+
+See [current contract and migrations](billing-v7-rollout.md), [safe reporting DTOs](reporting-operations.md), and [Swagger manual acceptance](publish-billing-v7-manual-test.md). Package6/12-month pricing stays monthly; quotation pins service periods/capacity/quota before Issue. Publish uses paid approval/readiness/package gates when enabled; operational metrics are not learner/revenue analytics. Source/Docker tests do not establish shared DB/provider deployment.

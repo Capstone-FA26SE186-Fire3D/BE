@@ -31,6 +31,8 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Billing.IPayosPayments,Fire3D.Infrastructure.Billing.PayosPayments>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.PayosRecoveryWorker>();
         services.AddScoped<IAdministrationStore, AdministrationStore>();
+        services.AddScoped<Fire3D.Application.Reporting.IAuditQueries,Fire3D.Infrastructure.Reporting.AuditQueries>();
+        services.AddScoped<Fire3D.Application.Reporting.IOperationsQueries,Fire3D.Infrastructure.Reporting.OperationsQueries>();
         services.AddScoped<AvatarStore>();
         services.AddScoped<IAvatarStore>(provider => provider.GetRequiredService<AvatarStore>());
         services.AddScoped<IAvatarCleanupStore>(provider => provider.GetRequiredService<AvatarStore>());
@@ -93,7 +95,8 @@ public static class ApplicationExtensions
         services.AddOptions<Fire3D.Application.Scenarios.PlaytestOptions>().Bind(configuration.GetSection("Playtest"))
             .Validate(o=>!o.Enabled || (System.Text.Encoding.UTF8.GetByteCount(o.SigningKey) is >=32 and <=512 && !string.IsNullOrWhiteSpace(o.Issuer) && o.Issuer.Length<=200 && !string.IsNullOrWhiteSpace(o.Audience) && o.Audience.Length<=200 && o.SigningKey!=configuration["Jwt:SigningKey"] && o.Audience!=configuration["Jwt:Audience"]),"Enabled Playtest requires a separate signing key of at least 32 bytes, issuer and audience.").ValidateOnStart();
         services.AddScoped<Fire3D.Application.Scenarios.IPlaytestLifecycle,Fire3D.Infrastructure.Scenarios.PlaytestLifecycle>();
-        services.AddScoped<Fire3D.Application.Releases.IReleaseStore, Fire3D.Infrastructure.Releases.FailClosedReleaseStore>();
+        services.AddOptions<Fire3D.Application.Releases.PublishingOptions>().Bind(configuration.GetSection("Publishing"));
+        services.AddScoped<Fire3D.Application.Releases.IReleaseStore, Fire3D.Infrastructure.Releases.ReleaseWriteStore>();
         services.AddScoped<Fire3D.Application.Support.ISupportService,Fire3D.Infrastructure.Support.SupportService>();
         services.AddScoped<Fire3D.Application.Buildings.IBuildingAccessService,Fire3D.Infrastructure.Buildings.BuildingAccessService>();
         services.AddScoped<Fire3D.Application.Buildings.IBuildingStore, Fire3D.Infrastructure.Buildings.BuildingStore>();

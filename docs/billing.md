@@ -1,18 +1,24 @@
 # Building billing / PayOS
 
+The current implementation work for catalog, fixed service intervals and quota snapshots is tracked in [billing v7 rollout](billing-v7-rollout.md). The historical task evidence below predates that rollout; source implementation and deployment acceptance are separate.
+
 Requirements: [Docs v7](../../Docs/schema_v7_contract.md), FR-BILLING-01..11, workflows §11, technology §9/10. Current implementation uses `building_locations.address`; v7 stores address on `buildings`. This is a mapping gap, not a second authoritative address. V7 source review baseline: BE `e42a2eb`, 2026-10-04; test/provider evidence below keeps its dated scope.
 
-## Product v7 target and remaining implementation
+## Current v7 implementation and remaining scope
 
-Each Building line buys 6/12-month game service with distinct-learner capacity, AI quota and immutable price/terms snapshots. New/Renewal/Upgrade have explicit period semantics, with no overlap of committed periods. Before Issue, quota-bearing lines pin a tenant/audience/unit-valid policy version and absolute grant interval within policy validity. Current catalog/quotation/PayOS delivery does not establish these v7 capabilities.
+The current task branch implements 6/12-month, monthly-priced packages and New/Renewal quotation lines with immutable capacity, quota, policy, price and terms snapshots. Admin fixes the service interval before Issue; checkout reserves it and paid provisioning creates the exact entitlement and quota grant atomically. Positive quota requires a policy covering the entire interval. Quota expires with its service interval and does not roll over. Deployment remains pending; this is source and disposable-database evidence. Upgrade, paid AI top-up, quota consumption and learner-seat allocation remain outside this delivery.
 
 Seats count distinct Trainee IDs at first online start per Building/service period. Repeated plays use the same seat; list/login/prepare/playtest do not count. Upgrades retain period and consumed seats; renewal starts a new period. Concurrent allocation of the last seat must be atomic.
 
 Organization AI pools prepaid Building/package and paid top-up grants. Top-up has its own quotation/payment purpose and never renews Building service. Request reserve/settle/release consumes existing quota; insufficient quota blocks new billable work. There is no AI billing period, overage consent or postpaid debt.
 
-Provision replay returns a previously committed payment/line resource even after expiry; it must not grant twice or reject replay only because the period is no longer Active. Current payment/provisioning recovery remains a separate implementation boundary. See BILLING-02, CAPACITY-01 and AI-01 in the [implementation checklist](api-implementation-checklist.md). Prices, quota unit/expiry/rollover and upgrade formulas need explicit policy; no values are inferred here.
+Provision replay returns a previously committed payment/line resource even after expiry; it must not grant twice or reject replay only because the period is no longer Active. See [current rollout and legacy compatibility](billing-v7-rollout.md), BILLING-02, CAPACITY-01 and AI-01 in the [implementation checklist](api-implementation-checklist.md). Admin configures prices, capacity, quota amount and unit; no business values are seeded. Upgrade formulas remain unspecified because Upgrade is not implemented.
 
-## Task 1: database foundation
+## Historical foundation and provider evidence
+
+The sections below retain earlier migration/provider evidence and legacy contracts. Their one-month package examples are historical and are not valid for new v7 sales. Use the [current Swagger test guide](publish-billing-v7-manual-test.md) for new packages, fixed service periods, publish and reporting.
+
+### Task 1: database foundation
 
 `20261002090000_AddBuildingBilling` runs the embedded `Billing/Schema.sql`. It retains legacy quotation/package fields and rows; new quotes use their Building lines. `20261002090100_SyncBuildingBillingModel` records the EF model only; it does not repeat the DDL. Financial migrations do not offer a destructive down migration: recover with a forward migration.
 

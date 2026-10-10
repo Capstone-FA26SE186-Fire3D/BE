@@ -69,17 +69,26 @@ public sealed partial class BillingService(Fire3DDbContext db) : IBillingService
     public async Task<IReadOnlyList<PackageResponse>> ListPackages(Guid actor,CancellationToken ct)
     {
         var identity=await Authorize(actor,false,ct);
-        return await db.ServicePackages.AsNoTracking().Where(x=>identity.Role==UserRole.PlatformAdmin||x.IsActive).OrderBy(x=>x.Code)
-            .Select(x=>new PackageResponse(x.Id,x.Code,x.Name,x.UnitPrice,x.Currency,x.DurationMonths??0,x.IsActive,x.Description,x.Revision)).ToListAsync(ct);
+        var packages=await db.ServicePackages.AsNoTracking().Where(x=>identity.Role==UserRole.PlatformAdmin||x.IsActive).OrderBy(x=>x.Code).ToListAsync(ct);
+        var now=DateTime.UtcNow;
+        var policies=await db.BillingQuotaPolicies.AsNoTracking().Where(x=>x.EffectiveFrom<=now&&(x.EffectiveUntil==null||x.EffectiveUntil>now)).Select(x=>x.Id).ToListAsync(ct);
+        return packages.Select(x=>{
+            var value=PackageView(x);
+            return value with {IsPurchasable=value.IsPurchasable && (x.AiPolicyVersionId is null || policies.Contains(x.AiPolicyVersionId.Value))};
+        }).ToArray();
     }
-    private static PackageResponse PackageView(ServicePackage x)=>new(x.Id,x.Code,x.Name,x.UnitPrice,x.Currency,x.DurationMonths??0,x.IsActive,x.Description,x.Revision);
+    private static PackageResponse PackageView(ServicePackage x)=>new(x.Id,x.Code,x.Name,x.UnitPrice,x.Currency,x.DurationMonths??0,x.IsActive,x.Description,x.Revision,
+        x.CommercialVersion,x.LearnerLimit,x.AiQuotaUnits,x.AiPolicyVersionId,"Monthly",x.IsActive && x.CommercialVersion==7 && x.DurationMonths is 6 or 12 && x.LearnerLimit>0 && x.AiQuotaUnits>=0 && (x.AiQuotaUnits==0 || x.AiPolicyVersionId.HasValue));
     private static DiscountResponse DiscountView(ServicePackageDiscountRule x)=>new(x.Id,x.Code,x.DiscountKind,x.DiscountValue,x.MinimumBuildings,x.ValidFrom,x.ValidUntil,x.ServicePackageId,x.MinimumDurationMonths,x.IsActive,x.Revision);
     private static PackageWriteRequest ValidatePackage(PackageWriteRequest request)
     {
         Field(Text(request.Code,50)&&System.Text.RegularExpressions.Regex.IsMatch(request.Code.Trim(),"^[A-Za-z0-9][A-Za-z0-9_-]*$"),"code","Use a package code of 1–50 letters, numbers, underscores or hyphens.");
         Field(Text(request.Name,255),"name","Name is required and must be at most 255 characters.");
         Field(Money(request.UnitPrice),"unitPrice","Monthly unit price must be a non-negative whole VND amount within the supported range.");
-        Field(request.DurationMonths>0,"durationMonths","Duration must be a positive number of months.");
+        Field(request.DurationMonths is 6 or 12,"durationMonths","V7 Building packages require 6 or 12 months.");
+        Field(request.LearnerLimit>0,"learnerLimit","Learner limit must be positive.");
+        Field(request.AiQuotaUnits>=0,"aiQuotaUnits","AI quota units must be supplied and non-negative.");
+        Field(request.AiQuotaUnits==0 || request.AiPolicyVersionId.HasValue,"aiPolicyVersionId","Quota-bearing packages require a policy version.");
         Field(request.Description is null||Text(request.Description,10000),"description","Description must be non-empty and at most 10,000 characters when supplied.");
         return request with {Code=request.Code.Trim().ToUpperInvariant(),Name=request.Name.Trim(),Description=request.Description?.Trim()};
     }
@@ -92,6 +101,9 @@ public sealed partial class BillingService(Fire3DDbContext db) : IBillingService
         var old=id.HasValue ? PackageView(item):null;
         if(id.HasValue) BillingETag.Require(ifMatch,item.Id,item.Revision);
         if(await db.ServicePackages.AnyAsync(x=>x.Code==request.Code&&x.Id!=item.Id,ct)) throw new BillingException(409,"PACKAGE_CODE_EXISTS","The package code already exists.");
+        if(request.AiPolicyVersionId.HasValue && !await db.BillingQuotaPolicies.AnyAsync(x=>x.Id==request.AiPolicyVersionId && x.EffectiveFrom<=DateTime.UtcNow && (x.EffectiveUntil==null || x.EffectiveUntil>DateTime.UtcNow),ct))
+            throw new BillingException(400,"BILLING_POLICY_INVALID","Choose an effective quota policy.",new(){["aiPolicyVersionId"]=["Policy is absent or outside its effective interval."]});
+        item.CommercialVersion=7;item.LearnerLimit=request.LearnerLimit;item.AiQuotaUnits=request.AiQuotaUnits;item.AiPolicyVersionId=request.AiPolicyVersionId;
         item.Code=request.Code;item.Name=request.Name;item.UnitPrice=request.UnitPrice;item.DurationMonths=request.DurationMonths;item.IsActive=request.IsActive;item.Description=request.Description;item.UpdatedAt=DateTime.UtcNow;
         if(id.HasValue)item.Revision++;else db.ServicePackages.Add(item);
         var response=PackageView(item);Audit(identity,null,"service_packages",item.Id,id.HasValue?AuditAction.Update:AuditAction.Create,old,response);

@@ -25,8 +25,9 @@ public sealed partial class AuthIntegrationTests
  private async Task WithReleaseRuntime(Func<string,Task> action)
  {
   var login="release_test_"+Guid.NewGuid().ToString("N");
-  await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS;GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION release_access_gate(text,uuid,uuid,uuid,jsonb,text,bigint) TO {login}");
-  try{await action(new NpgsqlConnectionStringBuilder(testConnection){Username=login,Password="",Pooling=false}.ConnectionString);}finally{await ExecuteAsync($"DROP OWNED BY {login};DROP ROLE {login}");}
+  var credentials=new NpgsqlConnectionStringBuilder(testConnection);
+  await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{(credentials.Password??"").Replace("'","''")}';GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION release_access_gate(text,uuid,uuid,uuid,jsonb,text,bigint),publish_release_gate(text,uuid,uuid,uuid,jsonb,text,bigint) TO {login}");
+  try{await action(new NpgsqlConnectionStringBuilder(testConnection){Username=login,Pooling=false}.ConnectionString);}finally{await ExecuteAsync($"DROP OWNED BY {login};DROP ROLE {login}");}
  }
  private async Task<BuildReleaseRequest> ApproveRelease((Guid Owner,Guid Revision,Guid Version,Guid Run,Guid Artifact) f)
  {

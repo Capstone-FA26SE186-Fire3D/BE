@@ -34,7 +34,7 @@ internal sealed class BillingDatabase : IAsyncDisposable
     public static readonly Guid Building = Guid.Parse("30000000-0000-0000-0000-000000000001");
 
     private BillingDatabase(string admin) => this.admin = admin;
-    public static async Task<BillingDatabase> Create(bool applyBilling = true,bool applyPayos = true)
+    public static async Task<BillingDatabase> Create(bool applyBilling = true,bool applyPayos = true,bool migrationHistory=false)
     {
         var source = Environment.GetEnvironmentVariable("FET3D_BILLING_TEST_ADMIN")
             ?? throw new InvalidOperationException("An explicit test connection is required.");
@@ -51,8 +51,28 @@ internal sealed class BillingDatabase : IAsyncDisposable
         {
             await using var db = result.Context();
             Assert.Equal(result.name, db.Database.GetDbConnection().Database);
-            await db.Database.EnsureCreatedAsync();
-            if (applyBilling) {await result.ApplyBilling();if(applyPayos)await result.ApplyPayos();}
+            if(migrationHistory)
+            {
+                await using var migrationDb=new Fire3DDbContext(new DbContextOptionsBuilder<Fire3DDbContext>().UseNpgsql(result.Connection).Options);
+                await migrationDb.Database.MigrateAsync();
+            }
+            else
+            {
+                await db.Database.EnsureCreatedAsync();
+                if (applyBilling)
+                {
+                    await result.ApplyBilling();
+                    await result.Sql("DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='fire3d_api') THEN CREATE ROLE fire3d_api NOLOGIN; END IF; END $$;");
+                    foreach (var operation in new Fire3D.Infrastructure.Migrations.AddBillingV7Catalog().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
+                        await result.Sql(operation.Sql);
+                    if(applyPayos)await result.ApplyPayos();
+                    foreach (var operation in new Fire3D.Infrastructure.Migrations.AddBillingV7QuotationSnapshots().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
+                        await result.Sql(operation.Sql);
+                    if(applyPayos)
+                        foreach (var operation in new Fire3D.Infrastructure.Migrations.AddBillingV7Provisioning().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
+                            await result.Sql(operation.Sql);
+                }
+            }
             await result.Sql($$"""
                 INSERT INTO organizations(id,name,slug,plan,is_active,metadata,created_at,updated_at)
                 VALUES ('{{Org}}','One','one','Standard',true,'{}',now(),now()),
@@ -73,11 +93,11 @@ internal sealed class BillingDatabase : IAsyncDisposable
         catch { await result.DisposeAsync(); throw; }
     }
 
-    public Fire3DDbContext Context()
+    public Fire3DDbContext Context(string? connection=null)
     {
         var services = new ServiceCollection();
         services.AddDatabase(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>
-            { ["ConnectionStrings:DefaultConnection"] = Connection }).Build());
+            { ["ConnectionStrings:DefaultConnection"] = connection ?? Connection }).Build());
         return new Fire3DDbContext(services.BuildServiceProvider().GetRequiredService<DbContextOptions<Fire3DDbContext>>());
     }
     public async Task ApplyBilling()
@@ -97,15 +117,18 @@ internal sealed class BillingDatabase : IAsyncDisposable
             await Sql(new StreamReader(stream).ReadToEnd());
         }
         requestLogin="test_req_"+Guid.NewGuid().ToString("N");webhookLogin="test_hook_"+Guid.NewGuid().ToString("N");
-        await Sql($"CREATE ROLE {requestLogin} LOGIN NOINHERIT; CREATE ROLE {webhookLogin} LOGIN NOINHERIT; GRANT fet3d_payos_request_executor TO {requestLogin}; GRANT fet3d_payos_webhook_executor TO {webhookLogin};");
+        var testPassword="'"+(new NpgsqlConnectionStringBuilder(Connection).Password ?? "").Replace("'","''")+"'";
+        await Sql($"CREATE ROLE {requestLogin} LOGIN NOINHERIT PASSWORD {testPassword}; CREATE ROLE {webhookLogin} LOGIN NOINHERIT PASSWORD {testPassword}; GRANT fet3d_payos_request_executor TO {requestLogin}; GRANT fet3d_payos_webhook_executor TO {webhookLogin};");
         var settings=new NpgsqlConnectionStringBuilder(Connection){Username=requestLogin};RequestConnection=settings.ConnectionString;
         settings.Username=webhookLogin;WebhookConnection=settings.ConnectionString;
     }
     public async Task ApplyPayosAsRestrictedMigration()
     {
+        // Extension installation is a deployment prerequisite for the restricted migrator.
+        await Sql("CREATE EXTENSION IF NOT EXISTS btree_gist");
         migrationLogin="test_migration_"+Guid.NewGuid().ToString("N");
         await Sql($$"""
-            CREATE ROLE {{migrationLogin}} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+            CREATE ROLE {{migrationLogin}} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD '{{(new NpgsqlConnectionStringBuilder(Connection).Password ?? "").Replace("'","''")}}';
             GRANT fet3d_payos_ledger_owner TO {{migrationLogin}};
             GRANT USAGE,CREATE ON SCHEMA public TO {{migrationLogin}};
             ALTER SCHEMA public OWNER TO {{migrationLogin}};
@@ -123,7 +146,7 @@ internal sealed class BillingDatabase : IAsyncDisposable
             """);
         await using var connection=new NpgsqlConnection(new NpgsqlConnectionStringBuilder(Connection){Username=migrationLogin}.ConnectionString);
         await connection.OpenAsync();await using var tx=await connection.BeginTransactionAsync();
-        foreach(var resource in new[]{"PayosRuntime.sql","PayosCheckout.sql","PayosWebhook.sql","PayosProvisioning.sql"})
+        foreach(var resource in new[]{"PayosRuntime.sql","PayosCheckout.sql","PayosWebhook.sql","PayosProvisioning.sql","BillingV7Provisioning.sql"})
         {
             using var stream=typeof(Fire3D.Infrastructure.Billing.PayosSdkProvider).Assembly.GetManifestResourceStream("Fire3D.Infrastructure.Billing."+resource)!;
             await new NpgsqlCommand(new StreamReader(stream).ReadToEnd(),connection,tx).ExecuteNonQueryAsync();

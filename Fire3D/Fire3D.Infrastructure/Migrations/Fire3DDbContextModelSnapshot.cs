@@ -444,6 +444,56 @@ namespace Fire3D.Infrastructure.Migrations
                     b.ToTable("billing_command_receipts");
                 });
 
+            modelBuilder.Entity("Fire3D.Domain.Entities.BillingQuotaPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Audience")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("audience");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("effective_from");
+
+                    b.Property<DateTime?>("EffectiveUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("effective_until");
+
+                    b.Property<string>("PolicyKind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("policy_kind");
+
+                    b.Property<string>("QuotaUnit")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("quota_unit");
+
+                    b.Property<string>("Rollover")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("rollover");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.ToTable("billing_quota_policy_versions");
+                });
+
             modelBuilder.Entity("Fire3D.Domain.Entities.Building", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1866,6 +1916,12 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasDefaultValue("BuildingService")
                         .HasColumnName("billing_purpose");
 
+                    b.Property<int>("CommercialVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("commercial_version");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -2009,9 +2065,27 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<Guid?>("AiPolicyVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ai_policy_version_id");
+
+                    b.Property<string>("AiQuotaUnit")
+                        .HasColumnType("text")
+                        .HasColumnName("ai_quota_unit");
+
+                    b.Property<int?>("AiQuotaUnits")
+                        .HasColumnType("integer")
+                        .HasColumnName("ai_quota_units");
+
                     b.Property<Guid>("BuildingId")
                         .HasColumnType("uuid")
                         .HasColumnName("building_id");
+
+                    b.Property<int>("CommercialVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("commercial_version");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -2032,10 +2106,22 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("discount_snapshot");
 
+                    b.Property<DateTime?>("EndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ends_at");
+
+                    b.Property<int?>("LearnerLimit")
+                        .HasColumnType("integer")
+                        .HasColumnName("learner_limit");
+
                     b.Property<string>("LineProvisioningKey")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("line_provisioning_key");
+
+                    b.Property<long?>("PackageRevision")
+                        .HasColumnType("bigint")
+                        .HasColumnName("package_revision");
 
                     b.Property<string>("PriceSnapshot")
                         .IsRequired()
@@ -2059,6 +2145,10 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Property<Guid>("ServicePackageId")
                         .HasColumnType("uuid")
                         .HasColumnName("service_package_id");
+
+                    b.Property<DateTime?>("StartsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("starts_at");
 
                     b.Property<decimal>("SubtotalAmount")
                         .HasColumnType("numeric(14,2)")
@@ -3099,6 +3189,12 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("building_id");
 
+                    b.Property<int>("CommercialVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("commercial_version");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -3110,6 +3206,10 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Property<DateTime>("EndsAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("ends_at");
+
+                    b.Property<int?>("LearnerLimit")
+                        .HasColumnType("integer")
+                        .HasColumnName("learner_limit");
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid")
@@ -3184,11 +3284,25 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<Guid?>("AiPolicyVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ai_policy_version_id");
+
+                    b.Property<int?>("AiQuotaUnits")
+                        .HasColumnType("integer")
+                        .HasColumnName("ai_quota_units");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("code");
+
+                    b.Property<int>("CommercialVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("commercial_version");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -3228,6 +3342,10 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
+
+                    b.Property<int?>("LearnerLimit")
+                        .HasColumnType("integer")
+                        .HasColumnName("learner_limit");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -4309,6 +4427,15 @@ namespace Fire3D.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Fire3D.Domain.Entities.BillingQuotaPolicy", b =>
+                {
+                    b.HasOne("Fire3D.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

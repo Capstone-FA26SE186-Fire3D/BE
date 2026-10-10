@@ -41,19 +41,21 @@ public class ReleasesController(ISender sender) : ControllerBase
     }
 
     /// <summary>
-    /// Publish remains contained: returns503 PUBLISH_GATE_UNAVAILABLE until the separate publish gate is complete.
+    /// Publishes a Built release after paid entitlement, approved content, exact readiness and accepted package gates. Disabled by default during rollout.
     /// </summary>
     [HttpPost("{releaseId:guid}/publish")]
     [ProducesResponseType<ProblemDetails>(503)]
     [ProducesResponseType(204)]
     [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> PublishRelease(Guid releaseId, CancellationToken ct)
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new Fire3D.Application.Releases.Commands.PublishRelease.PublishReleaseCommand(actor, releaseId), ct);
+        var result = await sender.Send(new Fire3D.Application.Releases.Commands.PublishRelease.PublishReleaseCommand(actor, releaseId, User.GetSessionFamilyId()), ct);
 
         return result.IsSuccess ? NoContent() : ReleaseProblem(result.Error!);
     }

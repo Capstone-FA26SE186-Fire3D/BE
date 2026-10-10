@@ -16,6 +16,7 @@ public sealed class AccountsController(ISender sender) : AdministrationControlle
     /// Tạo mới một tài khoản (chỉ dành cho PlatformAdmin).
     /// </summary>
     [HttpPost]
+    [ProducesResponseType<AccountResponse>(201)]
     public async Task<ActionResult<AccountResponse>> Create(CreateAccountRequest request, CancellationToken ct)
     {
         var result = await sender.Send(new CreateAccountCommand(ActorId, request, NewCorrelationId()), ct);

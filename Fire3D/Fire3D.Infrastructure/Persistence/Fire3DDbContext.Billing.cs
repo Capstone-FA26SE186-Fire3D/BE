@@ -7,6 +7,25 @@ public partial class Fire3DDbContext
 {
     private static void ConfigureBilling(ModelBuilder model)
     {
+        model.Entity<ServicePackage>().Property(x=>x.CommercialVersion).HasColumnName("commercial_version").HasDefaultValue(1);
+        model.Entity<Quotation>().Property(x=>x.CommercialVersion).HasColumnName("commercial_version").HasDefaultValue(1);
+        model.Entity<QuotationBuildingItem>().Property(x=>x.CommercialVersion).HasDefaultValue(1);
+        model.Entity<ServiceEntitlement>().Property(x=>x.CommercialVersion).HasDefaultValue(1);
+        model.Entity<ServicePackage>().Property(x=>x.LearnerLimit).HasColumnName("learner_limit");
+        model.Entity<ServicePackage>().Property(x=>x.AiQuotaUnits).HasColumnName("ai_quota_units");
+        model.Entity<ServicePackage>().Property(x=>x.AiPolicyVersionId).HasColumnName("ai_policy_version_id");
+        model.Entity<BillingQuotaPolicy>(e=>{
+            e.Property(x=>x.Id).HasColumnName("id");
+            e.Property(x=>x.Audience).HasColumnName("audience");
+            e.Property(x=>x.PolicyKind).HasColumnName("policy_kind");
+            e.Property(x=>x.QuotaUnit).HasColumnName("quota_unit");
+            e.Property(x=>x.EffectiveFrom).HasColumnName("effective_from");
+            e.Property(x=>x.EffectiveUntil).HasColumnName("effective_until");
+            e.Property(x=>x.Rollover).HasColumnName("rollover");
+            e.Property(x=>x.CreatedBy).HasColumnName("created_by");
+            e.Property(x=>x.CreatedAt).HasColumnName("created_at");
+        });
+        model.Entity<BillingQuotaPolicy>().HasOne<User>().WithMany().HasForeignKey(x=>x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
         model.Entity<PayosPaymentRequest>().Property(x=>x.PaymentLinkId).HasColumnName("payment_link_id").HasMaxLength(100);
         model.Entity<PayosPaymentRequest>().HasIndex(x=>x.PaymentLinkId).IsUnique();
         model.Entity<BillingCheckoutOperation>().Property(x=>x.ProviderInput).HasDefaultValueSql("'{}'::jsonb");
