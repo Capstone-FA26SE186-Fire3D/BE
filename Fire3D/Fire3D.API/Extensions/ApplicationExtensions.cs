@@ -15,6 +15,9 @@ public static class ApplicationExtensions
     {
         services.AddSingleton(configuration);
         services.AddScoped<Fire3D.Application.Billing.IBillingService,Fire3D.Infrastructure.Billing.BillingService>();
+        Fire3D.API.Authorization.LearnerContinuationAuthentication.AddLearnerContinuation(services,configuration);
+        services.AddScoped<Fire3D.Application.Learning.ILearnerSessions,Fire3D.Infrastructure.Learning.LearnerSessions>();
+        services.AddScoped<Fire3D.Application.Learning.IBuildingQrCodes,Fire3D.Infrastructure.Learning.BuildingQrCodes>();
         services.AddExceptionHandler<BillingExceptionHandler>();
         services.AddOptions<Fire3D.Application.Billing.PayosOptions>()
             .Bind(configuration.GetSection(Fire3D.Application.Billing.PayosOptions.Section))

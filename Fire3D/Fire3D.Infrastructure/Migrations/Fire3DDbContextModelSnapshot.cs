@@ -3572,7 +3572,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("AppVersion")
-                        .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("app_version");
 
@@ -3580,7 +3579,7 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("release_status_enum")
                         .HasColumnName("content_status_at_completion");
 
-                    b.Property<Guid>("DeviceId")
+                    b.Property<Guid?>("DeviceId")
                         .HasColumnType("uuid")
                         .HasColumnName("device_id");
 
@@ -3607,7 +3606,7 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnName("protocol_version")
                         .HasDefaultValueSql("'1.0'::text");
 
-                    b.Property<Guid>("QrCodeId")
+                    b.Property<Guid?>("QrCodeId")
                         .HasColumnType("uuid")
                         .HasColumnName("qr_code_id");
 
@@ -3658,7 +3657,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnName("training_id");
 
                     b.Property<string>("UnityVersion")
-                        .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("unity_version");
 
@@ -3860,7 +3858,7 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("exit_point_id");
 
-                    b.Property<decimal>("HazardExposureScore")
+                    b.Property<decimal?>("HazardExposureScore")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("hazard_exposure_score");
@@ -3870,13 +3868,12 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnName("last_event_sequence");
 
                     b.Property<string>("PathTraveled")
-                        .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("jsonb")
                         .HasColumnName("path_traveled")
                         .HasDefaultValueSql("'[]'::jsonb");
 
-                    b.Property<bool>("ReachedExit")
+                    b.Property<bool?>("ReachedExit")
                         .HasColumnType("boolean")
                         .HasColumnName("reached_exit");
 
@@ -3892,7 +3889,7 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("rubric_version");
 
-                    b.Property<decimal>("Score")
+                    b.Property<decimal?>("Score")
                         .HasPrecision(5, 2)
                         .HasColumnType("numeric(5,2)")
                         .HasColumnName("score");
@@ -3912,16 +3909,16 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnName("synced_at")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<int>("TimeTakenSeconds")
+                    b.Property<int?>("TimeTakenSeconds")
                         .HasColumnType("integer")
                         .HasColumnName("time_taken_seconds");
 
-                    b.Property<decimal>("TotalDistanceMeters")
+                    b.Property<decimal?>("TotalDistanceMeters")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("total_distance_meters");
 
-                    b.Property<int>("WrongExits")
+                    b.Property<int?>("WrongExits")
                         .HasColumnType("integer")
                         .HasColumnName("wrong_exits");
 
@@ -5245,14 +5242,12 @@ namespace Fire3D.Infrastructure.Migrations
                         .WithMany("Sessions")
                         .HasForeignKey("DeviceId", "TraineeUserId")
                         .HasPrincipalKey("Id", "UserId")
-                        .IsRequired()
                         .HasConstraintName("sessions_device_id_trainee_user_id_fkey");
 
                     b.HasOne("Fire3D.Domain.Entities.ReleaseQrCode", "ReleaseQrCode")
                         .WithMany("Sessions")
                         .HasForeignKey("QrCodeId", "TrainingId", "ReleaseId", "OrganizationId")
                         .HasPrincipalKey("Id", "TrainingId", "ReleaseId", "OrganizationId")
-                        .IsRequired()
                         .HasConstraintName("sessions_qr_code_id_training_id_release_id_organization_id_fkey");
 
                     b.HasOne("Fire3D.Domain.Entities.Training", "Training")
