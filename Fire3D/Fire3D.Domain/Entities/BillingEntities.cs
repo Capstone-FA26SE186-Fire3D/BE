@@ -37,6 +37,7 @@ public sealed class OrganizationNotification
 [Table("enterprise_quote_requests")]
 public sealed class EnterpriseQuoteRequest
 {
+    [Column("revision")] public long Revision { get; set; } = 1;
     [Column("id")]
     public Guid Id { get; set; }
     [Column("organization_id")]
@@ -116,6 +117,10 @@ public sealed class QuotationBuildingItem
     [Column("ai_quota_unit")] public string? AiQuotaUnit { get; set; }
     [Column("starts_at")] public DateTime? StartsAt { get; set; }
     [Column("ends_at")] public DateTime? EndsAt { get; set; }
+    [Column("pricing_basis")] public string PricingBasis { get; set; } = "Monthly";
+    [Column("upgrade_entitlement_id")] public Guid? UpgradeEntitlementId { get; set; }
+    [Column("upgrade_base_capacity_revision")] public int? UpgradeBaseCapacityRevision { get; set; }
+    [Column("upgrade_previous_learner_limit")] public int? UpgradePreviousLearnerLimit { get; set; }
     [Column("id")]
     public Guid Id { get; set; }
     [Column("quotation_id")]
@@ -260,4 +265,23 @@ public sealed class ServiceEntitlement
     public Guid CreatedBy { get; set; }
     [Column("created_at")]
     public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>Single line of an AIQuotaTopUp quotation; policy, units, amount and interval are pinned at Issue.</summary>
+[Table("quotation_topup_items")]
+public sealed class QuotationTopUpItem
+{
+    [Column("id")] public Guid Id { get; set; }
+    [Column("quotation_id")] public Guid QuotationId { get; set; }
+    [Column("organization_id")] public Guid OrganizationId { get; set; }
+    [Column("requested_quota_units")] public int? RequestedQuotaUnits { get; set; }
+    [Column("policy_version_id")] public Guid? PolicyVersionId { get; set; }
+    [Column("quota_unit")] public string? QuotaUnit { get; set; }
+    [Column("quota_units")] public int? QuotaUnits { get; set; }
+    [Column("amount", TypeName = "numeric(14,2)")] public decimal? Amount { get; set; }
+    [Column("starts_at")] public DateTime? StartsAt { get; set; }
+    [Column("ends_at")] public DateTime? EndsAt { get; set; }
+    [Column("line_provisioning_key")] public string LineProvisioningKey { get; set; } = "";
+    [Column("created_at")] public DateTime CreatedAt { get; set; }
+    [Column("updated_at")] public DateTime UpdatedAt { get; set; }
 }

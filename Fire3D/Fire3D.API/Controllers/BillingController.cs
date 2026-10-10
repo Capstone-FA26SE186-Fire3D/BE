@@ -125,4 +125,50 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     [HttpGet("api/admin/enterprise-quote-requests")]
     public async Task<ActionResult<BillingPage<EnterpriseQuoteResponse>>> AdminEnterpriseRequests([FromQuery]int page=1,[FromQuery]int pageSize=20,CancellationToken ct=default)=>Ok(await billing.ListEnterpriseRequests(Actor,page,pageSize,ct));
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
+    [HttpGet("api/admin/enterprise-quote-requests/{id:guid}")]
+    [ProducesResponseType<EnterpriseQuoteResponse>(200)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+    public async Task<ActionResult<EnterpriseQuoteResponse>> AdminEnterpriseRequest(Guid id,CancellationToken ct)
+    {var response=await billing.GetEnterpriseRequest(Actor,id,ct);ETag(id,response.Revision);return Ok(response);}
+    /// <summary>Admin changes status to Contacted, Rejected or Cancelled with If-Match. No charge or service grant.</summary>
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
+    [HttpPatch("api/admin/enterprise-quote-requests/{id:guid}")]
+    [ProducesResponseType<EnterpriseQuoteResponse>(200)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+    public async Task<ActionResult<EnterpriseQuoteResponse>> AdminEnterpriseStatus(Guid id,EnterpriseStatusRequest request,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? ifMatch,CancellationToken ct)
+    {var response=await billing.UpdateEnterpriseStatus(Actor,User.GetSessionFamilyId(),id,request,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
+    /// <summary>Admin drafts a Building quotation for the requesting OrganizationUser and marks the request Quoted. Idempotency-Key required; no service is granted.</summary>
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
+    [HttpPost("api/admin/enterprise-quote-requests/{id:guid}/quotations")]
+    [ProducesResponseType<QuotationResponse>(201)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+    public async Task<ActionResult<QuotationResponse>> AdminEnterpriseQuotation(Guid id,EnterpriseQuotationRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)
+    {var response=await billing.CreateEnterpriseQuotation(Actor,User.GetSessionFamilyId(),id,request,key,ct);ETag(response.Id,response.Revision);return Created($"/api/billing/quotations/{response.Id}",response);}
+    /// <summary>Current and upcoming paid service of a Building: effective learner limit (with upgrades), seats used/remaining, period and upgrades.</summary>
+    [HttpGet("api/buildings/{id:guid}/service-entitlement")]
+    [ProducesResponseType<BuildingServiceEntitlementResponse>(200)]
+    public async Task<ActionResult<BuildingServiceEntitlementResponse>> BuildingEntitlement(Guid id,CancellationToken ct)=>Ok(await billing.GetBuildingEntitlement(Actor,id,ct));
+    /// <summary>Organization prepaid AI quota per unit: granted, reserved, consumed, expired, available and scheduled at asOf.</summary>
+    [HttpGet("api/organizations/me/ai-quota")]
+    [ProducesResponseType<AiQuotaBalanceResponse>(200)]
+    public async Task<ActionResult<AiQuotaBalanceResponse>> AiQuota(CancellationToken ct)=>Ok(await billing.GetAiQuota(Actor,null,ct));
+    [HttpGet("api/organizations/me/ai-quota/grants")]
+    [ProducesResponseType<BillingPage<AiQuotaGrantView>>(200)]
+    public async Task<ActionResult<BillingPage<AiQuotaGrantView>>> AiQuotaGrants([FromQuery]int page=1,[FromQuery]int pageSize=20,CancellationToken ct=default)=>Ok(await billing.ListAiQuotaGrants(Actor,null,page,pageSize,ct));
+    [HttpGet("api/organizations/me/ai-usage")]
+    [ProducesResponseType<BillingPage<AiUsageView>>(200)]
+    public async Task<ActionResult<BillingPage<AiUsageView>>> AiUsage([FromQuery]int page=1,[FromQuery]int pageSize=20,CancellationToken ct=default)=>Ok(await billing.ListAiUsage(Actor,null,page,pageSize,ct));
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
+    [HttpGet("api/admin/organizations/{organizationId:guid}/ai-quota")]
+    [ProducesResponseType<AiQuotaBalanceResponse>(200)]
+    public async Task<ActionResult<AiQuotaBalanceResponse>> AdminAiQuota(Guid organizationId,CancellationToken ct)=>Ok(await billing.GetAiQuota(Actor,organizationId,ct));
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
+    [HttpGet("api/admin/organizations/{organizationId:guid}/ai-quota/grants")]
+    [ProducesResponseType<BillingPage<AiQuotaGrantView>>(200)]
+    public async Task<ActionResult<BillingPage<AiQuotaGrantView>>> AdminAiQuotaGrants(Guid organizationId,[FromQuery]int page=1,[FromQuery]int pageSize=20,CancellationToken ct=default)=>Ok(await billing.ListAiQuotaGrants(Actor,organizationId,page,pageSize,ct));
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
+    [HttpGet("api/admin/organizations/{organizationId:guid}/ai-usage")]
+    [ProducesResponseType<BillingPage<AiUsageView>>(200)]
+    public async Task<ActionResult<BillingPage<AiUsageView>>> AdminAiUsage(Guid organizationId,[FromQuery]int page=1,[FromQuery]int pageSize=20,CancellationToken ct=default)=>Ok(await billing.ListAiUsage(Actor,organizationId,page,pageSize,ct));
 }

@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-150 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+160 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -19,8 +19,14 @@
 | GET | /api/admin/discount-rules/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | PATCH | /api/admin/discount-rules/{id} | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/enterprise-quote-requests | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/admin/enterprise-quote-requests/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
+| PATCH | /api/admin/enterprise-quote-requests/{id} | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
+| POST | /api/admin/enterprise-quote-requests/{id}/quotations | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/feedback | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | PATCH | /api/admin/feedback/{id}/status | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/admin/organizations/{organizationId}/ai-quota | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/admin/organizations/{organizationId}/ai-quota/grants | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/admin/organizations/{organizationId}/ai-usage | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/admin/payments/payos/checkouts/{id}/reconcile | Bearer | None | 202, 400, 401, 403, 404, 409, 503 |
 | POST | /api/admin/quotations/{id}/issue | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/scenario-reviews | Bearer | None | 200, 400, 401, 403 |
@@ -78,6 +84,7 @@
 | POST | /api/buildings/{id}/participation/verify | Bearer | None | 200 |
 | GET | /api/buildings/{id}/revisions | Bearer | None | 200, 400, 401, 403, 404 |
 | POST | /api/buildings/{id}/revisions/upload-url | Bearer | Idempotency-Key | 201, 400, 401, 403, 404 |
+| GET | /api/buildings/{id}/service-entitlement | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/buildings/{id}/trainings | Bearer | None | 200, 400, 404 |
 | GET | /api/feedback | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/feedback | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
@@ -91,6 +98,9 @@
 | POST | /api/organizations | Bearer | None | 201 |
 | GET | /api/organizations/me | Bearer | None | 200, 401, 403 |
 | PATCH | /api/organizations/me | Bearer | If-Match | 200, 400, 401, 403, 409, 412, 428 |
+| GET | /api/organizations/me/ai-quota | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/organizations/me/ai-quota/grants | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/organizations/me/ai-usage | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/organizations/me/analytics/operations | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/organizations/{id} | Bearer | None | 200 |
 | PATCH | /api/organizations/{id}/status | Bearer | None | 200 |

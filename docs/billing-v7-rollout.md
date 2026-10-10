@@ -101,3 +101,51 @@ Package/discount create and PATCH, quota-policy create and enterprise requests
 derive family from JWT and recheck account/organization/session under lifecycle
 and actor locks. A revoked/expired family returns401 with no mutation, receipt or
 audit. GET contracts, ETags and immutable quotation snapshots are unchanged.
+
+## Upgrade, AI top-up, quota ledger reads, enterprise and expiry reminders — 2026-10-11
+
+Migration `20261011110000_AddBillingUpgradeTopUp` (plus EF snapshot `20261011110100_SyncBillingUpgradeTopUpModel`) is additive. Preflight stops on unknown purchase actions or billing purposes. No price, seat count, quota amount or policy is seeded.
+
+### Upgrade (same entitlement, period and consumed seats)
+
+- Draft: `POST /api/billing/quotations` with lines `{ buildingId, servicePackageId, purchaseAction: "Upgrade", upgradeEntitlementId }`. The entitlement must be the Building's current paid v7 entitlement. The target package's learner limit must exceed the current limit (`409 UPGRADE_LIMIT_NOT_HIGHER`); a missing or foreign entitlement returns `409 UPGRADE_ENTITLEMENT_INVALID`. Upgrade lines are not mixed with New/Renewal lines. The draft line has `pricingBasis: "OneTime"`, total 0, and pins `upgradeBaseCapacityRevision` and `upgradePreviousLearnerLimit`; repricing at Issue re-pins them.
+- Issue (`POST /api/admin/quotations/{id}/issue`): each Upgrade item takes `startsAt` (effective time: future, not before `validUntil`, before the entitlement end), `learnerLimit` (must exceed the previous limit), `oneTimePrice` (positive whole VND, fixed by Admin — no prorata from the monthly price) and optional `additionalQuotaUnits` with `aiPolicyVersionId` covering the effective time through the entitlement end. The line `endsAt` is the entitlement end; standalone quota purchases use top-up. Discount rules never apply to one-time lines.
+- Checkout reserves the capacity baseline: a unique `(entitlement, base capacity revision)` reservation means two checkouts on the same baseline cannot both proceed (`409 PAYOS_UPGRADE_RESERVED`; a changed baseline returns `409 PAYOS_UPGRADE_BASELINE_CHANGED`). Provider-confirmed cancellation releases it.
+- Provisioning writes an immutable `billing_entitlement_upgrades` row (capacity revision n+1, previous/new limit, effective time, payment and line provenance) and, for bundled quota, an `Upgrade` grant from the effective time to the entitlement end. The entitlement row, `endsAt` and seats are unchanged. A payment arriving after the baseline changed or the entitlement ended stays Paid/Applied and the line becomes `NeedsReconcile` (`PAYOS_UPGRADE_NEEDS_RECONCILE`); nothing is applied to a moved baseline. Replays never apply twice.
+- `billing_effective_learner_limit(entitlement, at)` returns the limit of the latest upgrade effective at that time, otherwise the base limit. Renewal still opens a new entitlement and seat period.
+
+### AI quota top-up
+
+- Draft: `POST /api/billing/quotations` with `{ "purpose": "AIQuotaTopUp", "topUp": { "requestedQuotaUnits": 500 } }` (no Building lines). PATCH keeps the purpose.
+- Issue: `topUp: { policyVersionId, quotaUnits, amount, startsAt, endsAt }` plus tax/terms/validUntil and no `items`. The organization quota policy must cover the whole interval (`409 BILLING_POLICY_INTERVAL_INVALID`); `startsAt` is not before the payment deadline. Unit comes from the policy.
+- Checkout accepts Accepted AIQuotaTopUp quotations; there is no service reservation. Provisioning creates only a `TopUp` grant (`entitlement_id` null) with payment/line provenance. Building entitlements and periods never change. Duplicate webhooks and recovery replays return the existing grant.
+
+### Grants and ledger
+
+`billing_ai_quota_grants` gains `source_kind` (`BuildingService` | `Upgrade` | `TopUp`) with per-source provenance checks; existing rows are `BuildingService`. `billing_ai_quota_allocations` (Reserved/Settled/Released per request and grant) is the reserve/settle/release ledger written by the AI accounting gates; `billing_learner_seats` stores one seat per Trainee per entitlement period. Runtime API has SELECT only; ledger tables have no direct runtime DML.
+
+### Read APIs
+
+| Method | Route | Notes |
+|---|---|---|
+| GET | `/api/buildings/{id}/service-entitlement` | Owner tenant or Admin. `current` and `upcoming` paid entitlements: period, `isEffective`, base and effective learner limit at asOf (or at start for upcoming), `capacityRevision`, `seatsUsed`, `seatsRemaining`, upgrades. |
+| GET | `/api/organizations/me/ai-quota` | Per unit: `granted`, `reserved`, `consumed` (active grants at `asOf`), `expired` (unused units of ended grants), `available = granted - reserved - consumed`, `scheduled`. Units never combine. |
+| GET | `/api/organizations/me/ai-quota/grants` | Paged grants with source kind, interval, status (Scheduled/Active/Expired), reserved/consumed/available. |
+| GET | `/api/organizations/me/ai-usage` | Paged allocations (request, grant, reserved/consumed units, status). |
+| GET | `/api/admin/organizations/{organizationId}/ai-quota`, `/ai-quota/grants`, `/ai-usage` | PlatformAdmin equivalents. |
+
+Each read runs in one RepeatableRead snapshot with a single database `asOf`.
+
+### Enterprise requests
+
+- `GET /api/admin/enterprise-quote-requests/{id}` returns the request with `revision`, `quotationId` and an ETag.
+- `PATCH /api/admin/enterprise-quote-requests/{id}` with `{ "status": "Contacted" | "Rejected" | "Cancelled" }` and If-Match (428/400/412). Contacted only from New; Rejected/Cancelled from New, Contacted or Quoted.
+- `POST /api/admin/enterprise-quote-requests/{id}/quotations` (Idempotency-Key) creates a Draft quotation for the requesting OrganizationUser with the given Building lines and marks the request Quoted. It never creates a payment or entitlement; the tenant still reviews, Admin issues and the tenant accepts and pays.
+
+### Expiry reminders
+
+`BillingReminders:Enabled` (default false), `LeadDays` (5), `PollSeconds` (300), `MaxAttempts` (5). Each cycle inserts, in one transaction, one notification per active OrganizationUser recipient for paid entitlements ending within the lead window without a committed later period, keyed `expiring:<entitlement>:<recipient>`, with a Web delivery (immediately Sent) and an Email delivery (Pending). The delivery rows are the transactional outbox. Dispatch rechecks for a renewal before sending (suppressed as `SUPPRESSED_RENEWED`), sends through the email adapter outside any transaction and records attempts. Email is at-least-once: a crash between sending and recording may resend. Recipients and bodies are never logged.
+
+### Privileges and evidence
+
+The ledger owner owns the gates and writes upgrades, reservations and grants; the row lock on an upgraded entitlement uses `UPDATE(id)` only. New tables referencing users or organizations grant SELECT plus a policy to the pending-registration cleanup owner, which fails closed on unreadable references. The composite FK from provisioning records to Building lines is replaced by a purpose-aware insert trigger, because top-up records reference the top-up line. Tests: disposable PostgreSQL through the fake PayOS provider and real gates (upgrade once with bundled quota, baseline race and late payment, validation failures, top-up once with duplicate webhook and no service change, per-unit balance, enterprise ETag/quotation, reminder uniqueness and suppression). Supabase, PayOS, Mailgun and frontend acceptance remain pending.
