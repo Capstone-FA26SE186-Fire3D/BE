@@ -22,6 +22,16 @@ Nguồn chuẩn: [v7 contract](../../Docs/schema_v7_contract.md) và [requiremen
 - Persistence ở [DbContext](../Fire3D/Fire3D.Infrastructure/Persistence/Fire3DDbContext.cs). Không chạy migration hoặc đổi schema database ngoài phạm vi được yêu cầu.
 - Không lưu connection string/credential vào context hoặc handoff. Không track .vs, bin, obj.
 
+## Source #52, #54–#58 — nhánh `feature/issues-52-58-completion` (2026-10-11)
+
+Trạng thái source, chưa merge/deploy/áp Supabase. Chi tiết API ở `docs/` của repo này; trạng thái tổng hợp ở Docs requirements mục 10.
+
+- Editor `fet3d.editor/1`: schema/fixture dùng chung tại `contracts/editor/v1`, validator strict trong `Application/Editor/EditorContract.cs`, metric rubric theo allowlist server.
+- Logic nghiệp vụ mới nằm trong gate PostgreSQL SECURITY DEFINER do `fet3d_ifc_upload_owner` sở hữu, trả `{code,status,result}`; runtime chỉ có EXECUTE. Migration `20261011090000`–`20261011150000` additive, dùng owner-role dance, không CREATE OR REPLACE hàm cũ, không ALTER TYPE; bảng mới có FK user/org phải grant SELECT và policy cho `fet3d_pending_cleanup_owner`.
+- Quota AI chỉ một ledger: `billing_ai_quota_grants` + `billing_ai_quota_allocations` (reserve/settle/release). Organization AI và analytics đọc/ghi qua gate, không DML trực tiếp từ API role.
+- Feature mặc định tắt: `LearnerSessions:Enabled`, `OrganizationAi:Enabled` (thiếu adapter → `503 AI_PROVIDER_UNAVAILABLE`). AI chỉ nghiệm thu với FastAPI giả lập.
+- Session learner mới là `contract_version = 7` trên bảng `sessions` cũ; dữ liệu legacy giữ nguyên, không tự gắn nhãn v7. Playtest không tính vào seat/analytics.
+
 ## Luồng auth hiện có — 2026-10-03
 
 Chi tiết request/response, lỗi và nguồn code tại [authentication.md](../docs/authentication.md), [API guide](../docs/api-docs.md) và [test Swagger](../docs/registration-payos-manual-test.md). Phần này mô tả source, không chứng minh deployment/provider đã nghiệm thu.
