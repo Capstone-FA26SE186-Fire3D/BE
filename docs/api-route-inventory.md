@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-141 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+150 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -99,6 +99,15 @@
 | GET | /api/payments/payos/requests/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 503 |
 | POST | /api/payments/payos/requests/{id}/cancel | Bearer | Idempotency-Key | 200, 202, 400, 401, 403, 404, 409, 503 |
 | POST | /api/payments/payos/webhook | Anonymous | None | 200, 400, 401, 403, 404, 409, 503 |
+| POST | /api/playtests/handoffs/redeem | Bearer | None | 200, 401, 403, 404, 409 |
+| GET | /api/playtests/{playtestId} | Bearer | None | 200, 401, 403, 404 |
+| POST | /api/playtests/{playtestId}/cancel | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409 |
+| POST | /api/playtests/{playtestId}/complete | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409, 422 |
+| POST | /api/playtests/{playtestId}/events:batch | Bearer | None | 200, 401, 403, 404, 409, 422 |
+| POST | /api/playtests/{playtestId}/handoffs | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 503 |
+| POST | /api/playtests/{playtestId}/heartbeat | Bearer | None | 200, 401, 403, 404, 409 |
+| POST | /api/playtests/{playtestId}/launch-grants | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409, 503 |
+| POST | /api/playtests/{playtestId}/launched | Bearer | None | 200, 401, 403, 404, 409, 422 |
 | POST | /api/playtests/{playtestId}/start | Bearer | Idempotency-Key | 200, 400, 404, 409, 503 |
 | GET | /api/processing-jobs/{jobId} | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/processing-jobs/{jobId}/qa | Bearer | None | 200, 400, 401, 403, 404 |
