@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-160 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+176 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -73,6 +73,10 @@
 | POST | /api/buildings | Bearer | None | 201, 400, 401, 403, 409 |
 | GET | /api/buildings/{buildingId}/editor-preview | Bearer | None | 200, 400, 401, 403, 404, 503 |
 | POST | /api/buildings/{buildingId}/ifc | Bearer | Idempotency-Key | 201, 400, 404 |
+| GET | /api/buildings/{buildingId}/qr-codes | Bearer | None | 200, 404 |
+| POST | /api/buildings/{buildingId}/qr-codes | Bearer | None | 201, 400, 404 |
+| POST | /api/buildings/{buildingId}/qr-codes/{qrId}/revoke | Bearer | None | 200, 404, 409 |
+| POST | /api/buildings/{buildingId}/qr-codes/{qrId}/rotate | Bearer | None | 200, 404, 409 |
 | GET | /api/buildings/{buildingId}/scenarios | Bearer | None | 200, 400, 403, 404 |
 | DELETE | /api/buildings/{id} | Bearer | None | 200 |
 | GET | /api/buildings/{id} | Bearer | None | 200 |
@@ -122,6 +126,8 @@
 | GET | /api/processing-jobs/{jobId} | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/processing-jobs/{jobId}/qa | Bearer | None | 200, 400, 401, 403, 404 |
 | POST | /api/processing-jobs/{jobId}/retry | Bearer | None | 202, 400, 401, 403, 404, 409 |
+| GET | /api/qr/{qrToken} | Bearer | None | 200, 404 |
+| GET | /api/qr/{qrToken}/trainings | Bearer | None | 200, 403, 404 |
 | POST | /api/releases | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
 | GET | /api/releases/{releaseId} | Bearer | None | 200, 401, 403, 404 |
 | POST | /api/releases/{releaseId}/publish | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409, 503 |
@@ -157,6 +163,16 @@
 | POST | /api/support/tickets | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/support/tickets/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/support/tickets/{id}/messages | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
+| POST | /api/training/reconcile | Bearer | None | 200, 400, 401 |
+| POST | /api/training/sessions | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
+| GET | /api/training/sessions/{id} | Bearer | None | 200, 401, 403, 404 |
+| POST | /api/training/sessions/{id}/complete | Bearer | Idempotency-Key | 200, 202, 400, 401, 404, 409, 422 |
+| POST | /api/training/sessions/{id}/continuation | Bearer | None | 200, 401, 404, 409, 503 |
+| POST | /api/training/sessions/{id}/events:batch | Bearer | None | 200, 401, 404, 409, 422 |
+| POST | /api/training/sessions/{id}/heartbeat | Bearer | None | 200, 401, 404, 409 |
+| POST | /api/training/sessions/{id}/launched | Bearer | None | 200, 401, 404, 409, 422 |
+| GET | /api/training/sessions/{id}/result | Bearer | None | 200, 401, 404, 409 |
+| POST | /api/training/sessions/{id}/start | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409, 503 |
 | GET | /api/validation-runs/{validationRunId} | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /health/version | Anonymous | None | 200 |
 | POST | /internal/processing/jobs/{jobId}/claim | ProcessingWorker | None | 200 |

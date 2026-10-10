@@ -16,7 +16,7 @@ public sealed partial class AuthIntegrationTests
         {
             var result=await client.PostAsJsonAsync(path,new{});Assert.Equal(HttpStatusCode.Unauthorized,result.StatusCode);
         }
-    }    private async Task<(Guid Owner,Guid Revision,Guid Version,Guid Run,Guid Artifact)> SeedReadyPackage(string kind="ReleasePackage",bool blocker=false,string minRuntimeVersion="1.0.0",string[]? requiredCapabilities=null,string manifestProtocolVersion="1")
+    }    private async Task<(Guid Owner,Guid Revision,Guid Version,Guid Run,Guid Artifact)> SeedReadyPackage(string kind="ReleasePackage",bool blocker=false,string minRuntimeVersion="1.0.0",string[]? requiredCapabilities=null,string manifestProtocolVersion="1",System.Text.Json.Nodes.JsonObject? rubric=null)
     {
         var revision=await SeedVerifiedIfcRevision();var building=(Guid)(await ScalarAsync($"SELECT building_id FROM revisions WHERE id='{revision}'"))!;var org=(Guid)(await ScalarAsync($"SELECT organization_id FROM revisions WHERE id='{revision}'"))!;var owner=Guid.NewGuid();
         await ExecuteAsync($"INSERT INTO users(id,organization_id,email,full_name,role,is_active,email_verified_at,created_at,updated_at) VALUES('{owner}','{org}','owner-{owner:N}@example.test','Owner','OrganizationUser',true,now(),now(),now())");
@@ -24,7 +24,7 @@ public sealed partial class AuthIntegrationTests
         var scenario=(await authoring.CreateScenarioAsync(owner,building,org,new(building,"Ready package"),default,"ready-scenario")).Value;
         var draft=(await authoring.CreateScenarioDraftAsync(owner,scenario,org,new(revision),default,"ready-draft")).Value;
         var xmin=Convert.ToUInt32(await ScalarAsync($"SELECT xmin::text::bigint FROM scenario_drafts WHERE id='{draft}'"));
-        var updated=await authoring.UpdateScenarioDraftAsync(owner,draft,xmin,ValidAuthoringState(),org,default);Assert.True(updated.IsSuccess,updated.Error?.Code);
+        var updated=await authoring.UpdateScenarioDraftAsync(owner,draft,xmin,rubric is null?ValidAuthoringState():ValidAuthoringState() with{Rubric=rubric},org,default);Assert.True(updated.IsSuccess,updated.Error?.Code);
         var snapshot=await authoring.SnapshotScenarioDraftAsync(owner,draft,org,default,"ready-snapshot",updated.Value);Assert.True(snapshot.IsSuccess,snapshot.Error?.Code);var version=snapshot.Value;
         var build=await authoring.BuildAsync(owner,version,new(kind,"Windows"),"ready-build",default);Assert.True(build.IsSuccess,build.Error?.Code);var job=build.Value;Guid run=default,artifact=default;
         await WithProcessingRuntime(async(api,worker)=>

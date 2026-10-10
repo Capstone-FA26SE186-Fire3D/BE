@@ -15,6 +15,7 @@
         <EmbeddedResource Include="Persistence/Sql/ReleasePublishReceipts.sql" />
         <EmbeddedResource Include="Persistence/Sql/EditorContractV1.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.EditorContractV1.sql" />
         <EmbeddedResource Include="Persistence/Sql/PlaytestRuntime.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PlaytestRuntime.sql" />
+        <EmbeddedResource Include="Persistence/Sql/LearnerSessions.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.LearnerSessions.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />

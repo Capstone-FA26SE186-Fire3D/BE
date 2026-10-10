@@ -22,21 +22,21 @@ public partial class SessionResult
 
     public string RubricVersion { get; set; } = null!;
 
-    public decimal Score { get; set; }
+    public decimal? Score { get; set; }
 
-    public int TimeTakenSeconds { get; set; }
+    public int? TimeTakenSeconds { get; set; }
 
-    public int WrongExits { get; set; }
+    public int? WrongExits { get; set; }
 
-    public decimal HazardExposureScore { get; set; }
+    public decimal? HazardExposureScore { get; set; }
 
-    public decimal TotalDistanceMeters { get; set; }
+    public decimal? TotalDistanceMeters { get; set; }
 
-    public bool ReachedExit { get; set; }
+    public bool? ReachedExit { get; set; }
 
     public string? ExitPointId { get; set; }
 
-    public string PathTraveled { get; set; } = null!;
+    public string? PathTraveled { get; set; }
 
     public DateTime? ClientStartedAt { get; set; }
 

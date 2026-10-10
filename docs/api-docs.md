@@ -594,6 +594,10 @@ Catalog trả mảng `{runtimeVersion, protocolVersion, manifestSchemaVersion, c
 
 Playtest prepare/start use the session-bound PostgreSQL gate: exact accepted immutable PlaytestPackage, live OrganizationUser owner/tenant, runtime catalog compatibility and Building entitlement. Preparation assigns no entitlement and consumes no Trial; start does (once) and enters `Launching`; the runtime confirms `Running` with the current grant generation. Mobile handoff, grant reissue, heartbeat, telemetry, complete and cancel with error codes: [requests, configuration and manual tests](playtest-manual-test.md). The legacy unrestricted store is not registered and refuses mutations without session proof.
 
+### 7.4 Learner sessions và QR Building
+
+Trainee prepare/start/launched/heartbeat/events/complete/result/continuation/reconcile dưới `/api/training/...`, seat theo Trainee/Building/kỳ entitlement, continuation 7 ngày cho đồng bộ offline, kết quả rubric do server tính và QR Building (`/api/buildings/{id}/qr-codes`, `/api/qr/{qrToken}`): xem [learner-sessions.md](learner-sessions.md).
+
 ## 8. Release lifecycle và Building access
 
 POST /api/releases: OrganizationUser/PlatformAdmin, Idempotency-Key, revisionId/scenarioVersionId/confirmationReviewId/candidateArtifactId; metadata legacy nullable chỉ được nhận khi khớp output worker. Gate kiểm Approved content/rubric và technical confirmation đúng cặp, current accepted ReleasePackage/manifest và runtime contract; tạo Built/package/provenance/Training/receipt/audit atomic. Replay cùng key/input trả cùng response201; khác input409. Không chứng minh Unity thật.
