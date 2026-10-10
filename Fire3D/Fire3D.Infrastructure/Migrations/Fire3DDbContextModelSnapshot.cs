@@ -921,6 +921,13 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("requested_duration_months");
 
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("revision");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -2128,6 +2135,13 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("price_snapshot");
 
+                    b.Property<string>("PricingBasis")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("Monthly")
+                        .HasColumnName("pricing_basis");
+
                     b.Property<string>("PurchaseAction")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -2171,6 +2185,18 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<int?>("UpgradeBaseCapacityRevision")
+                        .HasColumnType("integer")
+                        .HasColumnName("upgrade_base_capacity_revision");
+
+                    b.Property<Guid?>("UpgradeEntitlementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("upgrade_entitlement_id");
+
+                    b.Property<int?>("UpgradePreviousLearnerLimit")
+                        .HasColumnType("integer")
+                        .HasColumnName("upgrade_previous_learner_limit");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BuildingId");
@@ -2180,10 +2206,83 @@ namespace Fire3D.Infrastructure.Migrations
 
                     b.HasIndex("ServicePackageId");
 
+                    b.HasIndex("UpgradeEntitlementId");
+
                     b.HasIndex("QuotationId", "BuildingId")
                         .IsUnique();
 
                     b.ToTable("quotation_building_items");
+                });
+
+            modelBuilder.Entity("Fire3D.Domain.Entities.QuotationTopUpItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("Amount")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("EndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ends_at");
+
+                    b.Property<string>("LineProvisioningKey")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("line_provisioning_key");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<Guid?>("PolicyVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("policy_version_id");
+
+                    b.Property<string>("QuotaUnit")
+                        .HasColumnType("text")
+                        .HasColumnName("quota_unit");
+
+                    b.Property<int?>("QuotaUnits")
+                        .HasColumnType("integer")
+                        .HasColumnName("quota_units");
+
+                    b.Property<Guid>("QuotationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("quotation_id");
+
+                    b.Property<int?>("RequestedQuotaUnits")
+                        .HasColumnType("integer")
+                        .HasColumnName("requested_quota_units");
+
+                    b.Property<DateTime?>("StartsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("starts_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LineProvisioningKey")
+                        .IsUnique();
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("PolicyVersionId");
+
+                    b.HasIndex("QuotationId")
+                        .IsUnique();
+
+                    b.ToTable("quotation_topup_items");
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.RefreshToken", b =>
@@ -4768,6 +4867,31 @@ namespace Fire3D.Infrastructure.Migrations
                     b.HasOne("Fire3D.Domain.Entities.ServicePackage", null)
                         .WithMany()
                         .HasForeignKey("ServicePackageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Fire3D.Domain.Entities.ServiceEntitlement", null)
+                        .WithMany()
+                        .HasForeignKey("UpgradeEntitlementId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Fire3D.Domain.Entities.QuotationTopUpItem", b =>
+                {
+                    b.HasOne("Fire3D.Domain.Entities.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Fire3D.Domain.Entities.BillingQuotaPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Fire3D.Domain.Entities.Quotation", null)
+                        .WithMany()
+                        .HasForeignKey("QuotationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

@@ -752,6 +752,8 @@ Selected Task 6 source/HTTP/isolated PostgreSQL/runtime-fake evidence: [playtest
 
 Review detail has nested `review` metadata (hashes, names, submitter/decision/reason), frozen `content`/`rubric`/objectives/instructions and `readiness`. Scenario version detail/list add reviewStatus/reviewId/rejectReason. Queue defaults20/max100, stable submittedAt/ID descending. Invalid filters400, foreign tenant404, revoked family401; no direct review-table SELECT for runtime. [Readiness and review contract](scenario-readiness.md).
 
+Upgrade (`purchaseAction: Upgrade`, one-time Admin price, same period/seats), AI top-up (`purpose: AIQuotaTopUp`), `GET /api/buildings/{id}/service-entitlement`, `GET /api/organizations/me/ai-quota[/grants]`, `GET /api/organizations/me/ai-usage`, the Admin organization equivalents, enterprise detail/status/quotation and expiry reminders are documented with error codes in the [rollout notes](billing-v7-rollout.md).
+
 See [current contract and migrations](billing-v7-rollout.md), [safe reporting DTOs](reporting-operations.md), and [Swagger manual acceptance](publish-billing-v7-manual-test.md). Package6/12-month pricing stays monthly; quotation pins service periods/capacity/quota before Issue. Publish uses paid approval/readiness/package gates when enabled; operational metrics are not learner/revenue analytics. Source/Docker tests do not establish shared DB/provider deployment.
 # Selected worker/API contract update
 

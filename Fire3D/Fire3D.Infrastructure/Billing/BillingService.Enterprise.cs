@@ -9,7 +9,7 @@ namespace Fire3D.Infrastructure.Billing;
 public sealed partial class BillingService
 {
     private static EnterpriseQuoteResponse EnterpriseView(EnterpriseQuoteRequest item)=>new(item.Id,item.OrganizationId,item.RequestedBuildingCount,
-        item.RequestedDurationMonths,item.ContactName,item.ContactEmail,item.ContactPhone,item.Notes,item.Status,item.CreatedAt);
+        item.RequestedDurationMonths,item.ContactName,item.ContactEmail,item.ContactPhone,item.Notes,item.Status,item.CreatedAt,item.Revision,item.QuotationId);
     public async Task<EnterpriseQuoteResponse> CreateEnterpriseRequest(Guid actor,Guid family,EnterpriseQuoteRequestBody request,string? key,CancellationToken ct)
     {
         Field(request.RequestedBuildingCount>0,"requestedBuildingCount","Building count must be positive.");
