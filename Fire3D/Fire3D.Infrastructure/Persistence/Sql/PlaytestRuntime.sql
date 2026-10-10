@@ -334,3 +334,11 @@ DO $$ DECLARE sig text;r text;s record;BEGIN
  IF s.changed THEN IF s.original_set IS NULL THEN EXECUTE format('REVOKE fet3d_ifc_upload_owner FROM %I',current_user);
  ELSE EXECUTE format('GRANT fet3d_ifc_upload_owner TO %I WITH SET %s,INHERIT %s',current_user,CASE WHEN s.original_set THEN 'TRUE' ELSE 'FALSE' END,CASE WHEN s.original_inherit THEN 'TRUE' ELSE 'FALSE' END);END IF;END IF;
 END $$;
+
+-- Pending-registration cleanup fails closed on unreadable references: expose the new user reference to its owner.
+DO $cleanup$ BEGIN
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='fet3d_pending_cleanup_owner') THEN
+  GRANT SELECT ON playtest_handoffs TO fet3d_pending_cleanup_owner;
+  CREATE POLICY pending_cleanup_owner ON playtest_handoffs TO fet3d_pending_cleanup_owner USING(true) WITH CHECK(true);
+ END IF;
+END $cleanup$;
