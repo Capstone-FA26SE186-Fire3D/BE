@@ -7,7 +7,7 @@ namespace Fire3D.Application.Ifc;
 // Persistence-only projection. StorageKey is never returned by the API.
 public sealed record EditorPreviewSource(Guid BuildingId, Guid RevisionId, string RevisionStatus,
     Guid? ArtifactId, Guid? AttemptId, string? StorageKey, string? Sha256Hash,
-    JsonElement? CoordinateTransform, JsonElement? Floors, JsonElement? SemanticMapping);
+    JsonElement? CoordinateTransform, JsonElement? Floors, JsonElement? SemanticMapping, long? SizeBytes = null);
 public sealed record EditorPreviewResponse(Guid BuildingId, Guid RevisionId, string RevisionStatus,
     string Status, Guid? ArtifactId, Guid? AttemptId, string? Sha256Hash,
     string? DownloadUrl, DateTimeOffset? ExpiresAt,
@@ -17,9 +17,10 @@ public interface IEditorPreviewStore
     Task<EditorPreviewSource?> ReadAsync(Guid buildingId, Guid revisionId, Guid? tenant, CancellationToken ct);
 }
 public sealed record SignedDownload(string Url, DateTimeOffset ExpiresAt);
+public sealed class PreviewStorageUnavailableException(Exception inner) : Exception("Preview storage is unavailable.", inner);
 public interface IPreviewDownloadSigner
 {
-    Task<SignedDownload> SignAsync(string storageKey, CancellationToken ct);
+    Task<SignedDownload?> SignAsync(string storageKey, long expectedSizeBytes, CancellationToken ct);
 }
 public sealed record GetEditorPreviewQuery(Guid ActorId, Guid BuildingId, Guid RevisionId)
     : IRequest<AuthResult<EditorPreviewResponse>>;
@@ -34,15 +35,20 @@ public sealed class GetEditorPreviewHandler(IAuthStore accounts, IEditorPreviewS
             return AuthResult<EditorPreviewResponse>.Fail("VALIDATION_ERROR", "buildingId and revisionId are required.", 400);
         var source = await store.ReadAsync(request.BuildingId, request.RevisionId, scope.Value!.OrganizationId, ct);
         if (source is null) return AuthResult<EditorPreviewResponse>.Fail("NOT_FOUND", "Revision not found in this building.", 404);
-        var ready = source.ArtifactId.HasValue && !string.IsNullOrWhiteSpace(source.StorageKey)
+        var ready = source.ArtifactId.HasValue && source.SizeBytes > 0 && !string.IsNullOrWhiteSpace(source.StorageKey)
             && source.Sha256Hash is { Length: 64 } hash && hash.All(Uri.IsHexDigit)
             && source.CoordinateTransform is { ValueKind: JsonValueKind.Array } transform && transform.GetArrayLength() == 16
             && transform.EnumerateArray().All(x => x.ValueKind == JsonValueKind.Number && x.TryGetDouble(out var v) && double.IsFinite(v))
             && source.Floors is { ValueKind: JsonValueKind.Array }
             && source.SemanticMapping is { ValueKind: JsonValueKind.Object };
-        var download = ready ? await signer.SignAsync(source.StorageKey!, ct) : null;
+        SignedDownload? download;
+        try { download = ready ? await signer.SignAsync(source.StorageKey!, source.SizeBytes!.Value, ct) : null; }
+        catch (PreviewStorageUnavailableException)
+        {
+            return AuthResult<EditorPreviewResponse>.Fail("PREVIEW_STORAGE_UNAVAILABLE", "Preview storage is temporarily unavailable.", 503);
+        }
         return AuthResult<EditorPreviewResponse>.Ok(new(source.BuildingId, source.RevisionId, source.RevisionStatus,
-            ready ? "Ready" : "NotReady", source.ArtifactId, source.AttemptId, source.Sha256Hash,
+            download is not null ? "Ready" : "NotReady", source.ArtifactId, source.AttemptId, source.Sha256Hash,
             download?.Url, download?.ExpiresAt, source.CoordinateTransform, source.Floors, source.SemanticMapping));
     }
 }

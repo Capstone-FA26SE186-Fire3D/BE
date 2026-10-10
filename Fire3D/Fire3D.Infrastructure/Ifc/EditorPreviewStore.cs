@@ -17,7 +17,7 @@ public sealed class EditorPreviewStore(Fire3DDbContext db) : IEditorPreviewStore
             await using var cmd = new NpgsqlCommand("""
                 SELECT jsonb_build_object('buildingId', b.id, 'revisionId', r.id, 'revisionStatus', r.status,
                     'artifactId', x.id, 'attemptId', x.attempt_id, 'storageKey', x.storage_key,
-                    'sha256Hash', x.sha256_hash, 'coordinateTransform', x.metadata->'coordinateTransform',
+                    'sha256Hash', x.sha256_hash, 'sizeBytes', x.size_bytes, 'coordinateTransform', x.metadata->'coordinateTransform',
                     'floors', x.metadata->'floors', 'semanticMapping', x.metadata->'semanticMapping')::text
                 FROM public.revisions r
                 JOIN public.buildings b ON b.id=r.building_id
