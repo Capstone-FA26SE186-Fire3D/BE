@@ -14,13 +14,13 @@ public sealed class SupportController(ISupportService service):ControllerBase
 {
 
  [Authorize(Roles="Trainee,OrganizationUser")][HttpPost("api/feedback")][ProducesResponseType(typeof(FeedbackResponse),201)]
- public Task<IActionResult> CreateFeedback(CreateFeedbackRequest request,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)=>Run("CreateFeedback",null,request,key,null,201,ct);
+ public Task<IActionResult> CreateFeedback(CreateFeedbackRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Run("CreateFeedback",null,request,key,null,201,ct);
 
  [Authorize(Roles="Trainee,OrganizationUser")][HttpGet("api/feedback")][ProducesResponseType(typeof(SupportPage<FeedbackResponse>),200)]
  public Task<IActionResult> ListFeedback([FromQuery]SupportQuery query,CancellationToken ct)=>Run("ListFeedback",null,query,null,null,200,ct);
 
  [Authorize(Roles="Trainee,OrganizationUser")][HttpPost("api/support/tickets")][ProducesResponseType(typeof(TicketResponse),201)]
- public Task<IActionResult> CreateTicket(CreateTicketRequest request,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)=>Run("CreateTicket",null,request,key,null,201,ct);
+ public Task<IActionResult> CreateTicket(CreateTicketRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Run("CreateTicket",null,request,key,null,201,ct);
 
  [Authorize(Roles="Trainee,OrganizationUser")][HttpGet("api/support/tickets")][ProducesResponseType(typeof(SupportPage<TicketResponse>),200)]
  public Task<IActionResult> ListTickets([FromQuery]SupportQuery query,CancellationToken ct)=>Run("ListTickets",null,query,null,null,200,ct);
@@ -29,25 +29,28 @@ public sealed class SupportController(ISupportService service):ControllerBase
  public Task<IActionResult> GetTicket(Guid id,[FromQuery]SupportQuery query,CancellationToken ct)=>Run("GetTicket",id,query,null,null,200,ct);
 
  [Authorize(Roles="Trainee,OrganizationUser")][HttpPost("api/support/tickets/{id:guid}/messages")][ProducesResponseType(typeof(SupportMessageResponse),201)]
- public Task<IActionResult> AddMessage(Guid id,MessageRequest request,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)=>Run("Message",id,request,key,null,201,ct);
+ public Task<IActionResult> AddMessage(Guid id,MessageRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Run("Message",id,request,key,null,201,ct);
 
  [Authorize(Roles="PlatformAdmin")][HttpGet("api/admin/feedback")][ProducesResponseType(typeof(SupportPage<FeedbackResponse>),200)]
  public Task<IActionResult> AdminFeedback([FromQuery]SupportQuery query,CancellationToken ct)=>Run("AdminListFeedback",null,query,null,null,200,ct);
 
  [Authorize(Roles="PlatformAdmin")][HttpPatch("api/admin/feedback/{id:guid}/status")][ProducesResponseType(typeof(FeedbackResponse),200)]
- public Task<IActionResult> AdminUpdateFeedback(Guid id,AdminFeedbackUpdateRequest request,[FromHeader(Name="If-Match")]string? match,CancellationToken ct)=>Patch("FeedbackStatus",id,request,match,ct);
+ [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+ public Task<IActionResult> AdminUpdateFeedback(Guid id,AdminFeedbackUpdateRequest request,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? match,CancellationToken ct)=>Patch("FeedbackStatus",id,request,match,ct);
 
  [Authorize(Roles="PlatformAdmin")][HttpGet("api/admin/support/tickets")][ProducesResponseType(typeof(SupportPage<TicketResponse>),200)]
  public Task<IActionResult> AdminTickets([FromQuery]SupportQuery query,CancellationToken ct)=>Run("AdminListTickets",null,query,null,null,200,ct);
 
  [Authorize(Roles="PlatformAdmin")][HttpGet("api/admin/support/tickets/{id:guid}")][ProducesResponseType(typeof(TicketResponse),200)]
+ [Fire3D.API.OpenApi.ResponseHeader("ETag")]
  public Task<IActionResult> AdminTicket(Guid id,[FromQuery]SupportQuery query,CancellationToken ct)=>Run("AdminGetTicket",id,query,null,null,200,ct);
 
  [Authorize(Roles="PlatformAdmin")][HttpPost("api/admin/support/tickets/{id:guid}/messages")][ProducesResponseType(typeof(SupportMessageResponse),201)]
- public Task<IActionResult> AdminMessage(Guid id,MessageRequest request,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)=>Run("AdminMessage",id,request,key,null,201,ct);
+ public Task<IActionResult> AdminMessage(Guid id,MessageRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Run("AdminMessage",id,request,key,null,201,ct);
 
  [Authorize(Roles="PlatformAdmin")][HttpPatch("api/admin/support/tickets/{id:guid}")][ProducesResponseType(typeof(TicketResponse),200)]
- public Task<IActionResult> AdminUpdate(Guid id,AdminTicketUpdateRequest request,[FromHeader(Name="If-Match")]string? match,CancellationToken ct)=>Patch("TicketStatus",id,request,match,ct);
+ [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+ public Task<IActionResult> AdminUpdate(Guid id,AdminTicketUpdateRequest request,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? match,CancellationToken ct)=>Patch("TicketStatus",id,request,match,ct);
 
  private Task<IActionResult> Patch(string action,Guid? id,object input,string? match,CancellationToken ct)
  {

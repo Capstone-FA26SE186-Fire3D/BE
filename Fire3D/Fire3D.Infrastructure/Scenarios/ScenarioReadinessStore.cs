@@ -9,10 +9,11 @@ namespace Fire3D.Infrastructure.Scenarios;
 public sealed class ScenarioReadinessStore(Fire3DDbContext db):IScenarioReadinessStore
 {
     private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
-    public async Task<AuthResult<JsonElement>> ExecuteAsync(string action,Guid actor,Guid version,Guid? revision,object input,string? key,CancellationToken ct)
+    public async Task<AuthResult<JsonElement>> ExecuteAsync(string action,Guid actor,Guid family,Guid version,Guid? revision,object input,string? key,CancellationToken ct)
     {
         await db.Database.OpenConnectionAsync(ct);
-        await using var command=new NpgsqlCommand("SELECT scenario_readiness_gate(@action,@actor,@version,@revision,@input,@key)::text",(NpgsqlConnection)db.Database.GetDbConnection());
+        await using var command=new NpgsqlCommand("SELECT scenario_readiness_gate(@action,@actor,@family,@version,@revision,@input,@key)::text",(NpgsqlConnection)db.Database.GetDbConnection());
+        command.Parameters.AddWithValue("family", family);
         command.Parameters.AddWithValue("action",action);command.Parameters.AddWithValue("actor",actor);command.Parameters.AddWithValue("version",version);
         command.Parameters.AddWithValue("revision",NpgsqlDbType.Uuid,(object?)revision??DBNull.Value);command.Parameters.AddWithValue("input",NpgsqlDbType.Jsonb,JsonSerializer.Serialize(input,Json));command.Parameters.AddWithValue("key",NpgsqlDbType.Text,(object?)key??DBNull.Value);
         using var response=JsonDocument.Parse((string)(await command.ExecuteScalarAsync(ct))!);var value=response.RootElement;

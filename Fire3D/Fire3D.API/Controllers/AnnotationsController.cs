@@ -14,6 +14,7 @@ public sealed class AnnotationsController(ISender sender) : ControllerBase
     /// <summary>Reads the latest annotation overlay and its ETag.</summary>
     /// <remarks>OrganizationUser in the revision tenant or PlatformAdmin. Empty overlay has version 0 and ETag "0".</remarks>
     [HttpGet]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     [ProducesResponseType<AnnotationSnapshot>(200)]
     public async Task<IActionResult> Get(Guid revisionId, CancellationToken ct) =>
         Respond(await sender.Send(new GetAnnotationsQuery(User.GetActorId(), revisionId), ct));
@@ -23,13 +24,14 @@ public sealed class AnnotationsController(ISender sender) : ControllerBase
     /// Body: items array with id, ifcGlobalId, label and optional note. Maximum 500 items.
     /// Does not modify geometry, exits or runtime artifacts. Returns 200 and a new ETag.</remarks>
     [HttpPut]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     [RequestSizeLimit(2_000_000)]
     [ProducesResponseType<AnnotationSnapshot>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
     public async Task<IActionResult> Put(Guid revisionId, [FromBody] AnnotationData data,
-        [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct) =>
+        [FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct) =>
         Respond(await sender.Send(new SaveAnnotationsCommand(User.GetActorId(), revisionId, ifMatch, data), ct));
 
     private IActionResult Respond(Fire3D.Application.Authentication.AuthResult<AnnotationSnapshot> result)

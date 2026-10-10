@@ -18,7 +18,7 @@ public sealed class RejectScenarioVersionTests
             ? new RejectScenarioVersionRequest(Guid.NewGuid(), Guid.NewGuid(), "Invalid egress route")
             : new RejectScenarioVersionRequest(Guid.Empty, Guid.NewGuid(), "Invalid egress route");
         var result = await new RejectScenarioVersionCommandHandler(RevisionAccessTests.Accounts(actor), store)
-            .Handle(new(actor.Id, Guid.NewGuid(), request), default);
+            .Handle(new(actor.Id, actor.Id, Guid.NewGuid(), request), default);
         Assert.Equal(expectedStatus, result.Error?.Status);
     }
 
@@ -33,12 +33,12 @@ public sealed class RejectScenarioVersionTests
         var store = StubProxy.For<IScenarioReviewStore>((method, args) =>
         {
             Assert.Equal(nameof(IScenarioReviewStore.CreateRejectedReviewAsync), method);
-            Assert.Equal(revisionId, args[1]);
-            Assert.Equal(role == UserRole.PlatformAdmin ? null : actor.OrganizationId, args[2]);
+            Assert.Equal(revisionId, args[2]);
+            Assert.Equal(role == UserRole.PlatformAdmin ? null : actor.OrganizationId, args[3]);
             return Task.FromResult(AuthResult<Guid>.Ok(Guid.NewGuid()));
         });
         var result = await new RejectScenarioVersionCommandHandler(RevisionAccessTests.Accounts(actor), store)
-            .Handle(new(actor.Id, revisionId, request), default);
+            .Handle(new(actor.Id, actor.Id, revisionId, request), default);
         Assert.True(result.IsSuccess);
     }
 }

@@ -47,17 +47,17 @@ public sealed class BillingV7CatalogTests
     public async Task Policy_is_immutable_and_catalog_changes_obey_etag_and_audit_rollback()
     {
         await using var database=await BillingDatabase.Create();await using var db=database.Context();var service=new BillingService(db);
-        var policy=await service.CreateQuotaPolicy(BillingDatabase.Admin,new("tokens",DateTimeOffset.UtcNow.AddDays(-1)),default);
+        var policy=await service.CreateQuotaPolicy(BillingDatabase.Admin,BillingDatabase.Admin,new("tokens",DateTimeOffset.UtcNow.AddDays(-1)),default);
         var request=new PackageWriteRequest("V7","V7",100,6,true,null,10,50,policy.Id);
-        var package=await service.SavePackage(BillingDatabase.Admin,null,request,null,default);
+        var package=await service.SavePackage(BillingDatabase.Admin,BillingDatabase.Admin,null,request,null,default);
         Assert.True(package.IsPurchasable);
         var denied=await Assert.ThrowsAsync<PostgresException>(()=>database.Sql($"UPDATE billing_quota_policy_versions SET quota_unit='other' WHERE id='{policy.Id}'"));
         Assert.Equal("23514",denied.SqlState);
         Assert.Equal(false,await database.Scalar("SELECT has_table_privilege('fire3d_api','billing_quota_policy_versions','UPDATE')"));
-        var stale=await Assert.ThrowsAsync<BillingException>(()=>service.SavePackage(BillingDatabase.Admin,package.Id,request,BillingETag.Format(package.Id,99),default));
+        var stale=await Assert.ThrowsAsync<BillingException>(()=>service.SavePackage(BillingDatabase.Admin,BillingDatabase.Admin,package.Id,request,BillingETag.Format(package.Id,99),default));
         Assert.Equal(412,stale.Status);
         await database.Sql("ALTER TABLE audit_logs ADD CONSTRAINT reject_package_audit CHECK(target_entity<>'service_packages') NOT VALID");
-        await Assert.ThrowsAsync<Microsoft.EntityFrameworkCore.DbUpdateException>(()=>service.SavePackage(BillingDatabase.Admin,package.Id,request with {LearnerLimit=20},BillingETag.Format(package.Id,package.Revision),default));
+        await Assert.ThrowsAsync<Microsoft.EntityFrameworkCore.DbUpdateException>(()=>service.SavePackage(BillingDatabase.Admin,BillingDatabase.Admin,package.Id,request with {LearnerLimit=20},BillingETag.Format(package.Id,package.Revision),default));
         Assert.Equal(10,await database.Scalar($"SELECT learner_limit FROM service_packages WHERE id='{package.Id}'"));
         Assert.Equal(1L,await database.Scalar($"SELECT revision FROM service_packages WHERE id='{package.Id}'"));
     }

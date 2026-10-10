@@ -17,6 +17,8 @@ public static class SafeAuditChanges
             "billing_ai_quota_grants" when audit.Action==AuditAction.Grant => new[]{"quotaUnits","quotaUnit","startsAt","endsAt","policyVersionId","rollover"},
             "supportticket" or "support_tickets" when audit.Action is AuditAction.Update or AuditAction.Support => new[]{"status","priority","assignedTo","revision","resolvedAt"},
             "scenario_content_reviews" when audit.Action is AuditAction.Create or AuditAction.Update or AuditAction.Reject => new[]{"status","reviewedBy","reviewedAt"},
+            "scenarioversion" when audit.Action is AuditAction.Update or AuditAction.Reject or AuditAction.ConfirmForTraining
+                => new[]{"status","reviewId","scenarioVersionId","revisionId","validationRunId","candidateArtifactId","annotationSetId","submittedBy","submittedAt","reviewedBy","reviewedAt"},
             _ => Array.Empty<string>()
         };
         if(fields.Length==0 || audit.OldValues?.Length>65536 || audit.NewValues?.Length>65536)return [];
@@ -24,6 +26,8 @@ public static class SafeAuditChanges
         {
             using var before=JsonDocument.Parse(audit.OldValues??"{}");using var after=JsonDocument.Parse(audit.NewValues??"{}");
             if(before.RootElement.ValueKind!=JsonValueKind.Object || after.RootElement.ValueKind!=JsonValueKind.Object)return [];
+            if(audit.TargetEntity.Equals("ScenarioVersion",StringComparison.OrdinalIgnoreCase)
+                && (!after.RootElement.TryGetProperty("auditContractVersion",out var version) || version.ValueKind!=JsonValueKind.Number || !version.TryGetInt32(out var number) || number!=1))return [];
             var changes=new List<AuditFieldChange>();
             foreach(var field in fields)
             {
@@ -44,7 +48,7 @@ public static class SafeAuditChanges
             if(value.ValueKind==JsonValueKind.Null){found=true;return null;}
             if(field is "status" or "priority" or "rollover")
             {
-                string[] allowed=field=="priority"?Enum.GetNames<SupportPriority>():field=="rollover"?["None"]:["Built","Published","Revoked","Draft","Issued","Accepted","Expired","Cancelled","Active","Suspended","Open","InProgress","Resolved","Closed","Submitted","Reviewed","Approved","Rejected"];
+                string[] allowed=field=="priority"?Enum.GetNames<SupportPriority>():field=="rollover"?["None"]:["Built","Published","Revoked","Draft","Issued","Accepted","Expired","Cancelled","Active","Suspended","Open","InProgress","Resolved","Closed","Submitted","Reviewed","Approved","Rejected","ConfirmForTraining"];
                 if(value.ValueKind==JsonValueKind.String && allowed.Contains(value.GetString(),StringComparer.Ordinal))safe=value.GetString();
             }
             else if(field.EndsWith("Id",StringComparison.Ordinal)||field.EndsWith("By",StringComparison.Ordinal)||field=="assignedTo")

@@ -19,10 +19,10 @@ public sealed partial class AuthIntegrationTests
             var apiUser = new NpgsqlConnectionStringBuilder(api).Username;
             await ExecuteAsync($"GRANT EXECUTE ON FUNCTION processing_stream_consumer_gate(text,jsonb),processing_stream_recovery_gate(text,jsonb) TO {apiUser}");
             var dispatcher = "redis_dispatch_test_" + Guid.NewGuid().ToString("N");
-            await ExecuteAsync($"CREATE ROLE {dispatcher} LOGIN NOSUPERUSER NOBYPASSRLS; GRANT USAGE ON SCHEMA public TO {dispatcher}; GRANT fet3d_dispatcher_executor TO {dispatcher}");
+            await ExecuteAsync($"CREATE ROLE {dispatcher} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}'; GRANT USAGE ON SCHEMA public TO {dispatcher}; GRANT fet3d_dispatcher_executor TO {dispatcher}");
             try
             {
-                var dispatch = new NpgsqlConnectionStringBuilder(testConnection) { Username = dispatcher, Password = "", Pooling = false }.ConnectionString;
+                var dispatch = new NpgsqlConnectionStringBuilder(testConnection) { Username = dispatcher, Pooling = false }.ConnectionString;
                 var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["ConnectionStrings:DefaultConnection"] = api,

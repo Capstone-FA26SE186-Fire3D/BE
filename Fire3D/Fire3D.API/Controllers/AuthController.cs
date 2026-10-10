@@ -216,6 +216,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     /// </summary>
     [HttpGet("me")]
     [Authorize]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<ActionResult<AccountResponse>> Me(CancellationToken ct)
     {
         var account = await sender.Send(new GetCurrentAccountQuery(User.GetActorId()), ct);
@@ -235,9 +236,10 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<ActionResult<AccountResponse>> UpdateMe(
         Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileRequest request,
-        [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
+        [FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
     {
         var result = await sender.Send(
             new Fire3D.Application.Authentication.Commands.RegisterUser.UpdateCurrentProfileCommand(User.GetActorId(), ifMatch, request), ct);
@@ -258,7 +260,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> RegisterDevice(
         [FromBody] Fire3D.Application.Users.Commands.RegisterDevice.RegisterDeviceRequest request,
-        [FromHeader(Name = "X-Installation-Key")] string? installationKey, CancellationToken ct)
+        [FromHeader(Name="X-Installation-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? installationKey, CancellationToken ct)
     {
         var result = await sender.Send(new Fire3D.Application.Users.Commands.RegisterDevice.RegisterDeviceCommand(
             User.GetActorId(), User.GetSessionFamilyId(), request.DeviceUuid, installationKey, request.FcmToken, request.DeviceModel, request.OsVersion, request.AppVersion), ct);
@@ -272,7 +274,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(400)]
     public async Task<IActionResult> RevokeDevice(string deviceUuid,
-        [FromHeader(Name = "X-Installation-Key")] string? installationKey, CancellationToken ct)
+        [FromHeader(Name="X-Installation-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? installationKey, CancellationToken ct)
     {
         var result = await sender.Send(
         new Fire3D.Application.Users.Commands.RegisterDevice.RevokeDeviceCommand(User.GetActorId(), User.GetSessionFamilyId(), deviceUuid, installationKey), ct);

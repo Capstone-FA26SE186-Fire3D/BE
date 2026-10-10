@@ -123,60 +123,39 @@ public sealed class AvatarStore(Fire3DDbContext db) : IAvatarStore, IAvatarClean
 
     public async Task<AvatarCleanupJob?> ClaimAsync(CancellationToken ct)
     {
-        await db.Database.OpenConnectionAsync(ct);
-        await db.Database.ExecuteSqlRawAsync("""
-            INSERT INTO public.avatar_object_cleanups(id,object_key,available_at,attempts,created_at)
-            SELECT gen_random_uuid(), candidate_object_key, now(), 0, now()
-            FROM public.avatar_upload_intents
-            WHERE completed_at IS NULL AND candidate_object_key IS NOT NULL
-              AND candidate_lease_until <= now() - interval '1 hour'
-            ON CONFLICT (object_key) DO NOTHING;
-            """, ct);
-        await using var command = new Npgsql.NpgsqlCommand("""
-            WITH candidate AS (
-                SELECT id FROM public.avatar_object_cleanups
-                WHERE available_at<=now() AND (lease_until IS NULL OR lease_until<=now())
-                ORDER BY available_at,created_at FOR UPDATE SKIP LOCKED LIMIT 1)
-            UPDATE public.avatar_object_cleanups cleanup
-            SET lease_token=@lease,lease_until=now()+interval '2 minutes',attempts=attempts+1
-            FROM candidate WHERE cleanup.id=candidate.id
-            RETURNING cleanup.id,cleanup.object_key,cleanup.lease_token,cleanup.attempts
-            """, (Npgsql.NpgsqlConnection)db.Database.GetDbConnection());
-        command.Parameters.AddWithValue("lease", Guid.NewGuid());
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        return await reader.ReadAsync(ct)
-            ? new(reader.GetGuid(0), reader.GetString(1), reader.GetGuid(2), reader.GetInt32(3)) : null;
+        var result = await CleanupGateAsync("Claim", ct);
+        return result.GetProperty("code").GetString() == "EMPTY" ? null : new(
+            result.GetProperty("id").GetGuid(), result.GetProperty("objectKey").GetString()!,
+            result.GetProperty("leaseToken").GetGuid(), result.GetProperty("attempt").GetInt32());
     }
 
-    public Task<bool> IsReferencedAsync(string objectKey, CancellationToken ct) => db.Database.SqlQuery<bool>($"""
-        SELECT EXISTS(
-            SELECT 1 FROM public.users WHERE avatar_storage_key={objectKey}
-            UNION ALL SELECT 1 FROM public.avatar_upload_intents
-                WHERE staging_object_key={objectKey} AND completed_at IS NULL AND expires_at > now()
-            UNION ALL SELECT 1 FROM public.avatar_upload_intents
-                WHERE candidate_object_key={objectKey} AND completed_at IS NULL
-                  AND candidate_lease_until > now() - interval '1 hour') AS "Value"
-        """).SingleAsync(ct);
+    public async Task<bool> IsReferencedAsync(string objectKey, CancellationToken ct) =>
+        (await CleanupGateAsync("Referenced", ct, objectKey)).GetProperty("referenced").GetBoolean();
 
-    public Task CompleteAsync(AvatarCleanupJob job, CancellationToken ct) => db.Database.ExecuteSqlInterpolatedAsync($"""
-        DELETE FROM public.avatar_object_cleanups WHERE id={job.Id} AND lease_token={job.LeaseToken}
-        """, ct);
+    public async Task<bool> RenewAsync(AvatarCleanupJob job, CancellationToken ct) =>
+        (await CleanupGateAsync("Renew", ct, id: job.Id, lease: job.LeaseToken)).GetProperty("code").GetString() == "OK";
 
-    public Task FailAsync(AvatarCleanupJob job, CancellationToken ct)
+    public async Task CompleteAsync(AvatarCleanupJob job, CancellationToken ct)
     {
-        var delay = TimeSpan.FromSeconds(Math.Min(900, Math.Pow(2, job.Attempt) * 15));
-        return db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE public.avatar_object_cleanups SET available_at=now()+{delay},lease_token=NULL,lease_until=NULL
-            WHERE id={job.Id} AND lease_token={job.LeaseToken}
-            """, ct);
+        var result = await CleanupGateAsync("Complete", ct, id: job.Id, lease: job.LeaseToken);
+        if (result.GetProperty("code").GetString() == "PROTECTED") await FailAsync(job, ct);
     }
 
-    private Task QueueInCurrentTransactionAsync(string objectKey, DateTime now, CancellationToken ct) =>
-        db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO public.avatar_object_cleanups(id,object_key,available_at,attempts,created_at)
-            VALUES ({Guid.NewGuid()},{objectKey},{now},0,{now}) ON CONFLICT (object_key) DO NOTHING
-            """, ct);
+    public async Task FailAsync(AvatarCleanupJob job, CancellationToken ct) =>
+        _ = await CleanupGateAsync("Retry", ct, id: job.Id, lease: job.LeaseToken);
 
+    private async Task QueueInCurrentTransactionAsync(string objectKey, DateTime now, CancellationToken ct) =>
+        _ = await CleanupGateAsync("Enqueue", ct, objectKey, available: now);
+
+    private async Task<System.Text.Json.JsonElement> CleanupGateAsync(string action, CancellationToken ct,
+        string? key = null, Guid? id = null, Guid? lease = null, DateTime? available = null)
+    {
+        var json = await db.Database.SqlQuery<string>($"""
+            SELECT public.avatar_cleanup_gate({action}::text,{key}::text,{id}::uuid,{lease}::uuid,{available}::timestamptz)::text AS "Value"
+            """).SingleAsync(ct);
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
     private void AddAudit(User user, DateTime now) => db.AuditLogs.Add(new AuditLog
     {
         Id = Guid.NewGuid(), UserId = user.Id, OrganizationId = user.OrganizationId,

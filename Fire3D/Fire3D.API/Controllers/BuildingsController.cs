@@ -1,4 +1,4 @@
-﻿using Fire3D.API.Authorization;
+using Fire3D.API.Authorization;
 using Fire3D.Application.Administration;
 using Fire3D.Application.Buildings;
 using Fire3D.Application.Buildings.Commands.CreateBuilding;
@@ -79,7 +79,7 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<ActionResult<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>> GetUploadUrl(
         Guid id, Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadRequest request,
-        [FromHeader(Name = "Idempotency-Key")] string? key, CancellationToken ct)
+        [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadCommand(
             User.GetActorId(), id, request, key), ct);

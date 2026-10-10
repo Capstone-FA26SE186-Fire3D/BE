@@ -15,3 +15,13 @@ Missing/invalid key: 400 IDEMPOTENCY_KEY_REQUIRED. Same actor/operation/key/inpu
 Migrations are additive: content reviews and command receipts; no legacy approval/readiness is invented. An UPDATE(id) grant to the restricted NOLOGIN gate owner permits row locks only in practice: the immutable scenario trigger still rejects changes. Runtime callers have EXECUTE, not direct review DML. GrantIfcGateDependencies repairs hash/outbox EXECUTE grants by temporarily setting the existing integration-owner role and restoring membership; this was tested with a nonsuperuser migration identity.
 
 Evidence: isolated PostgreSQL actual migration history, limited runtime role, concurrent confirmation, wrong run/annotation/hash, role/lifecycle, receipt conflict, immutable decisions and injected audit failure rollback. Worker/package output is simulated. No actual IFC/Unity, runtime client, publish or training acceptance is implied. Supabase Tasks 2–6 and the dependency-grant repair were applied on 2026-10-07; see [ifc-authoring-deployment.md](ifc-authoring-deployment.md) for counts, privileges and deployment limits.
+# Live session enforcement
+
+Confirm, technical rejection, submit, approve and reject derive session family
+from the authenticated JWT. The gate locks lifecycle then actor then resource,
+rechecks the live family after lock waits and before receipt replay, and returns
+401 for a revoked/expired/missing family. The family is not part of the canonical
+receipt input. Legacy family-less SQL entrypoints fail closed after migration.
+# Safe audit details
+
+New submission/approval/rejection records include a versioned safe audit snapshot of review status, review/version identifiers, actor and timestamps. Technical confirmation/rejection adds the exact revision, validation, artifact and optional annotation IDs. Mutations, receipts and audit remain in the same transaction. Audit detail projects only approved scalar fields; it excludes reasons, content/rubric hashes and content, email, phone, credentials and signed URLs. Legacy `ScenarioVersion` audits without the new contract marker remain metadata-only with `changes: []`; no history is backfilled.

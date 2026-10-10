@@ -16,7 +16,7 @@ public sealed partial class AuthIntegrationTests
  public async Task Release_build_requires_content_approval_even_with_confirmed_technical_pair()
  {
   var f=await SeedReadyPackage();await using var db=BuildingContext(testConnection);var readiness=new ScenarioReadinessStore(db);
-  var confirmed=await readiness.ExecuteAsync("Confirm",f.Owner,f.Version,f.Revision,new ConfirmTrainingRequest(f.Version,f.Run),null,default);Assert.True(confirmed.IsSuccess,confirmed.Error?.Code);
+  var confirmed=await readiness.ExecuteAsync("Confirm",f.Owner,f.Owner,f.Version,f.Revision,new ConfirmTrainingRequest(f.Version,f.Run),null,default);Assert.True(confirmed.IsSuccess,confirmed.Error?.Code);
   await ExecuteAsync($"UPDATE users SET password_hash=(SELECT password_hash FROM users WHERE id='{adminId}') WHERE id='{f.Owner}'");var email=(string)(await ScalarAsync($"SELECT email FROM users WHERE id='{f.Owner}'"))!;var tokens=await LoginAsync(email);client.DefaultRequestHeaders.Authorization=new("Bearer",tokens.AccessToken);client.DefaultRequestHeaders.Add("Idempotency-Key","release-first");
   var response=await client.PostAsJsonAsync("/api/releases",new{revisionId=f.Revision,scenarioVersionId=f.Version,confirmationReviewId=confirmed.Value.GetProperty("reviewId").GetGuid(),candidateArtifactId=f.Artifact,safetyThresholds="{}",manifestUrl="untrusted/manifest.json",manifestSha256=new string('a',64),packageUrl="untrusted/package.zip",checksumSha256=new string('b',64),packageSizeBytes=100,minRuntimeVersion="1.0.0",schemaVersion="1",buildTarget="Windows"});
   Assert.Equal(HttpStatusCode.Conflict,response.StatusCode);Assert.Contains("CONTENT_APPROVAL_REQUIRED",await response.Content.ReadAsStringAsync());Assert.Equal(0L,await ScalarAsync("SELECT count(*) FROM releases"));
@@ -32,9 +32,9 @@ public sealed partial class AuthIntegrationTests
  private async Task<BuildReleaseRequest> ApproveRelease((Guid Owner,Guid Revision,Guid Version,Guid Run,Guid Artifact) f)
  {
   await using var db=BuildingContext(testConnection);var readiness=new ScenarioReadinessStore(db);
-  var confirm=await readiness.ExecuteAsync("Confirm",f.Owner,f.Version,f.Revision,new ConfirmTrainingRequest(f.Version,f.Run),null,default);Assert.True(confirm.IsSuccess,confirm.Error?.Code);
-  var submitted=await readiness.ExecuteAsync("Submit",f.Owner,f.Version,null,new{},"submit",default);Assert.True(submitted.IsSuccess,submitted.Error?.Code);
-  var approval=await readiness.ExecuteAsync("Approve",adminId,f.Version,null,new{contentHash=submitted.Value.GetProperty("contentHash").GetString(),rubricHash=submitted.Value.GetProperty("rubricHash").GetString()},"approve",default);Assert.True(approval.IsSuccess,approval.Error?.Code);
+  var confirm=await readiness.ExecuteAsync("Confirm",f.Owner,f.Owner,f.Version,f.Revision,new ConfirmTrainingRequest(f.Version,f.Run),null,default);Assert.True(confirm.IsSuccess,confirm.Error?.Code);
+  var submitted=await readiness.ExecuteAsync("Submit",f.Owner,f.Owner,f.Version,null,new{},"submit",default);Assert.True(submitted.IsSuccess,submitted.Error?.Code);
+  var approval=await readiness.ExecuteAsync("Approve",adminId,adminId,f.Version,null,new{contentHash=submitted.Value.GetProperty("contentHash").GetString(),rubricHash=submitted.Value.GetProperty("rubricHash").GetString()},"approve",default);Assert.True(approval.IsSuccess,approval.Error?.Code);
   return new(f.Revision,f.Version,confirm.Value.GetProperty("reviewId").GetGuid(),f.Artifact);
  }
  [PostgresFact]

@@ -81,7 +81,9 @@ public sealed class LoginAuditPermissionsPostgresTests
         {
             await using var db = await BillingDatabase.Create(false);
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "002_password_reset_recovery.sql")));
-            await db.Sql($"CREATE ROLE {role} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT");
+            var databasePassword = (new NpgsqlConnectionStringBuilder(db.Connection).Password
+                ?? throw new InvalidOperationException("Disposable database password is required")).Replace("'", "''");
+            await db.Sql($"CREATE ROLE {role} LOGIN PASSWORD '{databasePassword}' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT");
             roleCreated = true;
             await db.Sql($"""
                 GRANT USAGE ON SCHEMA public TO {role};

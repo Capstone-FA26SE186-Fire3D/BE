@@ -8,12 +8,13 @@ Contract hiện tại trong nhánh triển khai; dấu tick chỉ xác nhận so
 |2|POST /api/buildings/{id}/revisions/upload-url và /api/buildings/{buildingId}/ifc; upload-complete bind intent/ETag/size/hash/recovery|✅|✅|Migration áp; S3/binary chưa kiểm |
 |3|POST /api/revisions/{revisionId}/process, /api/processing-jobs/{jobId}/retry; outbox/HTTP machine worker claim/renew/output/complete/fail|✅|✅|Migration áp; worker thật ❌ |
 |4|Scenario/draft create, PUT/validate/snapshot; ETag/receipt/numbering/hash/audit; package-build job|✅|✅|Migration áp; Unity thật ❌ |
-|5|confirm-for-training/reviews đúng cặp; submit/admin approve/reject content/rubric|✅|✅|Migration áp; binary/client chưa kiểm |
+|5|confirm-for-training/reviews đúng cặp; submit/admin approve/reject content/rubric và live family|✅|✅|Migration nền đã áp; family/audit forward mới chưa áp; binary/client chưa kiểm |
 |6|Playtest prepare/start, immutable pins, quota and5-minute grant|✅|✅|Migration áp; runtime thật ❌ |
 |7|POST /api/releases Built; GET /api/buildings/{id}/trainings; access/participation dependencies|✅|✅|Migration áp; binary/client chưa kiểm |
 |8|Feedback/support owner/admin create/list/detail/message/PATCH; receipts/ETag/paging|✅|✅|Migration áp; binary/client chưa kiểm |
 |9|PayOS GET200 DTO; role/header/security metadata; relative server; OpenAPI-generated inventory/docs|✅|✅|Deployed OpenAPI chưa kiểm |
-|Backlog|Publish, learner start/sync/result/training analytics, real IFC/Blender/Unity pipeline|❌|❌|❌|
+|Publish|POST /api/releases/{releaseId}/publish; paid entitlement/approval/readiness/package gate và authorized replay|✅|✅|Cờ rollout mặc định tắt; binary/provider chưa kiểm |
+|Backlog|Learner start/sync/result/training analytics, real IFC/Blender/Unity pipeline|❌|❌|❌|
 
 ## Header, response và phụ thuộc
 
@@ -22,7 +23,7 @@ Contract hiện tại trong nhánh triển khai; dấu tick chỉ xác nhận so
 - Confirm trả reviewId cho exact revision/version/run/annotation/artifact, không dùng revision.status làm bằng chứng version khác. Technical rejection khác approval nội dung.
 - Worker là machine authentication X-Worker-Key, JWT user không cấp quyền worker. Transport mặc định Http; tùy chọn RedisStreams dùng PostgreSQL outbox → Redis → BE bridge → HTTP worker. [Hướng dẫn Redis](redis-processing.md) tách Published, durable handoff/ACK và Succeeded; provider/toolchain thật chưa nghiệm thu.
 - Playtest preparation không grant/quota; start pin actor/family/package/runtime, Trial consumption hoặc entitlement đúng Building. Không seed Trial tự động.
-- Release Built derive metadata/provenance từ accepted ReleasePackage và Approved content/rubric; create matching Training atomic. Publish vẫn503.
+- Release Built derive metadata/provenance từ accepted ReleasePackage và Approved content/rubric; create matching Training atomic. Publish có gate paid entitlement/approval/exact readiness/package và cờ Publishing:Enabled mặc định tắt; đủ điều kiện trả204, thiếu điều kiện nghiệp vụ409, chưa bật rollout503.
 - Paid/checkout/provisioning trong GET PayOS là ba trạng thái riêng. Chỉ sửa metadata GET, không thay thanh toán.
 
 ## Test tay theo dependency

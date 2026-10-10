@@ -21,7 +21,7 @@ public sealed class BillingV7OpenApiTests
     {
         await using var db=await BillingDatabase.Create(migrationHistory:true);
         var role="report_read_"+Guid.NewGuid().ToString("N");
-        await db.Sql($"CREATE ROLE {role} LOGIN NOSUPERUSER NOBYPASSRLS;GRANT fire3d_api TO {role};GRANT USAGE ON SCHEMA public TO {role}");
+        await db.Sql($"CREATE ROLE {role} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{(new Npgsql.NpgsqlConnectionStringBuilder(db.Connection).Password??"").Replace("'","''")}';GRANT fire3d_api TO {role};GRANT USAGE ON SCHEMA public TO {role}");
         try
         {
             await using var context=db.Context(new Npgsql.NpgsqlConnectionStringBuilder(db.Connection){Username=role}.ConnectionString);

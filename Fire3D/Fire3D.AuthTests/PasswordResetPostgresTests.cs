@@ -77,6 +77,9 @@ public sealed class PasswordResetPostgresTests
                 .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>()) await db.Sql(operation.Sql);
             foreach (var operation in new Fire3D.Infrastructure.Migrations.AddPasswordRecoveryGate().UpOperations
                 .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>()) await db.Sql(operation.Sql);
+            await db.Sql("ALTER TABLE buildings ADD FOREIGN KEY(organization_id) REFERENCES organizations(id); ALTER TABLE sessions ADD FOREIGN KEY(trainee_user_id) REFERENCES users(id);");
+            foreach (var operation in new Fire3D.Infrastructure.Migrations.AddPendingRegistrationCleanupGate().UpOperations
+                .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>()) await db.Sql(operation.Sql);
             return db;
         }
         private DbContextOptions<Fire3DDbContext>? contextOptions;

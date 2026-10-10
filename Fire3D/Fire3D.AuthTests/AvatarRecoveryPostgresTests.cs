@@ -12,6 +12,7 @@ public sealed class AvatarRecoveryPostgresTests
     public async Task Restricted_runtime_adopts_owned_candidate_and_keeps_current_object_protected()
     {
         await using var db = await BillingDatabase.Create(false);
+        await BackendDatabasePermissionsTests.Apply(db, "AddAvatarCleanupGate");
         await db.Sql("""
             DO $$ BEGIN
               IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='fire3d_api') THEN
@@ -20,7 +21,7 @@ public sealed class AvatarRecoveryPostgresTests
             END $$;
             GRANT USAGE ON SCHEMA public TO fire3d_api;
             GRANT SELECT,INSERT,UPDATE ON users,organizations,avatar_upload_intents TO fire3d_api;
-            GRANT SELECT,INSERT,UPDATE,DELETE ON avatar_object_cleanups TO fire3d_api;
+
             GRANT INSERT ON audit_logs TO fire3d_api;
             """);
         await BackendDatabasePermissionsTests.Apply(db, "AddAvatarCleanupRecovery");
@@ -57,6 +58,7 @@ public sealed class AvatarRecoveryPostgresTests
     public async Task Expired_candidate_cannot_be_reserved_again()
     {
         await using var db = await BillingDatabase.Create(false);
+        await BackendDatabasePermissionsTests.Apply(db, "AddAvatarCleanupGate");
         var intent = await Intent(db);
         await using var first = db.Context();
         var candidate = (await new AvatarStore(first).ReserveCopyCandidateAsync(intent.Id, intent.UserId, 1, "etag", DateTime.UtcNow, default)).Candidate!;
@@ -70,6 +72,7 @@ public sealed class AvatarRecoveryPostgresTests
     public async Task Expired_candidate_cannot_be_adopted_even_with_old_request_timestamp()
     {
         await using var db = await BillingDatabase.Create(false);
+        await BackendDatabasePermissionsTests.Apply(db, "AddAvatarCleanupGate");
         var intent = await Intent(db);
         await using var first = db.Context();
         var candidate = (await new AvatarStore(first).ReserveCopyCandidateAsync(intent.Id, intent.UserId, 1, "etag", DateTime.UtcNow, default)).Candidate!;
@@ -85,6 +88,7 @@ public sealed class AvatarRecoveryPostgresTests
     public async Task Audit_failure_rolls_back_adoption_and_candidate_remains_recoverable()
     {
         await using var db = await BillingDatabase.Create(false);
+        await BackendDatabasePermissionsTests.Apply(db, "AddAvatarCleanupGate");
         var intent = await Intent(db);
         await using var reserve = db.Context();
         var candidate = (await new AvatarStore(reserve).ReserveCopyCandidateAsync(intent.Id, intent.UserId, 1, "etag", DateTime.UtcNow, default)).Candidate!;
@@ -107,6 +111,7 @@ public sealed class AvatarRecoveryPostgresTests
     public async Task Complete_and_delete_compete_on_one_profile_revision_without_losing_cleanup()
     {
         await using var db = await BillingDatabase.Create(false);
+        await BackendDatabasePermissionsTests.Apply(db, "AddAvatarCleanupGate");
         var intent = await Intent(db);
         await db.Sql($"UPDATE users SET avatar_storage_key='avatars/users/old' WHERE id='{intent.UserId}'");
         await using var reserve = db.Context();
@@ -131,6 +136,7 @@ public sealed class AvatarRecoveryPostgresTests
     public async Task Cleanup_retains_protected_object_and_fences_old_worker_receipt()
     {
         await using var db = await BillingDatabase.Create(false);
+        await BackendDatabasePermissionsTests.Apply(db, "AddAvatarCleanupGate");
         await db.Sql($"UPDATE users SET avatar_storage_key='avatars/users/current' WHERE id='{BillingDatabase.Owner}'");
         await using var context = db.Context();
         var cleanup = new AvatarStore(context);

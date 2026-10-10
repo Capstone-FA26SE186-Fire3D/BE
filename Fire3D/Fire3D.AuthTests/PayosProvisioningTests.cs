@@ -102,7 +102,7 @@ public sealed class PayosProvisioningTests
         var line=(Guid)(await db.Scalar("SELECT id FROM payment_provisioning_records"))!;
         var error=await Assert.ThrowsAsync<Npgsql.PostgresException>(()=>db.Sql($"SET ROLE fet3d_payos_webhook_executor; SELECT claim_payos_provisioning_context('{line}','{Guid.NewGuid()}')"));
         Assert.Equal("PAYOS_STALE_LEASE",error.MessageText);
-        await db.Sql("DROP TRIGGER fail_entitlement ON audit_logs; UPDATE payment_provisioning_records SET next_attempt_at=now()");
+        await db.Sql("DROP TRIGGER fail_entitlement ON audit_logs; UPDATE payment_provisioning_records SET next_attempt_at=now()-interval '5 seconds'");
         await Task.WhenAll(PayosWebhookTests.Recover(factory,db),PayosWebhookTests.Recover(factory,db));
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payment_provisioning_records WHERE status='Succeeded'"));

@@ -20,7 +20,7 @@ public class ReleasesController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
-    public async Task<ActionResult<ReleaseResponse>> BuildRelease(BuildReleaseRequest request, CancellationToken ct, [FromHeader(Name="Idempotency-Key")]string? key=null)
+    public async Task<ActionResult<ReleaseResponse>> BuildRelease(BuildReleaseRequest request, CancellationToken ct, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key=null)
     {
         var result = await sender.Send(new BuildReleaseCommand(User.GetActorId(), request,key,User.GetSessionFamilyId()), ct);
         return result.IsSuccess

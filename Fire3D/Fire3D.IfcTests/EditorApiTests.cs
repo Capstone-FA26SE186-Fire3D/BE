@@ -43,12 +43,12 @@ public sealed class EditorApiTests
         var actor=RevisionAccessTests.Actor(UserRole.OrganizationUser);
         var source=new EditorPreviewSource(Guid.NewGuid(),Guid.NewGuid(),"Processing",Guid.NewGuid(),Guid.NewGuid(),
             "private/key",new string('a',64),JsonSerializer.SerializeToElement(complete?new int[16]:new int[3]),
-            JsonSerializer.SerializeToElement(Array.Empty<object>()),JsonSerializer.SerializeToElement(new {}));
+            JsonSerializer.SerializeToElement(Array.Empty<object>()),JsonSerializer.SerializeToElement(new {}),100);
         var store=StubProxy.For<IEditorPreviewStore>((_,args)=> {
             Assert.Equal(actor.OrganizationId,args[2]); return Task.FromResult<EditorPreviewSource?>(source);
         });
         var calls=0;
-        var signer=StubProxy.For<IPreviewDownloadSigner>((_,_)=> {calls++;return Task.FromResult(new SignedDownload("https://example.test/signed",DateTimeOffset.UtcNow.AddMinutes(5)));});
+        var signer=StubProxy.For<IPreviewDownloadSigner>((_,args)=> {calls++;Assert.Equal(100L,args[1]);return Task.FromResult<SignedDownload?>(new("https://example.test/signed",DateTimeOffset.UtcNow.AddMinutes(5)));});
         var result=await new GetEditorPreviewHandler(RevisionAccessTests.Accounts(actor),store,signer)
             .Handle(new(actor.Id,source.BuildingId,source.RevisionId),default);
         Assert.Equal(complete?"Ready":"NotReady",result.Value?.Status);
@@ -65,11 +65,22 @@ public sealed class EditorApiSqlTests(IfcReadDatabase database) : IClassFixture<
         var actor=Guid.NewGuid(); var other=Guid.NewGuid();
         await db.Database.ExecuteSqlRawAsync("""
             ALTER TABLE revision_artifacts ADD COLUMN storage_key text;
+            ALTER TABLE revision_artifacts ADD COLUMN size_bytes bigint DEFAULT 100;
             CREATE TABLE users(id uuid primary key,organization_id uuid,role text,is_active boolean,deleted_at timestamptz);
             CREATE TABLE annotation_sets(id uuid primary key,revision_id uuid REFERENCES revisions(id),version_number int NOT NULL,
                 data jsonb NOT NULL,provenance varchar(50),created_by uuid,created_at timestamptz DEFAULT now(),UNIQUE(revision_id,version_number));
             CREATE TABLE audit_logs(id uuid DEFAULT gen_random_uuid(),user_id uuid,organization_id uuid,actor_type text,
                 action text,target_entity text,target_id uuid,new_values jsonb);
+            -- Read-only fixture projection; production-gate behavior is covered
+            -- by HTTP tests running the full migration history.
+            CREATE FUNCTION scenario_reference_issues(p_revision uuid,p_state jsonb) RETURNS jsonb LANGUAGE sql AS $$
+              SELECT coalesce(jsonb_agg(jsonb_build_object('code','ANCHOR_NOT_FOUND')),'[]'::jsonb)
+              FROM jsonb_array_elements_text(p_state->'objectAnchors') anchor
+              WHERE NOT EXISTS(SELECT 1 FROM revision_artifacts a JOIN processing_jobs j ON j.id=a.job_id
+               JOIN processing_job_attempts t ON t.id=a.attempt_id AND t.id=j.current_attempt_id AND t.input_hash=j.input_hash
+               WHERE a.revision_id=p_revision AND j.kind='Geometry' AND j.status='Succeeded' AND t.status='Succeeded'
+                AND a.metadata->'objectAnchors' ? anchor);
+            $$;
             """);
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO users VALUES ({actor},{database.Tenant},'OrganizationUser',true,null),({other},{database.OtherTenant},'OrganizationUser',true,null)");
         await db.Database.ExecuteSqlRawAsync("UPDATE processing_job_attempts SET status='Running'");
@@ -81,6 +92,7 @@ public sealed class EditorApiSqlTests(IfcReadDatabase database) : IClassFixture<
         Assert.Equal(database.Artifact,(await preview.ReadAsync(database.Building,database.Revision,database.Tenant,default))!.ArtifactId);
         await db.Database.ExecuteSqlRawAsync("UPDATE processing_job_attempts SET input_hash='mismatch'");
         Assert.Null((await preview.ReadAsync(database.Building,database.Revision,database.Tenant,default))!.ArtifactId);
+        await db.Database.ExecuteSqlRawAsync("UPDATE processing_job_attempts t SET input_hash=j.input_hash FROM processing_jobs j WHERE t.id=j.current_attempt_id;UPDATE revision_artifacts SET metadata=jsonb_build_object('objectAnchors',jsonb_build_array('IFC-SPACE-1'))");
 
         var store=new AnnotationStore(db);
         Assert.Equal("\"0\"",(await store.ReadAsync(database.Revision,database.Tenant,default))!.ETag);

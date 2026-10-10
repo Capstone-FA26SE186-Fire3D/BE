@@ -8,10 +8,10 @@ public sealed record RejectScenarioVersionRequest(Guid ScenarioVersionId, Guid V
     Guid? AnnotationSetId = null);
 public interface IScenarioReviewStore
 {
-    Task<AuthResult<Guid>> CreateRejectedReviewAsync(Guid actorId, Guid revisionId, Guid? organizationId,
+    Task<AuthResult<Guid>> CreateRejectedReviewAsync(Guid actorId, Guid familyId, Guid revisionId, Guid? organizationId,
         RejectScenarioVersionRequest request, CancellationToken ct);
 }
-public sealed record RejectScenarioVersionCommand(Guid ActorId, Guid RevisionId, RejectScenarioVersionRequest Request)
+public sealed record RejectScenarioVersionCommand(Guid ActorId, Guid SessionFamilyId, Guid RevisionId, RejectScenarioVersionRequest Request)
     : IRequest<AuthResult<Guid>>;
 
 public sealed class RejectScenarioVersionCommandHandler(IAuthStore accounts, IScenarioReviewStore store)
@@ -28,7 +28,7 @@ public sealed class RejectScenarioVersionCommandHandler(IAuthStore accounts, ISc
             return AuthResult<Guid>.Fail("VALIDATION_ERROR",
                 "Revision, scenario version, validation run, and a review message up to 4000 characters are required.", 400);
 
-        return await store.CreateRejectedReviewAsync(command.ActorId, command.RevisionId, scope.Value!.OrganizationId,
+        return await store.CreateRejectedReviewAsync(command.ActorId, command.SessionFamilyId, command.RevisionId, scope.Value!.OrganizationId,
             request with { ReviewMessage = request.ReviewMessage.Trim() }, ct);
     }
 }

@@ -30,7 +30,9 @@ public sealed class SelectedGatePrivilegeMigrationTests
    Assert.True(await Bool($"SELECT has_table_privilege('{login}','support_tickets','INSERT')"));
    // Supabase's migration identity is not a superuser. Owner membership used
    // for gate grants must be restored, not inherited by runtime logins.
-   await Sql($"CREATE ROLE {migrationLogin} LOGIN NOSUPERUSER NOBYPASSRLS CREATEROLE;GRANT USAGE,CREATE ON SCHEMA public TO {migrationLogin} WITH GRANT OPTION;GRANT fet3d_ifc_upload_owner TO {migrationLogin} WITH ADMIN TRUE,SET FALSE,INHERIT FALSE;");
+   await Sql($"CREATE ROLE {migrationLogin} LOGIN NOSUPERUSER NOBYPASSRLS CREATEROLE PASSWORD '{(source.Password??"").Replace("'","''")}';GRANT USAGE,CREATE ON SCHEMA public TO {migrationLogin} WITH GRANT OPTION;GRANT fet3d_ifc_upload_owner TO {migrationLogin} WITH ADMIN TRUE,SET FALSE,INHERIT FALSE;");
+   foreach(var owner in new[]{"fet3d_pending_cleanup_owner","fet3d_avatar_cleanup_owner"})
+    await Sql($"DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='{owner}') THEN CREATE ROLE {owner} NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE; END IF; END $$;GRANT {owner} TO {migrationLogin} WITH ADMIN TRUE,SET FALSE,INHERIT FALSE;");
    // Redis adds FK references, an RLS policy and trusted handoff backfill on these
    // existing tables. Its migration identity must own the affected schema objects;
    // CREATEROLE alone cannot bypass table ownership or REFERENCES permissions.
@@ -40,9 +42,18 @@ public sealed class SelectedGatePrivilegeMigrationTests
    // these privileges are never granted to the runtime login under test.
    await Sql($"CREATE EXTENSION IF NOT EXISTS btree_gist;GRANT fet3d_payos_ledger_owner TO {migrationLogin};");
    foreach(var table in new[]{"users","organizations","buildings","revisions","processing_jobs","audit_logs","auth_refresh_tokens","service_packages","quotations","quotation_building_items","service_entitlements","billing_checkout_operations","payos_payment_requests","payment_transactions","releases","release_packages","trainings","building_participation_grants","release_build_provenance","release_command_receipts","feedback","support_tickets","support_ticket_messages","support_command_receipts","integration_outbox_events","integration_event_consumptions","processing_delivery_receipts","__EFMigrationsHistory"}) await Sql($"ALTER TABLE \"{table}\" OWNER TO {migrationLogin}");
+   // Cleanup checks every historical FK under RLS. The disposable migrator models
+   // schema ownership; runtime never receives these migration privileges.
+   await Sql($"DO $$ DECLARE t text;BEGIN FOR t IN SELECT tablename FROM pg_tables WHERE schemaname='public' LOOP EXECUTE format('ALTER TABLE public.%I OWNER TO %I',t,'{migrationLogin}'); END LOOP; END $$;");
    await using(var restricted=new Fire3DDbContext(new DbContextOptionsBuilder<Fire3DDbContext>().UseNpgsql(new NpgsqlConnectionStringBuilder(source.ConnectionString){Username=migrationLogin}.ConnectionString).Options)) await restricted.Database.MigrateAsync();
    Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','fet3d_ifc_upload_owner','USAGE')"));
    Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','fet3d_ifc_upload_owner','SET')"));
+   foreach(var owner in new[]{"fet3d_pending_cleanup_owner","fet3d_avatar_cleanup_owner"})
+   {
+    Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','{owner}','USAGE')"));
+    Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','{owner}','SET')"));
+    Assert.False(await Bool($"SELECT has_schema_privilege('{owner}','public','CREATE')"));
+   }
    foreach(var operation in new[]{"INSERT","UPDATE"})
    {
     Assert.True(await Bool($"SELECT has_column_privilege('{login}','buildings','name','{operation}')"));

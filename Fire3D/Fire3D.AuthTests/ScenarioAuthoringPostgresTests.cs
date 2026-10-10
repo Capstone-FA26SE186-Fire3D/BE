@@ -15,9 +15,9 @@ public sealed partial class AuthIntegrationTests
     private async Task WithAuthoringRuntime(Func<string,Task> action)
     {
         var login="authoring_test_"+Guid.NewGuid().ToString("N");
-        await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS;GRANT USAGE ON SCHEMA public TO {login};GRANT SELECT ON users,organizations,buildings,scenario_drafts,scenario_versions,scenarios TO {login};GRANT EXECUTE ON FUNCTION scenario_authoring_gate(text,uuid,uuid,jsonb,text,bigint),scenario_reference_issues(uuid,jsonb) TO {login}");
+        await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}';GRANT USAGE ON SCHEMA public TO {login};GRANT SELECT ON users,organizations,buildings,scenario_drafts,scenario_versions,scenarios TO {login};GRANT EXECUTE ON FUNCTION scenario_authoring_gate(text,uuid,uuid,jsonb,text,bigint),scenario_reference_issues(uuid,jsonb) TO {login}");
         foreach(var table in new[]{"users","organizations","buildings","scenario_drafts","scenario_versions","scenarios"}) await ExecuteAsync($"CREATE POLICY {login} ON {table} TO {login} USING(true)");
-        try{await action(new NpgsqlConnectionStringBuilder(testConnection){Username=login,Password="",Pooling=false}.ConnectionString);}
+        try{await action(new NpgsqlConnectionStringBuilder(testConnection){Username=login,Pooling=false}.ConnectionString);}
         finally
         {
             foreach(var table in new[]{"users","organizations","buildings","scenario_drafts","scenario_versions","scenarios"}) await ExecuteAsync($"DROP POLICY {login} ON {table}");

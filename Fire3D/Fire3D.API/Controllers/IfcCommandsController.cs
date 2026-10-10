@@ -14,7 +14,8 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
 {
     /// <summary>Records a rejection for one revisionâ€“scenario version pair without changing the shared revision status.</summary>
     [HttpPost("revisions/{revisionId:guid}/reviews")]
-    [ProducesResponseType(201)]
+    [ProducesResponseType<Fire3D.Application.Scenarios.TechnicalRejectionResponse>(201)]
+    [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
@@ -24,7 +25,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     {
         var actor = User.GetActorId();
         var result = await sender.Send(
-            new Fire3D.Application.Scenarios.Commands.RejectScenarioVersion.RejectScenarioVersionCommand(actor, revisionId, request), ct);
+            new Fire3D.Application.Scenarios.Commands.RejectScenarioVersion.RejectScenarioVersionCommand(actor, User.GetSessionFamilyId(), revisionId, request), ct);
         return result.IsSuccess ? Created($"/api/revisions/{revisionId}/reviews/{result.Value}", new { Id = result.Value })
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
@@ -61,7 +62,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<ActionResult<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>> InitiateUpload(Guid buildingId,
         Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadRequest request,
-        [FromHeader(Name = "Idempotency-Key")] string? key, CancellationToken ct)
+        [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadCommand(actor, buildingId, request, key), ct);
@@ -96,7 +97,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
-    public async Task<IActionResult> ProcessRevision(Guid revisionId, [FromHeader(Name = "Idempotency-Key")] string? key, CancellationToken ct)
+    public async Task<IActionResult> ProcessRevision(Guid revisionId, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ProcessRevision.ProcessRevisionCommand(actor, revisionId, key), ct);
@@ -109,14 +110,17 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     /// Records technical readiness for the exact revision/version/validation/artifact pair; it does not approve content.
     /// </summary>
     [HttpPost("revisions/{revisionId:guid}/confirm-for-training")]
-    [ProducesResponseType(200)]
+    [ProducesResponseType<Fire3D.Application.Scenarios.ConfirmationResponse>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> ConfirmForTraining(Guid revisionId, [FromBody] Fire3D.Application.Scenarios.ConfirmTrainingRequest request, CancellationToken ct)
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ConfirmForTraining.ConfirmForTrainingCommand(actor, revisionId, request), ct);
+        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ConfirmForTraining.ConfirmForTrainingCommand(actor, User.GetSessionFamilyId(), revisionId, request), ct);
 
         return result.IsSuccess 
             ? Ok(new { reviewId = result.Value })

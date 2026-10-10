@@ -13,7 +13,7 @@ public sealed class ScenarioPackageBuildsController(IScenarioPackageBuildStore s
     [ProducesResponseType(202)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]
-    public async Task<IActionResult> Build(Guid id,[FromBody]PackageBuildRequest request,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)
+    public async Task<IActionResult> Build(Guid id,[FromBody]PackageBuildRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)
     {
         if(request.Kind is not ("PlaytestPackage" or "ReleasePackage") || string.IsNullOrWhiteSpace(request.BuildTarget) || request.BuildTarget.Length>100)
             return Problem(statusCode:400,title:"Use PlaytestPackage or ReleasePackage and a build target of 1-100 characters.",extensions:new Dictionary<string,object?>{["code"]="VALIDATION_ERROR",["errors"]=new{kind=new[]{"Check package kind and buildTarget."}}});

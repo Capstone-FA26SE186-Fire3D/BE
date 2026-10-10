@@ -401,6 +401,7 @@ public sealed class AvatarServiceTests
         public List<string> QueuedKeys { get; } = [];
         public Task QueueAsync(string objectKey, DateTime availableAt, CancellationToken ct) { QueuedKeys.Add(objectKey); return Task.CompletedTask; }
         public Task<AvatarCleanupJob?> ClaimAsync(CancellationToken ct) => Task.FromResult<AvatarCleanupJob?>(null);
+        public Task<bool> RenewAsync(AvatarCleanupJob job, CancellationToken ct) => Task.FromResult(true);
         public Task<bool> IsReferencedAsync(string objectKey, CancellationToken ct) => Task.FromResult(false);
         public Task CompleteAsync(AvatarCleanupJob job, CancellationToken ct) => Task.CompletedTask;
         public Task FailAsync(AvatarCleanupJob job, CancellationToken ct) => Task.CompletedTask;

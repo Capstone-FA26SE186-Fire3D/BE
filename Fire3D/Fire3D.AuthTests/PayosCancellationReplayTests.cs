@@ -52,7 +52,7 @@ public sealed class PayosCancellationReplayTests
         Assert.Equal(audits,await db.Scalar("SELECT count(*) FROM audit_logs"));
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM payment_transactions"));
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
-        await db.Sql("UPDATE billing_checkout_operations SET next_attempt_at=now()");await PayosWebhookTests.Recover(factory,db);
+        await db.Sql("UPDATE billing_checkout_operations SET next_attempt_at=now()-interval '5 seconds'");await PayosWebhookTests.Recover(factory,db);
         var terminal=await owner.SendAsync(Cancel(id));Assert.Equal(HttpStatusCode.OK,terminal.StatusCode);
         Assert.Equal("Cancelled",(await PayosCheckoutTests.Json(terminal)).GetProperty("checkoutStatus").GetString());
     }

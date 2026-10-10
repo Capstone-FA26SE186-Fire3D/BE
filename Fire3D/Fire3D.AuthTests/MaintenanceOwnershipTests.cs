@@ -22,7 +22,7 @@ public sealed class MaintenanceOwnershipTests
         try
         {
             await db.Sql($$"""
-                CREATE ROLE {{login}} LOGIN CREATEROLE NOSUPERUSER NOBYPASSRLS NOCREATEDB;
+                CREATE ROLE {{login}} LOGIN CREATEROLE NOSUPERUSER NOBYPASSRLS NOCREATEDB PASSWORD '{{(new NpgsqlConnectionStringBuilder(db.Connection).Password??"").Replace("'","''")}}';
                 GRANT USAGE,CREATE ON SCHEMA public TO {{login}};
                 ALTER SCHEMA public OWNER TO {{login}};
                 DO $$ DECLARE obj record; BEGIN

@@ -142,8 +142,11 @@ public sealed class OrganizationPhoneHttpTests
         var email = id + "@example.test";
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/auth/registration/request-otp", new { email })).StatusCode);
         using var scope = factory.Services.CreateScope();
-        using var connection = new NpgsqlConnection(scope.ServiceProvider.GetRequiredService<Fire3DDbContext>().Database.GetConnectionString());
-        await connection.OpenAsync();
+        // Reuse the configured data source: Npgsql masks passwords from a
+        // connection string after use; cloning it must not assume trust auth.
+        var context = scope.ServiceProvider.GetRequiredService<Fire3DDbContext>();
+        await context.Database.OpenConnectionAsync();
+        var connection = (NpgsqlConnection)context.Database.GetDbConnection();
         Assert.Equal("fire3d_api", await new NpgsqlCommand("SELECT current_user", connection).ExecuteScalarAsync());
         var job = await scope.ServiceProvider.GetRequiredService<IRegistrationOtpDeliveryQueue>().ClaimAsync(default);
         Assert.NotNull(job); Assert.Equal(email, job.Email);
