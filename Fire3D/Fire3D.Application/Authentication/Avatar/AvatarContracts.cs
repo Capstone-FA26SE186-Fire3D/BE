@@ -38,6 +38,7 @@ public interface IAvatarCleanupStore
     Task QueueAsync(string objectKey, DateTime availableAt, CancellationToken ct);
     Task<AvatarCleanupJob?> ClaimAsync(CancellationToken ct);
     Task<bool> IsReferencedAsync(string objectKey, CancellationToken ct);
+    Task<bool> RenewAsync(AvatarCleanupJob job, CancellationToken ct);
     Task CompleteAsync(AvatarCleanupJob job, CancellationToken ct);
     Task FailAsync(AvatarCleanupJob job, CancellationToken ct);
 }

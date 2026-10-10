@@ -13,6 +13,7 @@
 
 	<ItemGroup>
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
+        <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />
         <EmbeddedResource Include="Persistence/Sql/ProcessingRedisDelivery.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ProcessingRedisDelivery.sql" />
         <EmbeddedResource Include="Persistence/Sql/ProcessingRedisConsumption.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ProcessingRedisConsumption.sql" />
         <EmbeddedResource Include="Persistence/Sql/ProcessingRedisRecovery.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ProcessingRedisRecovery.sql" />

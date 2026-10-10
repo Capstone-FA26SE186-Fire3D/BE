@@ -27,20 +27,33 @@ public sealed class AvatarCleanupWorker(IServiceScopeFactory scopes, ILogger<Ava
                         await cleanup.FailAsync(job, stoppingToken);
                         continue;
                     }
-                    await scope.ServiceProvider.GetRequiredService<IStorageService>().DeleteObjectAsync(job.ObjectKey, stoppingToken);
+                    if (!await cleanup.RenewAsync(job, stoppingToken)) continue;
+                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                    timeout.CancelAfter(TimeSpan.FromSeconds(45));
+                    try
+                    {
+                        await scope.ServiceProvider.GetRequiredService<IStorageService>().DeleteObjectAsync(job.ObjectKey, timeout.Token);
+                    }
+                    catch (Amazon.S3.AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound) { }
                     await cleanup.CompleteAsync(job, stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }
                 catch (Exception exception)
                 {
-                    logger.LogWarning(exception, "Avatar cleanup failed for {ObjectKey}.", job.ObjectKey);
+                    logger.LogWarning("Avatar cleanup failed. JobId={JobId}; Attempt={Attempt}; ErrorType={ErrorType}; SQLSTATE={SqlState}.",
+                        job.Id, job.Attempt, exception.GetType().Name, (exception as Npgsql.PostgresException)?.SqlState);
                     await cleanup.FailAsync(job, stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (Npgsql.PostgresException exception) when (exception.SqlState == Npgsql.PostgresErrorCodes.InsufficientPrivilege)
+            {
+                logger.LogError("Avatar cleanup blocked. SQLSTATE={SqlState}; retry in 60 seconds.", exception.SqlState);
+                await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
+            }
             catch (Exception exception)
             {
-                logger.LogError(exception, "Avatar cleanup worker failed.");
+                logger.LogError("Avatar cleanup worker failed ({ErrorType}).", exception.GetType().Name);
                 await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
             }
         }
