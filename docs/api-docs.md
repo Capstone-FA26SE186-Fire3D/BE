@@ -598,6 +598,8 @@ Playtest prepare/start use the session-bound PostgreSQL gate: exact accepted imm
 
 Trainee prepare/start/launched/heartbeat/events/complete/result/continuation/reconcile dưới `/api/training/...`, seat theo Trainee/Building/kỳ entitlement, continuation 7 ngày cho đồng bộ offline, kết quả rubric do server tính và QR Building (`/api/buildings/{id}/qr-codes`, `/api/qr/{qrToken}`): xem [learner-sessions.md](learner-sessions.md).
 
+Learn CMS công khai (`/api/learn/...`, bookmark của Trainee, quản trị `/api/admin/learn/...` với version bất biến, Hidden/Deleted/restore→Hidden, allowlist video YouTube/TikTok/Facebook) và Organization Library (`/api/library/...`, `/api/admin/library/...`): xem [learn-library.md](learn-library.md).
+
 ## 8. Release lifecycle và Building access
 
 POST /api/releases: OrganizationUser/PlatformAdmin, Idempotency-Key, revisionId/scenarioVersionId/confirmationReviewId/candidateArtifactId; metadata legacy nullable chỉ được nhận khi khớp output worker. Gate kiểm Approved content/rubric và technical confirmation đúng cặp, current accepted ReleasePackage/manifest và runtime contract; tạo Built/package/provenance/Training/receipt/audit atomic. Replay cùng key/input trả cùng response201; khác input409. Không chứng minh Unity thật.

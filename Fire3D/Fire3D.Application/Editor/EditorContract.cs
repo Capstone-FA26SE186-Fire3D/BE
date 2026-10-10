@@ -424,6 +424,14 @@ public static class ScenarioStateV1Validator
         return r.Issues;
     }
 
+    /// <summary>Complete rubric validation (shape and server-computed metrics) for Library rubric samples.</summary>
+    public static IReadOnlyList<ScenarioDraftValidationIssue> ValidateRubricDocument(JsonNode? rubric)
+    {
+        var r = new StrictReader([]);
+        ValidateRubric(r, rubric, complete: true);
+        return r.Issues;
+    }
+
     private static void UniqueValues(StrictReader r, JsonNode? node, string path, int max, Func<(JsonNode? node, string path), string?> read, bool requireOne)
     {
         var array = r.Array(node, path, max);

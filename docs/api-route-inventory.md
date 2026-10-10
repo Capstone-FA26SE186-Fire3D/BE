@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-176 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+203 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -24,6 +24,24 @@
 | POST | /api/admin/enterprise-quote-requests/{id}/quotations | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/feedback | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | PATCH | /api/admin/feedback/{id}/status | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
+| POST | /api/admin/learn/media/validate | Bearer | None | 200, 422 |
+| GET | /api/admin/learn/posts | Bearer | None | 200 |
+| POST | /api/admin/learn/posts | Bearer | Idempotency-Key | 201, 409, 422 |
+| GET | /api/admin/learn/posts/{id} | Bearer | None | 200, 404 |
+| POST | /api/admin/learn/posts/{id}/versions | Bearer | Idempotency-Key | 201, 409, 422 |
+| POST | /api/admin/learn/posts/{id}/{operation} | Bearer | If-Match | 200, 409, 412, 428 |
+| POST | /api/admin/learn/situations | Bearer | Idempotency-Key | 201, 409 |
+| GET | /api/admin/learn/versions/{versionId} | Bearer | None | 200, 404 |
+| PUT | /api/admin/learn/versions/{versionId} | Bearer | If-Match | 200, 409, 412, 422, 428 |
+| POST | /api/admin/learn/versions/{versionId}/publish | Bearer | If-Match | 200, 409, 412, 428 |
+| GET | /api/admin/library/items | Bearer | None | 200 |
+| POST | /api/admin/library/items | Bearer | Idempotency-Key | 201, 409 |
+| GET | /api/admin/library/items/{id} | Bearer | None | 200 |
+| PATCH | /api/admin/library/items/{id} | Bearer | If-Match | 200, 412, 428 |
+| POST | /api/admin/library/items/{id}/versions | Bearer | Idempotency-Key | 201, 422 |
+| GET | /api/admin/library/versions/{id} | Bearer | None | 200 |
+| PUT | /api/admin/library/versions/{id} | Bearer | If-Match | 200, 409, 412, 422, 428 |
+| POST | /api/admin/library/versions/{id}/publish | Bearer | If-Match | 200, 409, 412, 428 |
 | GET | /api/admin/organizations/{organizationId}/ai-quota | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/organizations/{organizationId}/ai-quota/grants | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/organizations/{organizationId}/ai-usage | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
@@ -92,6 +110,15 @@
 | GET | /api/buildings/{id}/trainings | Bearer | None | 200, 400, 404 |
 | GET | /api/feedback | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/feedback | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/learn/bookmarks | Bearer | None | 200 |
+| DELETE | /api/learn/bookmarks/{postId} | Bearer | None | 200 |
+| PUT | /api/learn/bookmarks/{postId} | Bearer | None | 200, 404 |
+| GET | /api/learn/posts | Anonymous | None | 200, 400 |
+| GET | /api/learn/posts/{slug} | Anonymous | None | 200, 404, 410 |
+| GET | /api/learn/situations | Anonymous | None | 200 |
+| GET | /api/library/items | Bearer | None | 200 |
+| GET | /api/library/items/{id} | Bearer | None | 200, 404 |
+| GET | /api/library/versions/{id} | Bearer | None | 200, 404 |
 | DELETE | /api/me/avatar | Bearer | If-Match | 204, 400, 401, 412, 428 |
 | GET | /api/me/avatar | Bearer | None | 200, 400, 401, 404 |
 | POST | /api/me/avatar/complete | Bearer | If-Match | 200, 400, 401, 409, 412, 428 |
