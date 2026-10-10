@@ -2,7 +2,7 @@
 -- never as a reason to grant superuser or delete shared data.
 BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
 SELECT current_database() AS database_name,current_user AS inspected_as,current_setting('server_version') AS postgres_version;
-SELECT migration_id FROM "__EFMigrationsHistory" ORDER BY migration_id DESC LIMIT 8;
+SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 8;
 SELECT rolname,rolcanlogin,rolsuper,rolbypassrls,rolcreatedb,rolcreaterole,rolreplication
  FROM pg_roles WHERE rolname IN('fire3d_api','fet3d_backend_executor','fet3d_pending_cleanup_owner','fet3d_avatar_cleanup_owner','fet3d_ifc_upload_owner');
 SELECT member.rolname AS member,owner.rolname AS inherited_role,m.admin_option,m.inherit_option,m.set_option
