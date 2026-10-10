@@ -6,7 +6,7 @@
   "timeLimitSeconds": 600,
   "randomSeed": 42,
   "replanIntervalSeconds": 5,
-  "modePolicy": { "allowedModes": ["Learn", "GuidedDrill", "Assessment"] },
+  "modePolicy": { "allowedModes": ["Learn", "Guided", "Assessment"] },
   "learningObjectives": ["Thoát hiểm theo lối an toàn gần nhất"],
   "learnerInstructions": "Rời khỏi tòa nhà qua cửa thoát hiểm, tránh khu vực có lửa.",
   "rubric": {

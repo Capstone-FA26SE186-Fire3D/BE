@@ -36,5 +36,7 @@ A document without `schemaVersion` is legacy: drafts keep the historical typed s
 saved. Legacy Geometry metadata is never reported as satisfying this contract: editor preview and floors return
 `ReprocessRequired` without coordinates or a download URL.
 
+Training modes use the database vocabulary `Learn`, `Guided`, `Assessment`. Rubric criteria must use a server-computed metric (`reached_exit`, `completion_time_seconds`, `wrong_exits`, `hazard_exposure`, `distance_meters`); see [learner sessions](../../../docs/learner-sessions.md).
+
 Structural validation is not geometry QA and not Unity acceptance. Object kinds are placement categories; behaviour
 comes only from capabilities published in the runtime catalog. No Unity behaviour is inferred or seeded here.
