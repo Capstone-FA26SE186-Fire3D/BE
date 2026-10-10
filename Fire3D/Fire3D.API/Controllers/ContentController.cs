@@ -125,7 +125,7 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     [ProducesResponseType<ProblemDetails>(428)]
     [OpenApi.ResponseHeader("ETag")]
     public async Task<IActionResult> Lifecycle(Guid id, string operation, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct) =>
-        Precondition(ifMatch, out var expected) ?? WithETag(await gates.LearnAdminAsync(CultureInfo.InvariantCulture.TextInfo.ToTitleCase(operation), Actor, Family, id, new { }, null, expected, ct));
+        Precondition(ifMatch, out var expected) ?? WithETag(await gates.LearnAdminAsync(LifecycleAction(operation), Actor, Family, id, new { }, null, expected, ct));
 
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPost("api/admin/learn/situations")]
     [ProducesResponseType<JsonElement>(201)]
@@ -230,6 +230,12 @@ public sealed class LibraryController(IContentGates gates) : ContentControllerBa
 
 public abstract class ContentControllerBase : ControllerBase
 {
+    // Route regex constraints match case-insensitively, so map the lower-cased segment explicitly.
+    protected static string LifecycleAction(string operation) => operation.ToLowerInvariant() switch
+    {
+        "hide" => "Hide", "show" => "Show", "delete" => "Delete", "restore" => "Restore",
+        "approve" => "ApproveSource", "retire" => "RetireSource", _ => "Invalid"
+    };
     protected Guid Actor => User.GetActorId();
     protected Guid Family => User.GetSessionFamilyId();
     protected IActionResult Reply(AuthResult<JsonElement> result) => result.IsSuccess ? Ok(result.Value) : Problem(result.Error!);

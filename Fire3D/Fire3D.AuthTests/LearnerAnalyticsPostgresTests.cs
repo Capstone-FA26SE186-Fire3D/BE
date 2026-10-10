@@ -138,7 +138,7 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal(750000m, total.GetProperty("amount").GetDecimal());
             Assert.Equal(2, total.GetProperty("transactions").GetInt32());
             Assert.Equal(2, revenue.GetProperty("payingOrganizations").GetInt32());
-            Assert.Equal(["2026-03-10"], revenue.GetProperty("byDay").EnumerateArray().Select(x => x.GetProperty("date").GetString()).ToArray());
+            Assert.Equal(["2026-03-10"], revenue.GetProperty("byDay").EnumerateArray().Select(x => x.GetProperty("date").GetString()!).ToArray());
             Assert.Equal("Unknown", Assert.Single(revenue.GetProperty("byPurpose").EnumerateArray()).GetProperty("purpose").GetString());
             Assert.Equal("FORBIDDEN", (await Analytics(runtime).Read("PlatformRevenue", tenant.User, tenant.Family, from, to, default)).Error?.Code);
 

@@ -49,7 +49,17 @@ public sealed class PlaytestLifecycle(Fire3DDbContext db,IOptions<PlaytestOption
   var result=await Runtime("Handoff",actor,family,playtest,new{codeHash=Hash(code),codeCiphertext=Convert.ToBase64String(Encrypt(code,playtest))},key,ct);
   if(!result.IsSuccess)return new(default,result.Error);
   // A replayed key returns the original code, recovered from its short-lived ciphertext; the fresh code above is discarded.
-  var stored=Decrypt(Convert.FromBase64String(result.Value.GetProperty("codeCiphertext").GetString()!),playtest);
+  string stored;
+  try
+  {
+   if(!result.Value.TryGetProperty("codeCiphertext",out var cipher) || cipher.GetString() is not { Length:>0 } text)throw new CryptographicException("purged");
+   stored=Decrypt(Convert.FromBase64String(text),playtest);
+  }
+  catch(Exception ex) when(ex is CryptographicException or FormatException)
+  {
+   // Ciphertext purged after TTL or the handoff key was rotated: the original code cannot be shown again.
+   return AuthResult<PlaytestHandoffResponse>.Fail("PLAYTEST_HANDOFF_NOT_RECOVERABLE","This handoff code can no longer be shown; create a new code with a new Idempotency-Key.",409);
+  }
   return AuthResult<PlaytestHandoffResponse>.Ok(new(result.Value.GetProperty("handoffId").GetGuid(),playtest,stored,
    $"{config.HandoffDeepLinkBaseUrl}?code={Uri.EscapeDataString(stored)}",result.Value.GetProperty("expiresAt").GetDateTimeOffset().UtcDateTime));
  }
@@ -121,6 +131,7 @@ public sealed class PlaytestLifecycle(Fire3DDbContext db,IOptions<PlaytestOption
  }
  private string Decrypt(byte[] value,Guid playtest)
  {
+  if(value.Length<=28)throw new CryptographicException("Handoff ciphertext is truncated.");
   using var aes=new AesGcm(Convert.FromBase64String(options.Value.HandoffKey),16);
   var plain=new byte[value.Length-28];
   aes.Decrypt(value.AsSpan(0,12),value.AsSpan(28),value.AsSpan(12,16),plain,playtest.ToByteArray());

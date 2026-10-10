@@ -172,7 +172,7 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync("/api/learn/posts/http-post")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/learn/bookmarks")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/library/items")).StatusCode);
-        hide = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/learn/posts/{postId}/hide"); hide.Headers.TryAddWithoutValidation("If-Match", etag);
+        hide = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/learn/posts/{postId}/HIDE"); hide.Headers.TryAddWithoutValidation("If-Match", etag);
         Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(hide)).StatusCode);
         Assert.Equal(HttpStatusCode.Gone, (await anonymous.GetAsync("/api/learn/posts/http-post")).StatusCode);
         var item = new HttpRequestMessage(HttpMethod.Post, "/api/admin/library/items") { Content = JsonContent.Create(new { kind = "Equipment", code = "co2-ext" }) };

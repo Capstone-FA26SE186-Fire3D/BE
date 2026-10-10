@@ -152,6 +152,9 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal("PLAYTEST_HANDOFF_INVALID", (await store.RedeemHandoffAsync(f.Owner, f.Mobile, new(new string('A', 43)), default)).Error?.Code);
 
             var fresh = (await store.CreateHandoffAsync(f.Owner, f.Web, id, "rot-3", default)).Value!;
+            // A ciphertext that no longer decrypts (e.g. rotated HandoffKey) is a clear 409 on replay, not a 500.
+            await ExecuteAsync($"UPDATE playtest_handoffs SET code_ciphertext=set_byte(code_ciphertext,30,(get_byte(code_ciphertext,30)+1)%256) WHERE id='{fresh.HandoffId}'");
+            Assert.Equal("PLAYTEST_HANDOFF_NOT_RECOVERABLE", (await store.CreateHandoffAsync(f.Owner, f.Web, id, "rot-3", default)).Error?.Code);
             await ExecuteAsync($"UPDATE auth_refresh_tokens SET revoked_at=now() WHERE family_id='{f.Web}'");
             Assert.Equal("PLAYTEST_HANDOFF_ISSUER_INVALID", (await store.RedeemHandoffAsync(f.Owner, f.Mobile, new(fresh.Code), default)).Error?.Code);
             Assert.Equal("UNAUTHORIZED", (await store.GetAsync(f.Owner, f.Web, id, default)).Error?.Code);

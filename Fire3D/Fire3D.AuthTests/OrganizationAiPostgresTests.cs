@@ -328,10 +328,12 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal((HttpStatusCode)428, (await client.SendAsync(approve)).StatusCode);
         approve = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/knowledge-sources/{id}/approve"); approve.Headers.TryAddWithoutValidation("If-Match", "\"7\"");
         Assert.Equal(HttpStatusCode.PreconditionFailed, (await client.SendAsync(approve)).StatusCode);
-        approve = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/knowledge-sources/{id}/approve"); approve.Headers.TryAddWithoutValidation("If-Match", "\"1\"");
+        // Route constraints are case-insensitive; upper-case must still approve, never retire.
+        approve = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/knowledge-sources/{id}/APPROVE"); approve.Headers.TryAddWithoutValidation("If-Match", "\"1\"");
         var approved = await client.SendAsync(approve);
         Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
         Assert.Equal("\"2\"", approved.Headers.ETag!.Tag);
+        Assert.Equal("Approved", (await approved.Content.ReadFromJsonAsync<JsonObject>())!["approvalStatus"]!.GetValue<string>());
         Assert.Equal(1L, await ScalarAsync($"SELECT count(*) FROM integration_outbox_events WHERE payload->>'scope'='knowledge' AND aggregate_id='{id}'"));
 
         var tenant = await SeedAiTenant();

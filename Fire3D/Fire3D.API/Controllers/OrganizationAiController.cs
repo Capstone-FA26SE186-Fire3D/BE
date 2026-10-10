@@ -151,5 +151,5 @@ public sealed partial class AdminAiController(IOrganizationAiGates gates) : Cont
     [ProducesResponseType<ProblemDetails>(428)]
     [OpenApi.ResponseHeader("ETag")]
     public async Task<IActionResult> ChangeKnowledgeSource(Guid id, string operation, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct) =>
-        Precondition(ifMatch, out var expected) ?? WithETag(await gates.AdminAsync(operation == "approve" ? "ApproveSource" : "RetireSource", Actor, Family, id, new { }, null, expected, ct));
+        Precondition(ifMatch, out var expected) ?? WithETag(await gates.AdminAsync(LifecycleAction(operation), Actor, Family, id, new { }, null, expected, ct));
 }
