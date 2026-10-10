@@ -19,6 +19,16 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Learning.ILearnerSessions,Fire3D.Infrastructure.Learning.LearnerSessions>();
         services.AddScoped<Fire3D.Application.Learning.IBuildingQrCodes,Fire3D.Infrastructure.Learning.BuildingQrCodes>();
         services.AddScoped<Fire3D.Application.Content.IContentGates,Fire3D.Infrastructure.Content.ContentGates>();
+        services.AddOptions<Fire3D.Application.Ai.OrganizationAiOptions>().Bind(configuration.GetSection(Fire3D.Application.Ai.OrganizationAiOptions.Section))
+            .Validate(o => !o.Enabled || o.Configured, "OrganizationAi:BaseUrl must be an absolute HTTPS (or loopback) URL when enabled.")
+            .Validate(o => o.TimeoutSeconds is >= 5 and <= 600 && o.LeaseSeconds > o.TimeoutSeconds && o.LeaseSeconds <= 3600 && o.MaxAttempts is >= 1 and <= 10
+                && o.BackoffSeconds is >= 1 and <= 3600 && o.PollSeconds is >= 1 and <= 300, "OrganizationAi timing settings are out of range.")
+            .ValidateOnStart();
+        services.AddScoped<Fire3D.Application.Ai.IOrganizationAiGates,Fire3D.Infrastructure.Ai.OrganizationAiGates>();
+        services.AddScoped<Fire3D.Application.Ai.IAiProviderClient,Fire3D.Infrastructure.Ai.FastApiAiClient>();
+        services.AddHttpClient(Fire3D.Infrastructure.Ai.FastApiAiClient.ClientName);
+        services.AddSingleton<Fire3D.Infrastructure.Ai.OrganizationAiWorker>();
+        services.AddHostedService(sp => sp.GetRequiredService<Fire3D.Infrastructure.Ai.OrganizationAiWorker>());
         services.AddExceptionHandler<BillingExceptionHandler>();
         services.AddOptions<Fire3D.Application.Billing.PayosOptions>()
             .Bind(configuration.GetSection(Fire3D.Application.Billing.PayosOptions.Section))
