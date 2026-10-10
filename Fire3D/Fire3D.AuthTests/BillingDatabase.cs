@@ -53,6 +53,14 @@ internal sealed class BillingDatabase : IAsyncDisposable
             Assert.Equal(result.name, db.Database.GetDbConnection().Database);
             if(migrationHistory)
             {
+                // Deployment identities are prerequisites, not runtime grants supplied by a fixture.
+                await result.Sql("""
+                    DO $$ BEGIN
+                      IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='fire3d_api') THEN CREATE ROLE fire3d_api NOLOGIN NOSUPERUSER NOBYPASSRLS; END IF;
+                      IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF;
+                      IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
+                    END $$;
+                    """);
                 await using var migrationDb=new Fire3DDbContext(new DbContextOptionsBuilder<Fire3DDbContext>().UseNpgsql(result.Connection).Options);
                 await migrationDb.Database.MigrateAsync();
             }
