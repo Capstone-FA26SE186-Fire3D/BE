@@ -41,12 +41,13 @@ public sealed partial class AuthIntegrationTests
             }
             var completed=await store.ExecuteAsync("Complete",job,WorkerInput(new{attemptId=attempt,leaseToken=lease,outputHash}),default);Assert.True(completed.IsSuccess,completed.Error?.Code);run=completed.Value.GetProperty("validationRunId").GetGuid();
         });
+        await ExecuteAsync($"INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at) SELECT gen_random_uuid(),id,id,'readiness-'||id::text,now(),now()+interval '1 day' FROM users WHERE id IN ('{owner}','{adminId}') ON CONFLICT(token_hash) DO NOTHING");
         return(owner,revision,version,run,artifact);
     }
     private async Task WithReadinessRuntime(Func<string,Task> action)
     {
-        var login="readiness_test_"+Guid.NewGuid().ToString("N");await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS;GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION scenario_readiness_gate(text,uuid,uuid,uuid,jsonb,text) TO {login}");
-        try{await action(new NpgsqlConnectionStringBuilder(testConnection){Username=login,Password="",Pooling=false}.ConnectionString);}
+        var login="readiness_test_"+Guid.NewGuid().ToString("N");await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}';GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION scenario_readiness_gate(text,uuid,uuid,uuid,uuid,jsonb,text) TO {login}");
+        try{await action(new NpgsqlConnectionStringBuilder(testConnection){Username=login,Pooling=false}.ConnectionString);}
         finally{await ExecuteAsync($"DROP OWNED BY {login};DROP ROLE {login}");}
     }
     [PostgresFact]
@@ -57,27 +58,27 @@ public sealed partial class AuthIntegrationTests
         {
             await using var db=BuildingContext(runtime);await using var otherDb=BuildingContext(runtime);var store=new ScenarioReadinessStore(db);var other=new ScenarioReadinessStore(otherDb);
             var confirm=new ConfirmTrainingRequest(fixture.Version,fixture.Run);
-            var requests=await Task.WhenAll(store.ExecuteAsync("Confirm",fixture.Owner,fixture.Version,fixture.Revision,confirm,null,default),other.ExecuteAsync("Confirm",fixture.Owner,fixture.Version,fixture.Revision,confirm,null,default));
+            var requests=await Task.WhenAll(store.ExecuteAsync("Confirm",fixture.Owner,fixture.Owner,fixture.Version,fixture.Revision,confirm,null,default),other.ExecuteAsync("Confirm",fixture.Owner,fixture.Owner,fixture.Version,fixture.Revision,confirm,null,default));
             Assert.All(requests,x=>Assert.True(x.IsSuccess,x.Error?.Code));Assert.Equal(requests[0].Value.GetProperty("reviewId").GetGuid(),requests[1].Value.GetProperty("reviewId").GetGuid());
             Assert.Equal(1L,await ScalarAsync($"SELECT count(*) FROM revision_reviews WHERE scenario_version_id='{fixture.Version}' AND action='ConfirmForTraining'"));
-            Assert.Equal("READINESS_PROVENANCE_MISMATCH",(await store.ExecuteAsync("Confirm",fixture.Owner,fixture.Version,fixture.Revision,confirm with{ValidationRunId=Guid.NewGuid()},null,default)).Error?.Code);
-            Assert.Equal("READINESS_PROVENANCE_MISMATCH",(await store.ExecuteAsync("Confirm",fixture.Owner,fixture.Version,fixture.Revision,confirm with{AnnotationSetId=Guid.NewGuid()},null,default)).Error?.Code);
-            Assert.Equal("FORBIDDEN",(await store.ExecuteAsync("Submit",adminId,fixture.Version,null,new{},"admin-submit",default)).Error?.Code);
-            var submitted=await store.ExecuteAsync("Submit",fixture.Owner,fixture.Version,null,new{},"submit-one",default);Assert.True(submitted.IsSuccess,submitted.Error?.Code);
+            Assert.Equal("READINESS_PROVENANCE_MISMATCH",(await store.ExecuteAsync("Confirm",fixture.Owner,fixture.Owner,fixture.Version,fixture.Revision,confirm with{ValidationRunId=Guid.NewGuid()},null,default)).Error?.Code);
+            Assert.Equal("READINESS_PROVENANCE_MISMATCH",(await store.ExecuteAsync("Confirm",fixture.Owner,fixture.Owner,fixture.Version,fixture.Revision,confirm with{AnnotationSetId=Guid.NewGuid()},null,default)).Error?.Code);
+            Assert.Equal("FORBIDDEN",(await store.ExecuteAsync("Submit",adminId,adminId,fixture.Version,null,new{},"admin-submit",default)).Error?.Code);
+            var submitted=await store.ExecuteAsync("Submit",fixture.Owner,fixture.Owner,fixture.Version,null,new{},"submit-one",default);Assert.True(submitted.IsSuccess,submitted.Error?.Code);
             var hashes=new ContentReviewDecisionRequest(submitted.Value.GetProperty("contentHash").GetString()!,submitted.Value.GetProperty("rubricHash").GetString()!);
-            Assert.Equal("FORBIDDEN",(await store.ExecuteAsync("Approve",fixture.Owner,fixture.Version,null,hashes,"owner-approve",default)).Error?.Code);
-            Assert.Equal("CONTENT_HASH_MISMATCH",(await store.ExecuteAsync("Approve",adminId,fixture.Version,null,hashes with{ContentHash=new string('b',64)},"wrong-hash",default)).Error?.Code);
+            Assert.Equal("FORBIDDEN",(await store.ExecuteAsync("Approve",fixture.Owner,fixture.Owner,fixture.Version,null,hashes,"owner-approve",default)).Error?.Code);
+            Assert.Equal("CONTENT_HASH_MISMATCH",(await store.ExecuteAsync("Approve",adminId,adminId,fixture.Version,null,hashes with{ContentHash=new string('b',64)},"wrong-hash",default)).Error?.Code);
             await ExecuteAsync($"ALTER TABLE audit_logs ADD CONSTRAINT review_audit_fault CHECK(target_id<>'{fixture.Version}'::uuid) NOT VALID");
-            await Assert.ThrowsAsync<PostgresException>(()=>store.ExecuteAsync("Approve",adminId,fixture.Version,null,hashes,"approve-one",default));
+            await Assert.ThrowsAsync<PostgresException>(()=>store.ExecuteAsync("Approve",adminId,adminId,fixture.Version,null,hashes,"approve-one",default));
             Assert.Equal("Submitted",await ScalarAsync($"SELECT status FROM scenario_content_reviews WHERE scenario_version_id='{fixture.Version}'"));Assert.Equal(0L,await ScalarAsync("SELECT count(*) FROM readiness_command_receipts WHERE idempotency_key='approve-one'"));
             await ExecuteAsync("ALTER TABLE audit_logs DROP CONSTRAINT review_audit_fault");
-            var approved=await store.ExecuteAsync("Approve",adminId,fixture.Version,null,hashes,"approve-one",default);Assert.True(approved.IsSuccess,approved.Error?.Code);Assert.Equal("Approved",approved.Value.GetProperty("status").GetString());
+            var approved=await store.ExecuteAsync("Approve",adminId,adminId,fixture.Version,null,hashes,"approve-one",default);Assert.True(approved.IsSuccess,approved.Error?.Code);Assert.Equal("Approved",approved.Value.GetProperty("status").GetString());
             var before=await ScalarAsync($"SELECT count(*) FROM audit_logs WHERE target_id='{fixture.Version}'");
-            Assert.True((await store.ExecuteAsync("Approve",adminId,fixture.Version,null,hashes,"approve-one",default)).IsSuccess);Assert.Equal(before,await ScalarAsync($"SELECT count(*) FROM audit_logs WHERE target_id='{fixture.Version}'"));
-            Assert.Equal("IDEMPOTENCY_KEY_CONFLICT",(await store.ExecuteAsync("Approve",adminId,fixture.Version,null,hashes with{Reason="Different"},"approve-one",default)).Error?.Code);
-            Assert.Equal("CONTENT_REVIEW_NOT_PENDING",(await store.ExecuteAsync("Reject",adminId,fixture.Version,null,hashes with{Reason="Late reject"},"late-reject",default)).Error?.Code);
+            Assert.True((await store.ExecuteAsync("Approve",adminId,adminId,fixture.Version,null,hashes,"approve-one",default)).IsSuccess);Assert.Equal(before,await ScalarAsync($"SELECT count(*) FROM audit_logs WHERE target_id='{fixture.Version}'"));
+            Assert.Equal("IDEMPOTENCY_KEY_CONFLICT",(await store.ExecuteAsync("Approve",adminId,adminId,fixture.Version,null,hashes with{Reason="Different"},"approve-one",default)).Error?.Code);
+            Assert.Equal("CONTENT_REVIEW_NOT_PENDING",(await store.ExecuteAsync("Reject",adminId,adminId,fixture.Version,null,hashes with{Reason="Late reject"},"late-reject",default)).Error?.Code);
             await Assert.ThrowsAsync<PostgresException>(()=>ExecuteAsync($"UPDATE scenario_content_reviews SET status='Rejected',reason='tamper' WHERE scenario_version_id='{fixture.Version}'"));
-            var technical=await store.ExecuteAsync("TechnicalReject",fixture.Owner,fixture.Version,fixture.Revision,new{scenarioVersionId=fixture.Version,validationRunId=fixture.Run,annotationSetId=(Guid?)null,reviewMessage="Technical concern"},null,default);Assert.True(technical.IsSuccess,technical.Error?.Code);
+            var technical=await store.ExecuteAsync("TechnicalReject",fixture.Owner,fixture.Owner,fixture.Version,fixture.Revision,new{scenarioVersionId=fixture.Version,validationRunId=fixture.Run,annotationSetId=(Guid?)null,reviewMessage="Technical concern"},null,default);Assert.True(technical.IsSuccess,technical.Error?.Code);
             Assert.Equal("ConfirmedForTraining",await ScalarAsync($"SELECT status::text FROM revisions WHERE id='{fixture.Revision}'"));
         });
     }
@@ -85,9 +86,9 @@ public sealed partial class AuthIntegrationTests
     public async Task Readiness_blockers_and_lifecycle_are_checked_before_confirmation()
     {
         var fixture=await SeedReadyPackage(blocker:true);await using var db=BuildingContext(testConnection);var store=new ScenarioReadinessStore(db);var input=new ConfirmTrainingRequest(fixture.Version,fixture.Run);
-        Assert.Equal("READINESS_BLOCKED",(await store.ExecuteAsync("Confirm",fixture.Owner,fixture.Version,fixture.Revision,input,null,default)).Error?.Code);
+        Assert.Equal("READINESS_BLOCKED",(await store.ExecuteAsync("Confirm",fixture.Owner,fixture.Owner,fixture.Version,fixture.Revision,input,null,default)).Error?.Code);
         await ExecuteAsync($"UPDATE users SET is_active=false WHERE id='{fixture.Owner}'");
-        Assert.Equal("UNAUTHORIZED",(await store.ExecuteAsync("Confirm",fixture.Owner,fixture.Version,fixture.Revision,input,null,default)).Error?.Code);
+        Assert.Equal("UNAUTHORIZED",(await store.ExecuteAsync("Confirm",fixture.Owner,fixture.Owner,fixture.Version,fixture.Revision,input,null,default)).Error?.Code);
         Assert.Equal(0L,await ScalarAsync($"SELECT count(*) FROM revision_reviews WHERE scenario_version_id='{fixture.Version}'"));
     }
 
@@ -100,7 +101,7 @@ public sealed partial class AuthIntegrationTests
         {
             using var resource=typeof(ScenarioReadinessStore).Assembly.GetManifestResourceStream("Fire3D.Infrastructure.Persistence.Sql.IfcDependencyGrants.sql")!;
             var sql=await new StreamReader(resource).ReadToEndAsync();
-            await using var connection=new NpgsqlConnection(new NpgsqlConnectionStringBuilder(testConnection){Username=login,Password="",Pooling=false}.ConnectionString);await connection.OpenAsync();
+            await using var connection=new NpgsqlConnection(new NpgsqlConnectionStringBuilder(testConnection){Username=login,Pooling=false}.ConnectionString);await connection.OpenAsync();
             await using var transaction=await connection.BeginTransactionAsync();await using var command=new NpgsqlCommand(sql,connection,transaction);await command.ExecuteNonQueryAsync();await transaction.CommitAsync();
             Assert.Equal(false,await ScalarAsync($"SELECT pg_has_role('{login}','fet3d_integration_owner','SET')"));
             Assert.Equal(true,await ScalarAsync("SELECT has_function_privilege('fet3d_ifc_upload_owner','enqueue_integration_outbox_event(text,text,uuid,text,text,jsonb)','EXECUTE')"));

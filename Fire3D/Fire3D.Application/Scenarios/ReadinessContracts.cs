@@ -5,5 +5,5 @@ public sealed record ConfirmTrainingRequest(Guid ScenarioVersionId,Guid Validati
 public sealed record ContentReviewDecisionRequest(string ContentHash,string RubricHash,string? Reason=null);
 public interface IScenarioReadinessStore
 {
-    Task<AuthResult<JsonElement>> ExecuteAsync(string action,Guid actor,Guid version,Guid? revision,object input,string? key,CancellationToken ct);
+    Task<AuthResult<JsonElement>> ExecuteAsync(string action,Guid actor,Guid family,Guid version,Guid? revision,object input,string? key,CancellationToken ct);
 }

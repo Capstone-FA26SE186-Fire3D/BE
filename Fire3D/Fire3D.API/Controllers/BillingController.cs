@@ -23,7 +23,7 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     [HttpPost("api/admin/billing/quota-policies")]
     [ProducesResponseType<QuotaPolicyResponse>(201)]
     public async Task<ActionResult<QuotaPolicyResponse>> CreateQuotaPolicy(QuotaPolicyWriteRequest request,CancellationToken ct)
-    {var value=await billing.CreateQuotaPolicy(Actor,request,ct);return Created($"/api/admin/billing/quota-policies/{value.Id}",value);}
+    {var value=await billing.CreateQuotaPolicy(Actor,User.GetSessionFamilyId(),request,ct);return Created($"/api/admin/billing/quota-policies/{value.Id}",value);}
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     [HttpGet("api/admin/billing/quota-policies")]
     [ProducesResponseType<BillingPage<QuotaPolicyResponse>>(200)]
@@ -49,13 +49,13 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     [HttpPost("api/admin/service-packages")]
     [ProducesResponseType(typeof(PackageResponse),201)]
     public async Task<ActionResult<PackageResponse>> CreatePackage(PackageWriteRequest request,CancellationToken ct)
-    {var response=await billing.SavePackage(Actor,null,request,null,ct);ETag(response.Id,response.Revision);return Created($"/api/billing/service-packages/{response.Id}",response);}
+    {var response=await billing.SavePackage(Actor,User.GetSessionFamilyId(),null,request,null,ct);ETag(response.Id,response.Revision);return Created($"/api/billing/service-packages/{response.Id}",response);}
     /// <summary>Admin replaces all editable package fields, preserving identity/history. Supply the complete editable body and current If-Match.</summary>
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     [HttpPatch("api/admin/service-packages/{id:guid}")]
     [ProducesResponseType<PackageResponse>(200)]
     public async Task<ActionResult<PackageResponse>> UpdatePackage(Guid id,PackageWriteRequest request,[FromHeader(Name="If-Match")]string? ifMatch,CancellationToken ct)
-    {var response=await billing.SavePackage(Actor,id,request,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
+    {var response=await billing.SavePackage(Actor,User.GetSessionFamilyId(),id,request,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     [HttpGet("api/admin/discount-rules")]
     [ProducesResponseType<IReadOnlyList<DiscountResponse>>(200)]
@@ -70,13 +70,13 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     [HttpPost("api/admin/discount-rules")]
     [ProducesResponseType(typeof(DiscountResponse),201)]
     public async Task<ActionResult<DiscountResponse>> CreateDiscount(DiscountWriteRequest request,CancellationToken ct)
-    {var response=await billing.SaveDiscount(Actor,null,request,null,ct);ETag(response.Id,response.Revision);return Created($"/api/admin/discount-rules/{response.Id}",response);}
+    {var response=await billing.SaveDiscount(Actor,User.GetSessionFamilyId(),null,request,null,ct);ETag(response.Id,response.Revision);return Created($"/api/admin/discount-rules/{response.Id}",response);}
     /// <summary>Admin replaces the editable discount rule body with If-Match; issued quotation snapshots stay unchanged.</summary>
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     [HttpPatch("api/admin/discount-rules/{id:guid}")]
     [ProducesResponseType<DiscountResponse>(200)]
     public async Task<ActionResult<DiscountResponse>> UpdateDiscount(Guid id,DiscountWriteRequest request,[FromHeader(Name="If-Match")]string? ifMatch,CancellationToken ct)
-    {var response=await billing.SaveDiscount(Actor,id,request,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
+    {var response=await billing.SaveDiscount(Actor,User.GetSessionFamilyId(),id,request,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
     /// <summary>OrganizationUser creates a Draft for their own Buildings. Idempotency-Key is required; totals are server-calculated.</summary>
     [HttpPost("api/billing/quotations")]
     [ProducesResponseType(typeof(QuotationResponse),201)]
@@ -108,7 +108,7 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     [HttpPost("api/billing/enterprise-quote-requests")]
     [ProducesResponseType(typeof(EnterpriseQuoteResponse),201)]
     public async Task<ActionResult<EnterpriseQuoteResponse>> Enterprise(EnterpriseQuoteRequestBody request,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)
-    {var response=await billing.CreateEnterpriseRequest(Actor,request,key,ct);return Created("/api/billing/enterprise-quote-requests",response);}
+    {var response=await billing.CreateEnterpriseRequest(Actor,User.GetSessionFamilyId(),request,key,ct);return Created("/api/billing/enterprise-quote-requests",response);}
     [HttpGet("api/billing/enterprise-quote-requests")]
     public async Task<ActionResult<BillingPage<EnterpriseQuoteResponse>>> EnterpriseRequests([FromQuery]int page=1,[FromQuery]int pageSize=20,CancellationToken ct=default)=>Ok(await billing.ListEnterpriseRequests(Actor,page,pageSize,ct));
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]

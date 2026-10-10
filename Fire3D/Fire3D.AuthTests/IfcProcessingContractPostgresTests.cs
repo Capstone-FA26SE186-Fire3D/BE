@@ -164,13 +164,13 @@ public sealed partial class AuthIntegrationTests
     private async Task WithProcessingRuntime(Func<string,string,Task> action)
     {
         var api="processing_api_test_"+Guid.NewGuid().ToString("N");var worker="processing_machine_test_"+Guid.NewGuid().ToString("N");
-        await ExecuteAsync($"CREATE ROLE {api} LOGIN NOSUPERUSER NOBYPASSRLS; CREATE ROLE {worker} LOGIN NOSUPERUSER NOBYPASSRLS; GRANT USAGE ON SCHEMA public TO {api},{worker}; GRANT EXECUTE ON FUNCTION request_revision_processing(uuid,uuid,text),processing_dispatch_gate(text,text,uuid,uuid) TO {api}; GRANT fet3d_processing_executor TO {worker}");
+        await ExecuteAsync($"CREATE ROLE {api} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}'; CREATE ROLE {worker} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}'; GRANT USAGE ON SCHEMA public TO {api},{worker}; GRANT EXECUTE ON FUNCTION request_revision_processing(uuid,uuid,text),processing_dispatch_gate(text,text,uuid,uuid) TO {api}; GRANT fet3d_processing_executor TO {worker}");
         try
         {
             Assert.Equal(false,await ScalarAsync($"SELECT has_table_privilege('{worker}','revision_artifacts','INSERT')"));
             Assert.Equal(false,await ScalarAsync($"SELECT has_table_privilege('{api}','processing_jobs','INSERT')"));
             Assert.Equal(false,await ScalarAsync($"SELECT has_function_privilege('{api}','processing_worker_gate(text,uuid,jsonb)','EXECUTE')"));
-            await action(new NpgsqlConnectionStringBuilder(testConnection){Username=api,Password="",Pooling=false}.ConnectionString,new NpgsqlConnectionStringBuilder(testConnection){Username=worker,Password="",Pooling=false}.ConnectionString);
+            await action(new NpgsqlConnectionStringBuilder(testConnection){Username=api,Pooling=false}.ConnectionString,new NpgsqlConnectionStringBuilder(testConnection){Username=worker,Pooling=false}.ConnectionString);
         }
         finally { await ExecuteAsync($"DROP OWNED BY {api}; DROP ROLE {api}; DROP OWNED BY {worker}; DROP ROLE {worker}"); }
     }

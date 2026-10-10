@@ -180,12 +180,12 @@ public sealed partial class AuthIntegrationTests
     private async Task WithIfcRuntime(Func<string,Task> action)
     {
         var role="ifc_upload_test_"+Guid.NewGuid().ToString("N");
-        await ExecuteAsync($"CREATE ROLE {role} LOGIN NOSUPERUSER NOBYPASSRLS; GRANT USAGE ON SCHEMA public TO {role}; GRANT EXECUTE ON FUNCTION ifc_upload_gate(text,uuid,uuid,jsonb,text,uuid,text),claim_ifc_object_cleanup(),finish_ifc_object_cleanup(text,uuid,boolean) TO {role}");
+        await ExecuteAsync($"CREATE ROLE {role} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}'; GRANT USAGE ON SCHEMA public TO {role}; GRANT EXECUTE ON FUNCTION ifc_upload_gate(text,uuid,uuid,jsonb,text,uuid,text),claim_ifc_object_cleanup(),finish_ifc_object_cleanup(text,uuid,boolean) TO {role}");
         try
         {
             Assert.Equal(false,await ScalarAsync($"SELECT has_table_privilege('{role}','source_documents','INSERT')"));
             Assert.Equal(false,await ScalarAsync($"SELECT has_table_privilege('{role}','ifc_upload_attempts','UPDATE')"));
-            await action(new NpgsqlConnectionStringBuilder(testConnection){Username=role,Password="",Pooling=false}.ConnectionString);
+            await action(new NpgsqlConnectionStringBuilder(testConnection){Username=role,Pooling=false}.ConnectionString);
         }
         finally { await ExecuteAsync($"DROP OWNED BY {role}; DROP ROLE {role}"); }
     }

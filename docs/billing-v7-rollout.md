@@ -95,3 +95,9 @@ History advanced from `20261007160000_AddPersonalPhoneUniqueness` (51 entries) t
 Before/after counts agree: users 12, organizations 7, Buildings 2, packages 2, quotations 1, entitlements 0 and payment transactions 0. Both packages remain legacy version 1; policy/grant/reservation tables are empty. No commercial values, dates or application records were seeded, rewritten or removed.
 
 Only schema deployment is verified. The compatible API/worker binary, real PayOS/webhook, frontend and Unity acceptance remain pending. `Publishing:Enabled` remains false by default; no Azure feature flag was changed. Deploy every compatible API/worker instance before enabling v7 sales or publication, and use the [manual acceptance guide](publish-billing-v7-manual-test.md).
+# Mutation session checks
+
+Package/discount create and PATCH, quota-policy create and enterprise requests
+derive family from JWT and recheck account/organization/session under lifecycle
+and actor locks. A revoked/expired family returns401 with no mutation, receipt or
+audit. GET contracts, ETags and immutable quotation snapshots are unchanged.

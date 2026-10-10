@@ -35,20 +35,20 @@ public sealed record QuotaPolicyResponse(Guid Id,string Audience,string PolicyKi
 
 public interface IBillingService
 {
-    Task<QuotaPolicyResponse> CreateQuotaPolicy(Guid actor,QuotaPolicyWriteRequest request,CancellationToken ct);
+    Task<QuotaPolicyResponse> CreateQuotaPolicy(Guid actor,Guid family,QuotaPolicyWriteRequest request,CancellationToken ct);
     Task<BillingPage<QuotaPolicyResponse>> ListQuotaPolicies(Guid actor,int page,int pageSize,CancellationToken ct);
     Task<QuotaPolicyResponse> GetQuotaPolicy(Guid actor,Guid id,CancellationToken ct);
     Task<IReadOnlyList<PackageResponse>> ListPackages(Guid actor,CancellationToken ct);
-    Task<PackageResponse> SavePackage(Guid actor,Guid? id,PackageWriteRequest request,string? ifMatch,CancellationToken ct);
+    Task<PackageResponse> SavePackage(Guid actor,Guid family,Guid? id,PackageWriteRequest request,string? ifMatch,CancellationToken ct);
     Task<IReadOnlyList<DiscountResponse>> ListDiscounts(Guid actor,CancellationToken ct);
-    Task<DiscountResponse> SaveDiscount(Guid actor,Guid? id,DiscountWriteRequest request,string? ifMatch,CancellationToken ct);
+    Task<DiscountResponse> SaveDiscount(Guid actor,Guid family,Guid? id,DiscountWriteRequest request,string? ifMatch,CancellationToken ct);
     Task<QuotationResponse> CreateQuotation(Guid actor,Guid family,QuotationWriteRequest request,string? key,CancellationToken ct);
     Task<QuotationResponse> UpdateDraft(Guid actor,Guid family,Guid id,QuotationWriteRequest request,string? ifMatch,CancellationToken ct);
     Task<QuotationResponse> GetQuotation(Guid actor,Guid id,CancellationToken ct);
     Task<BillingPage<QuotationResponse>> ListQuotations(Guid actor,int page,int pageSize,CancellationToken ct);
     Task<QuotationResponse> IssueQuotation(Guid actor,Guid family,Guid id,IssueQuotationRequest request,string? ifMatch,CancellationToken ct);
     Task<QuotationResponse> AcceptQuotation(Guid actor,Guid family,Guid id,string? ifMatch,CancellationToken ct);
-    Task<EnterpriseQuoteResponse> CreateEnterpriseRequest(Guid actor,EnterpriseQuoteRequestBody request,string? key,CancellationToken ct);
+    Task<EnterpriseQuoteResponse> CreateEnterpriseRequest(Guid actor,Guid family,EnterpriseQuoteRequestBody request,string? key,CancellationToken ct);
     Task<BillingPage<EnterpriseQuoteResponse>> ListEnterpriseRequests(Guid actor,int page,int pageSize,CancellationToken ct);
 }
 

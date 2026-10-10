@@ -12,9 +12,16 @@ public sealed partial class BillingService
     {
         await Lock("fire3d:auth:"+actor,false,ct);
         var identity=await Authorize(actor,admin,ct);
-        if(family==Guid.Empty || !await db.Set<RefreshToken>().AnyAsync(x=>x.UserId==actor&&x.FamilyId==family&&x.RevokedAt==null&&x.ConsumedAt==null&&x.ExpiresAt>DateTime.UtcNow,ct))
-            throw new BillingException(401,"SESSION_REVOKED","The session is no longer active.");
+        await RequireLiveFamily(actor,family,ct);
         return identity;
+    }
+    private async Task RequireLiveFamily(Guid actor,Guid family,CancellationToken ct)
+    {
+        if(family==Guid.Empty || !await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM auth_refresh_tokens WHERE user_id={actor} AND family_id={family}
+              AND revoked_at IS NULL AND consumed_at IS NULL AND expires_at>clock_timestamp()) AS "Value"
+            """).SingleAsync(ct))
+            throw new BillingException(401,"SESSION_REVOKED","The session is no longer active.");
     }
     private sealed record PriceSnapshot(string BuildingName,string BuildingAddress,string PackageName,decimal MonthlyUnitPrice,int DurationMonths,long PackageRevision);
     private static QuotationWriteRequest ValidateQuotation(QuotationWriteRequest request)

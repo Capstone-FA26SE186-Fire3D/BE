@@ -24,7 +24,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     {
         var actor = User.GetActorId();
         var result = await sender.Send(
-            new Fire3D.Application.Scenarios.Commands.RejectScenarioVersion.RejectScenarioVersionCommand(actor, revisionId, request), ct);
+            new Fire3D.Application.Scenarios.Commands.RejectScenarioVersion.RejectScenarioVersionCommand(actor, User.GetSessionFamilyId(), revisionId, request), ct);
         return result.IsSuccess ? Created($"/api/revisions/{revisionId}/reviews/{result.Value}", new { Id = result.Value })
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
@@ -116,7 +116,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ConfirmForTraining.ConfirmForTrainingCommand(actor, revisionId, request), ct);
+        var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ConfirmForTraining.ConfirmForTrainingCommand(actor, User.GetSessionFamilyId(), revisionId, request), ct);
 
         return result.IsSuccess 
             ? Ok(new { reviewId = result.Value })

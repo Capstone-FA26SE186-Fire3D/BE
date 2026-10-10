@@ -39,7 +39,7 @@ public sealed class ScenarioContentReviewsController(IScenarioReadinessStore sto
     }
     private async Task<IActionResult> Run(string action,Guid id,object input,string? key,CancellationToken ct)
     {
-        var result=await store.ExecuteAsync(action,User.GetActorId(),id,null,input,key,ct);
+        var result=await store.ExecuteAsync(action,User.GetActorId(),User.GetSessionFamilyId(),id,null,input,key,ct);
         return result.IsSuccess?(action=="Submit"?StatusCode(201,result.Value):Ok(result.Value)):Problem(statusCode:result.Error!.Status,title:result.Error.Message,extensions:new Dictionary<string,object?>{["code"]=result.Error.Code,["errors"]=result.Error.Errors});
     }
 }

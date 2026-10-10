@@ -92,10 +92,10 @@ public sealed partial class BillingService(Fire3DDbContext db) : IBillingService
         Field(request.Description is null||Text(request.Description,10000),"description","Description must be non-empty and at most 10,000 characters when supplied.");
         return request with {Code=request.Code.Trim().ToUpperInvariant(),Name=request.Name.Trim(),Description=request.Description?.Trim()};
     }
-    public async Task<PackageResponse> SavePackage(Guid actor,Guid? id,PackageWriteRequest request,string? ifMatch,CancellationToken ct)
+    public async Task<PackageResponse> SavePackage(Guid actor,Guid family,Guid? id,PackageWriteRequest request,string? ifMatch,CancellationToken ct)
     {
         request=ValidatePackage(request);
-        await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await Authorize(actor,true,ct);
+        await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await QuotationActor(actor,family,true,ct);
         await Lock("fet3d:billing:catalog",false,ct);
         var item=id.HasValue ? await db.ServicePackages.SingleOrDefaultAsync(x=>x.Id==id,ct)??throw Missing() : new ServicePackage {Id=Guid.NewGuid(),CreatedBy=actor,CreatedAt=DateTime.UtcNow,Features="{}",Currency="VND"};
         var old=id.HasValue ? PackageView(item):null;
@@ -107,14 +107,14 @@ public sealed partial class BillingService(Fire3DDbContext db) : IBillingService
         item.Code=request.Code;item.Name=request.Name;item.UnitPrice=request.UnitPrice;item.DurationMonths=request.DurationMonths;item.IsActive=request.IsActive;item.Description=request.Description;item.UpdatedAt=DateTime.UtcNow;
         if(id.HasValue)item.Revision++;else db.ServicePackages.Add(item);
         var response=PackageView(item);Audit(identity,null,"service_packages",item.Id,id.HasValue?AuditAction.Update:AuditAction.Create,old,response);
-        await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return response;
+        await RequireLiveFamily(actor,family,ct);await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return response;
     }
     public async Task<IReadOnlyList<DiscountResponse>> ListDiscounts(Guid actor,CancellationToken ct)
     {
         await Authorize(actor,true,ct);
         var items=await db.Set<ServicePackageDiscountRule>().AsNoTracking().OrderBy(x=>x.Code).ToListAsync(ct);return items.Select(DiscountView).ToArray();
     }
-    public async Task<DiscountResponse> SaveDiscount(Guid actor,Guid? id,DiscountWriteRequest request,string? ifMatch,CancellationToken ct)
+    public async Task<DiscountResponse> SaveDiscount(Guid actor,Guid family,Guid? id,DiscountWriteRequest request,string? ifMatch,CancellationToken ct)
     {
         Field(Text(request.Code,80),"code","Discount code is required, maximum 80 characters.");
         Field(request.DiscountKind is "Percent" or "Fixed","discountKind","Choose Percent or Fixed.");
@@ -124,7 +124,7 @@ public sealed partial class BillingService(Fire3DDbContext db) : IBillingService
         Field(request.ValidFrom!=default,"validFrom","Supply validFrom as an ISO 8601 timestamp with timezone.");
         Field(request.ValidUntil is null||request.ValidUntil>request.ValidFrom,"validUntil","Expiry must be after validFrom.");
         request=request with {Code=request.Code.Trim().ToUpperInvariant()};
-        await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await Authorize(actor,true,ct);await Lock("fet3d:billing:catalog",false,ct);
+        await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await QuotationActor(actor,family,true,ct);await Lock("fet3d:billing:catalog",false,ct);
         if(request.ServicePackageId.HasValue&&!await db.ServicePackages.AnyAsync(x=>x.Id==request.ServicePackageId,ct))throw Missing();
         var item=id.HasValue ? await db.Set<ServicePackageDiscountRule>().SingleOrDefaultAsync(x=>x.Id==id,ct)??throw Missing() : new ServicePackageDiscountRule {Id=Guid.NewGuid(),CreatedBy=actor,CreatedAt=DateTime.UtcNow};
         var old=id.HasValue?DiscountView(item):null;if(id.HasValue)BillingETag.Require(ifMatch,item.Id,item.Revision);
@@ -134,6 +134,6 @@ public sealed partial class BillingService(Fire3DDbContext db) : IBillingService
         item.ValidFrom=request.ValidFrom.UtcDateTime;item.ValidUntil=request.ValidUntil?.UtcDateTime;item.IsActive=request.IsActive;item.UpdatedAt=DateTime.UtcNow;
         if(id.HasValue)item.Revision++;else db.Add(item);
         var response=DiscountView(item);Audit(identity,null,"service_package_discount_rules",item.Id,id.HasValue?AuditAction.Update:AuditAction.Create,old,response);
-        await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return response;
+        await RequireLiveFamily(actor,family,ct);await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return response;
     }
 }

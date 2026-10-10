@@ -9,8 +9,8 @@ public sealed class BillingV7PayosTests
     private static async Task<Guid> Accepted(BillingDatabase database,string code,string key,int quota=100)
     {
         await using var db=database.Context();var service=new BillingService(db);
-        var policy=await service.CreateQuotaPolicy(BillingDatabase.Admin,new("tokens",DateTimeOffset.UtcNow.AddDays(-1)),default);
-        var package=await service.SavePackage(BillingDatabase.Admin,null,new(code,code,2000,6,true,null,25,quota,policy.Id),null,default);
+        var policy=await service.CreateQuotaPolicy(BillingDatabase.Admin,BillingDatabase.Admin,new("tokens",DateTimeOffset.UtcNow.AddDays(-1)),default);
+        var package=await service.SavePackage(BillingDatabase.Admin,BillingDatabase.Admin,null,new(code,code,2000,6,true,null,25,quota,policy.Id),null,default);
         var quote=await service.CreateQuotation(BillingDatabase.Owner,BillingDatabase.Owner,new([new(BillingDatabase.Building,package.Id,"New")]),key,default);
         var start=new DateTimeOffset(DateTime.UtcNow.Date.AddDays(2),TimeSpan.Zero);
         quote=await service.IssueQuotation(BillingDatabase.Admin,BillingDatabase.Admin,quote.Id,new(0,"Terms",DateTimeOffset.UtcNow.AddDays(1),[new(quote.Items[0].Id,start)]),BillingETag.Format(quote.Id,quote.Revision),default);
