@@ -314,7 +314,8 @@ END $$;
 -- The composite FK only covered Building lines; the trigger below validates the line of either purpose at insert,
 -- provenance stays immutable, and issued lines of both tables cannot be deleted (Draft-only write triggers).
 ALTER TABLE payment_provisioning_records DROP CONSTRAINT IF EXISTS fk_provisioning_quotation_line;
-CREATE OR REPLACE FUNCTION validate_payment_provisioning_write() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+-- New function plus trigger swap: needs table ownership only, not ownership of the original trigger function.
+CREATE FUNCTION validate_payment_provisioning_purpose_write() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN
  IF NOT EXISTS(SELECT 1 FROM public.payment_transactions payment
    JOIN public.payos_payment_requests request ON request.id=payment.payment_request_id
@@ -331,6 +332,8 @@ BEGIN
  THEN RAISE EXCEPTION 'payment provisioning provenance is immutable'; END IF;
  RETURN NEW;
 END $$;
+DROP TRIGGER IF EXISTS billing_payment_provisioning_records ON payment_provisioning_records;
+CREATE TRIGGER billing_payment_provisioning_records BEFORE INSERT OR UPDATE ON payment_provisioning_records FOR EACH ROW EXECUTE FUNCTION validate_payment_provisioning_purpose_write();
 
 -- 8. Provisioning context and finalisation per source.
 CREATE OR REPLACE FUNCTION claim_payos_provisioning_context(p_line uuid,p_lease uuid) RETURNS jsonb
