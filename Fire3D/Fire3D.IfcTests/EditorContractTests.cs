@@ -128,6 +128,12 @@ public sealed class EditorContractTests
         Assert.Contains("FIELD_REQUIRED", Codes(gaps, "$.rubric"));
         Assert.Contains("FIELD_REQUIRED", Codes(gaps, "$.timeLimitSeconds"));
         Assert.Empty(ScenarioStateV1Validator.ValidateShape(missing));
+
+        // Criteria must use metrics the server computes from telemetry; client scores are never accepted.
+        var unsupported = EditorContractFixtures.State();
+        unsupported["rubric"]!["criteria"]![0]!["metric"] = "client_score";
+        Assert.Contains("RUBRIC_METRIC_UNSUPPORTED", Codes(ScenarioStateV1Validator.ValidateComplete(unsupported, Contracts()), "$.rubric.criteria[0].metric"));
+        Assert.Empty(ScenarioStateV1Validator.ValidateShape(unsupported));
     }
 
     [Fact]

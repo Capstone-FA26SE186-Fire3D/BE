@@ -16,10 +16,15 @@ public static partial class EditorContract
     public const string V1 = "fet3d.editor/1";
     public static readonly string[] SupportedVersions = [V1];
     public static readonly string[] ObjectKinds = ["Spawn", "Hazard", "Goal", "Npc", "BlockedElement", "Equipment"];
-    public static readonly string[] TrainingModes = ["Learn", "GuidedDrill", "Assessment"];
+    public static readonly string[] TrainingModes = ["Learn", "Guided", "Assessment"];
     // Behaviour objects must name a runtime capability; Unity behaviour is never inferred from the kind alone.
     public static readonly string[] CapabilityRequiredKinds = ["Hazard", "Npc", "Equipment"];
     public const int MaxFloors = 500, MaxMappings = 100_000, MaxObjects = 2_000;
+    /// <summary>
+    /// Rubric metrics the server can compute from learner telemetry (ExitReached, WrongExit, HazardExposure.amount, Moved.distanceMeters).
+    /// A criterion on any other metric is rejected before release; scores are never taken from the client.
+    /// </summary>
+    public static readonly string[] LearnerMetrics = ["reached_exit", "completion_time_seconds", "wrong_exits", "hazard_exposure", "distance_meters"];
 
     /// <summary>Returns the declared schemaVersion, or null for a legacy document.</summary>
     public static string? DeclaredVersion(JsonNode? document) =>
@@ -446,7 +451,8 @@ public static class ScenarioStateV1Validator
             if (c is null) continue;
             if (r.Text(c["id"], $"{path}.id", 128, pattern: EditorContract.IdPattern()) is { } id && !ids.Add(id))
                 r.Add("ID_DUPLICATE", $"{path}.id", "Criterion IDs must be unique.");
-            r.Text(c["metric"], $"{path}.metric", 128, pattern: EditorContract.IdPattern());
+            if (r.Text(c["metric"], $"{path}.metric", 128, pattern: EditorContract.IdPattern()) is { } metric && complete && !EditorContract.LearnerMetrics.Contains(metric))
+                r.Add("RUBRIC_METRIC_UNSUPPORTED", $"{path}.metric", $"Use a server-computed metric: {string.Join(", ", EditorContract.LearnerMetrics)}.");
             r.Boolean(c["mandatory"], $"{path}.mandatory");
             r.Number(c["weight"], $"{path}.weight", min: 0);
             r.Number(c["threshold"], $"{path}.threshold");
