@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-137 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+140 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -23,6 +23,8 @@
 | PATCH | /api/admin/feedback/{id}/status | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/admin/payments/payos/checkouts/{id}/reconcile | Bearer | None | 202, 400, 401, 403, 404, 409, 503 |
 | POST | /api/admin/quotations/{id}/issue | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/admin/scenario-reviews | Bearer | None | 200, 400, 401, 403 |
+| GET | /api/admin/scenario-reviews/{reviewId} | Bearer | None | 200, 401, 403, 404 |
 | POST | /api/admin/scenario-versions/{id}/approve | Bearer | Idempotency-Key | 200, 401, 403, 404, 409 |
 | POST | /api/admin/scenario-versions/{id}/reject | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409 |
 | POST | /api/admin/service-packages | Bearer | None | 201, 400, 401, 403, 404, 409, 412, 428 |
@@ -103,7 +105,7 @@
 | POST | /api/processing-jobs/{jobId}/retry | Bearer | None | 202, 400, 401, 403, 404, 409 |
 | POST | /api/releases | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
 | GET | /api/releases/{releaseId} | Bearer | None | 200, 401, 403, 404 |
-| POST | /api/releases/{releaseId}/publish | Bearer | None | 204, 400, 401, 403, 404, 409, 503 |
+| POST | /api/releases/{releaseId}/publish | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409, 503 |
 | POST | /api/releases/{releaseId}/revoke | Bearer | None | 204, 400, 401, 403, 404, 409 |
 | GET | /api/revisions/{id} | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/revisions/{revisionId}/annotations | Bearer | None | 200 |
@@ -130,6 +132,7 @@
 | POST | /api/scenario-versions/{id}/package-builds | Bearer | Idempotency-Key | 202, 400, 409 |
 | POST | /api/scenario-versions/{id}/submit | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
 | GET | /api/scenario-versions/{versionId} | Bearer | None | 200, 400, 403, 404 |
+| GET | /api/scenario-versions/{versionId}/review | Bearer | None | 200, 401, 403, 404 |
 | GET | /api/support/tickets | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/support/tickets | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/support/tickets/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
