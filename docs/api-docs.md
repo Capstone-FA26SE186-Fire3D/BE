@@ -600,6 +600,8 @@ Trainee prepare/start/launched/heartbeat/events/complete/result/continuation/rec
 
 Learn CMS công khai (`/api/learn/...`, bookmark của Trainee, quản trị `/api/admin/learn/...` với version bất biến, Hidden/Deleted/restore→Hidden, allowlist video YouTube/TikTok/Facebook) và Organization Library (`/api/library/...`, `/api/admin/library/...`): xem [learn-library.md](learn-library.md).
 
+Organization AI qua adapter FastAPI (`/api/ai/organization/...`, `/api/ai/requests/{id}`), policy reserve quota, registry nguồn tri thức và đối soát Admin (`/api/admin/ai/...`, `/api/admin/knowledge-sources`): xem [organization-ai.md](organization-ai.md). Mặc định tắt; chưa cấu hình adapter trả `503 AI_PROVIDER_UNAVAILABLE`.
+
 ## 8. Release lifecycle và Building access
 
 POST /api/releases: OrganizationUser/PlatformAdmin, Idempotency-Key, revisionId/scenarioVersionId/confirmationReviewId/candidateArtifactId; metadata legacy nullable chỉ được nhận khi khớp output worker. Gate kiểm Approved content/rubric và technical confirmation đúng cặp, current accepted ReleasePackage/manifest và runtime contract; tạo Built/package/provenance/Training/receipt/audit atomic. Replay cùng key/input trả cùng response201; khác input409. Không chứng minh Unity thật.
