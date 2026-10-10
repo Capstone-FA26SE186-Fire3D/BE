@@ -50,6 +50,9 @@ public static class ApplicationExtensions
         services.AddScoped<IAdministrationStore, AdministrationStore>();
         services.AddScoped<Fire3D.Application.Reporting.IAuditQueries,Fire3D.Infrastructure.Reporting.AuditQueries>();
         services.AddScoped<Fire3D.Application.Reporting.IOperationsQueries,Fire3D.Infrastructure.Reporting.OperationsQueries>();
+        services.AddOptions<Fire3D.Application.Reporting.LearnerAnalyticsOptions>().Bind(configuration.GetSection(Fire3D.Application.Reporting.LearnerAnalyticsOptions.Section))
+            .Validate(o => o.ActiveSessionSeconds is >= 10 and <= 3600, "Analytics:ActiveSessionSeconds must be 10-3600.").ValidateOnStart();
+        services.AddScoped<Fire3D.Application.Reporting.ILearnerAnalytics,Fire3D.Infrastructure.Reporting.LearnerAnalytics>();
         services.AddScoped<AvatarStore>();
         services.AddScoped<IAvatarStore>(provider => provider.GetRequiredService<AvatarStore>());
         services.AddScoped<IAvatarCleanupStore>(provider => provider.GetRequiredService<AvatarStore>());

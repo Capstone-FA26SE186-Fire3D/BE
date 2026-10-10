@@ -18,6 +18,7 @@
         <EmbeddedResource Include="Persistence/Sql/LearnerSessions.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.LearnerSessions.sql" />
         <EmbeddedResource Include="Persistence/Sql/LearnLibrary.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.LearnLibrary.sql" />
         <EmbeddedResource Include="Persistence/Sql/OrganizationAi.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.OrganizationAi.sql" />
+        <EmbeddedResource Include="Persistence/Sql/LearnerAnalytics.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.LearnerAnalytics.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />

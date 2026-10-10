@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-216 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+219 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -14,6 +14,8 @@
 | GET | /api/admin/ai/requests/{requestId} | Bearer | None | 200, 404 |
 | POST | /api/admin/ai/requests/{requestId}/reconcile | Bearer | Idempotency-Key | 202, 409 |
 | GET | /api/admin/analytics/operations | Bearer | None | 200, 400, 401, 403 |
+| GET | /api/admin/analytics/revenue | Bearer | None | 200, 400, 401, 403 |
+| GET | /api/admin/analytics/training | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/admin/audit-logs | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/admin/audit-logs/{id} | Bearer | None | 200, 401, 403, 404 |
 | GET | /api/admin/billing/quota-policies | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
@@ -146,6 +148,7 @@
 | GET | /api/organizations/me/ai-quota/grants | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/organizations/me/ai-usage | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/organizations/me/analytics/operations | Bearer | None | 200, 400, 401, 403 |
+| GET | /api/organizations/me/analytics/training | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/organizations/{id} | Bearer | None | 200 |
 | PATCH | /api/organizations/{id}/status | Bearer | None | 200 |
 | GET | /api/payments/payos/checkouts/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 503 |
