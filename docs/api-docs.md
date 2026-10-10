@@ -602,6 +602,8 @@ Learn CMS công khai (`/api/learn/...`, bookmark của Trainee, quản trị `/a
 
 Organization AI qua adapter FastAPI (`/api/ai/organization/...`, `/api/ai/requests/{id}`), policy reserve quota, registry nguồn tri thức và đối soát Admin (`/api/admin/ai/...`, `/api/admin/knowledge-sources`): xem [organization-ai.md](organization-ai.md). Mặc định tắt; chưa cấu hình adapter trả `503 AI_PROVIDER_UNAVAILABLE`.
 
+Analytics dữ liệu thật: `/api/organizations/me/analytics/training`, `/api/admin/analytics/training`, `/api/admin/analytics/revenue` (cohort theo thời điểm start, heartbeat server, kết quả server, doanh thu theo giao dịch Applied, AI usage đã settle): xem [learner-analytics.md](learner-analytics.md).
+
 ## 8. Release lifecycle và Building access
 
 POST /api/releases: OrganizationUser/PlatformAdmin, Idempotency-Key, revisionId/scenarioVersionId/confirmationReviewId/candidateArtifactId; metadata legacy nullable chỉ được nhận khi khớp output worker. Gate kiểm Approved content/rubric và technical confirmation đúng cặp, current accepted ReleasePackage/manifest và runtime contract; tạo Built/package/provenance/Training/receipt/audit atomic. Replay cùng key/input trả cùng response201; khác input409. Không chứng minh Unity thật.
