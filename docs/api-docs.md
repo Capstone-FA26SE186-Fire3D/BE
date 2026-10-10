@@ -525,7 +525,16 @@ Tất cả cần Editor. Đây là luồng tác giả thiết kế/thử kịch 
 | GET | `/api/scenario-versions/{versionId}` | Không body | 200 ScenarioVersionDetailResponse |
 | GET | `/api/scenario-interactions/catalog` | Không body | 200 RuntimeCatalogDto[] kèm `capabilityContracts` hợp lệ |
 | POST | `/api/scenarios/{scenarioId}/playtests` | Optional buildingId; exact draft/version + Idempotency-Key; OrganizationUser | 201 PlaytestPreparation |
-| POST | `/api/playtests/{playtestId}/start` | runtimeVersion + Idempotency-Key; OrganizationUser owner | 200 PlaytestLaunch with 5-minute grant |
+| POST | `/api/playtests/{playtestId}/start` | runtimeVersion + Idempotency-Key; OrganizationUser launching session | 200 PlaytestLaunch with 5-minute grant, status Launching |
+| GET | `/api/playtests/{playtestId}` | Owner | 200 PlaytestStatusResponse |
+| POST | `/api/playtests/{playtestId}/handoffs` | Idempotency-Key; owner, Created | 201 PlaytestHandoffResponse (5-minute single-use code) |
+| POST | `/api/playtests/handoffs/redeem` | code; another session of the same owner | 200 PlaytestStatusResponse |
+| POST | `/api/playtests/{playtestId}/launch-grants` | Idempotency-Key; launching session, Launching | 200 PlaytestLaunch (next generation) |
+| POST | `/api/playtests/{playtestId}/launched` | generation | 200 PlaytestStatusResponse (Running) |
+| POST | `/api/playtests/{playtestId}/heartbeat` | No body | 200 PlaytestHeartbeatResponse |
+| POST | `/api/playtests/{playtestId}/events:batch` | events[] | 200 PlaytestEventsResponse |
+| POST | `/api/playtests/{playtestId}/complete` | lastEventSequence, summary + Idempotency-Key | 200 PlaytestStatusResponse (Completed) |
+| POST | `/api/playtests/{playtestId}/cancel` | Idempotency-Key | 200 PlaytestStatusResponse (Cancelled) |
 | POST | `/api/revisions/{revisionId}/reviews` | scenarioVersionId, validationRunId, reviewMessage, annotationSetId nullable | 201 {id} |
 
 ### 7.1 Scenario/draft
@@ -583,7 +592,7 @@ Snapshot không body, trả 201 id ScenarioVersion. Đây là snapshot state, kh
 
 Catalog trả mảng `{runtimeVersion, protocolVersion, manifestSchemaVersion, capabilities}`; capabilities là JSON. Dùng giá trị catalog/package thực tế khi tích hợp runtime.
 
-Playtest prepare/start use the session-bound PostgreSQL gate: exact accepted immutable PlaytestPackage, live OrganizationUser owner/tenant, runtime catalog compatibility and Building entitlement. Preparation assigns no entitlement and consumes no Trial; start does. See [requests, configuration and manual tests](playtest-manual-test.md). The legacy unrestricted store is not registered and refuses mutations without session proof.
+Playtest prepare/start use the session-bound PostgreSQL gate: exact accepted immutable PlaytestPackage, live OrganizationUser owner/tenant, runtime catalog compatibility and Building entitlement. Preparation assigns no entitlement and consumes no Trial; start does (once) and enters `Launching`; the runtime confirms `Running` with the current grant generation. Mobile handoff, grant reissue, heartbeat, telemetry, complete and cancel with error codes: [requests, configuration and manual tests](playtest-manual-test.md). The legacy unrestricted store is not registered and refuses mutations without session proof.
 
 ## 8. Release lifecycle và Building access
 
