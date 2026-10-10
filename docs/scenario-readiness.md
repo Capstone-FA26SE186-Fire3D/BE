@@ -22,3 +22,6 @@ from the authenticated JWT. The gate locks lifecycle then actor then resource,
 rechecks the live family after lock waits and before receipt replay, and returns
 401 for a revoked/expired/missing family. The family is not part of the canonical
 receipt input. Legacy family-less SQL entrypoints fail closed after migration.
+# Safe audit details
+
+New submission/approval/rejection records include a versioned safe audit snapshot of review status, review/version identifiers, actor and timestamps. Technical confirmation/rejection adds the exact revision, validation, artifact and optional annotation IDs. Mutations, receipts and audit remain in the same transaction. Audit detail projects only approved scalar fields; it excludes reasons, content/rubric hashes and content, email, phone, credentials and signed URLs. Legacy `ScenarioVersion` audits without the new contract marker remain metadata-only with `changes: []`; no history is backfilled.
