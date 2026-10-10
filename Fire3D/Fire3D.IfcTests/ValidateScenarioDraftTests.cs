@@ -34,7 +34,8 @@ public sealed class ValidateScenarioDraftTests
         var actor = RevisionAccessTests.Actor(role);
         var store = StubProxy.For<IScenarioReadStore>((_, _) => throw new Exception("Unexpected store access"));
         var draftId = role == UserRole.Trainee ? Guid.NewGuid() : Guid.Empty;
-        var result = await new ValidateScenarioDraftCommandHandler(RevisionAccessTests.Accounts(actor), store)
+        var result = await new ValidateScenarioDraftCommandHandler(RevisionAccessTests.Accounts(actor), store,
+            StubProxy.For<Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog.IRuntimeCatalogReadStore>((_, _) => throw new Exception("Unexpected catalog access")))
             .Handle(new(actor.Id, draftId), default);
         Assert.Equal(expectedStatus, result.Error?.Status);
     }

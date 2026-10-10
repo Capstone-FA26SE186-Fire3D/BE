@@ -163,15 +163,21 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
     /// <summary>
     /// Updates the state of a scenario draft (D11). Requires If-Match header for concurrency control.
     /// </summary>
+    /// <remarks>Body with schemaVersion "fet3d.editor/1" is shape-validated and stored as sent, so GET→PUT→GET keeps every
+    /// supported field; unknown fields, non-finite numbers or duplicate IDs return 422 EDITOR_SCHEMA_INVALID with
+    /// issues [{code,path,message}]. Unsupported schemaVersion returns 422 EDITOR_SCHEMA_VERSION_UNSUPPORTED and malformed
+    /// JSON 400 EDITOR_JSON_MALFORMED. A body without schemaVersion keeps the legacy typed shape.</remarks>
     [HttpPut("/api/scenario-drafts/{draftId:guid}")]
+    [Fire3D.API.OpenApi.EditorJsonBody]
     [ProducesResponseType(204)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(412)]
+    [ProducesResponseType<ProblemDetails>(422)]
     [ProducesResponseType<ProblemDetails>(428)]
     [Fire3D.API.OpenApi.ResponseHeader("ETag")]
-    public async Task<IActionResult> UpdateScenarioDraft(Guid draftId, [FromBody] Fire3D.Application.Scenarios.Dto.ScenarioDraftStateDto state, [FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
+    public async Task<IActionResult> UpdateScenarioDraft(Guid draftId, [FromBody] System.Text.Json.Nodes.JsonNode? state, [FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
     {
         var actor = User.GetActorId();
 
@@ -180,11 +186,7 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
 
         var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.UpdateScenarioDraft.UpdateScenarioDraftCommand(actor, draftId, expectedVersion, state), ct);
 
-        if (!result.IsSuccess)
-        {
-            return Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
-        }
+        if (!result.IsSuccess) return DraftProblem(result.Error!);
 
         Response.Headers["ETag"] = $"\"{result.Value}\"";
         return NoContent();
@@ -195,6 +197,7 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
     /// </summary>
     [HttpPost("/api/scenario-drafts/{draftId:guid}/snapshot")]
     [ProducesResponseType(201)]
+    [ProducesResponseType<ProblemDetails>(422)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> SnapshotScenarioDraft(Guid draftId, CancellationToken ct, [FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch = null, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key = null)
@@ -207,8 +210,7 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
 
         return result.IsSuccess 
             ? Created($"/api/scenario-versions/{result.Value}", new { Id = result.Value })
-            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
+            : DraftProblem(result.Error!);
     }
 
     /// <summary>
@@ -251,6 +253,12 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
             ? Ok(result.Value)
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
+    }
+    private ObjectResult DraftProblem(Fire3D.Application.Authentication.AuthError error)
+    {
+        var extensions = new Dictionary<string, object?> { ["code"] = error.Code, ["errors"] = error.Errors };
+        if (error.Issues is not null) extensions["issues"] = error.Issues;
+        return Problem(statusCode: error.Status, title: error.Message, extensions: extensions);
     }
     private IActionResult? DraftPrecondition(string? value, out uint revision)
     {

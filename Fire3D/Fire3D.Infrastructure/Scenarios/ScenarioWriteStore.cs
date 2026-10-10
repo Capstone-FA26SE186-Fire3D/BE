@@ -18,7 +18,10 @@ public sealed class ScenarioWriteStore(Fire3DDbContext db) : IScenarioWriteStore
         => IdAsync("CreateScenario",actorId,buildingId,new{name=request.Name},key,null,ct);
     public Task<AuthResult<Guid>> CreateScenarioDraftAsync(Guid actorId, Guid scenarioId, Guid? organizationId, CreateScenarioDraftRequest request, CancellationToken ct, string? key=null)
         => IdAsync("CreateDraft",actorId,scenarioId,request,key,null,ct);
-    public async Task<AuthResult<uint>> UpdateScenarioDraftAsync(Guid actorId, Guid draftId, uint expectedVersion, ScenarioDraftStateDto state, Guid? organizationId, CancellationToken ct)
+    /// <summary>Legacy typed overload; serializes exactly as the historical PUT body binding did.</summary>
+    public Task<AuthResult<uint>> UpdateScenarioDraftAsync(Guid actorId, Guid draftId, uint expectedVersion, ScenarioDraftStateDto state, Guid? organizationId, CancellationToken ct)
+        => UpdateScenarioDraftAsync(actorId, draftId, expectedVersion, JsonSerializer.SerializeToNode(state, Json)!, organizationId, ct);
+    public async Task<AuthResult<uint>> UpdateScenarioDraftAsync(Guid actorId, Guid draftId, uint expectedVersion, JsonNode state, Guid? organizationId, CancellationToken ct)
     {
         var result=await GateAsync("UpdateDraft",actorId,draftId,state,null,expectedVersion,ct);
         return result.IsSuccess ? AuthResult<uint>.Ok(result.Value.GetProperty("revision").GetUInt32()) : new(default,result.Error);
@@ -28,7 +31,8 @@ public sealed class ScenarioWriteStore(Fire3DDbContext db) : IScenarioWriteStore
         // Read only the authorized state. Gate rechecks xmin under lock before adopting it.
         var draft=await db.ScenarioDrafts.AsNoTracking().Where(x=>x.Id==draftId && (!organizationId.HasValue || x.OrganizationId==organizationId)).SingleOrDefaultAsync(ct);
         if(draft is null) return AuthResult<Guid>.Fail("NOT_FOUND","Draft not found in scope.",404);
-        if (draft.Version==expectedVersion)
+        // Versioned drafts were validated by the handler; the legacy structural validator applies to legacy drafts only.
+        if (draft.Version==expectedVersion && Fire3D.Application.Editor.EditorContract.DeclaredVersion(draft.State) is null)
         {
             var issues=ScenarioDraftStructuralValidator.Validate(draft.State);
             if(issues.Count>0) return AuthResult<Guid>.Fail("VALIDATION_ERROR","Draft structure is not valid.",400,issues.GroupBy(x=>x.Path).ToDictionary(x=>x.Key,x=>x.Select(y=>y.Message).ToArray()));

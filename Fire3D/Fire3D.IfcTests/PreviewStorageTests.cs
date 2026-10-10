@@ -69,7 +69,7 @@ public sealed class PreviewStorageTests
     {
         var actor=RevisionAccessTests.Actor(UserRole.OrganizationUser);
         var source=new EditorPreviewSource(Guid.NewGuid(),Guid.NewGuid(),"Processed",Guid.NewGuid(),Guid.NewGuid(),"server/key",new string('a',64),
-            JsonSerializer.SerializeToElement(new int[16]),JsonSerializer.SerializeToElement(Array.Empty<object>()),JsonSerializer.SerializeToElement(new{}),100);
+            Fire3D.Tests.Shared.EditorContractFixtures.GeometryElement(),100);
         var store=StubProxy.For<IEditorPreviewStore>((_,_)=>Task.FromResult<EditorPreviewSource?>(source));
         var signer=StubProxy.For<IPreviewDownloadSigner>((_,_)=>unavailable
             ? Task.FromException<SignedDownload?>(new PreviewStorageUnavailableException(new Exception("secret provider payload")))

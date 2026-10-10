@@ -1,0 +1,44 @@
+{
+  "_comment": "Test fixture describing the catalog contract shape. It is not a seed: operators publish real runtime capabilities.",
+  "runtimeVersion": "1.4.0",
+  "protocolVersion": "1",
+  "manifestSchemaVersion": "1",
+  "capabilities": ["fire.source", "npc.evacuee", "equipment.extinguisher", "smoke.spread"],
+  "capabilityContracts": {
+    "fire.source": {
+      "version": "1.0.0",
+      "objectKinds": ["Hazard"],
+      "description": "Point fire source.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["intensity"],
+        "properties": {
+          "intensity": { "type": "number", "minimum": 0, "maximum": 10 },
+          "activationSeconds": { "type": "integer", "minimum": 0, "maximum": 3600 }
+        }
+      }
+    },
+    "npc.evacuee": {
+      "version": "2.1.0",
+      "objectKinds": ["Npc"],
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "behaviour": { "type": "string", "enum": ["follow", "panic", "wait"] },
+          "mobilityImpaired": { "type": "boolean" }
+        }
+      }
+    },
+    "equipment.extinguisher": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "agent": { "type": "string", "enum": ["CO2", "Powder", "Foam"] } }
+      }
+    }
+  }
+}

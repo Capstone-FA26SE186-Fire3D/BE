@@ -69,8 +69,25 @@ public sealed class ProcessingWorkerController(IProcessingWorkerGate gate,IOptio
             }
         }
         if(errors.Count>0)return Problem(statusCode:400,title:"Worker command validation failed.",extensions:new Dictionary<string,object?> { ["code"]="VALIDATION_ERROR",["errors"]=errors });
+        if(action=="Output"&&EditorMetadataProblem(input.GetProperty("output")) is { } editor)return editor;
         var result=await gate.ExecuteAsync(action,job,input,ct);
         return result.IsSuccess?Ok(result.Value):Problem(statusCode:result.Error!.Status,title:result.Error.Message,extensions:new Dictionary<string,object?> { ["code"]=result.Error.Code });
+    }
+    /// <summary>
+    /// Geometry preview metadata that declares a schemaVersion must satisfy that editor contract before acceptance.
+    /// Metadata without schemaVersion is accepted as legacy and is reported ReprocessRequired by editor reads.
+    /// </summary>
+    private ObjectResult? EditorMetadataProblem(JsonElement output)
+    {
+        if(output.GetProperty("artifactType").GetString()!="preview_glb")return null;
+        var metadata=System.Text.Json.Nodes.JsonNode.Parse(output.GetProperty("metadata").GetRawText());
+        var version=Fire3D.Application.Editor.EditorContract.DeclaredVersion(metadata);
+        if(version is null)return null;
+        if(!Fire3D.Application.Editor.EditorContract.IsSupported(version))
+            return Problem(statusCode:422,title:"Geometry metadata schemaVersion is not supported.",extensions:new Dictionary<string,object?> { ["code"]="EDITOR_SCHEMA_VERSION_UNSUPPORTED" });
+        var issues=Fire3D.Application.Editor.GeometryMetadataValidator.Validate(metadata);
+        return issues.Count==0?null:Problem(statusCode:422,title:"Geometry metadata does not satisfy the editor contract.",
+            extensions:new Dictionary<string,object?> { ["code"]="EDITOR_SCHEMA_INVALID",["issues"]=issues });
     }
     private static bool Text(JsonElement input,string name,int max)=>input.TryGetProperty(name,out var value)&&value.ValueKind==JsonValueKind.String&&value.GetString() is { Length: > 0 } text&&text.Length<=max&&!string.IsNullOrWhiteSpace(text)&&!text.Any(char.IsControl);
     private static bool Hash(JsonElement input,string name)=>Text(input,name,64)&&input.GetProperty(name).GetString() is { Length:64 } hash&&hash.All(char.IsAsciiHexDigit);

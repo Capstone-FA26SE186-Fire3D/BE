@@ -32,4 +32,23 @@ public sealed class RevisionsController(ISender sender) : ControllerBase
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
+
+    /// <summary>Lists floors of the accepted versioned Geometry artifact for one revision.</summary>
+    /// <remarks>OrganizationUser in the tenant or PlatformAdmin. Status Ready returns floors with stable IDs, elevation in
+    /// metres, optional IFC GlobalId and a column-major floor→GLB transform (fet3d.editor/1). NotReady means no accepted
+    /// Geometry artifact; ReprocessRequired means the artifact predates or fails the editor contract and no coordinates
+    /// are returned. Missing or other-tenant revision returns 404.</remarks>
+    [HttpGet("{id:guid}/floors")]
+    [ProducesResponseType<Fire3D.Application.Ifc.RevisionFloorsResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> GetFloors(Guid id, CancellationToken ct)
+    {
+        var result = await sender.Send(new Fire3D.Application.Ifc.GetRevisionFloorsQuery(User.GetActorId(), id), ct);
+        return result.IsSuccess ? Ok(result.Value)
+            : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
 }
