@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-140 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+141 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -73,9 +73,9 @@
 | PUT | /api/buildings/{id} | Bearer | None | 200 |
 | GET | /api/buildings/{id}/access | Bearer | None | 200 |
 | PATCH | /api/buildings/{id}/access | Bearer | If-Match | 200 |
-| POST | /api/buildings/{id}/participation/verify | Bearer | None | 200 |
 | DELETE | /api/buildings/{id}/participation-code | Bearer | If-Match | 200 |
 | POST | /api/buildings/{id}/participation-code/rotate | Bearer | If-Match | 200 |
+| POST | /api/buildings/{id}/participation/verify | Bearer | None | 200 |
 | GET | /api/buildings/{id}/revisions | Bearer | None | 200, 400, 401, 403, 404 |
 | POST | /api/buildings/{id}/revisions/upload-url | Bearer | Idempotency-Key | 201, 400, 401, 403, 404 |
 | GET | /api/buildings/{id}/trainings | Bearer | None | 200, 400, 404 |
@@ -89,11 +89,11 @@
 | POST | /api/me/link-google | Bearer | None | 200, 400, 401, 403, 409, 503 |
 | GET | /api/organizations | Bearer | None | 200 |
 | POST | /api/organizations | Bearer | None | 201 |
-| GET | /api/organizations/{id} | Bearer | None | 200 |
-| PATCH | /api/organizations/{id}/status | Bearer | None | 200 |
 | GET | /api/organizations/me | Bearer | None | 200, 401, 403 |
 | PATCH | /api/organizations/me | Bearer | If-Match | 200, 400, 401, 403, 409, 412, 428 |
 | GET | /api/organizations/me/analytics/operations | Bearer | None | 200, 400, 401, 403 |
+| GET | /api/organizations/{id} | Bearer | None | 200 |
+| PATCH | /api/organizations/{id}/status | Bearer | None | 200 |
 | GET | /api/payments/payos/checkouts/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 503 |
 | POST | /api/payments/payos/create | Bearer | Idempotency-Key | 200, 201, 202, 400, 401, 403, 404, 409, 503 |
 | GET | /api/payments/payos/requests/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 503 |
@@ -108,6 +108,7 @@
 | POST | /api/releases/{releaseId}/publish | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409, 503 |
 | POST | /api/releases/{releaseId}/revoke | Bearer | None | 204, 400, 401, 403, 404, 409 |
 | GET | /api/revisions/{id} | Bearer | None | 200, 400, 401, 403, 404 |
+| GET | /api/revisions/{id}/floors | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/revisions/{revisionId}/annotations | Bearer | None | 200 |
 | PUT | /api/revisions/{revisionId}/annotations | Bearer | If-Match | 200, 400, 412, 428 |
 | GET | /api/revisions/{revisionId}/artifacts | Bearer | None | 200, 400, 401, 403, 404 |
@@ -120,19 +121,19 @@
 | POST | /api/revisions/{revisionId}/reviews | Bearer | None | 201, 400, 401, 403, 404, 409 |
 | POST | /api/revisions/{revisionId}/upload-complete | Bearer | None | 204, 400, 404, 409, 410, 422, 503 |
 | GET | /api/scenario-drafts/{draftId} | Bearer | None | 200 |
-| PUT | /api/scenario-drafts/{draftId} | Bearer | If-Match | 204, 400, 404, 409, 412, 428 |
-| POST | /api/scenario-drafts/{draftId}/snapshot | Bearer | If-Match, Idempotency-Key | 201, 400, 404 |
+| PUT | /api/scenario-drafts/{draftId} | Bearer | If-Match | 204, 400, 404, 409, 412, 422, 428 |
+| POST | /api/scenario-drafts/{draftId}/snapshot | Bearer | If-Match, Idempotency-Key | 201, 400, 404, 422 |
 | POST | /api/scenario-drafts/{draftId}/validate | Bearer | None | 200, 400, 403, 404 |
 | GET | /api/scenario-interactions/catalog | Bearer | None | 200 |
+| POST | /api/scenario-versions/{id}/package-builds | Bearer | Idempotency-Key | 202, 400, 409 |
+| POST | /api/scenario-versions/{id}/submit | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
+| GET | /api/scenario-versions/{versionId} | Bearer | None | 200, 400, 403, 404 |
+| GET | /api/scenario-versions/{versionId}/review | Bearer | None | 200, 401, 403, 404 |
 | POST | /api/scenarios | Bearer | Idempotency-Key | 201, 400, 404 |
 | GET | /api/scenarios/{scenarioId} | Bearer | None | 200, 400, 403, 404 |
 | POST | /api/scenarios/{scenarioId}/draft | Bearer | Idempotency-Key | 201, 400, 404 |
 | POST | /api/scenarios/{scenarioId}/playtests | Bearer | Idempotency-Key | 201, 400, 404 |
 | GET | /api/scenarios/{scenarioId}/versions | Bearer | None | 200, 400, 403, 404 |
-| POST | /api/scenario-versions/{id}/package-builds | Bearer | Idempotency-Key | 202, 400, 409 |
-| POST | /api/scenario-versions/{id}/submit | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
-| GET | /api/scenario-versions/{versionId} | Bearer | None | 200, 400, 403, 404 |
-| GET | /api/scenario-versions/{versionId}/review | Bearer | None | 200, 401, 403, 404 |
 | GET | /api/support/tickets | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/support/tickets | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/support/tickets/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
