@@ -15,15 +15,17 @@ public sealed class PayosWebhookTests
         var created=await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(quote)));
         var order=created.GetProperty("orderCode").GetInt64();
         fake.Links[order]=fake.Links[order] with {Status="Paid",AmountPaid=12000};
-        await db.Sql("UPDATE billing_checkout_operations SET next_attempt_at=now()");await Recover(factory,db);
+        await db.Sql("UPDATE billing_checkout_operations SET next_attempt_at=now()-interval '5 seconds'");await Recover(factory,db);
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payos_payment_requests WHERE status='Pending'"));
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM payment_transactions"));
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
         Assert.Equal(HttpStatusCode.OK,(await anonymous.PostAsJsonAsync("/api/payments/payos/webhook",
             new VerifiedPayosEvent(order,12000,"VND","link"+order,"paid-before-bind","2026-10-02 18:00:00"))).StatusCode);
         await Recover(factory,db);
-        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payment_transactions WHERE status='Applied'"));
-        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
+        Assert.True(1L.Equals(await db.Scalar("SELECT count(*) FROM payment_transactions WHERE status='Applied'")),
+            "Inbox: " + await db.Scalar("SELECT coalesce(string_agg(status::text || ':' || coalesce(last_error,'none'), ','),'missing') FROM payos_webhook_inbox"));
+        Assert.True(1L.Equals(await db.Scalar("SELECT count(*) FROM service_entitlements")),
+            "Provisioning: " + await db.Scalar("SELECT coalesce(string_agg(status::text || ':' || coalesce(last_error,'none'), ','),'missing') FROM payment_provisioning_records"));
         Assert.Equal(1,fake.Creates);
     }
 
@@ -48,8 +50,13 @@ public sealed class PayosWebhookTests
     }
     internal static async Task Recover(BillingApiTests.Factory factory,BillingDatabase db)
     {
-        await db.Sql("UPDATE payos_webhook_inbox SET next_attempt_at=now()");
+        // Advance due work explicitly: Docker's database clock can be slightly
+        // ahead of the host clock. A newly committed provisioning row need not
+        // be eligible during the same worker tick as its webhook.
+        await db.Sql("UPDATE payos_webhook_inbox SET next_attempt_at=now()-interval '5 seconds'");
         using var scope=factory.Services.CreateScope();await scope.ServiceProvider.GetRequiredService<IPayosPayments>().Recover(default);
+        await db.Sql("UPDATE payment_provisioning_records SET next_attempt_at=now()-interval '5 seconds' WHERE status='Pending' AND lease_token IS NULL");
+        await scope.ServiceProvider.GetRequiredService<IPayosPayments>().Recover(default);
     }
     [BillingPostgresFact]
     public async Task Verified_inbox_replays_and_rejects_mismatch_without_entitlements()
@@ -80,7 +87,7 @@ public sealed class PayosWebhookTests
         var ev=new VerifiedPayosEvent(order,12000,"VND","link"+order,"early-reference","2026-10-02 18:00:00");
         Assert.Equal(HttpStatusCode.OK,(await anonymous.PostAsJsonAsync("/api/payments/payos/webhook",ev)).StatusCode);
         await Recover(factory,db);Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM payment_transactions"));
-        await db.Sql("UPDATE billing_checkout_operations SET next_attempt_at=now()");await Recover(factory,db);
+        await db.Sql("UPDATE billing_checkout_operations SET next_attempt_at=now()-interval '5 seconds'");await Recover(factory,db);
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM payment_transactions WHERE status='Applied'"));
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM billing_checkout_operations WHERE status='Completed'"));
         var quote2=await PayosCheckoutTests.Accepted(db,"Renewal");var second=await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(quote2,"quote2")));

@@ -1,7 +1,7 @@
 -- Private helper: discover every FK, including composite keys and future business tables.
 -- A new unreadable reference fails closed; no historical child is cascaded away.
 CREATE FUNCTION public.pending_registration_has_reference(p_target regclass,p_id uuid,p_ignored text[])
-RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$
+RETURNS boolean LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE fk record; predicate text; found boolean;
 BEGIN
  IF p_target NOT IN ('public.users'::regclass,'public.organizations'::regclass) THEN
@@ -21,7 +21,7 @@ BEGIN
 END $$;
 
 CREATE FUNCTION public.cleanup_pending_registrations(p_batch integer DEFAULT 100)
-RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE candidate record; current_user_row users; removed integer:=0;
 BEGIN
  IF p_batch IS NULL OR p_batch NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION 'invalid cleanup batch'; END IF;
@@ -49,7 +49,8 @@ BEGIN
    IF current_user_row.organization_id IS NOT NULL THEN
     IF EXISTS(SELECT 1 FROM organizations WHERE id=current_user_row.organization_id
      AND registration_owner_user_id=candidate.id FOR UPDATE)
-     AND NOT EXISTS(SELECT 1 FROM audit_logs WHERE organization_id=current_user_row.organization_id)
+     AND NOT EXISTS(SELECT 1 FROM audit_logs WHERE organization_id=current_user_row.organization_id
+       OR (lower(target_entity) IN('organization','organizations') AND target_id=current_user_row.organization_id))
      AND NOT public.pending_registration_has_reference('public.organizations',current_user_row.organization_id,ARRAY[]::text[]) THEN
       DELETE FROM organizations WHERE id=current_user_row.organization_id AND registration_owner_user_id=candidate.id;
     END IF;

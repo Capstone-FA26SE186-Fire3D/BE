@@ -96,7 +96,7 @@ public sealed partial class AuthIntegrationTests
     public async Task Ifc_dependency_grants_work_for_non_superuser_without_retaining_owner_membership()
     {
         var login="grant_repair_"+Guid.NewGuid().ToString("N");
-        await ExecuteAsync($"CREATE ROLE {login} LOGIN CREATEROLE NOSUPERUSER NOBYPASSRLS; GRANT USAGE ON SCHEMA public TO {login}; GRANT fet3d_integration_owner TO {login} WITH ADMIN TRUE, SET FALSE, INHERIT FALSE; REVOKE EXECUTE ON FUNCTION fet3d_jsonb_payload_hash(jsonb),enqueue_integration_outbox_event(text,text,uuid,text,text,jsonb),enqueue_integration_outbox_event_internal(text,text,uuid,text,text,jsonb,boolean,boolean) FROM fet3d_ifc_upload_owner");
+        await ExecuteAsync($"CREATE ROLE {login} LOGIN CREATEROLE NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}'; GRANT USAGE ON SCHEMA public TO {login}; GRANT fet3d_integration_owner TO {login} WITH ADMIN TRUE, SET FALSE, INHERIT FALSE; REVOKE EXECUTE ON FUNCTION fet3d_jsonb_payload_hash(jsonb),enqueue_integration_outbox_event(text,text,uuid,text,text,jsonb),enqueue_integration_outbox_event_internal(text,text,uuid,text,text,jsonb,boolean,boolean) FROM fet3d_ifc_upload_owner");
         try
         {
             using var resource=typeof(ScenarioReadinessStore).Assembly.GetManifestResourceStream("Fire3D.Infrastructure.Persistence.Sql.IfcDependencyGrants.sql")!;

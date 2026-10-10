@@ -22,6 +22,7 @@ public sealed class OrganizationProfileController(ISender sender) : ControllerBa
     [ProducesResponseType<OrganizationProfileResponse>(200)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<ActionResult<OrganizationProfileResponse>> Get(CancellationToken ct)
     {
         var result = await sender.Send(new GetMyOrganizationQuery(User.GetActorId()), ct);
@@ -44,8 +45,9 @@ public sealed class OrganizationProfileController(ISender sender) : ControllerBa
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<ActionResult<OrganizationProfileResponse>> Update([FromBody] UpdateOrganizationProfileRequest request,
-        [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
+        [FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
     {
         var result = await sender.Send(new UpdateMyOrganizationCommand(User.GetActorId(), ifMatch, request), ct);
         if (!result.IsSuccess) return Problem(statusCode: result.Error!.Status, title: result.Error.Message,

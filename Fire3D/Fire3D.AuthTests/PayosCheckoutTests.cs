@@ -84,7 +84,7 @@ public sealed class PayosCheckoutTests
         using var factory=new BillingApiTests.Factory(db,provider);using var owner=factory.As(BillingDatabase.Owner);
         var attempts=await Task.WhenAll(owner.SendAsync(Create(quote)),owner.SendAsync(Create(quote,"checkout-2")));
         Assert.All(attempts,x=>Assert.Equal(HttpStatusCode.Accepted,x.StatusCode));Assert.Equal(1,provider.Creates);
-        await db.Sql("UPDATE billing_checkout_operations SET next_attempt_at=now()");
+        await db.Sql("UPDATE billing_checkout_operations SET next_attempt_at=now()-interval '5 seconds'");
         using var scope=factory.Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<IPayosPayments>().Recover(default);
         var replay=await owner.SendAsync(Create(quote));var result=await Json(replay);Assert.Equal("Ready",result.GetProperty("checkoutStatus").GetString());

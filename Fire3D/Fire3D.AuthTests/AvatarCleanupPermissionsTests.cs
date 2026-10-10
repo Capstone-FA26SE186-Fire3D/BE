@@ -7,6 +7,27 @@ namespace Fire3D.AuthTests;
 public sealed class AvatarCleanupPermissionsTests
 {
     [BillingPostgresFact]
+    public async Task Temporary_tables_cannot_hide_protected_objects_from_definer_gates()
+    {
+        await using var db = await BillingDatabase.Create(migrationHistory: true);
+        const string key = "avatars/users/actual-protected";
+        await db.Sql($"UPDATE users SET avatar_storage_key='{key}' WHERE id='{BillingDatabase.Owner}'");
+        Assert.Equal(3L, await db.Scalar("""
+            SELECT count(*) FROM pg_proc WHERE proname IN ('cleanup_pending_registrations','avatar_cleanup_gate','scenario_readiness_gate')
+             AND prosecdef AND array_to_string(proconfig,',') ~ 'pg_catalog, *public, *pg_temp$'
+            """));
+        await using var context = db.Context();
+        await context.Database.OpenConnectionAsync();
+        await context.Database.ExecuteSqlRawAsync("SET ROLE fire3d_api; CREATE TEMP TABLE users (LIKE public.users)");
+        var cleanup = new AvatarStore(context);
+        Assert.True(await cleanup.IsReferencedAsync(key, default));
+        await cleanup.QueueAsync(key, DateTime.UtcNow.AddMinutes(-1), default);
+        var job = (await cleanup.ClaimAsync(default))!;
+        await cleanup.CompleteAsync(job, default);
+        Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM avatar_object_cleanups"));
+    }
+
+    [BillingPostgresFact]
     public async Task Actual_migrations_allow_cleanup_under_rls_without_direct_queue_dml()
     {
         await using var db = await BillingDatabase.Create(migrationHistory: true);

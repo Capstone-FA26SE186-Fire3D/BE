@@ -1,6 +1,6 @@
 CREATE FUNCTION public.avatar_cleanup_gate(p_action text,p_key text DEFAULT NULL,p_id uuid DEFAULT NULL,
  p_lease uuid DEFAULT NULL,p_available timestamptz DEFAULT NULL) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE job avatar_object_cleanups; protected boolean;
 BEGIN
  IF p_action='Enqueue' THEN

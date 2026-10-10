@@ -1,5 +1,6 @@
 using Fire3D.Application.Scenarios;
 using Fire3D.Infrastructure.Scenarios;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Xunit;
 
@@ -8,6 +9,28 @@ namespace Fire3D.AuthTests;
 public sealed partial class AuthIntegrationTests
 {
     private string RuntimeTestPassword => (new NpgsqlConnectionStringBuilder(testConnection).Password ?? "").Replace("'", "''");
+    [PostgresFact]
+    public async Task Temporary_refresh_table_cannot_restore_a_revoked_family()
+    {
+        var fixture = await SeedReadyPackage();
+        await WithReadinessRuntime(async runtime =>
+        {
+            await using var db = BuildingContext(runtime);
+            await db.Database.OpenConnectionAsync();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                CREATE TEMP TABLE auth_refresh_tokens (user_id uuid,family_id uuid,consumed_at timestamptz,revoked_at timestamptz,expires_at timestamptz);
+                INSERT INTO auth_refresh_tokens VALUES ({fixture.Owner},{fixture.Owner},NULL,NULL,now()+interval '1 day');
+                """);
+            await using var admin = BuildingContext(testConnection);
+            await admin.Database.ExecuteSqlInterpolatedAsync($"UPDATE public.auth_refresh_tokens SET revoked_at=now() WHERE user_id={fixture.Owner}");
+            var store = new ScenarioReadinessStore(db);
+            var result = await store.ExecuteAsync("Confirm",fixture.Owner,fixture.Owner,fixture.Version,fixture.Revision,
+                new ConfirmTrainingRequest(fixture.Version,fixture.Run),null,default);
+            Assert.Equal(401,result.Error?.Status);
+            Assert.Equal(0L,await ScalarAsync("SELECT count(*) FROM readiness_command_receipts"));
+        });
+    }
+
     [PostgresFact]
     public async Task Readiness_rechecks_family_after_waiting_and_before_receipt_replay()
     {
@@ -42,8 +65,13 @@ public sealed partial class AuthIntegrationTests
     public async Task All_readiness_actions_reject_revoked_and_missing_families_and_legacy_gate_fails_closed()
     {
         await using var db = BuildingContext(testConnection); var store = new ScenarioReadinessStore(db);
+        var expiredFamily = Guid.NewGuid();
+        await ExecuteAsync($"INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at) VALUES(gen_random_uuid(),'{adminId}','{expiredFamily}','expired-readiness-family',now()-interval '1 day',now()-interval '1 minute')");
         foreach (var action in new[]{"Confirm","TechnicalReject","Submit","Approve","Reject"})
+        {
             Assert.Equal(401,(await store.ExecuteAsync(action,adminId,Guid.NewGuid(),Guid.NewGuid(),null,new{},"family-test",default)).Error?.Status);
+            Assert.Equal(401,(await store.ExecuteAsync(action,adminId,expiredFamily,Guid.NewGuid(),null,new{},"expired-family-test",default)).Error?.Status);
+        }
         Assert.Equal(0L,await ScalarAsync("SELECT count(*) FROM readiness_command_receipts"));
         var legacy = (string)(await ScalarAsync($"SELECT scenario_readiness_gate('Submit','{adminId}','{Guid.NewGuid()}',NULL,'{{}}','legacy')::text"))!;
         Assert.Contains("UNAUTHORIZED",legacy);

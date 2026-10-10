@@ -4,29 +4,32 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 namespace Fire3D.API.Controllers;
 [ApiController]
+[ProducesResponseType<ProblemDetails>(401)]
+[ProducesResponseType<ProblemDetails>(403)]
+[ProducesResponseType<ProblemDetails>(404)]
 [ResponseCache(NoStore=true,Location=ResponseCacheLocation.None)]
 public sealed class ScenarioContentReviewsController(IScenarioReadinessStore store):ControllerBase
 {
     /// <summary>Submits immutable scenario content and rubric for PlatformAdmin review. Technical readiness is a separate gate.</summary>
     [Authorize(Roles="OrganizationUser")]
     [HttpPost("/api/scenario-versions/{id:guid}/submit")]
-    [ProducesResponseType(201)]
+    [ProducesResponseType<ContentReviewResponse>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]
-    public Task<IActionResult> Submit(Guid id,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)=>Run("Submit",id,new{},key,ct);
+    public Task<IActionResult> Submit(Guid id,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Run("Submit",id,new{},key,ct);
     /// <summary>Approves only the exact submitted contentHash and rubricHash.</summary>
     [Authorize(Roles="PlatformAdmin")]
     [HttpPost("/api/admin/scenario-versions/{id:guid}/approve")]
-    [ProducesResponseType(200)]
+    [ProducesResponseType<ContentReviewResponse>(200)]
     [ProducesResponseType<ProblemDetails>(409)]
-    public Task<IActionResult> Approve(Guid id,ContentReviewDecisionRequest request,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)=>Decision("Approve",id,request,key,ct);
+    public Task<IActionResult> Approve(Guid id,ContentReviewDecisionRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Decision("Approve",id,request,key,ct);
     /// <summary>Rejects submitted content with a reason. Further changes require a new version and submission.</summary>
     [Authorize(Roles="PlatformAdmin")]
     [HttpPost("/api/admin/scenario-versions/{id:guid}/reject")]
-    [ProducesResponseType(200)]
+    [ProducesResponseType<ContentReviewResponse>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]
-    public Task<IActionResult> Reject(Guid id,ContentReviewDecisionRequest request,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)=>Decision("Reject",id,request,key,ct);
+    public Task<IActionResult> Reject(Guid id,ContentReviewDecisionRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Decision("Reject",id,request,key,ct);
     private Task<IActionResult> Decision(string action,Guid id,ContentReviewDecisionRequest input,string? key,CancellationToken ct)
     {
         var errors=new Dictionary<string,string[]>();

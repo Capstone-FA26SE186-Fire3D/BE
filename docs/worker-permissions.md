@@ -25,3 +25,9 @@ RLS reference reads run as a restricted owner that sees every protecting profile
 and intent. Protected jobs remain queued. Staging/candidate grace is one hour;
 this is not proof an indefinitely stalled storage request has stopped.
 Logs contain job ID/attempt/error type/SQLSTATE, never raw object keys.
+
+Definer entrypoints pin `pg_catalog, public, pg_temp` so temporary tables cannot replace identity or object-reference reads. Pending cleanup also retains organization audit targets even when the audit's organization FK is absent. New unknown or unreadable FK sources fail closed.
+
+# Rollout and validation
+
+See [manual checks](api-worker-contract-manual-test.md). Forward migrations install restricted cleanup entrypoints, restore temporary owner membership/schema CREATE permissions and fail the legacy family-less readiness signature closed. Apply schema before matching workers/API; do not run old direct-delete/queue-write workers after permission revocation. Source Docker tests do not prove the deployed artifact or live provider. Permission SQLSTATE `42501` is blocked work with a 60-second retry, never a successful cleanup. Runtime roles retain no direct money/provenance write permission.

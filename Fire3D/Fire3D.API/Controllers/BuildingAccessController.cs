@@ -9,13 +9,17 @@ namespace Fire3D.API.Controllers;
 public sealed class BuildingAccessController(IBuildingAccessService service):ControllerBase
 {
  [ProducesResponseType(typeof(BuildingAccessResponse),200)][HttpGet("api/buildings/{id:guid}/access")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
+ [Fire3D.API.OpenApi.ResponseHeader("ETag")]
  public Task<IActionResult> Get(Guid id,CancellationToken ct)=>Run("GetAccess",id,new{},null,ct);
  [ProducesResponseType(typeof(BuildingAccessResponse),200)][HttpPatch("api/buildings/{id:guid}/access")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
- public Task<IActionResult> Update(Guid id,BuildingAccessRequest request,[FromHeader(Name="If-Match")]string? match,CancellationToken ct)=>Run("Access",id,request,match,ct);
+ [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+ public Task<IActionResult> Update(Guid id,BuildingAccessRequest request,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? match,CancellationToken ct)=>Run("Access",id,request,match,ct);
  [ProducesResponseType(typeof(BuildingAccessResponse),200)][HttpPost("api/buildings/{id:guid}/participation-code/rotate")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
- public Task<IActionResult> Rotate(Guid id,[FromHeader(Name="If-Match")]string? match,CancellationToken ct)=>Run("Rotate",id,new{},match,ct);
+ [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+ public Task<IActionResult> Rotate(Guid id,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? match,CancellationToken ct)=>Run("Rotate",id,new{},match,ct);
  [ProducesResponseType(typeof(BuildingAccessResponse),200)][HttpDelete("api/buildings/{id:guid}/participation-code")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
- public Task<IActionResult> Revoke(Guid id,[FromHeader(Name="If-Match")]string? match,CancellationToken ct)=>Run("RevokeCode",id,new{},match,ct);
+ [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+ public Task<IActionResult> Revoke(Guid id,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? match,CancellationToken ct)=>Run("RevokeCode",id,new{},match,ct);
  [ProducesResponseType(typeof(BuildingAccessResponse),200)][HttpPost("api/buildings/{id:guid}/participation/verify")][Authorize(Roles="Trainee")]
  public Task<IActionResult> Verify(Guid id,ParticipationCodeRequest request,CancellationToken ct)=>Run("Verify",id,request,null,ct);
  private async Task<IActionResult> Run(string action,Guid id,object input,string? match,CancellationToken ct)

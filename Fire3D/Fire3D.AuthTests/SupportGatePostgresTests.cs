@@ -27,8 +27,8 @@ public sealed partial class AuthIntegrationTests
  }
  private async Task WithSupportRuntime(Func<string,Task> action)
  {
-  var login="support_test_"+Guid.NewGuid().ToString("N");await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS;GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION support_command_gate(text,uuid,uuid,uuid,jsonb,text,bigint) TO {login}");
-  try{await action(new NpgsqlConnectionStringBuilder(testConnection){Username=login,Password="",Pooling=false}.ConnectionString);}finally{await ExecuteAsync($"DROP OWNED BY {login};DROP ROLE {login}");}
+  var login="support_test_"+Guid.NewGuid().ToString("N");await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}';GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION support_command_gate(text,uuid,uuid,uuid,jsonb,text,bigint) TO {login}");
+  try{await action(new NpgsqlConnectionStringBuilder(testConnection){Username=login,Pooling=false}.ConnectionString);}finally{await ExecuteAsync($"DROP OWNED BY {login};DROP ROLE {login}");}
  }
  [PostgresFact]
  public async Task Support_receipts_concurrent_replay_scope_validation_and_audit_rollback()

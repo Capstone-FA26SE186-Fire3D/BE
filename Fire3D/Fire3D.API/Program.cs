@@ -34,7 +34,6 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
     .AddDocumentTransformer<GoogleOnboardingDocumentTransformer>()
     .AddSchemaTransformer<AuthProfileSchemaTransformer>()
     .AddOperationTransformer<AuthOperationTransformer>()
-    .AddOperationTransformer<BillingOperationTransformer>()
     .AddOperationTransformer<AuthoringOperationTransformer>()
     .AddOperationTransformer<SuccessResponseTransformer>());
 builder.Services.AddHealthChecks();

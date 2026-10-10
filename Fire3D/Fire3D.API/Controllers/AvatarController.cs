@@ -23,8 +23,9 @@ public sealed class AvatarController(IAvatarService avatars) : ControllerBase
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
     [ProducesResponseType<ProblemDetails>(503)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<ActionResult<AvatarResponse>> Upload([FromForm] IFormFile? file,
-        [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
+        [FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
     {
         if (!ProfileEtag.TryParse(ifMatch, out var revision)) return EtagProblem(ifMatch);
         if (file is null) return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Send an avatar file in the multipart field named file.",
@@ -50,8 +51,9 @@ public sealed class AvatarController(IAvatarService avatars) : ControllerBase
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<ActionResult<AvatarResponse>> Complete(CompleteAvatarUploadRequest request,
-        [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
+        [FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
     {
         if (!ProfileEtag.TryParse(ifMatch, out var revision)) return EtagProblem(ifMatch);
         var result = await avatars.CompleteUploadAsync(User.GetActorId(), revision, request, ct);
@@ -63,6 +65,7 @@ public sealed class AvatarController(IAvatarService avatars) : ControllerBase
     [HttpGet]
     [ProducesResponseType<AvatarResponse>(200)]
     [ProducesResponseType<ProblemDetails>(404)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<ActionResult<AvatarResponse>> Get(CancellationToken ct)
     {
         var result = await avatars.GetAvatarAsync(User.GetActorId(), ct);
@@ -75,7 +78,8 @@ public sealed class AvatarController(IAvatarService avatars) : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
-    public async Task<IActionResult> Delete([FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+    public async Task<IActionResult> Delete([FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
     {
         if (!ProfileEtag.TryParse(ifMatch, out var revision)) return EtagProblem(ifMatch);
         var result = await avatars.DeleteAvatarAsync(User.GetActorId(), revision, ct);

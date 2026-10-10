@@ -21,16 +21,6 @@ public sealed class SuccessResponseTransformer : IOpenApiOperationTransformer
             var schema=await context.GetOrCreateSchemaAsync(type,null,ct);
             operation.Responses["200"]=new OpenApiResponse{Description="OK",Content=new Dictionary<string,OpenApiMediaType>{["application/json"]=new(){Schema=schema}}};
         }
-        var controller=action.ControllerTypeInfo.AsType();
-        var tagged=controller==typeof(Controllers.BillingController) && type.Name is "PackageResponse" or "DiscountResponse" or "QuotationResponse"
-            || controller==typeof(Controllers.OrganizationProfileController)
-            || controller==typeof(Controllers.AuthController) && action.MethodInfo.Name is "Me" or "UpdateMe";
-        if(tagged)
-            foreach(var response in operation.Responses.Where(x=>int.TryParse(x.Key,out var status)&&status is >=200 and <300).Select(x=>x.Value).OfType<OpenApiResponse>())
-            {
-                response.Headers??=new Dictionary<string,IOpenApiHeader>();
-                response.Headers["ETag"]=new OpenApiHeader{Description="Current quoted representation revision. Send unchanged as If-Match for updates.",Schema=new OpenApiSchema{Type=JsonSchemaType.String}};
-            }
         if(operation.Responses.TryGetValue("429",out var rejected)&&rejected is OpenApiResponse error)
         {
             error.Headers??=new Dictionary<string,IOpenApiHeader>();

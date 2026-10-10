@@ -12,7 +12,7 @@ public sealed class PayosController(IPayosPayments payments) : ControllerBase
     /// <summary>OrganizationUser creates/replays checkout for an Accepted quotation. Server determines amount and tenant.</summary>
     [Authorize(Roles="OrganizationUser")][HttpPost("api/payments/payos/create")]
     [ProducesResponseType(typeof(PayosCheckoutResponse),201)][ProducesResponseType(typeof(PayosCheckoutResponse),200)][ProducesResponseType(typeof(PayosCheckoutResponse),202)]
-    public async Task<IActionResult> Create(CreatePayosRequest request,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)
+    public async Task<IActionResult> Create(CreatePayosRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)
     {var result=await payments.Create(User.GetActorId(),User.GetSessionFamilyId(),request,key,ct);Response.Headers.Location=$"/api/payments/payos/checkouts/{result.Value.CheckoutId}";return StatusCode(result.HttpStatus,result.Value);}
     /// <summary>OrganizationUser reads own tenant checkout; PlatformAdmin may inspect all tenants.</summary>
     [Authorize(Roles="OrganizationUser,PlatformAdmin")][HttpGet("api/payments/payos/checkouts/{id:guid}")][ProducesResponseType(typeof(PayosCheckoutResponse),200)]
@@ -21,7 +21,7 @@ public sealed class PayosController(IPayosPayments payments) : ControllerBase
     /// <remarks>Same key/input returns current checkoutStatus without provider calls or mutation. Terminal replay returns200, including Completed after a late payment; otherwise202. Read checkoutStatus:200 alone does not mean Cancelled. A new cancellation of Paid returns409.</remarks>
     [Authorize(Roles="OrganizationUser")][HttpPost("api/payments/payos/requests/{id:guid}/cancel")]
     [ProducesResponseType(typeof(PayosCheckoutResponse),200)][ProducesResponseType(typeof(PayosCheckoutResponse),202)]
-    public async Task<IActionResult> Cancel(Guid id,[FromHeader(Name="Idempotency-Key")]string? key,CancellationToken ct)
+    public async Task<IActionResult> Cancel(Guid id,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)
     {var result=await payments.Cancel(User.GetActorId(),User.GetSessionFamilyId(),id,key,ct);return StatusCode(result.HttpStatus,result.Value);}
     /// <summary>Anonymous JWT endpoint, authenticated by official PayOS signature. ACK only after durable inbox commit; navigation never marks Paid.</summary>
     [AllowAnonymous][HttpPost("api/payments/payos/webhook")][ProducesResponseType(200)]

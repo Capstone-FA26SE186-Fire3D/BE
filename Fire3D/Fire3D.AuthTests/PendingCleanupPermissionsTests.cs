@@ -6,6 +6,27 @@ namespace Fire3D.AuthTests;
 public sealed class PendingCleanupPermissionsTests
 {
     [BillingPostgresFact]
+    public async Task Organization_audit_target_without_organization_fk_is_preserved()
+    {
+        await using var db = await BillingDatabase.Create(migrationHistory: true);
+        var user = Guid.NewGuid(); var organization = Guid.NewGuid();
+        await db.Sql($$"""
+            INSERT INTO organizations(id,name,slug,registration_owner_user_id) VALUES
+             ('{{organization}}','Audit history','audit-{{organization:N}}','{{user}}');
+            INSERT INTO users(id,email,role,organization_id,registration_expires_at) VALUES
+             ('{{user}}','org-audit@example.test','OrganizationUser','{{organization}}',now()-interval '1 minute');
+            INSERT INTO audit_logs(id,actor_type,action,target_entity,target_id,created_at) VALUES
+             (gen_random_uuid(),'System','Create','Organization','{{organization}}',now());
+            """);
+        await using var context = db.Context();
+        await context.Database.OpenConnectionAsync();
+        await context.Database.ExecuteSqlRawAsync("SET ROLE fire3d_api");
+        Assert.Equal(1, await context.Database.SqlQueryRaw<int>("SELECT public.cleanup_pending_registrations(100) AS \"Value\"").SingleAsync());
+        Assert.Equal(1L, await db.Scalar($"SELECT count(*) FROM organizations WHERE id='{organization}'"));
+        Assert.Equal(1L, await db.Scalar($"SELECT count(*) FROM audit_logs WHERE target_id='{organization}'"));
+    }
+
+    [BillingPostgresFact]
     public async Task Actual_migrations_allow_bounded_cleanup_without_runtime_delete_and_preserve_history()
     {
         await using var db = await BillingDatabase.Create(migrationHistory: true);

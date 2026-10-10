@@ -10,7 +10,7 @@ END $$;
 GRANT SELECT ON auth_refresh_tokens TO fet3d_ifc_upload_owner;
 CREATE POLICY readiness_family_read ON auth_refresh_tokens FOR SELECT TO fet3d_ifc_upload_owner USING(true);
 CREATE FUNCTION scenario_readiness_gate(p_action text,p_actor uuid,p_family uuid,p_version uuid,p_revision uuid,p_input jsonb,p_key text) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE actor users;v scenario_versions;b buildings;run validation_runs;art revision_artifacts;review scenario_content_reviews;receipt readiness_command_receipts;
  h text:=fet3d_jsonb_payload_hash(jsonb_build_object('version',p_version,'revision',p_revision,'input',p_input));k text:=p_key;result jsonb;new_id uuid;existing revision_reviews;
 BEGIN
@@ -79,7 +79,7 @@ BEGIN
 END $$;
 -- Every legacy caller fails closed, including a login with an old explicit grant.
 CREATE OR REPLACE FUNCTION scenario_readiness_gate(p_action text,p_actor uuid,p_version uuid,p_revision uuid,p_input jsonb,p_key text)
-RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path=pg_catalog,public AS $$ SELECT jsonb_build_object('code','UNAUTHORIZED','status',401) $$;
+RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path=pg_catalog,public,pg_temp AS $$ SELECT jsonb_build_object('code','UNAUTHORIZED','status',401) $$;
 ALTER FUNCTION scenario_readiness_gate(text,uuid,uuid,uuid,uuid,jsonb,text) OWNER TO fet3d_ifc_upload_owner;
 REVOKE ALL ON FUNCTION scenario_readiness_gate(text,uuid,uuid,uuid,uuid,jsonb,text),scenario_readiness_gate(text,uuid,uuid,uuid,jsonb,text) FROM PUBLIC;
 DO $$ DECLARE r text;s readiness_family_owner_state;BEGIN

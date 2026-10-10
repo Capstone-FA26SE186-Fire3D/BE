@@ -63,6 +63,7 @@ public class ScenariosController(ISender sender) : ControllerBase
 
     /// <summary>Loads a draft state and returns its version as an ETag for the next update.</summary>
     [HttpGet("/api/scenario-drafts/{draftId:guid}")]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<IActionResult> GetScenarioDraft(Guid draftId, CancellationToken ct)
     {
         var actor = User.GetActorId();
@@ -109,7 +110,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> CreateScenario([FromBody] CreateScenarioRequest request, CancellationToken ct, [FromHeader(Name = "Idempotency-Key")] string? key = null)
+    public async Task<IActionResult> CreateScenario([FromBody] CreateScenarioRequest request, CancellationToken ct, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key = null)
     {
         var actor = User.GetActorId();
 
@@ -128,7 +129,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> CreateScenarioDraft(Guid scenarioId, [FromBody] CreateScenarioDraftRequest request, CancellationToken ct, [FromHeader(Name = "Idempotency-Key")] string? key = null)
+    public async Task<IActionResult> CreateScenarioDraft(Guid scenarioId, [FromBody] CreateScenarioDraftRequest request, CancellationToken ct, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key = null)
     {
         var actor = User.GetActorId();
 
@@ -150,7 +151,8 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
-    public async Task<IActionResult> UpdateScenarioDraft(Guid draftId, [FromBody] Fire3D.Application.Scenarios.Dto.ScenarioDraftStateDto state, [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+    public async Task<IActionResult> UpdateScenarioDraft(Guid draftId, [FromBody] Fire3D.Application.Scenarios.Dto.ScenarioDraftStateDto state, [FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
     {
         var actor = User.GetActorId();
 
@@ -176,7 +178,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> SnapshotScenarioDraft(Guid draftId, CancellationToken ct, [FromHeader(Name = "If-Match")] string? ifMatch = null, [FromHeader(Name = "Idempotency-Key")] string? key = null)
+    public async Task<IActionResult> SnapshotScenarioDraft(Guid draftId, CancellationToken ct, [FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch = null, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key = null)
     {
         var actor = User.GetActorId();
 
@@ -198,7 +200,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<Fire3D.Application.Scenarios.PlaytestPreparation>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> PreparePlaytestSession(Guid scenarioId, [FromQuery] Guid? buildingId, [FromBody] Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestRequest request, [FromHeader(Name="Idempotency-Key")] string? key, CancellationToken ct)
+    public async Task<IActionResult> PreparePlaytestSession(Guid scenarioId, [FromQuery] Guid? buildingId, [FromBody] Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestRequest request, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();
 
@@ -220,7 +222,7 @@ public class ScenariosController(ISender sender) : ControllerBase
     [ProducesResponseType<Fire3D.Application.Scenarios.PlaytestLaunch>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> StartPlaytestSession(Guid playtestId, [FromBody] Fire3D.Application.Scenarios.StartPlaytestRequest request, [FromHeader(Name="Idempotency-Key")] string? key, CancellationToken ct)
+    public async Task<IActionResult> StartPlaytestSession(Guid playtestId, [FromBody] Fire3D.Application.Scenarios.StartPlaytestRequest request, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();
 

@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using Fire3D.API.Extensions;
 using Fire3D.Application.Buildings;
@@ -124,13 +124,13 @@ public sealed partial class AuthIntegrationTests
     private async Task WithBuildingRuntime(Func<string,Task> run)
     {
         var login = "building_test_" + Guid.NewGuid().ToString("N");
-        await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS; GRANT USAGE ON SCHEMA public TO {login}; GRANT SELECT ON users,organizations,buildings,building_locations,building_contacts TO {login}; GRANT INSERT,UPDATE ON buildings,building_locations,building_contacts TO {login}; GRANT INSERT ON audit_logs TO {login};");
+        await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}'; GRANT USAGE ON SCHEMA public TO {login}; GRANT SELECT ON users,organizations,buildings,building_locations,building_contacts TO {login}; GRANT INSERT,UPDATE ON buildings,building_locations,building_contacts TO {login}; GRANT INSERT ON audit_logs TO {login};");
         foreach (var table in new[] { "users", "organizations", "buildings", "building_locations", "building_contacts", "audit_logs" })
             await ExecuteAsync($"CREATE POLICY {login} ON {table} TO {login} USING(true) WITH CHECK(true)");
         try
         {
             Assert.Equal(false, await ScalarAsync($"SELECT has_table_privilege('{login}','audit_logs','SELECT')"));
-            await run(new NpgsqlConnectionStringBuilder(testConnection) { Username = login, Password = "", Pooling = false }.ConnectionString);
+            await run(new NpgsqlConnectionStringBuilder(testConnection) { Username = login, Pooling = false }.ConnectionString);
         }
         finally
         {

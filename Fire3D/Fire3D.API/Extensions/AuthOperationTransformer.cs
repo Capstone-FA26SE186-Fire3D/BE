@@ -14,21 +14,6 @@ public sealed class AuthOperationTransformer : IOpenApiOperationTransformer
         if (controller != typeof(AuthController) && controller != typeof(AvatarController) && controller != typeof(OrganizationProfileController))
             return Task.CompletedTask;
 
-        foreach (var parameter in operation.Parameters ?? [])
-            if (parameter is OpenApiParameter header && header.In == ParameterLocation.Header)
-            {
-                if (header.Name == "If-Match")
-                {
-                    header.Required = true;
-                    header.Description = "Quoted ETag from the relevant GET profile. Missing: 428; malformed: 400; stale: 412. Complete replay uses the original ETag.";
-                }
-                else if (header.Name == "X-Installation-Key")
-                {
-                    header.Required = true;
-                    header.Description = "Client-generated 32 random bytes encoded as base64url. Keep with the installation UUID in secure storage; UUID alone is not ownership proof.";
-                }
-            }
-
         if (controller == typeof(AvatarController) && action.MethodInfo.Name == nameof(AvatarController.Upload))
         {
             operation.RequestBody = new OpenApiRequestBody

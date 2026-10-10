@@ -65,9 +65,12 @@ public sealed class AnnotationStore(Fire3DDbContext db) : IAnnotationStore
         if (current != expectedVersion)
             return AuthResult<AnnotationSnapshot>.Fail("PRECONDITION_FAILED","Annotations changed. GET again before saving.",412);
         var anchors = data.Items.Select(x => x.IfcGlobalId).Distinct().ToArray();
-        var found = Convert.ToInt32(await Scalar("SELECT count(DISTINCT ifc_global_id) FROM public.bim_facts WHERE revision_id=@revision AND ifc_global_id=ANY(@anchors)",
-            ct,("revision",revisionId),("anchors",anchors)));
-        if (found != anchors.Length)
+        // Use the accepted current Geometry provenance gate. bim_facts is not
+        // present in the production migration history and must not be fabricated.
+        var issues = (string)(await Scalar("SELECT public.scenario_reference_issues(@revision,jsonb_build_object('objectAnchors',to_jsonb(@anchors)))::text",
+            ct,("revision",revisionId),("anchors",anchors)))!;
+        using var anchorIssues = JsonDocument.Parse(issues);
+        if (anchorIssues.RootElement.GetArrayLength() != 0)
             return AuthResult<AnnotationSnapshot>.Fail("INVALID_ANCHOR","Every IFC anchor must exist in this revision.",400);
         var id = Guid.NewGuid();
         await Scalar("""
