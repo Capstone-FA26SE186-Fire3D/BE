@@ -14,6 +14,17 @@ Organization AI pools prepaid Building/package and paid top-up grants. Top-up ha
 
 Provision replay returns a previously committed payment/line resource even after expiry; it must not grant twice or reject replay only because the period is no longer Active. See [current rollout and legacy compatibility](billing-v7-rollout.md), BILLING-02, CAPACITY-01 and AI-01 in the [implementation checklist](api-implementation-checklist.md). Admin configures prices, capacity, quota amount and unit; no business values are seeded. Upgrade price is a one-time fee fixed by Admin at Issue; no prorata formula is derived.
 
+## Quotation cancellation (#68)
+
+`POST /api/billing/quotations/{id}/cancel` (OrganizationUser, own tenant) and `POST /api/admin/quotations/{id}/cancel` (PlatformAdmin) take `If-Match`, `Idempotency-Key` and `{reason}` (1-1000 characters, recorded in the audit row).
+
+- Draft, Issued and Accepted can be cancelled while no payment is valid and no checkout is open. `Expired` keeps its status (`409 QUOTATION_EXPIRED`); an already `Cancelled` quotation returns its current state without another audit row.
+- A checkout in `Creating`, `Ready` or `NeedsReconcile` may still have a live provider link: `409 QUOTATION_CHECKOUT_UNRESOLVED` with `checkoutIds`. Cancel the payment request (`POST /api/payments/payos/requests/{id}/cancel`) or reconcile first; only a provider-confirmed `Cancelled`/`Expired` checkout counts as closed, never a local expiry time. The cancel API never calls PayOS itself.
+- A `Paid` request or an `Applied` transaction gives `409 QUOTATION_ALREADY_PAID`; there is no automatic refund.
+- Lock order matches issue/accept/checkout (identity, actor, quotation row), so a cancel and a checkout creation are serialized: either the cancel sees the open checkout, or the checkout sees a non-Accepted quotation and creates no link.
+- Same key and input replay the stored response after the scope check, even with the now stale ETag; the same key with another input is `409 IDEMPOTENCY_KEY_CONFLICT`.
+- Money that arrives after cancellation is still recorded with its provenance (`Applied`, request `Paid`), but its provisioning records stay `NeedsReconcile` with `PAYOS_QUOTATION_CANCELLED`: no entitlement or quota is activated and the quotation is not reopened. Migration: `20261012110000_AddBillingQuotationCancel`.
+
 ## Historical foundation and provider evidence
 
 The sections below retain earlier migration/provider evidence and legacy contracts. Their one-month package examples are historical and are not valid for new v7 sales. Use the [current Swagger test guide](publish-billing-v7-manual-test.md) for new packages, fixed service periods, publish and reporting.

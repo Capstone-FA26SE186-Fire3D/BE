@@ -115,6 +115,19 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<ActionResult<QuotationResponse>> Accept(Guid id,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? ifMatch,CancellationToken ct)
     {var response=await billing.AcceptQuotation(Actor,User.GetSessionFamilyId(),id,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
+    /// <summary>OrganizationUser cancels a Draft/Issued/Accepted quotation of their tenant with If-Match, Idempotency-Key and a reason. 409 QUOTATION_ALREADY_PAID when a payment is Paid/Applied; 409 QUOTATION_CHECKOUT_UNRESOLVED (with checkoutIds) while a checkout is Creating/Ready/NeedsReconcile; an Expired quotation keeps its status; an already Cancelled quotation returns its current state. Same key and input replay the result.</summary>
+    [HttpPost("api/billing/quotations/{id:guid}/cancel")]
+    [ProducesResponseType<QuotationResponse>(200)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+    public async Task<ActionResult<QuotationResponse>> Cancel(Guid id,CancelQuotationRequest request,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? ifMatch,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)
+    {var response=await billing.CancelQuotation(Actor,User.GetSessionFamilyId(),id,request,ifMatch,key,false,ct);ETag(id,response.Revision);return Ok(response);}
+    /// <summary>PlatformAdmin cancels any quotation under the same payment and checkout gates as the organization route.</summary>
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
+    [HttpPost("api/admin/quotations/{id:guid}/cancel")]
+    [ProducesResponseType<QuotationResponse>(200)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+    public async Task<ActionResult<QuotationResponse>> AdminCancel(Guid id,CancelQuotationRequest request,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? ifMatch,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)
+    {var response=await billing.CancelQuotation(Actor,User.GetSessionFamilyId(),id,request,ifMatch,key,true,ct);ETag(id,response.Revision);return Ok(response);}
     /// <summary>OrganizationUser submits a contact request with Idempotency-Key. This does not create a payment or entitlement.</summary>
     [HttpPost("api/billing/enterprise-quote-requests")]
     [ProducesResponseType(typeof(EnterpriseQuoteResponse),201)]

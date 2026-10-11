@@ -15,6 +15,8 @@ public sealed record QuotationItemRequest(Guid BuildingId,Guid ServicePackageId,
 /// <summary>Purpose BuildingService (default, Building lines) or AIQuotaTopUp (no Building lines, optional requested units).</summary>
 public sealed record QuotationWriteRequest(IReadOnlyList<QuotationItemRequest>? Items,string? Purpose=null,TopUpDraftRequest? TopUp=null);
 public sealed record TopUpDraftRequest(int? RequestedQuotaUnits=null);
+/// <summary>Reason 1-1000 characters, recorded in the audit trail.</summary>
+public sealed record CancelQuotationRequest(string? Reason);
 public sealed record IssueQuotationRequest(decimal? TaxAmount,string? Terms,
     [property:JsonConverter(typeof(BillingTimestampConverter))] DateTimeOffset? ValidUntil,
     IReadOnlyList<QuotationPeriodRequest>? Items=null,IssueTopUpRequest? TopUp=null);
@@ -78,6 +80,7 @@ public interface IBillingService
     Task<BillingPage<QuotationResponse>> ListQuotations(Guid actor,int page,int pageSize,CancellationToken ct);
     Task<QuotationResponse> IssueQuotation(Guid actor,Guid family,Guid id,IssueQuotationRequest request,string? ifMatch,CancellationToken ct);
     Task<QuotationResponse> AcceptQuotation(Guid actor,Guid family,Guid id,string? ifMatch,CancellationToken ct);
+    Task<QuotationResponse> CancelQuotation(Guid actor,Guid family,Guid id,CancelQuotationRequest request,string? ifMatch,string? idempotencyKey,bool admin,CancellationToken ct);
     Task<EnterpriseQuoteResponse> CreateEnterpriseRequest(Guid actor,Guid family,EnterpriseQuoteRequestBody request,string? key,CancellationToken ct);
     Task<BillingPage<EnterpriseQuoteResponse>> ListEnterpriseRequests(Guid actor,int page,int pageSize,CancellationToken ct);
     Task<EnterpriseQuoteResponse> GetEnterpriseRequest(Guid actor,Guid id,CancellationToken ct)=>throw new NotSupportedException();
@@ -94,6 +97,8 @@ public sealed class BillingException(int status,string code,string message,Dicti
     public int Status { get; }=status;
     public string Code { get; }=code;
     public Dictionary<string,string[]>? Errors { get; }=errors;
+    /// <summary>Extra ProblemDetails members (for example checkoutIds of an unresolved checkout).</summary>
+    public IReadOnlyDictionary<string,object?>? Extensions { get; init; }
 }
 
 public static class BillingETag

@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-221 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+223 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -59,6 +59,7 @@
 | GET | /api/admin/organizations/{organizationId}/ai-usage | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/organizations/{organizationId}/analytics/operations | Bearer | None | 200, 400, 401, 403, 404 |
 | POST | /api/admin/payments/payos/checkouts/{id}/reconcile | Bearer | None | 202, 400, 401, 403, 404, 409, 503 |
+| POST | /api/admin/quotations/{id}/cancel | Bearer | If-Match, Idempotency-Key | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/admin/quotations/{id}/issue | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/scenario-reviews | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/admin/scenario-reviews/{reviewId} | Bearer | None | 200, 401, 403, 404 |
@@ -102,6 +103,7 @@
 | GET | /api/billing/quotations/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | PATCH | /api/billing/quotations/{id} | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/billing/quotations/{id}/accept | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
+| POST | /api/billing/quotations/{id}/cancel | Bearer | If-Match, Idempotency-Key | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/billing/service-packages | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/billing/service-packages/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/buildings | Bearer | None | 200 |

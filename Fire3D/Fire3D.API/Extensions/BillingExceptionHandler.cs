@@ -13,6 +13,7 @@ public sealed class BillingExceptionHandler(IProblemDetailsService problems) : I
         var details=new Microsoft.AspNetCore.Mvc.ProblemDetails{Status=error.Status,Title=error.Message};
         details.Extensions["code"]=error.Code;details.Extensions["traceId"]=Activity.Current?.Id??context.TraceIdentifier;
         if(error.Errors is not null)details.Extensions["errors"]=error.Errors;
+        if(error.Extensions is not null)foreach(var (name,value) in error.Extensions)details.Extensions[name]=value;
         // Swagger can send Accept: text/plain. Preserve the error contract even
         // when none of the registered problem writers accepts that media type.
         if(!await problems.TryWriteAsync(new ProblemDetailsContext{HttpContext=context,ProblemDetails=details}))
