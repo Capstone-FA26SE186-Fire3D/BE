@@ -25,6 +25,18 @@ Provision replay returns a previously committed payment/line resource even after
 - Same key and input replay the stored response after the scope check, even with the now stale ETag; the same key with another input is `409 IDEMPOTENCY_KEY_CONFLICT`.
 - Money that arrives after cancellation is still recorded with its provenance (`Applied`, request `Paid`), but its provisioning records stay `NeedsReconcile` with `PAYOS_QUOTATION_CANCELLED`: no entitlement or quota is activated and the quotation is not reopened. Migration: `20261012110000_AddBillingQuotationCancel`.
 
+## Draft tax and pricing status (#68)
+
+Quotation responses carry `pricingStatus`, nullable `taxAmount` and `issuedAt`:
+
+| pricingStatus | When | taxAmount |
+|---|---|---|
+| `Estimated` | Draft, or a v7 quotation cancelled before Issue | `null`; `totalAmount` is an estimate before tax and FE labels it as such |
+| `Final` | Issued, Accepted, Expired, or cancelled after Issue (`issuedAt` set) | number fixed by Admin at Issue, possibly `0` |
+| `LegacyUnknown` | legacy non-Draft record without proof that the price was fixed | `null`, never an assumed approved `0` |
+
+Stored ledger values are unchanged. Receipts written before this field existed are converted from their own snapshot (a replayed Draft stays `Estimated`), never from the current quotation. FE must handle a nullable `taxAmount` in the same release.
+
 ## Payment and checkout lists (#68)
 
 - `GET /api/admin/payments/payos/checkouts` (PlatformAdmin): every checkout operation, including ones whose provider response was lost or that failed before a payment request was bound.

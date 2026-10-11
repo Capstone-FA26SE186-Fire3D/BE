@@ -38,6 +38,8 @@ Trong Azure App Service, đặt các biến trên tại Environment variables / 
 
 ReturnUrl/CancelUrl có thể dùng host FE nếu FE thực sự phục vụ các trang tương ứng; hoặc dùng hai trang test trên BE `/billing/payment-return/` và `/billing/payment-cancel/`. Webhook vẫn phải là endpoint BE HTTPS công khai `/api/payments/payos/webhook`; return/cancel không ghi nhận tiền. Kiểm tra URL hiệu lực sau khi biến môi trường ghi đè appsettings.
 
+Trỏ về trang FE (#68): `PayOS__ReturnUrl` và `PayOS__CancelUrl` có thể là trang HTTPS của FE, ví dụ `https://<host-FE>/workspace/billing/return` và `https://<host-FE>/workspace/billing/cancel`; URL cụ thể do deployment cấu hình, BE không seed giá trị. Client không gửi được callback URL khi tạo checkout (trường lạ trong body bị bỏ qua). Khi người dùng quay lại, FE gọi `GET /api/payments/payos/checkouts/{id}` hoặc `GET /api/billing/quotations/{id}/checkouts` để đọc trạng thái; query string như `status=PAID` không ghi gì vào database. Mỗi checkout giữ snapshot return/cancel URL lúc tạo; đổi cấu hình chỉ ảnh hưởng link mới. Bước này không thay đổi cấu hình Azure.
+
 ## Kiểm tra Azure ngày 2026-10-03
 
 Host kiểm tra: `https://fire3d-api-h3a5h2fgdvajfbcz.eastasia-01.azurewebsites.net`. `/health/version` tự báo `d785937e5948f31486df66740a1f31ccd9ce25a5`; chưa đối chiếu artifact/commit deployment qua Azure.

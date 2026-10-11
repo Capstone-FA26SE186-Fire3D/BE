@@ -25,7 +25,7 @@ public sealed partial class BillingService
         // Scope is checked before any replay: another tenant gets 404, never a stored response.
         var quote=await Quote(identity,id,true,ct);
         var receipt=await Receipt(identity,CancelOperation,key,hash,ct);
-        if(receipt is not null){var replay=Replay<QuotationResponse>(receipt);await tx.CommitAsync(ct);return replay;}
+        if(receipt is not null){var replay=ReplayQuote(receipt);await tx.CommitAsync(ct);return replay;}
         if(quote.Status==QuotationStatus.Cancelled){var current=await QuoteView(quote,ct);await tx.CommitAsync(ct);return current;}
         BillingETag.Require(ifMatch,id,quote.Revision);
         if(quote.Status==QuotationStatus.Expired)throw new BillingException(409,"QUOTATION_EXPIRED","An expired quotation keeps its status.");

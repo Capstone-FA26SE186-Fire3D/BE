@@ -144,7 +144,7 @@ public sealed partial class BillingService
         var write=ValidateQuotation(new QuotationWriteRequest(request.Items));var hash=Hash(new{id,request=write});var stableKey=Key(key);
         await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await QuotationActor(actor,family,true,ct);
         var previous=await Receipt(identity,"CreateEnterpriseQuotation",stableKey,hash,ct);
-        if(previous is not null)return Replay<QuotationResponse>(previous);
+        if(previous is not null)return ReplayQuote(previous);
         await Lock("fet3d:billing:enterprise:"+id,false,ct);
         var item=await db.Set<EnterpriseQuoteRequest>().SingleOrDefaultAsync(x=>x.Id==id,ct)??throw Missing();
         await Scope(identity,item.OrganizationId,ct);

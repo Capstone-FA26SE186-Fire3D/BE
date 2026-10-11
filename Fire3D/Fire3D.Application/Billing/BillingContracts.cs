@@ -36,10 +36,15 @@ public sealed record QuotationLineResponse(Guid Id,Guid BuildingId,Guid ServiceP
     int CommercialVersion=1,long? PackageRevision=null,int? LearnerLimit=null,int? AiQuotaUnits=null,Guid? AiPolicyVersionId=null,string? AiQuotaUnit=null,DateTime? StartsAt=null,DateTime? EndsAt=null,
     string PricingBasis="Monthly",Guid? UpgradeEntitlementId=null,int? UpgradeBaseCapacityRevision=null,int? UpgradePreviousLearnerLimit=null);
 public sealed record TopUpLineResponse(Guid Id,int? RequestedQuotaUnits,Guid? PolicyVersionId,string? QuotaUnit,int? QuotaUnits,decimal? Amount,DateTime? StartsAt,DateTime? EndsAt);
+/// <summary>
+/// PricingStatus: Estimated (Draft, or cancelled before Issue: TaxAmount is null and TotalAmount is an estimate before tax),
+/// Final (Admin fixed the tax at Issue; TaxAmount may be 0), LegacyUnknown (legacy record without proof that the price was fixed;
+/// TaxAmount is null rather than an assumed approved 0). IssuedAt marks when the price was fixed.
+/// </summary>
 public sealed record QuotationResponse(Guid Id,Guid OrganizationId,string QuotationNumber,string Status,long Revision,string Currency,
-    decimal SubtotalAmount,decimal DiscountAmount,decimal TaxAmount,decimal TotalAmount,Guid? DiscountRuleId,
+    decimal SubtotalAmount,decimal DiscountAmount,decimal? TaxAmount,decimal TotalAmount,Guid? DiscountRuleId,
     string? Terms,DateTime ValidUntil,DateTime? AcceptedAt,IReadOnlyList<QuotationLineResponse> Items,int CommercialVersion=1,
-    string Purpose="BuildingService",TopUpLineResponse? TopUp=null);
+    string Purpose="BuildingService",TopUpLineResponse? TopUp=null,string? PricingStatus=null,DateTime? IssuedAt=null);
 public sealed record BillingPage<T>(IReadOnlyList<T> Items,int Total,int Page,int PageSize);
 public sealed record EnterpriseQuoteRequestBody(int RequestedBuildingCount,int? RequestedDurationMonths,string ContactName,string ContactEmail,string? ContactPhone=null,string? Notes=null);
 public sealed record EnterpriseQuoteResponse(Guid Id,Guid OrganizationId,int RequestedBuildingCount,int? RequestedDurationMonths,
