@@ -151,8 +151,6 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<ActionResult<EnterpriseQuoteResponse>> AdminEnterpriseStatus(Guid id,EnterpriseStatusRequest request,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? ifMatch,CancellationToken ct)
     {var response=await billing.UpdateEnterpriseStatus(Actor,User.GetSessionFamilyId(),id,request,ifMatch,ct);ETag(id,response.Revision);return Ok(response);}
-    /// <summary>Admin drafts a Building quotation for the requesting OrganizationUser and marks the request Quoted. Idempotency-Key required; no service is granted.</summary>
-    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     /// <summary>Admin appends a reply visible to the requesting organization. Idempotency-Key required; Closed requests reject new replies.</summary>
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     [HttpPost("api/admin/enterprise-quote-requests/{id:guid}/responses")]
@@ -178,6 +176,8 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     [HttpGet("api/billing/enterprise-quote-requests/{id:guid}/responses")]
     public async Task<ActionResult<BillingPage<EnterpriseResponseItem>>> EnterpriseResponses(Guid id,[FromQuery]int page=1,[FromQuery]int pageSize=20,CancellationToken ct=default)
         =>Ok(await billing.ListEnterpriseResponses(Actor,id,page,pageSize,ct));
+    /// <summary>Admin drafts a Building quotation for the requesting OrganizationUser and marks the request Quoted. Idempotency-Key required; no service is granted.</summary>
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     [HttpPost("api/admin/enterprise-quote-requests/{id:guid}/quotations")]
     [ProducesResponseType<QuotationResponse>(201)]
     [Fire3D.API.OpenApi.ResponseHeader("ETag")]
