@@ -10,7 +10,16 @@ public sealed class AuditQueries(Fire3DDbContext db) : IAuditQueries
     private async Task<bool> Authorized(Guid actor,Guid family,CancellationToken ct)=>
         await db.Users.AnyAsync(x=>x.Id==actor && x.Role==UserRole.PlatformAdmin && x.IsActive && x.DeletedAt==null,ct)
         && await db.Set<RefreshToken>().AnyAsync(x=>x.UserId==actor && x.FamilyId==family && x.ConsumedAt==null && x.RevokedAt==null && x.ExpiresAt>DateTime.UtcNow,ct);
-    private static AuditMetadata Metadata(AuditLog x)=>new(x.Id,x.UserId,x.OrganizationId,x.Action.ToString(),x.TargetEntity,x.TargetId,x.CorrelationId,x.CreatedAt);
+    // Labels are resolved at read time and never written back to audit history; a System actor is labelled "System", never a person.
+    private sealed record Labeled(AuditLog Log,AuditMetadata Meta);
+    private IQueryable<Labeled> WithLabels(IQueryable<AuditLog> logs)=>
+        from x in logs
+        join u in db.Users.AsNoTracking().Where(u=>u.DeletedAt==null) on x.UserId equals u.Id into users
+        from u in users.DefaultIfEmpty()
+        join o in db.Organizations.AsNoTracking().Where(o=>o.DeletedAt==null) on x.OrganizationId equals o.Id into orgs
+        from o in orgs.DefaultIfEmpty()
+        select new Labeled(x,new AuditMetadata(x.Id,x.UserId,x.OrganizationId,x.Action.ToString(),x.TargetEntity,x.TargetId,x.CorrelationId,x.CreatedAt,
+            x.ActorType=="System"?"System":u==null?null:(u.FullName!=null && u.FullName.Trim()!=""?u.FullName:u.Username),o==null?null:o.Name));
     public async Task<AuthResult<AuditPage>> List(Guid actor,Guid family,AuditFilters f,CancellationToken ct)
     {
         if(!await Authorized(actor,family,ct))return AuthResult<AuditPage>.Fail("FORBIDDEN","Only an active PlatformAdmin session can read audit.",403);
@@ -27,14 +36,15 @@ public sealed class AuditQueries(Fire3DDbContext db) : IAuditQueries
         if(f.TargetId.HasValue)query=query.Where(x=>x.TargetId==f.TargetId);
         if(f.CorrelationId.HasValue)query=query.Where(x=>x.CorrelationId==f.CorrelationId);
         var total=await query.CountAsync(ct);
-        var rows=await query.OrderByDescending(x=>x.CreatedAt).ThenByDescending(x=>x.Id).Skip((f.Page-1)*f.PageSize).Take(f.PageSize)
-            .Select(x=>new AuditMetadata(x.Id,x.UserId,x.OrganizationId,x.Action.ToString(),x.TargetEntity,x.TargetId,x.CorrelationId,x.CreatedAt)).ToListAsync(ct);
-        return AuthResult<AuditPage>.Ok(new(rows,total,f.Page,f.PageSize,range.From,range.To));
+        var page=query.OrderByDescending(x=>x.CreatedAt).ThenByDescending(x=>x.Id).Skip((f.Page-1)*f.PageSize).Take(f.PageSize);
+        var rows=await WithLabels(page).Select(x=>x.Meta).ToListAsync(ct);
+        return AuthResult<AuditPage>.Ok(new(rows.OrderByDescending(x=>x.CreatedAt).ThenByDescending(x=>x.Id).ToList(),total,f.Page,f.PageSize,range.From,range.To));
     }
     public async Task<AuthResult<AuditDetail>> Get(Guid actor,Guid family,Guid id,CancellationToken ct)
     {
         if(!await Authorized(actor,family,ct))return AuthResult<AuditDetail>.Fail("FORBIDDEN","Only an active PlatformAdmin session can read audit.",403);
-        var item=await db.AuditLogs.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==id,ct);
-        return item is null?AuthResult<AuditDetail>.Fail("NOT_FOUND","The audit record was not found.",404):AuthResult<AuditDetail>.Ok(new(Metadata(item),SafeAuditChanges.Read(item)));
+        var item=await WithLabels(db.AuditLogs.AsNoTracking().Where(x=>x.Id==id)).SingleOrDefaultAsync(ct);
+        return item is null?AuthResult<AuditDetail>.Fail("NOT_FOUND","The audit record was not found.",404)
+            :AuthResult<AuditDetail>.Ok(new(item.Meta,SafeAuditChanges.Read(item.Log),SafeAuditChanges.Reason(item.Log)));
     }
 }

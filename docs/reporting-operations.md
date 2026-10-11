@@ -4,6 +4,10 @@ Audit routes require an active PlatformAdmin session. List supports actorId, org
 
 Detail preserves metadata fields at the root and adds `changes`. Changes are selected by recognized entity/action and safe scalar fields, including status/publication, revisions, service periods, package/amount/capacity/quota and assignment. Unknown legacy records return empty changes. Raw old/new JSON, email/phone, password/hash/token, credentials, signed URLs, IP/user agent and ticket content are excluded. No historical audit is invented and no mutation API is added.
 
+List items and detail add `actorDisplayName` (current `full_name`, else username; `"System"` for system actors; null when the account no longer exists) and `organizationName` (null when the organization is deleted). Names are resolved at read time and never written back into audit history.
+
+Detail adds `reason` (nullable). It is returned only from support writers that mark `supportAuditContract: 1`: `PATCH /api/admin/support/tickets/{id}` and `PATCH /api/admin/feedback/{id}/status` accept an optional `reason` (1-1000 characters, not only whitespace), stored in the same transaction as the mutation. Legacy or unmarked JSON yields `reason: null`; other fields named `reason` are never read. Support status changes now record before/after of status, priority, assignedTo, revision and resolvedAt (feedback: status, revision, reviewedBy, reviewedAt). Messages are audited without their text. Migration: `20261012100000_AddSupportAuditReason`.
+
 Manual check: login as Admin, list `/api/admin/audit-logs?targetEntity=Release&action=Publish`, open one ID and inspect safe status changes. A non-admin must receive 403. Missing timezone, numeric action or pageSize 101 must return 400.
 
 ## Operations analytics contract

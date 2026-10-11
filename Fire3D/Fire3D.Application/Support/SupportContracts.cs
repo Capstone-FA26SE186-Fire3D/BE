@@ -5,8 +5,9 @@ namespace Fire3D.Application.Support;
 public sealed record CreateFeedbackRequest(string Category,string Message,int? Rating=null,Guid? SessionId=null);
 public sealed record CreateTicketRequest(string Subject,string Description,Guid? FeedbackId=null,Guid? SessionId=null);
 public sealed record MessageRequest(string Message);
-public sealed record AdminTicketUpdateRequest(SupportTicketStatus Status,SupportPriority Priority,Guid? AssignedTo);
-public sealed record AdminFeedbackUpdateRequest(FeedbackStatus Status);
+/// <summary>Reason is optional (1-1000 characters, not only whitespace) and is recorded only in the audit trail.</summary>
+public sealed record AdminTicketUpdateRequest(SupportTicketStatus Status,SupportPriority Priority,Guid? AssignedTo,string? Reason=null);
+public sealed record AdminFeedbackUpdateRequest(FeedbackStatus Status,string? Reason=null);
 public sealed record SupportQuery(int Page=1,int PageSize=20,string? Status=null,string? Priority=null,Guid? AssignedTo=null,Guid? OrganizationId=null);
 public sealed record SupportPage<T>(IReadOnlyList<T> Items,long Total,int Page,int PageSize);
 /// <summary>Current display label of a person. Email is present only in PlatformAdmin responses; Available=false when the account is missing or deleted (the ID is kept).</summary>
