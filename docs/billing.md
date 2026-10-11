@@ -25,6 +25,16 @@ Provision replay returns a previously committed payment/line resource even after
 - Same key and input replay the stored response after the scope check, even with the now stale ETag; the same key with another input is `409 IDEMPOTENCY_KEY_CONFLICT`.
 - Money that arrives after cancellation is still recorded with its provenance (`Applied`, request `Paid`), but its provisioning records stay `NeedsReconcile` with `PAYOS_QUOTATION_CANCELLED`: no entitlement or quota is activated and the quotation is not reopened. Migration: `20261012110000_AddBillingQuotationCancel`.
 
+## Payment and checkout lists (#68)
+
+- `GET /api/admin/payments/payos/checkouts` (PlatformAdmin): every checkout operation, including ones whose provider response was lost or that failed before a payment request was bound.
+- `GET /api/admin/payments/payos/requests` (PlatformAdmin): every payment request with its checkout.
+- `GET /api/billing/quotations/{id}/checkouts` (owning OrganizationUser or PlatformAdmin): checkout history of one quotation, so a reload of the quotation page finds its checkouts.
+
+Filters: `organizationId`, `quotationId`, `status` (checkout status, or payment request status on `/requests`), UTC `[from,to)` on creation with timezone-qualified timestamps; `page` default 1, `pageSize` default 20, maximum 100; ordered `createdAt DESC, id`.
+
+Each item links quotation (`quotationId`, `quotationNumber`, `purpose`), checkout (`checkoutId`, `checkoutStatus`, `checkoutError`), payment request (`paymentRequestId`, `paymentStatus`), transaction (`transactionId`, `transactionStatus`), `amount`/`currency`, `createdAt`/`paidAt` and provisioning. The three states stay separate. `provisioningStatus` is `NotStarted` until the request is Paid, then `Pending`, `Partial`, `Succeeded` or `NeedsReconcile` from the provisioning lines (`provisioningLines`, `provisioningSucceeded`). Lines are counted per purpose: Building lines for BuildingService/Upgrade, the top-up line for AIQuotaTopUp. Provisioning is aggregated per row, so several lines never duplicate a payment. Lists never contain QR data, the checkout URL, webhook payloads or bank data; the checkout URL is read from `GET /api/payments/payos/checkouts/{id}`. `GET /api/payments/payos/requests/{id}` now reports a top-up line (`buildingId: null`) instead of treating the missing Building line as a failure.
+
 ## Historical foundation and provider evidence
 
 The sections below retain earlier migration/provider evidence and legacy contracts. Their one-month package examples are historical and are not valid for new v7 sales. Use the [current Swagger test guide](publish-billing-v7-manual-test.md) for new packages, fixed service periods, publish and reporting.

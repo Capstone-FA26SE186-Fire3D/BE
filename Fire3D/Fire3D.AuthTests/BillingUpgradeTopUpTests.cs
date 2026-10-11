@@ -150,6 +150,18 @@ public sealed class BillingUpgradeTopUpTests
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
         Assert.Equal(endsBefore,await db.Scalar($"SELECT ends_at FROM service_entitlements WHERE id='{entitlement}'"));
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM billing_service_reservations WHERE status='Reserved'"));
+        // A top-up has no Building line; its provisioning is still reported from the top-up line, not as a failure.
+        using(var adminClient=factory.As(BillingDatabase.Admin))
+        {
+            var ledger=JsonDocument.Parse(await adminClient.GetStringAsync($"/api/admin/payments/payos/requests?quotationId={topUp.Id}")).RootElement;
+            var row=Assert.Single(ledger.GetProperty("items").EnumerateArray());
+            Assert.Equal("AIQuotaTopUp",row.GetProperty("purpose").GetString());
+            Assert.Equal("Succeeded",row.GetProperty("provisioningStatus").GetString());
+            Assert.Equal(1,row.GetProperty("provisioningLines").GetInt32());
+            var payment=JsonDocument.Parse(await adminClient.GetStringAsync($"/api/payments/payos/requests/{row.GetProperty("paymentRequestId").GetGuid()}")).RootElement;
+            Assert.Equal("Succeeded",payment.GetProperty("provisioningStatus").GetString());
+            Assert.Equal(JsonValueKind.Null,Assert.Single(payment.GetProperty("items").EnumerateArray()).GetProperty("buildingId").ValueKind);
+        }
         // Another unit never combines with tokens.
         await db.Sql($"""
             INSERT INTO billing_quota_policy_versions(id,audience,policy_kind,quota_unit,effective_from,rollover,created_by,created_at) VALUES(gen_random_uuid(),'organization','quota','requests',now()-interval '1 day','None','{BillingDatabase.Admin}',now());

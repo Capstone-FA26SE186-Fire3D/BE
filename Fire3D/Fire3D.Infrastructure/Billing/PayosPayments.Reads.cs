@@ -14,6 +14,9 @@ public sealed partial class PayosPayments
         var entitlements=await db.Set<ServiceEntitlement>().AsNoTracking().Where(x=>x.PaymentTransactionId==req.PaidTransactionId&&x.PaymentTransactionId!=null).ToListAsync(ct);
         var items=lines.Select(line=>new ProvisioningLineResponse(line.Id,line.BuildingId,records.SingleOrDefault(x=>x.QuotationItemId==line.Id)?.Status??"NotStarted",
             entitlements.SingleOrDefault(x=>x.QuotationItemId==line.Id)?.Id,records.SingleOrDefault(x=>x.QuotationItemId==line.Id)?.LastError)).ToArray();
+        // An AI top-up has no Building line: its single top-up line is the provisioning unit, never a failure by absence.
+        var topUps=await db.Database.SqlQuery<Guid>($"""SELECT id AS "Value" FROM quotation_topup_items WHERE quotation_id={req.QuotationId} ORDER BY id""").ToListAsync(ct);
+        items=items.Concat(topUps.Select(id=>new ProvisioningLineResponse(id,null,records.SingleOrDefault(x=>x.QuotationItemId==id)?.Status??"NotStarted",null,records.SingleOrDefault(x=>x.QuotationItemId==id)?.LastError))).ToArray();
         var status=req.Status!=PaymentRequestStatus.Paid?"NotStarted":items.Length==0||items.Any(x=>x.Status is "NeedsReconcile" or "NotStarted")?"NeedsReconcile":items.All(x=>x.Status=="Succeeded")?"Succeeded":"Pending";
         var transaction=req.PaidTransactionId.HasValue?await db.PaymentTransactions.AsNoTracking().SingleAsync(x=>x.Id==req.PaidTransactionId,ct):null;
         return new(req.Id,req.QuotationId,req.OrderCode,req.ExpectedAmount,req.ExpectedCurrency,req.Status.ToString(),req.PaidAt,req.PaidTransactionId,transaction?.Status.ToString(),status,items);

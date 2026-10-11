@@ -33,6 +33,18 @@ public sealed class PayosController(IPayosPayments payments) : ControllerBase
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)][HttpPost("api/admin/payments/payos/checkouts/{id:guid}/reconcile")]
     [ProducesResponseType(202)]
     public async Task<IActionResult> Reconcile(Guid id,CancellationToken ct){await payments.Reconcile(User.GetActorId(),User.GetSessionFamilyId(),id,ct);return Accepted();}
+    /// <summary>PlatformAdmin lists PayOS checkouts (including ones that failed before a payment request was bound) with quotation, payment, transaction and provisioning status. Filters: organizationId, quotationId, checkout status, UTC [from,to) on creation; createdAt DESC, id.</summary>
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)][HttpGet("api/admin/payments/payos/checkouts")]
+    [ProducesResponseType(typeof(BillingPage<PayosLedgerItem>),200)]
+    public async Task<BillingPage<PayosLedgerItem>> AdminCheckouts([FromQuery]PayosLedgerQuery query,CancellationToken ct)=>await payments.AdminCheckouts(User.GetActorId(),query,ct);
+    /// <summary>PlatformAdmin lists PayOS payment requests with their checkout, transaction and provisioning status. Filters as for checkouts; status is the payment request status.</summary>
+    [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)][HttpGet("api/admin/payments/payos/requests")]
+    [ProducesResponseType(typeof(BillingPage<PayosLedgerItem>),200)]
+    public async Task<BillingPage<PayosLedgerItem>> AdminRequests([FromQuery]PayosLedgerQuery query,CancellationToken ct)=>await payments.AdminRequests(User.GetActorId(),query,ct);
+    /// <summary>Checkout history of one quotation for its OrganizationUser or PlatformAdmin, newest first.</summary>
+    [Authorize(Roles="OrganizationUser,PlatformAdmin")][HttpGet("api/billing/quotations/{id:guid}/checkouts")]
+    [ProducesResponseType(typeof(BillingPage<PayosLedgerItem>),200)]
+    public async Task<BillingPage<PayosLedgerItem>> QuotationCheckouts(Guid id,[FromQuery]int page=1,[FromQuery]int pageSize=20,CancellationToken ct=default)=>await payments.QuotationCheckouts(User.GetActorId(),id,page,pageSize,ct);
     /// <summary>OrganizationUser sees own tenant. PlatformAdmin can filter organization/Building. IsEffective checks lifecycle and UTC period.</summary>
     [Authorize(Roles="OrganizationUser,PlatformAdmin")][HttpGet("api/billing/entitlements")]
     public async Task<BillingPage<EntitlementResponse>> Entitlements([FromQuery]Guid? organizationId,[FromQuery]Guid? buildingId,[FromQuery]int page=1,[FromQuery]int pageSize=20,CancellationToken ct=default)
