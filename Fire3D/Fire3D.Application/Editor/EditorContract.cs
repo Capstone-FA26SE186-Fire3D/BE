@@ -446,7 +446,9 @@ public static class ScenarioStateV1Validator
     {
         var rubric = r.Object(node, "$.rubric", Rubric, complete);
         if (rubric is null) return;
-        r.Text(rubric["schema_version"], "$.rubric.schema_version", 32);
+        // Only the registered schema versions are accepted; legacy values remain readable in stored snapshots but are never accepted again.
+        if (rubric["schema_version"] is null) { if (complete) r.Add("FIELD_REQUIRED", "$.rubric.schema_version", "Required."); }
+        else if (!RubricContract.IsSupportedVersion(rubric["schema_version"])) r.Add(RubricContract.UnsupportedCode, "$.rubric.schema_version", RubricContract.UnsupportedMessage);
         r.Number(rubric["pass_threshold"], "$.rubric.pass_threshold");
         var criteria = r.Array(rubric["criteria"], "$.rubric.criteria", 100);
         if (criteria is null) return;
@@ -464,7 +466,7 @@ public static class ScenarioStateV1Validator
             r.Boolean(c["mandatory"], $"{path}.mandatory");
             r.Number(c["weight"], $"{path}.weight", min: 0);
             r.Number(c["threshold"], $"{path}.threshold");
-            r.OneOf(c["operator"], $"{path}.operator", ["gte", "lte", "eq"]);
+            r.OneOf(c["operator"], $"{path}.operator", RubricContract.Operators);
             if (c["description"] is not null) r.Text(c["description"], $"{path}.description", 1000);
         }
     }

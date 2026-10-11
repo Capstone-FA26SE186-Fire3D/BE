@@ -68,6 +68,13 @@ Every state change enqueues a `PlatformCacheInvalidation` outbox event with `{sc
 | POST | `/api/admin/learn/situations` | PlatformAdmin | Idempotency-Key. |
 | POST | `/api/admin/learn/media/validate` | PlatformAdmin | Preview of URL canonicalisation. |
 
+## Editor catalogs (#69)
+
+- `GET /api/admin/knowledge-sources?visibility=&status=&search=&page=&pageSize=` (PlatformAdmin): `visibility` defaults to `Common`; tenant sources appear only with `visibility=Organization`. `status` is Draft/Approved/Retired. `search` matches title, version label or jurisdiction, with wildcard characters taken literally. Results are ordered `createdAt DESC, id`, default 20, maximum 100. Each item has the source fields plus `canUseInDraft` (Common and Draft/Approved: a Learn draft may cite it) and `canPublishReference` (Common, Approved and inside its effective window: publish, Hidden and RAG accept it). Publish still re-checks the source in the backend. `GET /api/admin/knowledge-sources/{id}` returns the same flags, so a source chosen earlier can be reopened after a reload.
+- `GET /api/admin/learn/situations?search=&isActive=&page=&pageSize=` (PlatformAdmin): paged catalog ordered by name, searching slug and name. The public `GET /api/learn/situations` is unchanged. Inactive situations stay readable in stored versions but cannot be chosen for new content (`LEARN_SITUATION_INVALID`). Nothing is seeded.
+
+Migration: `20261012140000_AddCatalogLists` (read-only `catalog_list_gate`).
+
 ## Organization Library
 
 - `organization_library_items` (kind ScenarioTemplate | RubricSample | Equipment, unique upper-case `code`, `is_active`,

@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-233 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+235 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -35,7 +35,7 @@
 | GET | /api/admin/feedback | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/feedback/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | PATCH | /api/admin/feedback/{id}/status | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
-| GET | /api/admin/knowledge-sources | Bearer | None | 200 |
+| GET | /api/admin/knowledge-sources | Bearer | None | 200, 400 |
 | POST | /api/admin/knowledge-sources | Bearer | Idempotency-Key | 201, 409, 422 |
 | GET | /api/admin/knowledge-sources/{id} | Bearer | None | 200, 404 |
 | POST | /api/admin/knowledge-sources/{id}/{operation} | Bearer | If-Match | 200, 409, 412, 428 |
@@ -45,6 +45,7 @@
 | GET | /api/admin/learn/posts/{id} | Bearer | None | 200, 404 |
 | POST | /api/admin/learn/posts/{id}/versions | Bearer | Idempotency-Key | 201, 409, 422 |
 | POST | /api/admin/learn/posts/{id}/{operation} | Bearer | If-Match | 200, 409, 412, 428 |
+| GET | /api/admin/learn/situations | Bearer | None | 200, 400 |
 | POST | /api/admin/learn/situations | Bearer | Idempotency-Key | 201, 409 |
 | GET | /api/admin/learn/versions/{versionId} | Bearer | None | 200, 404 |
 | PUT | /api/admin/learn/versions/{versionId} | Bearer | If-Match | 200, 409, 412, 422, 428 |
@@ -207,6 +208,7 @@
 | POST | /api/scenario-drafts/{draftId}/snapshot | Bearer | If-Match, Idempotency-Key | 201, 400, 404, 422 |
 | POST | /api/scenario-drafts/{draftId}/validate | Bearer | None | 200, 400, 403, 404 |
 | GET | /api/scenario-interactions/catalog | Bearer | None | 200 |
+| GET | /api/scenario-rubrics/catalog | Bearer | None | 200, 401, 403 |
 | POST | /api/scenario-versions/{id}/package-builds | Bearer | Idempotency-Key | 202, 400, 409 |
 | POST | /api/scenario-versions/{id}/submit | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
 | GET | /api/scenario-versions/{versionId} | Bearer | None | 200, 400, 403, 404 |

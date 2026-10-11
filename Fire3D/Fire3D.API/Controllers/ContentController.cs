@@ -127,6 +127,14 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     public async Task<IActionResult> Lifecycle(Guid id, string operation, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct) =>
         Precondition(ifMatch, out var expected) ?? WithETag(await gates.LearnAdminAsync(LifecycleAction(operation), Actor, Family, id, new { }, null, expected, ct));
 
+    /// <summary>PlatformAdmin situation catalog for the editor: search on slug/name, isActive filter, ordered by name; default 20, max 100. The public GET stays unchanged.</summary>
+    [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpGet("api/admin/learn/situations")]
+    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> AdminSituations([FromQuery] string? search, [FromQuery] bool? isActive, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
+        Paging(page, pageSize) ?? (search is { Length: > 200 } ? Problem(statusCode: 400, title: "search is at most 200 characters.", extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR" })
+            : Reply(await gates.CatalogAsync("Situations", Actor, Family, new { search, isActive, page, pageSize }, ct)));
+
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPost("api/admin/learn/situations")]
     [ProducesResponseType<JsonElement>(201)]
     [ProducesResponseType<ProblemDetails>(409)]

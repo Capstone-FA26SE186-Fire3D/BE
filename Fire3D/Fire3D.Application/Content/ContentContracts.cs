@@ -24,6 +24,8 @@ public interface IContentGates
     Task<AuthResult<JsonElement>> LearnPublicAsync(string action, Guid? actor, Guid? family, object input, CancellationToken ct);
     Task<AuthResult<JsonElement>> LearnAdminAsync(string action, Guid actor, Guid family, Guid resource, object input, string? key, long? expected, CancellationToken ct);
     Task<AuthResult<JsonElement>> LibraryAsync(string action, Guid actor, Guid family, Guid resource, object input, string? key, long? expected, CancellationToken ct);
+    /// <summary>PlatformAdmin editor catalogs: KnowledgeSources (visibility, status, search) and Situations (search, isActive), paged.</summary>
+    Task<AuthResult<JsonElement>> CatalogAsync(string action, Guid actor, Guid family, object input, CancellationToken ct);
 }
 
 /// <summary>

@@ -19,6 +19,9 @@ public sealed class ContentGates(Fire3DDbContext db) : IContentGates
     public Task<AuthResult<JsonElement>> LibraryAsync(string action, Guid actor, Guid family, Guid resource, object input, string? key, long? expected, CancellationToken ct) =>
         Run("SELECT library_gate(@action,@actor,@family,@resource,@input,@key,@expected)::text", action, actor, family, resource, input, key, expected, ct);
 
+    public Task<AuthResult<JsonElement>> CatalogAsync(string action, Guid actor, Guid family, object input, CancellationToken ct) =>
+        Run("SELECT catalog_list_gate(@action,@actor,@family,@input)::text", action, actor, family, null, input, null, null, ct);
+
     private async Task<AuthResult<JsonElement>> Run(string sql, string action, Guid? actor, Guid? family, Guid? resource, object input, string? key, long? expected, CancellationToken ct)
     {
         await db.Database.OpenConnectionAsync(ct);
