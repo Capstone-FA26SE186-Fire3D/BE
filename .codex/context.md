@@ -32,6 +32,18 @@ Trạng thái source, chưa merge/deploy/áp Supabase. Chi tiết API ở `docs/
 - Feature mặc định tắt: `LearnerSessions:Enabled`, `OrganizationAi:Enabled` (thiếu adapter → `503 AI_PROVIDER_UNAVAILABLE`). AI chỉ nghiệm thu với FastAPI giả lập.
 - Session learner mới là `contract_version = 7` trên bảng `sessions` cũ; dữ liệu legacy giữ nguyên, không tự gắn nhãn v7. Playtest không tính vào seat/analytics.
 
+## Source #67–#69 — nhánh `feature/support-billing-catalog-contracts` (2026-10-11)
+
+Trạng thái source, chưa merge/deploy/áp Supabase.
+
+- Support trả nhãn `createdBy`/`organization`/`author`; email chỉ trên route Admin; receipt lưu bản không nhãn, nhãn tính lại theo caller khi replay.
+- Audit đọc tên lúc đọc (không ghi ngược); `reason` chỉ đọc từ writer có `supportAuditContract: 1`.
+- Hủy quotation chỉ khi chưa Paid và không còn checkout Creating/Ready/NeedsReconcile; tiền về sau khi hủy vẫn ghi nhận, provisioning dừng ở NeedsReconcile (`PAYOS_QUOTATION_CANCELLED`).
+- Quotation `pricingStatus` Estimated/Final/LegacyUnknown dựa trên `issued_at`; Draft `taxAmount: null`.
+- Email nhắc hạn claim bằng lease (`Sending`); at-least-once.
+- Rubric `schema_version` chỉ nhận chuỗi `"1"` qua `RubricContract` dùng chung (editor v1, legacy snapshot, Library, AI draft).
+- Billing fixture không chạy migration history áp SQL billing theo danh sách cố định trong `BillingDatabase.cs`; migration billing mới phải thêm vào đó.
+
 ## Luồng auth hiện có — 2026-10-03
 
 Chi tiết request/response, lỗi và nguồn code tại [authentication.md](../docs/authentication.md), [API guide](../docs/api-docs.md) và [test Swagger](../docs/registration-payos-manual-test.md). Phần này mô tả source, không chứng minh deployment/provider đã nghiệm thu.
