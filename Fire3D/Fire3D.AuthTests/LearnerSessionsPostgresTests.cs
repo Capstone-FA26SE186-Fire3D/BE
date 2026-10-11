@@ -239,6 +239,44 @@ public sealed partial class AuthIntegrationTests
     }
 
     [PostgresFact]
+    public async Task Learner_review_fixes_clamp_result_columns_and_recheck_reissue_replay_and_rotated_continuation()
+    {
+        var f = await PublishedTraining();
+        var trainee = await SeedTrainee();
+        await WithLearnerRuntime(async runtime =>
+        {
+            await using var db = BuildingContext(runtime);
+            var store = new LearnerSessions(db, Options.Create(LearnerOptions));
+            var caller = new LearnerCaller(trainee.Id, trainee.Family, null);
+            // Summed telemetry beyond the result column ranges still finalizes; metrics keep the exact values.
+            var big = await Running(store, caller, f.Training, "Learn", "big");
+            var events = Enumerable.Range(1, 11).Select(i => LearnerEvent(i, "HazardExposure", i * 1000, new { amount = 1e9 })).Append(LearnerEvent(12, "ExitReached", 3_000_000_000_000)).ToArray();
+            Assert.Equal(12, (await store.RecordEventsAsync(caller, big, new(events), default)).Value!.AcknowledgedSequence);
+            Assert.Equal(200, (await store.CompleteAsync(caller, big, new(12, "Finished"), "big-complete", default)).Value.Status);
+            Assert.Equal(11_000_000_000m, (await store.ResultAsync(caller, big, default)).Value!.Metrics.GetProperty("hazard_exposure").GetDecimal());
+            Assert.Equal(9999999999.99m, await ScalarAsync($"SELECT hazard_exposure_score FROM session_results WHERE session_id='{big}'"));
+            Assert.Equal(int.MaxValue, await ScalarAsync($"SELECT time_taken_seconds FROM session_results WHERE session_id='{big}'"));
+
+            // A Complete replay through a continuation that has since been rotated is rejected like any other call.
+            var cont = await Running(store, caller, f.Training, "Learn", "cont-replay");
+            var oldContinuation = (Guid)(await ScalarAsync($"SELECT continuation_id FROM sessions WHERE id='{cont}'"))!;
+            var offline = new LearnerCaller(trainee.Id, null, oldContinuation);
+            Assert.Equal(202, (await store.CompleteAsync(offline, cont, new(1, "Finished"), "cont-replay-complete", default)).Value.Status);
+            Assert.True((await store.ContinuationAsync(caller, cont, default)).IsSuccess);
+            Assert.Equal("CONTINUATION_INVALID", (await store.CompleteAsync(offline, cont, new(1, "Finished"), "cont-replay-complete", default)).Error?.Code);
+
+            // Grant reissue and Start replay recheck access under lock instead of handing out a fresh grant.
+            var prepared = await store.PrepareAsync(caller, new(f.Training, "Learn", "1.0.0"), "rc-prepare", default);
+            Assert.True((await store.StartAsync(caller, prepared.Value!.Id, "rc-start", default)).IsSuccess);
+            await ExecuteAsync($"UPDATE buildings SET visibility='Private' WHERE id='{f.Building}'");
+            Assert.Equal("BUILDING_ACCESS_REQUIRED", (await store.StartAsync(caller, prepared.Value.Id, "rc-start-2", default)).Error?.Code);
+            Assert.Equal("BUILDING_ACCESS_REQUIRED", (await store.StartAsync(caller, prepared.Value.Id, "rc-start", default)).Error?.Code);
+            await ExecuteAsync($"UPDATE buildings SET visibility='Public' WHERE id='{f.Building}'; ALTER TABLE service_entitlements DISABLE TRIGGER USER; UPDATE service_entitlements SET ends_at=now()-interval '1 second' WHERE id='{f.Entitlement}'; ALTER TABLE service_entitlements ENABLE TRIGGER USER;");
+            Assert.Equal("BUILDING_ENTITLEMENT_REQUIRED", (await store.StartAsync(caller, prepared.Value.Id, "rc-start-3", default)).Error?.Code);
+        });
+    }
+
+    [PostgresFact]
     public async Task Learner_access_mode_rubric_qr_and_reconcile_are_scoped()
     {
         var f = await PublishedTraining(publicBuilding: false);
@@ -274,13 +312,20 @@ public sealed partial class AuthIntegrationTests
             var resolved = await qr.ResolveAsync(trainee.Id, trainee.Family, created.Value.Token, default);
             Assert.Equal(f.Building, resolved.Value!.BuildingId); Assert.True(resolved.Value.HasAccess);
             Assert.Equal("FORBIDDEN", (await qr.CreateAsync(trainee.Id, trainee.Family, f.Building, new(null), default)).Error?.Code);
+            // One canonical Active code: a retried or second create never adds another one.
+            Assert.Equal("QR_ALREADY_EXISTS", (await qr.CreateAsync(f.Owner, f.OwnerFamily, f.Building, new("Lobby"), default)).Error?.Code);
             var rotated = await qr.RotateAsync(f.Owner, f.OwnerFamily, f.Building, created.Value.Code.Id, new(null), default);
             Assert.Equal("Lobby", rotated.Value!.Code.Label);
             Assert.Equal("QR_NOT_FOUND", (await qr.ResolveAsync(trainee.Id, trainee.Family, created.Value.Token, default)).Error?.Code);
             Assert.True((await qr.ResolveAsync(trainee.Id, trainee.Family, rotated.Value.Token, default)).IsSuccess);
             Assert.True((await qr.RevokeAsync(f.Owner, f.OwnerFamily, f.Building, rotated.Value.Code.Id, default)).IsSuccess);
             Assert.Equal("QR_NOT_FOUND", (await qr.ResolveAsync(trainee.Id, trainee.Family, rotated.Value.Token, default)).Error?.Code);
-            Assert.Equal(2, (await qr.ListAsync(f.Owner, f.OwnerFamily, f.Building, default)).Value!.Count);
+            var history = (await qr.ListAsync(f.Owner, f.OwnerFamily, f.Building, 1, 1, default)).Value!;
+            Assert.Equal(2, history.Total); Assert.Single(history.Items);
+            Assert.Equal(created.Value.Code.Id, (await qr.ListAsync(f.Owner, f.OwnerFamily, f.Building, 2, 1, default)).Value!.Items.Single().Id);
+            Assert.Equal("VALIDATION_ERROR", (await qr.ListAsync(f.Owner, f.OwnerFamily, f.Building, 1, 101, default)).Error?.Code);
+            // After revoking the last code a new one can be created.
+            Assert.True((await qr.CreateAsync(f.Owner, f.OwnerFamily, f.Building, new("Lobby 2"), default)).IsSuccess);
         });
     }
 

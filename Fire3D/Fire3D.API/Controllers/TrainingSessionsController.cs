@@ -143,11 +143,14 @@ public sealed class TrainingSessionsController(ILearnerSessions sessions) : Cont
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class BuildingQrController(IBuildingQrCodes qr, ISender sender) : ControllerBase
 {
+    /// <summary>Creates the canonical QR code of a Building.</summary>
+    /// <remarks>A Building has one Active code; a second create returns 409 QR_ALREADY_EXISTS, so a retried create never adds another code. Use rotate to replace it.</remarks>
     [Authorize(Roles = "OrganizationUser,PlatformAdmin")]
     [HttpPost("api/buildings/{buildingId:guid}/qr-codes")]
     [ProducesResponseType<BuildingQrCreated>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> Create(Guid buildingId, CreateBuildingQrRequest request, CancellationToken ct)
     {
         var result = await qr.CreateAsync(User.GetActorId(), User.GetSessionFamilyId(), buildingId, request, ct);
@@ -155,9 +158,11 @@ public sealed class BuildingQrController(IBuildingQrCodes qr, ISender sender) : 
     }
     [Authorize(Roles = "OrganizationUser,PlatformAdmin")]
     [HttpGet("api/buildings/{buildingId:guid}/qr-codes")]
-    [ProducesResponseType<IReadOnlyList<BuildingQrView>>(200)]
+    [ProducesResponseType<BuildingQrPage>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> List(Guid buildingId, CancellationToken ct) => Reply(await qr.ListAsync(User.GetActorId(), User.GetSessionFamilyId(), buildingId, ct));
+    public async Task<IActionResult> List(Guid buildingId, CancellationToken ct, [FromQuery] int page = 1, [FromQuery] int pageSize = 20) =>
+        Reply(await qr.ListAsync(User.GetActorId(), User.GetSessionFamilyId(), buildingId, page, pageSize, ct));
     [Authorize(Roles = "OrganizationUser,PlatformAdmin")]
     [HttpPost("api/buildings/{buildingId:guid}/qr-codes/{qrId:guid}/rotate")]
     [ProducesResponseType<BuildingQrCreated>(200)]

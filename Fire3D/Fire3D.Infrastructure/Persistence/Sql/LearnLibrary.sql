@@ -114,7 +114,7 @@ BEGIN
    SELECT lp.id,v.published_at,jsonb_build_object('id',lp.id,'slug',lp.slug,'kind',v.content_kind,'title',v.title,'summary',v.summary,'coverImageUrl',v.cover_image_url,'publishedAt',v.published_at) item
    FROM learn_posts lp JOIN learn_post_versions v ON v.id=lp.published_version_id
    WHERE lp.publication_status='Published' AND (p_input->>'situation' IS NULL OR EXISTS(SELECT 1 FROM learn_post_version_situations l JOIN learn_situations s ON s.id=l.situation_id WHERE l.post_version_id=lp.published_version_id AND s.slug=p_input->>'situation'))
-   ORDER BY v.published_at DESC,lp.id OFFSET (page-1)*size LIMIT size) x;
+   ORDER BY v.published_at DESC,lp.id OFFSET (page-1)::bigint*size LIMIT size) x;
   RETURN jsonb_build_object('code','OK','result',jsonb_build_object('items',result,'total',total,'page',page,'pageSize',size));
  ELSIF p_action='Post' THEN
   SELECT * INTO p FROM learn_posts WHERE slug=p_input->>'slug';
@@ -132,7 +132,7 @@ BEGIN
    SELECT b.post_id,b.created_at,CASE WHEN lp.publication_status='Published' THEN jsonb_build_object('postId',lp.id,'available',true,'bookmarkedAt',b.created_at,'slug',lp.slug,'title',v.title,'summary',v.summary,'kind',v.content_kind)
     ELSE jsonb_build_object('postId',b.post_id,'available',false,'bookmarkedAt',b.created_at) END item
    FROM learn_bookmarks b JOIN learn_posts lp ON lp.id=b.post_id LEFT JOIN learn_post_versions v ON v.id=lp.published_version_id
-   WHERE b.trainee_user_id=p_actor ORDER BY b.created_at DESC,b.post_id OFFSET (page-1)*size LIMIT size) x;
+   WHERE b.trainee_user_id=p_actor ORDER BY b.created_at DESC,b.post_id OFFSET (page-1)::bigint*size LIMIT size) x;
   RETURN jsonb_build_object('code','OK','result',jsonb_build_object('items',result,'total',total,'page',page,'pageSize',size));
  END IF;
  SELECT * INTO p FROM learn_posts WHERE id=(p_input->>'postId')::uuid;
@@ -166,7 +166,7 @@ BEGIN
  IF actor.role<>'PlatformAdmin' THEN RETURN jsonb_build_object('code','FORBIDDEN','status',403);END IF;
  IF p_action='List' THEN
   RETURN jsonb_build_object('code','OK','result',jsonb_build_object(
-   'items',COALESCE((SELECT jsonb_agg(learn_post_representation(x.id,false) ORDER BY x.updated_at DESC,x.id) FROM (SELECT id,updated_at FROM learn_posts WHERE p_input->>'status' IS NULL OR publication_status=p_input->>'status' ORDER BY updated_at DESC,id OFFSET (COALESCE((p_input->>'page')::int,1)-1)*COALESCE((p_input->>'pageSize')::int,20) LIMIT COALESCE((p_input->>'pageSize')::int,20)) x),'[]'),
+   'items',COALESCE((SELECT jsonb_agg(learn_post_representation(x.id,false) ORDER BY x.updated_at DESC,x.id) FROM (SELECT id,updated_at FROM learn_posts WHERE p_input->>'status' IS NULL OR publication_status=p_input->>'status' ORDER BY updated_at DESC,id OFFSET (COALESCE((p_input->>'page')::int,1)-1)::bigint*COALESCE((p_input->>'pageSize')::int,20) LIMIT COALESCE((p_input->>'pageSize')::int,20)) x),'[]'),
    'total',(SELECT count(*) FROM learn_posts WHERE p_input->>'status' IS NULL OR publication_status=p_input->>'status'),'page',COALESCE((p_input->>'page')::int,1),'pageSize',COALESCE((p_input->>'pageSize')::int,20)));
  ELSIF p_action='Get' THEN
   IF NOT EXISTS(SELECT 1 FROM learn_posts WHERE id=p_resource) THEN RETURN jsonb_build_object('code','NOT_FOUND','status',404);END IF;
@@ -188,6 +188,7 @@ BEGIN
 
  IF p_action='CreateSituation' THEN
   IF p_input->>'slug' !~ '^[a-z0-9]+(-[a-z0-9]+)*$' OR length(p_input->>'slug')>120 OR NULLIF(btrim(p_input->>'name'),'') IS NULL OR length(p_input->>'name')>255 THEN RETURN jsonb_build_object('code','VALIDATION_ERROR','status',400);END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('fire3d:learn-situation:'||(p_input->>'slug'),0));
   IF EXISTS(SELECT 1 FROM learn_situations WHERE slug=p_input->>'slug') THEN RETURN jsonb_build_object('code','SLUG_EXISTS','status',409);END IF;
   INSERT INTO learn_situations(id,slug,name,description,created_by,created_at,updated_at) VALUES(gen_random_uuid(),p_input->>'slug',btrim(p_input->>'name'),NULLIF(btrim(p_input->>'description'),''),p_actor,stamp,stamp) RETURNING jsonb_build_object('id',id,'slug',slug,'name',name,'description',description) INTO result;
   INSERT INTO content_command_receipts VALUES(p_actor,p_action,p_key,h,result,stamp);
@@ -196,6 +197,7 @@ BEGIN
 
  IF p_action='CreatePost' THEN
   IF p_input->>'slug' !~ '^[a-z0-9]+(-[a-z0-9]+)*$' OR length(p_input->>'slug')>180 THEN RETURN jsonb_build_object('code','VALIDATION_ERROR','status',400);END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('fire3d:learn-post:'||(p_input->>'slug'),0));
   IF EXISTS(SELECT 1 FROM learn_posts WHERE slug=p_input->>'slug') THEN RETURN jsonb_build_object('code','SLUG_EXISTS','status',409);END IF;
   new_post:=gen_random_uuid();
   INSERT INTO learn_posts(id,slug,publication_status,created_by,created_at,updated_at) VALUES(new_post,p_input->>'slug','Unpublished',p_actor,stamp,stamp) RETURNING * INTO p;
@@ -309,7 +311,7 @@ BEGIN
    SELECT count(*) INTO total FROM organization_library_items x WHERE (p_input->>'kind' IS NULL OR x.kind=p_input->>'kind') AND (admin OR (x.is_active AND EXISTS(SELECT 1 FROM organization_library_versions WHERE item_id=x.id AND status='Published')));
    SELECT COALESCE(jsonb_agg(library_item_representation(y.id,admin) ORDER BY y.code),'[]') INTO result FROM (SELECT x.id,x.code FROM organization_library_items x
     WHERE (p_input->>'kind' IS NULL OR x.kind=p_input->>'kind') AND (admin OR (x.is_active AND EXISTS(SELECT 1 FROM organization_library_versions WHERE item_id=x.id AND status='Published')))
-    ORDER BY x.code OFFSET (page-1)*size LIMIT size) y;
+    ORDER BY x.code OFFSET (page-1)::bigint*size LIMIT size) y;
    RETURN jsonb_build_object('code','OK','result',jsonb_build_object('items',result,'total',total,'page',page,'pageSize',size));
   ELSIF p_action='Get' THEN
    SELECT * INTO i FROM organization_library_items WHERE id=p_resource;
@@ -335,6 +337,7 @@ BEGIN
  ELSIF p_expected IS NULL THEN RETURN jsonb_build_object('code','PRECONDITION_REQUIRED','status',428);END IF;
  IF p_action='CreateItem' THEN
   IF p_input->>'kind' NOT IN('ScenarioTemplate','RubricSample','Equipment') OR p_input->>'code' !~ '^[A-Z0-9][A-Z0-9_-]{0,79}$' THEN RETURN jsonb_build_object('code','VALIDATION_ERROR','status',400);END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('fire3d:library-code:'||(p_input->>'code'),0));
   IF EXISTS(SELECT 1 FROM organization_library_items WHERE code=p_input->>'code') THEN RETURN jsonb_build_object('code','LIBRARY_CODE_EXISTS','status',409);END IF;
   INSERT INTO organization_library_items(id,kind,code,created_by,created_at,updated_at) VALUES(gen_random_uuid(),p_input->>'kind',p_input->>'code',p_actor,stamp,stamp) RETURNING * INTO i;
  ELSIF p_action='UpdateItem' THEN

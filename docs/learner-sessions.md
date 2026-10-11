@@ -62,8 +62,8 @@ Criteria compare a metric with `gte`/`lte`/`eq`; a missing metric fails the crit
 
 | Method | Route | Notes |
 |---|---|---|
-| POST | `/api/buildings/{id}/qr-codes` | Organization (own tenant) or Admin; `{label?}`; returns the token once (32 random bytes, base64url). Only its SHA-256 is stored. |
-| GET | `/api/buildings/{id}/qr-codes` | Codes without tokens. |
+| POST | `/api/buildings/{id}/qr-codes` | Organization (own tenant) or Admin; `{label?}`; returns the token once (32 random bytes, base64url). Only its SHA-256 is stored. A Building has one canonical Active code: a second create, including a retry, returns `409 QR_ALREADY_EXISTS` (rotate instead). |
+| GET | `/api/buildings/{id}/qr-codes?page=&pageSize=` | Code history without tokens, newest first: `{items,total,page,pageSize}`, default 20, max 100. |
 | POST | `/api/buildings/{id}/qr-codes/{qrId}/rotate` | Revokes the code and issues a new token. |
 | POST | `/api/buildings/{id}/qr-codes/{qrId}/revoke` | |
 | GET | `/api/qr/{qrToken}` | Signed-in user: Building ID, name, visibility and whether the caller has access. |

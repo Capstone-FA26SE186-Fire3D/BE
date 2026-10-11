@@ -145,6 +145,8 @@ public sealed partial class AuthIntegrationTests
             var id = (await store.PrepareAsync(f.Owner, f.Web, null, f.Scenario, new(f.Revision, ScenarioVersionId: f.Version), "rot-prepare", default)).Value!.Id;
             var old = (await store.CreateHandoffAsync(f.Owner, f.Web, id, "rot-1", default)).Value!;
             var current = (await store.CreateHandoffAsync(f.Owner, f.Web, id, "rot-2", default)).Value!;
+            // Only the issuing Web session can replay the key and see the code again.
+            Assert.Equal("PLAYTEST_SESSION_MISMATCH", (await store.CreateHandoffAsync(f.Owner, f.Mobile, id, "rot-2", default)).Error?.Code);
             Assert.Equal("PLAYTEST_HANDOFF_REVOKED", (await store.RedeemHandoffAsync(f.Owner, f.Mobile, new(old.Code), default)).Error?.Code);
             Assert.Equal("PLAYTEST_HANDOFF_EXPIRED", (await store.CreateHandoffAsync(f.Owner, f.Web, id, "rot-1", default)).Error?.Code);
             await ExecuteAsync($"UPDATE playtest_handoffs SET created_at=now()-interval '6 minutes',expires_at=now()-interval '1 minute' WHERE id='{current.HandoffId}'");

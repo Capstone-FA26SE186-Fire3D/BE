@@ -73,12 +73,14 @@ public sealed record BuildingQrView(Guid Id, Guid BuildingId, string? Label, str
 /// <summary>Token is returned only on create/rotate; the QR encodes it. It identifies a Building, nothing else.</summary>
 public sealed record BuildingQrCreated(BuildingQrView Code, string Token);
 public sealed record CreateBuildingQrRequest(string? Label);
+/// <summary>QR history of one Building, newest first; at most one code is Active (rotate to replace it).</summary>
+public sealed record BuildingQrPage(IReadOnlyList<BuildingQrView> Items, int Total, int Page, int PageSize);
 public sealed record BuildingQrResolution(Guid BuildingId, string BuildingName, string Visibility, bool HasAccess);
 
 public interface IBuildingQrCodes
 {
     Task<AuthResult<BuildingQrCreated>> CreateAsync(Guid actor, Guid family, Guid building, CreateBuildingQrRequest request, CancellationToken ct);
-    Task<AuthResult<IReadOnlyList<BuildingQrView>>> ListAsync(Guid actor, Guid family, Guid building, CancellationToken ct);
+    Task<AuthResult<BuildingQrPage>> ListAsync(Guid actor, Guid family, Guid building, int page, int pageSize, CancellationToken ct);
     Task<AuthResult<BuildingQrCreated>> RotateAsync(Guid actor, Guid family, Guid building, Guid qr, CreateBuildingQrRequest request, CancellationToken ct);
     Task<AuthResult<BuildingQrView>> RevokeAsync(Guid actor, Guid family, Guid building, Guid qr, CancellationToken ct);
     Task<AuthResult<BuildingQrResolution>> ResolveAsync(Guid actor, Guid family, string token, CancellationToken ct);

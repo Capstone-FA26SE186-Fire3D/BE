@@ -170,7 +170,7 @@ BEGIN
 
  SELECT * INTO r FROM ai_requests WHERE id=p_request FOR UPDATE;
  IF r.id IS NULL THEN RETURN jsonb_build_object('code','NOT_FOUND','status',404);END IF;
- IF r.lease_token IS DISTINCT FROM p_lease OR r.lease_until<=stamp OR r.status NOT IN('Running','NeedsReconcile') THEN RETURN jsonb_build_object('code','AI_LEASE_LOST','status',409);END IF;
+ IF p_lease IS NULL OR r.lease_token IS NULL OR r.lease_until IS NULL OR r.lease_token<>p_lease OR r.lease_until<=stamp OR r.status NOT IN('Running','NeedsReconcile') THEN RETURN jsonb_build_object('code','AI_LEASE_LOST','status',409);END IF;
  phase:=CASE WHEN r.status='Running' THEN 'Dispatch' ELSE 'Lookup' END;
 
  IF p_action='Complete' THEN
@@ -240,7 +240,7 @@ BEGIN
   SELECT count(*) INTO total FROM ai_requests WHERE (p_input->>'status' IS NULL OR status=p_input->>'status') AND (p_input->>'organizationId' IS NULL OR organization_id=(p_input->>'organizationId')::uuid);
   SELECT COALESCE(jsonb_agg(ai_request_representation(x.id,true) ORDER BY x.created_at DESC,x.id),'[]') INTO result FROM (SELECT id,created_at FROM ai_requests
    WHERE (p_input->>'status' IS NULL OR status=p_input->>'status') AND (p_input->>'organizationId' IS NULL OR organization_id=(p_input->>'organizationId')::uuid)
-   ORDER BY created_at DESC,id OFFSET (page-1)*size LIMIT size) x;
+   ORDER BY created_at DESC,id OFFSET (page-1)::bigint*size LIMIT size) x;
   RETURN jsonb_build_object('code','OK','result',jsonb_build_object('items',result,'total',total,'page',page,'pageSize',size));
  ELSIF p_action='GetRequest' THEN
   IF NOT EXISTS(SELECT 1 FROM ai_requests WHERE id=p_resource) THEN RETURN jsonb_build_object('code','NOT_FOUND','status',404);END IF;
@@ -253,7 +253,7 @@ BEGIN
   SELECT COALESCE(jsonb_agg(x.item ORDER BY x.created_at DESC,x.id),'[]') INTO result FROM (SELECT id,created_at,jsonb_build_object('id',id,'visibility',visibility,'organizationId',organization_id,'title',title,
    'sourceUri',source_uri,'versionLabel',version_label,'sourceHash',source_hash,'jurisdiction',jurisdiction,'effectiveFrom',effective_from,'effectiveUntil',effective_until,'approvalStatus',approval_status,
    'approvedAt',approved_at,'createdAt',created_at,'revision',revision) item FROM knowledge_sources WHERE p_input->>'status' IS NULL OR approval_status=p_input->>'status'
-   ORDER BY created_at DESC,id OFFSET (page-1)*size LIMIT size) x;
+   ORDER BY created_at DESC,id OFFSET (page-1)::bigint*size LIMIT size) x;
   RETURN jsonb_build_object('code','OK','result',jsonb_build_object('items',result,'total',total,'page',page,'pageSize',size));
  END IF;
 

@@ -211,6 +211,10 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal("NeedsReconcile", parked.GetProperty("status").GetString());
             Assert.Equal("AI_OUTCOME_UNKNOWN", parked.GetProperty("failureCode").GetString());
             Assert.Equal(100L, await AllocationUnits(id, "Reserved"));
+            // A parked request has no lease; a caller without a claimed lease can neither settle nor release it.
+            foreach (var action in new[] { "NotFound", "Complete", "Unknown" })
+                Assert.Equal("AI_LEASE_LOST", (await gates.WorkerAsync(action, "intruder", id, null, new { requestId = id, outcome = "Succeeded", result = new { answer = "x" }, citations = new[] { new { kind = "KnowledgeSource", id = source } }, usage = new { quotaUnit = "tokens", units = 1 } }, default)).GetProperty("code").GetString());
+            Assert.Equal(100L, await AllocationUnits(id, "Reserved"));
             Assert.False(await worker.RunOnceAsync(default));
             Assert.Equal("NOT_FOUND", (await gates.AdminAsync("Reconcile", adminId, admin, Guid.NewGuid(), new { }, "missing", null, default)).Error?.Code);
             Assert.Equal("FORBIDDEN", (await gates.AdminAsync("Reconcile", tenant.User, tenant.Family, id, new { }, "org", null, default)).Error?.Code);

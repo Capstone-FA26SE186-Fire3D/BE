@@ -196,13 +196,17 @@ public sealed class BuildingQrCodes(Fire3DDbContext db) : IBuildingQrCodes
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public Task<AuthResult<BuildingQrCreated>> CreateAsync(Guid actor, Guid family, Guid building, CreateBuildingQrRequest request, CancellationToken ct) => Issue("Create", actor, family, building, null, request, ct);
     public Task<AuthResult<BuildingQrCreated>> RotateAsync(Guid actor, Guid family, Guid building, Guid qr, CreateBuildingQrRequest request, CancellationToken ct) => Issue("Rotate", actor, family, building, qr, request, ct);
-    public async Task<AuthResult<IReadOnlyList<BuildingQrView>>> ListAsync(Guid actor, Guid family, Guid building, CancellationToken ct)
+    public async Task<AuthResult<BuildingQrPage>> ListAsync(Guid actor, Guid family, Guid building, int page, int pageSize, CancellationToken ct)
     {
-        var result = await Gate("List", actor, family, building, new { }, ct);
-        return result.IsSuccess ? AuthResult<IReadOnlyList<BuildingQrView>>.Ok(result.Value.GetProperty("result").EnumerateArray()
+        if (page < 1 || pageSize is < 1 or > 100) return AuthResult<BuildingQrPage>.Fail("VALIDATION_ERROR", "page >= 1 and pageSize 1-100.", 400);
+        var result = await Gate("List", actor, family, building, new { page, pageSize }, ct);
+        if (!result.IsSuccess) return new(default, result.Error);
+        var body = result.Value.GetProperty("result");
+        return AuthResult<BuildingQrPage>.Ok(new(body.GetProperty("items").EnumerateArray()
             .Select(x => new BuildingQrView(x.GetProperty("id").GetGuid(), building, x.GetProperty("label").GetString(), x.GetProperty("status").GetString()!,
                 x.GetProperty("createdAt").GetDateTimeOffset().UtcDateTime, x.GetProperty("revokedAt").ValueKind == JsonValueKind.Null ? null : x.GetProperty("revokedAt").GetDateTimeOffset().UtcDateTime,
-                x.GetProperty("replacedBy").ValueKind == JsonValueKind.Null ? null : x.GetProperty("replacedBy").GetGuid())).ToArray()) : new(default, result.Error);
+                x.GetProperty("replacedBy").ValueKind == JsonValueKind.Null ? null : x.GetProperty("replacedBy").GetGuid())).ToArray(),
+            body.GetProperty("total").GetInt32(), page, pageSize));
     }
     public async Task<AuthResult<BuildingQrView>> RevokeAsync(Guid actor, Guid family, Guid building, Guid qr, CancellationToken ct)
     {
@@ -232,6 +236,7 @@ public sealed class BuildingQrCodes(Fire3DDbContext db) : IBuildingQrCodes
         using var document = JsonDocument.Parse((string)(await command.ExecuteScalarAsync(ct))!);
         var value = document.RootElement;
         return value.GetProperty("code").GetString() == "OK" ? AuthResult<JsonElement>.Ok(value.Clone())
-            : AuthResult<JsonElement>.Fail(value.GetProperty("code").GetString()!, "QR request was rejected.", value.GetProperty("status").GetInt32());
+            : AuthResult<JsonElement>.Fail(value.GetProperty("code").GetString()!, value.GetProperty("code").GetString() == "QR_ALREADY_EXISTS"
+                ? "This Building already has an active QR code; rotate it to replace it." : "QR request was rejected.", value.GetProperty("status").GetInt32());
     }
 }

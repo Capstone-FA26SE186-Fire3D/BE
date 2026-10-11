@@ -184,7 +184,7 @@ BEGIN
  IF actor.role<>'OrganizationUser' THEN RETURN jsonb_build_object('code','FORBIDDEN','status',403);END IF;
  IF p_action='Redeem' THEN
   IF p_input->>'codeHash' IS NULL OR p_input->>'codeHash' !~ '^[0-9a-f]{64}$' THEN RETURN jsonb_build_object('code','PLAYTEST_HANDOFF_INVALID','status',404);END IF;
-  SELECT * INTO ho FROM playtest_handoffs WHERE code_hash=p_input->>'codeHash' FOR UPDATE;
+  SELECT * INTO ho FROM playtest_handoffs WHERE code_hash=p_input->>'codeHash';
   -- Another user's code is indistinguishable from an unknown code.
   IF ho.id IS NULL OR ho.created_by<>p_actor THEN RETURN jsonb_build_object('code','PLAYTEST_HANDOFF_INVALID','status',404);END IF;
   p_playtest:=ho.playtest_id;
@@ -199,6 +199,8 @@ BEGIN
  SELECT * INTO pin FROM playtest_package_pins WHERE playtest_id=session.id;
  SELECT * INTO rs FROM playtest_runtime_state WHERE playtest_id=session.id FOR UPDATE;
  IF pin.playtest_id IS NULL OR rs.playtest_id IS NULL THEN RETURN jsonb_build_object('code','PLAYTEST_SESSION_MISMATCH','status',409);END IF;
+ -- Same lock order as handoff rotation, cancel and start: playtest row first, then its handoff row.
+ IF p_action='Redeem' THEN SELECT * INTO ho FROM playtest_handoffs WHERE id=ho.id FOR UPDATE;END IF;
  IF NOT fet3d_live_family(p_actor,p_family) THEN RETURN jsonb_build_object('code','UNAUTHORIZED','status',401);END IF;
  stamp:=clock_timestamp();
  IF p_key IS NOT NULL AND p_action IN('Handoff','Reissue','Complete','Cancel') THEN
@@ -207,8 +209,11 @@ BEGIN
   SELECT * INTO receipt FROM playtest_command_receipts WHERE actor_id=p_actor AND operation=p_action AND idempotency_key=p_key;
   IF receipt.result IS NOT NULL THEN
    IF receipt.input_hash<>h THEN RETURN jsonb_build_object('code','IDEMPOTENCY_KEY_CONFLICT','status',409);END IF;
+   IF p_action IN('Reissue','Complete') AND pin.started_family IS DISTINCT FROM p_family THEN RETURN jsonb_build_object('code','PLAYTEST_SESSION_MISMATCH','status',409);END IF;
    IF p_action='Handoff' THEN
     SELECT * INTO ho FROM playtest_handoffs WHERE id=(receipt.result->>'handoffId')::uuid;
+    -- Only the issuing session may see the code again.
+    IF ho.issuing_family IS DISTINCT FROM p_family THEN RETURN jsonb_build_object('code','PLAYTEST_SESSION_MISMATCH','status',409);END IF;
     IF ho.revoked_at IS NOT NULL OR ho.redeemed_at IS NOT NULL OR ho.expires_at<=stamp OR ho.code_ciphertext IS NULL THEN RETURN jsonb_build_object('code','PLAYTEST_HANDOFF_EXPIRED','status',409);END IF;
     RETURN receipt.result||jsonb_build_object('codeCiphertext',encode(ho.code_ciphertext,'base64'));
    END IF;
