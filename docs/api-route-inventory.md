@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-228 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+233 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -28,7 +28,10 @@
 | GET | /api/admin/enterprise-quote-requests | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/enterprise-quote-requests/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | PATCH | /api/admin/enterprise-quote-requests/{id} | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
+| POST | /api/admin/enterprise-quote-requests/{id}/close | Bearer | If-Match, Idempotency-Key | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/admin/enterprise-quote-requests/{id}/quotations | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/admin/enterprise-quote-requests/{id}/responses | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
+| POST | /api/admin/enterprise-quote-requests/{id}/responses | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/feedback | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/feedback/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | PATCH | /api/admin/feedback/{id}/status | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
@@ -99,6 +102,8 @@
 | POST | /api/auth/verify-email | Anonymous | None | 204, 400 |
 | GET | /api/billing/enterprise-quote-requests | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/billing/enterprise-quote-requests | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/billing/enterprise-quote-requests/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/billing/enterprise-quote-requests/{id}/responses | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/billing/entitlements | Bearer | None | 200, 400, 401, 403, 404, 409, 503 |
 | GET | /api/billing/quotations | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/billing/quotations | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |

@@ -48,9 +48,16 @@ public sealed record QuotationResponse(Guid Id,Guid OrganizationId,string Quotat
 public sealed record BillingPage<T>(IReadOnlyList<T> Items,int Total,int Page,int PageSize);
 public sealed record EnterpriseQuoteRequestBody(int RequestedBuildingCount,int? RequestedDurationMonths,string ContactName,string ContactEmail,string? ContactPhone=null,string? Notes=null);
 public sealed record EnterpriseQuoteResponse(Guid Id,Guid OrganizationId,int RequestedBuildingCount,int? RequestedDurationMonths,
-    string ContactName,string ContactEmail,string? ContactPhone,string? Notes,string Status,DateTime CreatedAt,long Revision=1,Guid? QuotationId=null);
+    string ContactName,string ContactEmail,string? ContactPhone,string? Notes,string Status,DateTime CreatedAt,long Revision=1,Guid? QuotationId=null,
+    Guid? AssignedTo=null,DateTime? ClosedAt=null,string? CloseReason=null);
+/// <summary>Append-only reply on an enterprise request, visible to Admin and the requesting organization.</summary>
+public sealed record EnterpriseResponseItem(Guid Id,Guid RequestId,Guid AuthorId,string? AuthorName,string Message,DateTime CreatedAt);
+public sealed record EnterpriseResponseBody(string? Message);
+/// <summary>Reason 1-1000 characters. Closing ends handling only; quotations and payments are untouched.</summary>
+public sealed record EnterpriseCloseRequest(string? Reason);
 /// <summary>Admin status change: Contacted, Rejected or Cancelled. Quoted is set only by creating a quotation.</summary>
-public sealed record EnterpriseStatusRequest(string Status);
+/// <summary>Every field is optional: an omitted field keeps its value. AssignedTo must be an active PlatformAdmin; ClearAssignment=true removes the assignee. Assignment never changes the status.</summary>
+public sealed record EnterpriseStatusRequest(string? Status=null,Guid? AssignedTo=null,bool ClearAssignment=false);
 public sealed record EnterpriseQuotationRequest(IReadOnlyList<QuotationItemRequest> Items);
 
 public sealed record EntitlementUpgradeView(Guid Id,int CapacityRevision,int PreviousLearnerLimit,int LearnerLimit,int AdditionalQuotaUnits,DateTime EffectiveFrom,DateTime CreatedAt);
@@ -91,6 +98,9 @@ public interface IBillingService
     Task<EnterpriseQuoteResponse> GetEnterpriseRequest(Guid actor,Guid id,CancellationToken ct)=>throw new NotSupportedException();
     Task<EnterpriseQuoteResponse> UpdateEnterpriseStatus(Guid actor,Guid family,Guid id,EnterpriseStatusRequest request,string? ifMatch,CancellationToken ct)=>throw new NotSupportedException();
     Task<QuotationResponse> CreateEnterpriseQuotation(Guid actor,Guid family,Guid id,EnterpriseQuotationRequest request,string? key,CancellationToken ct)=>throw new NotSupportedException();
+    Task<EnterpriseResponseItem> AddEnterpriseResponse(Guid actor,Guid family,Guid id,EnterpriseResponseBody request,string? key,CancellationToken ct)=>throw new NotSupportedException();
+    Task<BillingPage<EnterpriseResponseItem>> ListEnterpriseResponses(Guid actor,Guid id,int page,int pageSize,CancellationToken ct)=>throw new NotSupportedException();
+    Task<EnterpriseQuoteResponse> CloseEnterpriseRequest(Guid actor,Guid family,Guid id,EnterpriseCloseRequest request,string? ifMatch,string? key,CancellationToken ct)=>throw new NotSupportedException();
     Task<BuildingServiceEntitlementResponse> GetBuildingEntitlement(Guid actor,Guid buildingId,CancellationToken ct)=>throw new NotSupportedException();
     Task<AiQuotaBalanceResponse> GetAiQuota(Guid actor,Guid? organizationId,CancellationToken ct)=>throw new NotSupportedException();
     Task<BillingPage<AiQuotaGrantView>> ListAiQuotaGrants(Guid actor,Guid? organizationId,int page,int pageSize,CancellationToken ct)=>throw new NotSupportedException();

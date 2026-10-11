@@ -25,6 +25,16 @@ Provision replay returns a previously committed payment/line resource even after
 - Same key and input replay the stored response after the scope check, even with the now stale ETag; the same key with another input is `409 IDEMPOTENCY_KEY_CONFLICT`.
 - Money that arrives after cancellation is still recorded with its provenance (`Applied`, request `Paid`), but its provisioning records stay `NeedsReconcile` with `PAYOS_QUOTATION_CANCELLED`: no entitlement or quota is activated and the quotation is not reopened. Migration: `20261012110000_AddBillingQuotationCancel`.
 
+## Enterprise request workflow (#68)
+
+Statuses: New → Contacted → Quoted, plus Rejected/Cancelled, and the new terminal `Closed`.
+
+- **Assignment.** `PATCH /api/admin/enterprise-quote-requests/{id}` (If-Match) takes optional `status`, `assignedTo` and `clearAssignment`. An omitted field keeps its value. The assignee must be an active PlatformAdmin, and assignment never changes the status. `Quoted` still comes only from creating a real quotation.
+- **Responses.** `POST /api/admin/enterprise-quote-requests/{id}/responses` (Idempotency-Key, `{message}` 1-10,000 characters) appends a reply. Replies are append-only, the text is never copied into audit, and a Closed request rejects new replies. Admin reads them at `GET /api/admin/enterprise-quote-requests/{id}/responses`.
+- **Organization reads.** The requesting organization reads `GET /api/billing/enterprise-quote-requests/{id}` and `/{id}/responses`; other tenants get 404.
+- **Close.** `POST /api/admin/enterprise-quote-requests/{id}/close` (If-Match, Idempotency-Key, `{reason}` 1-1000 characters) sets `Closed` with `closedAt` and `closeReason`. It never cancels a quotation or payment and grants no service. A replay or a repeated close returns the current state. Closed requests cannot be changed.
+- **Migrations.** `20261012130000_AddEnterpriseWorkflow` and the EF snapshot `20261012130100_SyncEnterpriseWorkflowModel`.
+
 ## Expiry reminder notifications (#68)
 
 - `GET /api/organizations/me/notifications?unread=&type=&page=&pageSize=` (OrganizationUser, live session): reminders addressed to the caller in their current organization, newest first, default 20, maximum 100. Items carry type, title, body, Building (id and current name), entitlement, `referenceEndsAt`, `createdAt`, `readAt` and `stillRelevant`. `stillRelevant` becomes false after a renewal or once the period ended; the history is kept.
