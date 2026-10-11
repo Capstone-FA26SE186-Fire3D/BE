@@ -89,12 +89,12 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
-    /// <summary>Danh sÃƒÂ¡ch revision IFC cÃ¡Â»Â§a Building, cÃƒÂ³ phÃƒÂ¢n trang.</summary>
+    /// <summary>Danh sách revision IFC của Building, có phân trang.</summary>
     /// <remarks>
-    /// OrganizationUser chÃ¡Â»â€° xem tÃ¡Â»â€¢ chÃ¡Â»Â©c cÃ¡Â»Â§a mÃƒÂ¬nh; PlatformAdmin Ã„â€˜Ã†Â°Ã¡Â»Â£c xem Building Ã„â€˜ÃƒÂ­ch.
-    /// Role/tenant lÃ¡ÂºÂ¥y tÃ¡Â»Â« DB; Trainee bÃ¡Â»â€¹ tÃ¡Â»Â« chÃ¡Â»â€˜i. page mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh 1; pageSize mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh 20, tÃ¡Â»â€˜i Ã„â€˜a 100.
-    /// Response gÃ¡Â»â€œm items,totalCount,page,pageSize. Building hÃ¡Â»Â£p lÃ¡Â»â€¡ chÃ†Â°a cÃƒÂ³ revision trÃ¡ÂºÂ£ items rÃ¡Â»â€”ng.
-    /// Building khÃƒÂ´ng tÃ¡Â»â€œn tÃ¡ÂºÂ¡i, bÃ¡Â»â€¹ archive hoÃ¡ÂºÂ·c khÃƒÂ¡c tenant trÃ¡ÂºÂ£ 404. KhÃƒÂ´ng trÃ¡ÂºÂ£ raw IFC/storage key.
+    /// OrganizationUser chỉ xem tổ chức của mình; PlatformAdmin được xem Building đích.
+    /// Role/tenant lấy từ DB; Trainee bị từ chối. page mặc định 1; pageSize mặc định 20, tối đa 100.
+    /// Response gồm items,totalCount,page,pageSize. Building hợp lệ chưa có revision trả items rỗng.
+    /// Building không tồn tại, bị archive hoặc khác tenant trả 404. Không trả raw IFC/storage key.
     /// </remarks>
     [HttpGet("{id:guid}/revisions")]
     [ProducesResponseType<PageResponse<RevisionResponse>>(200)]

@@ -37,7 +37,7 @@ public static class ApplicationExtensions
             .Validate(options => !options.Enabled || (PayosHttps(options.ReturnUrl) && PayosHttps(options.CancelUrl)), "PayOS ReturnUrl and CancelUrl must be absolute non-loopback HTTPS URLs.")
             .Validate(options => !(options.Enabled || options.WorkerEnabled) ||
                 (!string.IsNullOrWhiteSpace(configuration.GetConnectionString("PayosRequestExecutor")) && !string.IsNullOrWhiteSpace(configuration.GetConnectionString("PayosWebhookExecutor"))), "PayOS requires separate least-privilege request and webhook executor connections.")
-            .Validate(options => options.PollSeconds is >= 5 and <= 300, "PayOS PollSeconds must be 5â€“300.")
+            .Validate(options => options.PollSeconds is >= 5 and <= 300, "PayOS PollSeconds must be 5–300.")
             .ValidateOnStart();
         services.AddScoped<Fire3D.Application.Billing.IPayosProvider,Fire3D.Infrastructure.Billing.PayosSdkProvider>();
         services.AddHttpClient("fet3d-payos");
@@ -130,10 +130,10 @@ public static class ApplicationExtensions
             if (!string.IsNullOrWhiteSpace(licenseKey)) options.LicenseKey = licenseKey;
         });
 
-        // Email â€“ Mailgun
+        // Email – Mailgun
         services.AddOptions<MailgunOptions>()
             .Bind(configuration.GetSection(MailgunOptions.SectionName))
-            .Validate(o => o.IsValid(), "Mailgun: ApiKey, Domain vÃ  From lÃ  báº¯t buá»™c.")
+            .Validate(o => o.IsValid(), "Mailgun: ApiKey, Domain và From là bắt buộc.")
             .ValidateOnStart();
         services.AddHttpClient<IEmailService, MailgunEmailService>();
 

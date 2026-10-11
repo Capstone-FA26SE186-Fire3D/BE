@@ -56,7 +56,8 @@ public sealed class IfcUploadService(IIfcUploadStore store, IStorageService stor
         if (options.Value.MaxBytes is not > 0 || intent.Size > options.Value.MaxBytes)
             return AuthResult<bool>.Fail("IFC_UPLOAD_DISABLED", "IFC upload limit is not configured for this source.", 503);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        // Two full hash reads plus a server-side copy: the deadline grows with the object size instead of a flat 30 s.
+        timeout.CancelAfter(options.Value.CompletionTimeout(intent.Size));
         try
         {
             var metadata = await inspector.MetadataAsync(intent.StagingKey, timeout.Token);

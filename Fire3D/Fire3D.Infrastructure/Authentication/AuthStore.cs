@@ -35,7 +35,8 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
     public Task<User?> FindUserAsync(Guid id, CancellationToken ct) =>
         db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<User?> FindUserByEmailAsync(string email, CancellationToken ct) =>
-        db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Email.Trim().ToLower() == email, ct);
+        // Same expression as the unique index users_email_normalized_key, so the lookup is an index probe rather than a scan.
+        db.Users.FromSqlInterpolated($"SELECT * FROM users WHERE lower(btrim(email))={email}").AsNoTracking().SingleOrDefaultAsync(ct);
     public Task<User?> FindUserByFirebaseUidAsync(string uid, CancellationToken ct) =>
         db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.FirebaseUid == uid, ct);
     public Task<bool> HasAdminAsync(CancellationToken ct) =>
