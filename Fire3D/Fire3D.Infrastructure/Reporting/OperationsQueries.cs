@@ -31,11 +31,13 @@ public sealed class OperationsQueries(Fire3DDbContext db) : IOperationsQueries
         return(user,asOf);
     }
     private sealed record Common(List<LifecycleCount> Buildings,List<ProcessingCount> Jobs,List<TicketCount> Tickets,OrganizationCreated Created);
-    private async Task<Common> Aggregate(Guid? organization,Guid? owner,DateTime from,DateTime to,CancellationToken ct)
+    // Tickets: owner filters caller-created tickets (organization self-view); ticketOrganization filters support_tickets.organization_id
+    // (Admin per-organization view, includes Trainee tickets attached through a session). Both null counts every ticket (platform).
+    private async Task<Common> Aggregate(Guid? organization,Guid? owner,DateTime from,DateTime to,CancellationToken ct,Guid? ticketOrganization=null)
     {
         var buildings=db.Buildings.AsNoTracking().Where(x=>organization==null || x.OrganizationId==organization);
         var jobs=db.ProcessingJobs.AsNoTracking().Where(x=>x.CreatedAt>=from && x.CreatedAt<to && (organization==null || db.Revisions.Any(r=>r.Id==x.RevisionId && db.Buildings.Any(b=>b.Id==r.BuildingId && b.OrganizationId==organization))));
-        var tickets=db.SupportTickets.AsNoTracking().Where(x=>x.CreatedAt>=from && x.CreatedAt<to && (owner==null || x.CreatedBy==owner));
+        var tickets=db.SupportTickets.AsNoTracking().Where(x=>x.CreatedAt>=from && x.CreatedAt<to && (owner==null || x.CreatedBy==owner) && (ticketOrganization==null || x.OrganizationId==ticketOrganization));
         var counts=await buildings.Where(x=>x.DeletedAt==null).GroupBy(x=>x.IsActive).Select(x=>new LifecycleCount(x.Key,x.Count())).ToListAsync(ct);
         var jobCounts=await jobs.GroupBy(x=>new{x.Kind,x.Status}).Select(x=>new ProcessingCount(x.Key.Kind,x.Key.Status,x.Count())).ToListAsync(ct);
         var ticketCounts=await tickets.GroupBy(x=>x.Status).Select(x=>new TicketCount(x.Key.ToString(),x.Count())).ToListAsync(ct);
@@ -46,6 +48,24 @@ public sealed class OperationsQueries(Fire3DDbContext db) : IOperationsQueries
             new(await buildings.CountAsync(x=>x.CreatedAt>=from && x.CreatedAt<to,ct),jobCounts.Sum(x=>x.Count),ticketCounts.Sum(x=>x.Count)));
     }
     private static List<LifecycleCount> FillLifecycle(List<LifecycleCount> counts)=>new[]{false,true}.Select(active=>new LifecycleCount(active,counts.SingleOrDefault(x=>x.IsActive==active)?.Count??0)).ToList();
+    public async Task<AuthResult<AdminOrganizationOperations>> OrganizationForAdmin(Guid actor,Guid family,Guid organizationId,string? from,string? to,CancellationToken ct)
+    {
+        await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead,ct);
+        var snapshot=await BeginSnapshot(actor,family,true,ct);
+        if(snapshot.Actor is null)return AuthResult<AdminOrganizationOperations>.Fail("FORBIDDEN","Only an active PlatformAdmin session can read organization operations.",403);
+        if(!ReportingRange.TryParse(from,to,snapshot.AsOf,out var range))return AuthResult<AdminOrganizationOperations>.Fail("VALIDATION_ERROR","Use timezone-qualified timestamps and a positive range of at most 90 days.",400);
+        // Inactive organizations stay readable for Admin; missing or deleted ones are 404.
+        var organization=await db.Organizations.AsNoTracking().Where(x=>x.Id==organizationId && x.DeletedAt==null).Select(x=>new OrganizationIdentity(x.Id,x.Name,x.IsActive)).SingleOrDefaultAsync(ct);
+        if(organization is null)return AuthResult<AdminOrganizationOperations>.Fail("NOT_FOUND","The organization was not found.",404);
+        var common=await Aggregate(organizationId,null,range.From,range.To,ct,ticketOrganization:organizationId);
+        await tx.CommitAsync(ct);
+        return AuthResult<AdminOrganizationOperations>.Ok(new(organization,snapshot.AsOf,range.From,range.To,AdminOrganizationDefinitions,common.Buildings,common.Jobs,common.Tickets,common.Created));
+    }
+    private static readonly IReadOnlyDictionary<string,string> AdminOrganizationDefinitions=new Dictionary<string,string>(Definitions)
+    {
+        ["snapshot"]="Buildings of this organization: current state at asOf, excludes soft-deleted, includes inactive.",
+        ["tickets"]="Tickets created in [from,to) whose stored organization is this organization (including Trainee tickets attached through a session), grouped by current status."
+    };
     public async Task<AuthResult<PlatformOperations>> Platform(Guid actor,Guid family,string? from,string? to,CancellationToken ct)
     {
         await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead,ct);

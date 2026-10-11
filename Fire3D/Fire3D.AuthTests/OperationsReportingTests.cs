@@ -41,6 +41,70 @@ public sealed class OperationsReportingTests
         await database.Sql($"UPDATE organizations SET is_active=false WHERE id='{BillingDatabase.Org}'");
         Assert.Equal(HttpStatusCode.Forbidden,(await owner.GetAsync("/api/organizations/me/analytics/operations")).StatusCode);
     }
+    [BillingPostgresFact]
+    public async Task Admin_organization_operations_scope_tickets_by_stored_organization()
+    {
+        await using var database=await BillingDatabase.Create(migrationHistory:true);using var factory=new BillingApiTests.Factory(database);
+        await database.Sql($$"""
+            INSERT INTO buildings(id,organization_id,name,is_active,created_by,created_at,updated_at)
+            VALUES(gen_random_uuid(),'{{BillingDatabase.OtherOrg}}','Other tenant',true,'{{BillingDatabase.Other}}','2026-10-02T00:00:00Z',now());
+            INSERT INTO support_tickets(id,ticket_number,created_by,organization_id,subject,description,status,priority,created_at,updated_at)
+            VALUES(gen_random_uuid(),'A1','{{BillingDatabase.Owner}}','{{BillingDatabase.Org}}','Fixture','Fixture','Open','Normal','2026-10-01T00:00:00Z',now()),
+            (gen_random_uuid(),'A2','{{BillingDatabase.Other}}','{{BillingDatabase.Org}}','Attached through a session','Fixture','InProgress','Normal','2026-10-01T12:00:00Z',now()),
+            (gen_random_uuid(),'A3','{{BillingDatabase.Other}}','{{BillingDatabase.OtherOrg}}','Fixture','Fixture','Closed','Normal','2026-10-02T00:00:00Z',now()),
+            (gen_random_uuid(),'A4','{{BillingDatabase.Owner}}','{{BillingDatabase.Org}}','Out of range','Fixture','Open','Normal','2026-10-03T00:00:00Z',now());
+            """);
+        using var owner=factory.As(BillingDatabase.Owner);using var admin=factory.As(BillingDatabase.Admin);
+        const string range="?from=2026-10-01T00:00:00Z&to=2026-10-03T00:00:00Z";
+        var response=await admin.GetAsync($"/api/admin/organizations/{BillingDatabase.Org}/analytics/operations"+range);
+        Assert.Equal(HttpStatusCode.OK,response.StatusCode);
+        using var json=JsonDocument.Parse(await response.Content.ReadAsStringAsync());var result=json.RootElement;
+        Assert.Equal(BillingDatabase.Org,result.GetProperty("organization").GetProperty("id").GetGuid());
+        Assert.False(result.TryGetProperty("accounts",out _));
+        // Both tickets stored with this organization count, including the one created by another user; other tenants and [to) are excluded.
+        Assert.Equal(2,result.GetProperty("created").GetProperty("tickets").GetInt32());
+        Assert.Equal(1,result.GetProperty("tickets").EnumerateArray().Single(x=>x.GetProperty("status").GetString()=="InProgress").GetProperty("count").GetInt32());
+        Assert.Equal(0,result.GetProperty("tickets").EnumerateArray().Single(x=>x.GetProperty("status").GetString()=="Closed").GetProperty("count").GetInt32());
+        Assert.Equal(1,result.GetProperty("buildings").EnumerateArray().Sum(x=>x.GetProperty("count").GetInt32()));
+        using var other=JsonDocument.Parse(await (await admin.GetAsync($"/api/admin/organizations/{BillingDatabase.OtherOrg}/analytics/operations"+range)).Content.ReadAsStringAsync());
+        Assert.Equal(1,other.RootElement.GetProperty("created").GetProperty("tickets").GetInt32());
+        // The organization self-view keeps its caller-only ticket semantics.
+        using var self=JsonDocument.Parse(await (await owner.GetAsync("/api/organizations/me/analytics/operations"+range)).Content.ReadAsStringAsync());
+        Assert.Equal(1,self.RootElement.GetProperty("created").GetProperty("tickets").GetInt32());
+        Assert.Equal(HttpStatusCode.Forbidden,(await owner.GetAsync($"/api/admin/organizations/{BillingDatabase.Org}/analytics/operations")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,(await admin.GetAsync($"/api/admin/organizations/{Guid.NewGuid()}/analytics/operations")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync($"/api/admin/organizations/{BillingDatabase.Org}/analytics/operations?from=2026-01-01T00:00:00Z&to=2026-06-01T00:00:00Z")).StatusCode);
+        await database.Sql($"UPDATE organizations SET is_active=false WHERE id='{BillingDatabase.Org}'");
+        using var inactive=JsonDocument.Parse(await (await admin.GetAsync($"/api/admin/organizations/{BillingDatabase.Org}/analytics/operations"+range)).Content.ReadAsStringAsync());
+        Assert.False(inactive.RootElement.GetProperty("organization").GetProperty("isActive").GetBoolean());
+        await database.Sql($"UPDATE organizations SET deleted_at=now() WHERE id='{BillingDatabase.Org}'");
+        Assert.Equal(HttpStatusCode.NotFound,(await admin.GetAsync($"/api/admin/organizations/{BillingDatabase.Org}/analytics/operations")).StatusCode);
+    }
+    private sealed class MutationOnFirstGroup(BillingDatabase database) : DbCommandInterceptor
+    {
+        public bool Mutated { get; private set; }
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,CommandEventData eventData,InterceptionResult<DbDataReader> result,CancellationToken cancellationToken=default)
+        {
+            if(!Mutated && command.CommandText.Contains("GROUP BY"))
+            {
+                Mutated=true;
+                await database.Sql($"UPDATE buildings SET is_active=false WHERE id='{BillingDatabase.Building}'; INSERT INTO support_tickets(id,ticket_number,created_by,organization_id,subject,description,status,priority,created_at,updated_at) VALUES(gen_random_uuid(),'LATE','{BillingDatabase.Owner}','{BillingDatabase.Org}','Late','Late','Open','Normal',now()-interval '1 minute',now())");
+            }
+            return result;
+        }
+    }
+    [BillingPostgresFact]
+    public async Task Admin_organization_operations_keep_one_snapshot_during_concurrent_mutation()
+    {
+        await using var database=await BillingDatabase.Create(migrationHistory:true);var interceptor=new MutationOnFirstGroup(database);
+        var services=new ServiceCollection();services.AddDatabase(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{["ConnectionStrings:DefaultConnection"]=database.Connection}).Build());
+        using var provider=services.BuildServiceProvider();var options=new DbContextOptionsBuilder<Fire3DDbContext>(provider.GetRequiredService<DbContextOptions<Fire3DDbContext>>()).AddInterceptors(interceptor).Options;
+        await using var context=new Fire3DDbContext(options);
+        var result=await new OperationsQueries(context).OrganizationForAdmin(BillingDatabase.Admin,BillingDatabase.Admin,BillingDatabase.Org,null,null,default);
+        Assert.True(result.IsSuccess,result.Error?.Code);Assert.True(interceptor.Mutated);
+        Assert.Equal(1,result.Value!.Buildings.Single(x=>x.IsActive).Count);
+        Assert.Equal(0,result.Value.Created.Tickets);
+    }
     private sealed class MutationBetweenAggregates(BillingDatabase database) : DbCommandInterceptor
     {
         public bool Mutated { get; private set; }

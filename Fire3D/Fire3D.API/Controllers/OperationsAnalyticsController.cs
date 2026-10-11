@@ -34,5 +34,18 @@ public sealed class OperationsAnalyticsController(IOperationsQueries queries) : 
         var result=await queries.Organization(User.GetActorId(),User.GetSessionFamilyId(),from,to,ct);
         return result.IsSuccess?Ok(result.Value):Failure(result.Error!);
     }
+    /// <summary>PlatformAdmin operations of one organization: its Buildings, processing jobs and tickets stored with that organization. No account, learner, revenue or AI aggregate. UTC [from,to), default 30 days, maximum 90; inactive organizations included, deleted ones 404.</summary>
+    [Authorize(Roles="PlatformAdmin")]
+    [HttpGet("api/admin/organizations/{organizationId:guid}/analytics/operations")]
+    [ProducesResponseType<AdminOrganizationOperations>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> AdminOrganization(Guid organizationId,[FromQuery]string? from,[FromQuery]string? to,CancellationToken ct)
+    {
+        var result=await queries.OrganizationForAdmin(User.GetActorId(),User.GetSessionFamilyId(),organizationId,from,to,ct);
+        return result.IsSuccess?Ok(result.Value):Failure(result.Error!);
+    }
     private ObjectResult Failure(AuthError error)=>Problem(statusCode:error.Status,title:error.Message,extensions:new Dictionary<string,object?>{["code"]=error.Code,["errors"]=error.Errors});
 }
