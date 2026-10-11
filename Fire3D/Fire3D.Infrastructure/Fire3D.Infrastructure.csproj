@@ -12,6 +12,8 @@
 
 
 	<ItemGroup>
+        <EmbeddedResource Include="Persistence/Sql/ReleasePublishReceipts.sql" />
+        <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />
         <EmbeddedResource Include="Persistence/Sql/ReadinessLiveFamily.sql" />

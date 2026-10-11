@@ -53,7 +53,9 @@ public sealed class BillingV7OpenApiTests
         Assert.False(schemas.GetProperty("OrganizationOperations").GetProperty("properties").TryGetProperty("accounts",out _));
         var org=paths.GetProperty("/api/organizations/me/analytics/operations").GetProperty("get");Assert.Contains("OrganizationUser",org.GetProperty("description").GetString());Assert.DoesNotContain("PlatformAdministration",org.GetProperty("description").GetString());
         Assert.Equal("/",root.GetProperty("servers")[0].GetProperty("url").GetString());
-        Assert.True(paths.GetProperty("/api/releases/{releaseId}/publish").GetProperty("post").GetProperty("responses").TryGetProperty("204",out _));
+        var publication=paths.GetProperty("/api/releases/{releaseId}/publish").GetProperty("post");
+        Assert.Contains("ReleaseResponse",publication.GetProperty("responses").GetProperty("200").GetProperty("content").GetRawText());
+        Assert.False(publication.GetProperty("responses").TryGetProperty("204",out _));
         using var version=JsonDocument.Parse(await client.GetStringAsync("/health/version"));Assert.NotEqual("unknown",version.RootElement.GetProperty("version").GetString());Assert.Single(version.RootElement.EnumerateObject());
         Assert.Equal(HttpStatusCode.Unauthorized,(await client.GetAsync("/api/admin/analytics/operations")).StatusCode);
         var output=Environment.GetEnvironmentVariable("FIRE3D_OPENAPI_OUTPUT");if(output is not null)await File.WriteAllTextAsync(output,root.GetRawText());

@@ -30,6 +30,18 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 - **PARTIAL / CODE/TEST:** source có một phần hoặc có bằng chứng kiểm thử lịch sử; không đồng nghĩa đã triển khai đầy đủ contract v7.
 - Mỗi task triển khai cập nhật checklist, API guide và bằng chứng trong PR. Chỉ cập nhật trạng thái sau khi kiểm cả quyền, tenant, trạng thái, persistence, audit/idempotency và lỗi liên quan.
 
+## Publish and scenario review issue acceptance
+
+| Contract | Source | Automated checks | Deployment |
+|---|---|---|---|
+| Publish gated by paid service, approval, exact readiness, QA, accepted package/runtime and active Training | Implemented; rollout defaults off | PostgreSQL/HTTP regression; current result recorded in handoff/PR | Requires new migrations, matching binary and explicit flag enablement |
+| Idempotency-Key,200 Published DTO, GET/revoke/current Training visibility | Implemented; receipt replay never republishes | Receipt/conflict/race/audit rollback and HTTP readback | Azure/real Unity acceptance separate |
+| Admin review queue/detail with filters/names/content/rubric/readiness | Implemented | HTTP and restricted runtime SQL tests | New read-gate migration required |
+| Organization version detail/list reviewStatus/reviewId/rejectReason | Implemented | Reload, role/session and tenant isolation tests | FE/binary integration separate |
+| Draft/release/readiness lists and typed editor schemas from additional issues | Pending | Not claimed | Pending |
+
+[Exact contracts, error codes and manual tests](publish-review-manual-test.md). Do not infer deployment from source or mock worker results.
+
 ## A. Database và nền tảng dùng chung
 
 ### DB-02 — P0/P1 · CODE/TEST · Backend ACL, IFC enqueue và token cleanup

@@ -76,7 +76,7 @@ Lỗi nghiệp vụ thường dùng ProblemDetails:
 { "title": "Invalid email or password.", "status": 401, "code": "INVALID_CREDENTIALS" }
 ```
 
-Framework có thể thêm type/traceId/errors. Building CRUD, một số IFC command và publish không thêm code. Middleware 401/403/429 có thể không có JSON. Ưu tiên HTTP status rồi mới đọc body nếu có.
+Framework có thể thêm type/traceId/errors. Một số legacy response có thể thiếu code; publish và review trả ProblemDetails kèm code, traceId. Middleware 401/403/429 có thể không có JSON. Ưu tiên HTTP status rồi mới đọc body nếu có.
 
 | Status | Ý nghĩa |
 | --- | --- |
@@ -589,7 +589,7 @@ Playtest prepare/start use the session-bound PostgreSQL gate: exact accepted imm
 
 POST /api/releases: OrganizationUser/PlatformAdmin, Idempotency-Key, revisionId/scenarioVersionId/confirmationReviewId/candidateArtifactId; metadata legacy nullable chỉ được nhận khi khớp output worker. Gate kiểm Approved content/rubric và technical confirmation đúng cặp, current accepted ReleasePackage/manifest và runtime contract; tạo Built/package/provenance/Training/receipt/audit atomic. Replay cùng key/input trả cùng response201; khác input409. Không chứng minh Unity thật.
 
-GET /api/releases/{releaseId} trả ReleaseResponse; POST /revoke nhận reason và trả204, atomic/replay không thêm audit. POST /publish có gate entitlement/approval/readiness/provenance, bật bằng Publishing:Enabled;204/replay khi đủ điều kiện,409 khi thiếu gate nghiệp vụ,503 khi rollout chưa bật.
+GET /api/releases/{releaseId} trả ReleaseResponse; POST /revoke nhận reason và trả204, atomic/replay không thêm audit. POST /publish có gate entitlement/approval/readiness/provenance, bật bằng Publishing:Enabled;bắt buộc Idempotency-Key,200 ReleaseResponse/replay cùng key/input;409 khi thiếu gate hoặc key conflict,503 khi rollout chưa bật. GET trả trạng thái hiện tại; replay receipt không republish release đã Revoked.
 
 GET/PATCH /api/buildings/{id}/access, POST /participation-code/rotate, DELETE /participation-code dùng tenant/role server và If-Match cho mutation. POST /participation/verify chỉ Trainee, grant gắn account/revision. Xem [contract/test release–access](release-building-access.md).
 
@@ -610,7 +610,7 @@ GET /api/payments/payos/checkouts/{id} khai báo200 PayosCheckoutResponse; GET /
 | Draft editor | GET draft state/version đã có. Kiểm tra response ETag/xmin trước khi tích hợp; không coi đây là API còn thiếu. |
 | Playtest prepare | Pins exact accepted immutable package/version/run without Trial consumption or grant; requires OrganizationUser live session and Idempotency-Key. |
 | Playtest start | Live session/owner/tenant/runtime/Building entitlement gate, atomic Trial and receipt/audit; dedicated 5-minute grant. Real Unity integration remains unverified. |
-| Release/training | Built checks approval/readiness/current ReleasePackage, derives package, creates Training atomic. Participation/access and authorized listing implemented. Publish dùng gate paid entitlement/approval/readiness/package và cờ rollout (204 khi đạt,409 thiếu điều kiện,503 khi tắt); learner start/sync/result chưa có. |
+| Release/training | Built checks approval/readiness/current ReleasePackage, derives package, creates Training atomic. Participation/access and authorized listing implemented. Publish dùng gate paid entitlement/approval/readiness/package và cờ rollout (200 ReleaseResponse khi đạt; Idempotency-Key bắt buộc;409 thiếu điều kiện/conflict;503 khi tắt); learner start/sync/result chưa có. |
 | Auth | Form → OTP → proof → register → login cho Trainee/OrganizationUser; OrganizationUser route chưa nhận username cá nhân. Request/verify OTP không tạo identity; verify-email link chỉ cho pending legacy. Profile cá nhân/tổ chức và avatar mutation dùng ETag; logout-all đã có. AvatarService reserve candidate trước conditional S3 copy, có cleanup/recovery source; provider/deployment cần kiểm riêng. Google onboarding completion và explicit link đã có. Xem [Google contract/test tay](google-auth-manual-test.md); Firebase/client/deployment chưa kiểm chứng. |
 | Token response | Login local, Firebase login và refresh đều không trả expiresAt |
 | Device | Installation proof và family session được kiểm khi bind/revoke; FCM send chỉ dùng binding active. Không coi test mock là bằng chứng FCM production delivery. |
@@ -721,6 +721,18 @@ Selected Task 6 source/HTTP/isolated PostgreSQL/runtime-fake evidence: [playtest
 
 
 ## Billing v7 / publish / reporting rollout (source branch)
+
+### Publish and scenario review read contracts
+
+`POST /api/releases/{releaseId}/publish` requires Idempotency-Key and returns 200 ReleaseResponse when Publishing is enabled and every gate passes. Same actor/key/input replays the original response; changed canonical input returns409 IDEMPOTENCY_KEY_CONFLICT. GET reads current release state; replay after revoke never republishes. Missing QA, blockers, package/runtime, approval, readiness, entitlement or active Training has a distinct409 code. The disabled rollout flag remains503. [Errors, migration order and manual acceptance](publish-review-manual-test.md).
+
+| Method | Route | Response / scope |
+|---|---|---|
+| GET | `/api/admin/scenario-reviews` | 200 PageResponse<ScenarioReviewSummary>; PlatformAdmin; status/organizationId/page/pageSize |
+| GET | `/api/admin/scenario-reviews/{reviewId}` | 200 ScenarioReviewDetail; PlatformAdmin |
+| GET | `/api/scenario-versions/{versionId}/review` | 200 ScenarioReviewDetail; own-tenant OrganizationUser or PlatformAdmin |
+
+Review detail has nested `review` metadata (hashes, names, submitter/decision/reason), frozen `content`/`rubric`/objectives/instructions and `readiness`. Scenario version detail/list add reviewStatus/reviewId/rejectReason. Queue defaults20/max100, stable submittedAt/ID descending. Invalid filters400, foreign tenant404, revoked family401; no direct review-table SELECT for runtime. [Readiness and review contract](scenario-readiness.md).
 
 See [current contract and migrations](billing-v7-rollout.md), [safe reporting DTOs](reporting-operations.md), and [Swagger manual acceptance](publish-billing-v7-manual-test.md). Package6/12-month pricing stays monthly; quotation pins service periods/capacity/quota before Issue. Publish uses paid approval/readiness/package gates when enabled; operational metrics are not learner/revenue analytics. Source/Docker tests do not establish shared DB/provider deployment.
 # Selected worker/API contract update

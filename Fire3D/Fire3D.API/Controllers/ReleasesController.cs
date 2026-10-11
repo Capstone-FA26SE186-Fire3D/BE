@@ -45,19 +45,19 @@ public class ReleasesController(ISender sender) : ControllerBase
     /// </summary>
     [HttpPost("{releaseId:guid}/publish")]
     [ProducesResponseType<ProblemDetails>(503)]
-    [ProducesResponseType(204)]
+    [ProducesResponseType<ReleaseResponse>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
-    public async Task<IActionResult> PublishRelease(Guid releaseId, CancellationToken ct)
+    public async Task<IActionResult> PublishRelease(Guid releaseId, CancellationToken ct, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key=null)
     {
         var actor = User.GetActorId();
 
-        var result = await sender.Send(new Fire3D.Application.Releases.Commands.PublishRelease.PublishReleaseCommand(actor, releaseId, User.GetSessionFamilyId()), ct);
+        var result = await sender.Send(new Fire3D.Application.Releases.Commands.PublishRelease.PublishReleaseCommand(actor, releaseId, User.GetSessionFamilyId(), key), ct);
 
-        return result.IsSuccess ? NoContent() : ReleaseProblem(result.Error!);
+        return result.IsSuccess ? Ok(result.Value) : ReleaseProblem(result.Error!);
     }
 
     /// <summary>Revokes a Built or Published release. Repeating the request is idempotent.</summary>

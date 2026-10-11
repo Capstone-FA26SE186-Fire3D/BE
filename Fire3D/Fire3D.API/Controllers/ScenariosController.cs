@@ -15,7 +15,7 @@ namespace Fire3D.API.Controllers;
 [ApiController]
 [Route("api/scenarios")]
 [Authorize(Roles = "OrganizationUser,PlatformAdmin")]
-public class ScenariosController(ISender sender) : ControllerBase
+public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IScenarioReviewQueries reviews) : ControllerBase
 {
     /// <summary>Validates draft structure. IFC geometry and runtime capability checks require the worker pipeline and are not run by this synchronous endpoint.</summary>
     [HttpPost("/api/scenario-drafts/{draftId:guid}/validate")]
@@ -34,7 +34,7 @@ public class ScenariosController(ISender sender) : ControllerBase
 
     /// <summary>Loads one immutable scenario snapshot with its complete configuration.</summary>
     [HttpGet("/api/scenario-versions/{versionId:guid}")]
-    [ProducesResponseType(200)]
+    [ProducesResponseType<Fire3D.Application.Scenarios.ScenarioVersionDetailResponse>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
@@ -42,13 +42,21 @@ public class ScenariosController(ISender sender) : ControllerBase
     {
         var actor = User.GetActorId();
         var result = await sender.Send(new GetScenarioVersionQuery(actor, versionId), ct);
+        if(result.IsSuccess)
+        {
+            var states=await reviews.StatesAsync(actor,User.GetSessionFamilyId(),[versionId],ct);
+            if(!states.IsSuccess) return ReviewReadProblem(states.Error!);
+            var review=states.Value!.SingleOrDefault();
+            if(review is null) return Problem(statusCode:404,title:"Scenario version not found.",extensions:new Dictionary<string,object?>{["code"]="NOT_FOUND"});
+            return Ok(result.Value! with {ReviewStatus=review.ReviewStatus,ReviewId=review.ReviewId,RejectReason=review.RejectReason});
+        }
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
     /// <summary>Lists immutable snapshots for a scenario, newest version first.</summary>
     [HttpGet("{scenarioId:guid}/versions")]
-    [ProducesResponseType(200)]
+    [ProducesResponseType<Fire3D.Application.Administration.PageResponse<Fire3D.Application.Scenarios.ScenarioVersionSummaryResponse>>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
@@ -57,9 +65,20 @@ public class ScenariosController(ISender sender) : ControllerBase
     {
         var actor = User.GetActorId();
         var result = await sender.Send(new ListScenarioVersionsQuery(actor, scenarioId, page, pageSize), ct);
+        if(result.IsSuccess)
+        {
+            var states=await reviews.StatesAsync(actor,User.GetSessionFamilyId(),result.Value!.Items.Select(v=>v.Id).ToArray(),ct);
+            if(!states.IsSuccess) return ReviewReadProblem(states.Error!);
+            var byId=states.Value!.ToDictionary(v=>v.ScenarioVersionId);
+            var items=result.Value.Items.Where(v=>byId.ContainsKey(v.Id)).Select(v=>v with {ReviewStatus=byId[v.Id].ReviewStatus,ReviewId=byId[v.Id].ReviewId,RejectReason=byId[v.Id].RejectReason}).ToArray();
+            return Ok(result.Value with {Items=items});
+        }
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
+
+    private ObjectResult ReviewReadProblem(Fire3D.Application.Authentication.AuthError error)=>Problem(statusCode:error.Status,title:error.Message,
+        extensions:new Dictionary<string,object?>{["code"]=error.Code,["errors"]=error.Errors});
 
     /// <summary>Loads a draft state and returns its version as an ETag for the next update.</summary>
     [HttpGet("/api/scenario-drafts/{draftId:guid}")]

@@ -51,7 +51,11 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal(1L,await ScalarAsync("SELECT count(*) FROM audit_logs WHERE action='Publish'"));
             Assert.Equal(1L,await ScalarAsync("SELECT count(*) FROM release_command_receipts WHERE operation='Publish'"));
             Assert.True((await store.RevokeAsync(f.Owner,built.Value.Id,null,"Test revoke",default,family)).IsSuccess);
-            Assert.Equal("RELEASE_NOT_BUILT",(await store.PublishAsync(f.Owner,built.Value.Id,null,default,family)).Error?.Code);
+            var replay=await store.PublishAsync(f.Owner,built.Value.Id,null,default,family);
+            Assert.True(replay.IsSuccess,replay.Error?.Code);
+            Assert.Equal("Published",replay.Value!.Status); // Original receipt, not a new publication.
+            Assert.Equal("RELEASE_NOT_BUILT",(await store.PublishAsync(f.Owner,built.Value.Id,null,default,family,"new-publication")).Error?.Code);
+            Assert.Equal("Revoked",await ScalarAsync($"SELECT status::text FROM releases WHERE id='{built.Value.Id}'"));
         });
     }
 

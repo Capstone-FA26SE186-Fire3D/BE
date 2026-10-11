@@ -23,7 +23,7 @@ Contract hiện tại trong nhánh triển khai; dấu tick chỉ xác nhận so
 - Confirm trả reviewId cho exact revision/version/run/annotation/artifact, không dùng revision.status làm bằng chứng version khác. Technical rejection khác approval nội dung.
 - Worker là machine authentication X-Worker-Key, JWT user không cấp quyền worker. Transport mặc định Http; tùy chọn RedisStreams dùng PostgreSQL outbox → Redis → BE bridge → HTTP worker. [Hướng dẫn Redis](redis-processing.md) tách Published, durable handoff/ACK và Succeeded; provider/toolchain thật chưa nghiệm thu.
 - Playtest preparation không grant/quota; start pin actor/family/package/runtime, Trial consumption hoặc entitlement đúng Building. Không seed Trial tự động.
-- Release Built derive metadata/provenance từ accepted ReleasePackage và Approved content/rubric; create matching Training atomic. Publish có gate paid entitlement/approval/exact readiness/package và cờ Publishing:Enabled mặc định tắt; đủ điều kiện trả204, thiếu điều kiện nghiệp vụ409, chưa bật rollout503.
+- Release Built derive metadata/provenance từ accepted ReleasePackage và Approved content/rubric; create matching Training atomic. Publish có gate paid entitlement/approval/exact readiness/package và cờ Publishing:Enabled mặc định tắt; yêu cầu Idempotency-Key; đủ điều kiện trả200 ReleaseResponse, thiếu điều kiện nghiệp vụ409, chưa bật rollout503.
 - Paid/checkout/provisioning trong GET PayOS là ba trạng thái riêng. Chỉ sửa metadata GET, không thay thanh toán.
 
 ## Test tay theo dependency
@@ -34,7 +34,7 @@ Contract hiện tại trong nhánh triển khai; dấu tick chỉ xác nhận so
 4. [Scenario](scenario-authoring.md): GET draft ETag → PUT state v7/rubric → validate → snapshot cùng ETag/key → package build. Fake output phải accept trước readiness.
 5. [Readiness/approval](scenario-readiness.md): confirm exact pair; submit lấy server hashes → admin approve; sai version/hash phải bị chặn.
 6. [Playtest](playtest-manual-test.md): prepare không trừ Trial; start runtime đúng với explicit entitlementfixture; replay không trừ lần hai.
-7. [Release/access](release-building-access.md): Build body4 IDs/key, thử metadata mismatch, replay; list Built không hiện cho Trainee. GET access ETag → rotate/code verify → rotate/revoke grant cũ vô hiệu. Không gỡ publish containment để tạo Published bằng test tay.
+7. [Release/access](release-building-access.md): Build body4 IDs/key, thử metadata mismatch, replay; list Built không hiện cho Trainee. GET access ETag → rotate/code verify → rotate/revoke grant cũ vô hiệu. Publish dùng gate thật khi bật cờ sau migration; kiểm đủ điều kiện và Idempotency-Key theo [test tay publish/review](publish-review-manual-test.md).
 8. [Support](support-api.md): create/message replay, cross-user, detail ETag/admin transitions, stale PATCH và pageSize101.
 9. Swagger GET PayOS phải hiện response200 đúng DTO; copy server-relative HTTPS origin. Kiểm binary/schema deploy trước khi kết luận runtime.
 
