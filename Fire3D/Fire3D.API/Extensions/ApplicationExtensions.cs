@@ -46,6 +46,7 @@ public static class ApplicationExtensions
         services.AddHostedService<Fire3D.Infrastructure.Workers.PayosRecoveryWorker>();
         services.Configure<Fire3D.Infrastructure.Billing.BillingReminderOptions>(configuration.GetSection("BillingReminders"));
         services.AddScoped<Fire3D.Infrastructure.Billing.BillingReminders>();
+        services.AddScoped<Fire3D.Application.Billing.IOrganizationNotifications,Fire3D.Infrastructure.Billing.OrganizationNotifications>();
         services.AddHostedService<Fire3D.Infrastructure.Billing.BillingReminderWorker>();
         services.AddScoped<IAdministrationStore, AdministrationStore>();
         services.AddScoped<Fire3D.Application.Reporting.IAuditQueries,Fire3D.Infrastructure.Reporting.AuditQueries>();

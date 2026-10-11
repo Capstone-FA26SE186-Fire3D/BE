@@ -15,7 +15,7 @@ public sealed class BillingUpgradeTopUpTests
     private static string ETag(QuotationResponse q)=>BillingETag.Format(q.Id,q.Revision);
 
     // A paid v7 entitlement (learner limit 20) for the fixture Building, provisioned through the real PayOS gates.
-    private static async Task<(BillingApiTests.Factory Factory,Guid Entitlement,Guid Policy)> PaidEntitlement(BillingDatabase db,FakePayos? provider=null)
+    internal static async Task<(BillingApiTests.Factory Factory,Guid Entitlement,Guid Policy)> PaidEntitlement(BillingDatabase db,FakePayos? provider=null)
     {
         var quote=await PayosCheckoutTests.Accepted(db);
         var factory=new BillingApiTests.Factory(db,provider??new FakePayos());
@@ -251,7 +251,12 @@ public sealed class BillingUpgradeTopUpTests
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM notification_deliveries WHERE channel='Web' AND status='Sent'"));
         Assert.Equal(0,await reminders.DispatchAsync(default));
         Assert.Equal("Pending",await db.Scalar("SELECT status FROM notification_deliveries WHERE channel='Email'"));
-        email.Fail=false;Assert.Equal(1,await reminders.DispatchAsync(default));
+        // Retries wait for their backoff; a stale lease is reclaimed by the next worker, a live one is not.
+        email.Fail=false;Assert.Equal(0,await reminders.DispatchAsync(default));
+        await db.Sql("UPDATE notification_deliveries SET status='Sending',lease_token=gen_random_uuid(),lease_until=now()+interval '1 minute' WHERE channel='Email'");
+        Assert.Equal(0,await reminders.DispatchAsync(default));
+        await db.Sql("UPDATE notification_deliveries SET status='Pending',lease_token=NULL,lease_until=NULL,next_attempt_at=now()-interval '1 second' WHERE channel='Email'");
+        Assert.Equal(1,await reminders.DispatchAsync(default));
         Assert.Equal(["owner@example.test"],email.Sent);Assert.Equal(0,await reminders.DispatchAsync(default));
         // A second period or a renewal already in place is not reminded; a pending email is suppressed after renewal.
         await db.Sql("DELETE FROM notification_deliveries; DELETE FROM organization_notifications");

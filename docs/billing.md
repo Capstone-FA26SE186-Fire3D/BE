@@ -25,6 +25,13 @@ Provision replay returns a previously committed payment/line resource even after
 - Same key and input replay the stored response after the scope check, even with the now stale ETag; the same key with another input is `409 IDEMPOTENCY_KEY_CONFLICT`.
 - Money that arrives after cancellation is still recorded with its provenance (`Applied`, request `Paid`), but its provisioning records stay `NeedsReconcile` with `PAYOS_QUOTATION_CANCELLED`: no entitlement or quota is activated and the quotation is not reopened. Migration: `20261012110000_AddBillingQuotationCancel`.
 
+## Expiry reminder notifications (#68)
+
+- `GET /api/organizations/me/notifications?unread=&type=&page=&pageSize=` (OrganizationUser, live session): reminders addressed to the caller in their current organization, newest first, default 20, maximum 100. Items carry type, title, body, Building (id and current name), entitlement, `referenceEndsAt`, `createdAt`, `readAt` and `stillRelevant`. `stillRelevant` becomes false after a renewal or once the period ended; the history is kept.
+- `PATCH /api/organizations/me/notifications/{id}/read`: idempotent; the first read time is kept. Another recipient's or tenant's notification is 404.
+
+The existing worker (`BillingReminders`) still creates one notification per entitlement period and recipient with Web and Email deliveries. Email delivery now uses a lease (`BillingReminders:LeaseSeconds`, default 300). A claim commits `Sending` with a lease token and expiry before any email is sent, so two instances never take the same delivery. Sending happens outside transactions, and complete/retry only apply while the lease is still held. Retries back off (60 s doubling, up to 1 h) until `MaxAttempts`. An expired lease (crashed worker) is reclaimed. Recipient, tenant, Building and renewal are rechecked just before sending. Email is at-least-once: a crash after the provider accepted a message can send it again. Tests use a fake email adapter, and the real-send flag is unchanged. Migration: `20261012120000_AddNotificationDeliveryLease`.
+
 ## Draft tax and pricing status (#68)
 
 Quotation responses carry `pricingStatus`, nullable `taxAmount` and `issuedAt`:
