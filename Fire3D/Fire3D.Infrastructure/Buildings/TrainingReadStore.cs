@@ -8,14 +8,10 @@ public sealed class TrainingReadStore(Fire3DDbContext db):ITrainingReadStore
 {
  public async Task<AuthResult<List<TrainingDto>>> GetTrainingsByBuildingAsync(Guid actorId,Guid buildingId,Guid? organizationId,CancellationToken ct,Guid? family=null)
  {
-  var result=await JsonCommandGate.Execute(db,"release_access_gate","List",actorId,family,buildingId,new{},null,null,ct);
+  // The gate authorizes via release_access_gate('List') and adds the release state and version each Training serves.
+  var result=await JsonCommandGate.Execute(db,"training_list_gate","List",actorId,family,buildingId,new{},null,null,ct);
   var json=new JsonSerializerOptions(JsonCommandGate.Json);json.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
   if(!result.IsSuccess)return new(default,result.Error);
-  var items=result.Value.Deserialize<List<TrainingDto>>(json)!;
-  // The gate lists only Trainings pinned to an Approved content review; add the release state and version it serves.
-  var ids=items.Select(x=>x.ReleaseId).Distinct().ToList();
-  var releases=(await db.Database.SqlQuery<ReleaseState>($"SELECT id AS \"Id\",status::text AS \"Status\",scenario_version_id AS \"ScenarioVersionId\" FROM releases WHERE id=ANY({ids.ToArray()})").ToListAsync(ct)).ToDictionary(x=>x.Id);
-  return AuthResult<List<TrainingDto>>.Ok(items.Select(x=>releases.TryGetValue(x.ReleaseId,out var r)?x with{ReleaseStatus=r.Status,ScenarioVersionId=r.ScenarioVersionId}:x).ToList());
+  return AuthResult<List<TrainingDto>>.Ok(result.Value.Deserialize<List<TrainingDto>>(json)!);
  }
- private sealed record ReleaseState(Guid Id,string Status,Guid ScenarioVersionId);
 }
