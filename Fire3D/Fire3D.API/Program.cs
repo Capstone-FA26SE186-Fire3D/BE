@@ -35,6 +35,7 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
     .AddSchemaTransformer<AuthProfileSchemaTransformer>()
     .AddOperationTransformer<AuthOperationTransformer>()
     .AddOperationTransformer<AuthoringOperationTransformer>()
+    .AddSchemaTransformer<ContractSchemaTransformer>()
     .AddOperationTransformer<SuccessResponseTransformer>());
 builder.Services.AddHealthChecks();
 
@@ -65,7 +66,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(frontendUrls)
               .AllowAnyMethod()
               .AllowAnyHeader()
-              .WithExposedHeaders("ETag", "Retry-After")
+              .WithExposedHeaders("ETag", "Retry-After", "X-Correlation-ID", "Location")
               .AllowCredentials();
     });
 });

@@ -61,4 +61,17 @@ public sealed class BillingV7QuotationTests
         Assert.Equal(new[]{200,412},(await Task.WhenAll(Issue(),Issue())).Order().ToArray());
         Assert.Equal(1L,await database.Scalar($"SELECT count(*) FROM audit_logs WHERE target_id='{quote.Id}' AND action='Update'"));
     }
+    [BillingPostgresFact]
+    public async Task Quotation_names_the_missing_building_profile_field_instead_of_not_found()
+    {
+        await using var database=await BillingDatabase.Create();await using var db=database.Context();var service=new BillingService(db);
+        var package=await service.SavePackage(BillingDatabase.Admin,BillingDatabase.Admin,null,new("V7","V7",100,6,true,null,25,0),null,default);
+        var bare=Guid.NewGuid();
+        await database.Sql($"INSERT INTO buildings(id,organization_id,name,is_active,created_by,created_at,updated_at) VALUES('{bare}','{BillingDatabase.Org}','No address',true,'{BillingDatabase.Owner}',now(),now())");
+        var failure=await Assert.ThrowsAsync<BillingException>(()=>service.CreateQuotation(BillingDatabase.Owner,BillingDatabase.Owner,new([new(bare,package.Id,"New")]),"bare",default));
+        Assert.Equal(409,failure.Status);Assert.Equal("BUILDING_PROFILE_INCOMPLETE",failure.Code);
+        Assert.Equal(["address"],failure.Errors!.Keys.ToArray());Assert.Equal(bare,failure.Extensions!["buildingId"]);
+        // A Building of another tenant is still simply not found.
+        Assert.Equal(404,(await Assert.ThrowsAsync<BillingException>(()=>service.CreateQuotation(BillingDatabase.Other,BillingDatabase.Other,new([new(bare,package.Id,"New")]),"foreign",default))).Status);
+    }
 }

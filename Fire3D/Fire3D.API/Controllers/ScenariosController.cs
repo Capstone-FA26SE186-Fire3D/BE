@@ -200,6 +200,9 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
     [ProducesResponseType<ProblemDetails>(422)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(412)]
+    [ProducesResponseType<ProblemDetails>(428)]
     public async Task<IActionResult> SnapshotScenarioDraft(Guid draftId, CancellationToken ct, [FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch = null, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key = null)
     {
         var actor = User.GetActorId();

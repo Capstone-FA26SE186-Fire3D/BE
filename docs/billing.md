@@ -103,7 +103,7 @@ Catalog PATCH nhận **đầy đủ** các field editable, không phải JSON Me
 
 Discount: `code`, `discountKind` (`Percent` hoặc `Fixed`), `discountValue`, `minimumBuildings`, `validFrom`; tùy chọn `validUntil`, `servicePackageId`, `minimumDurationMonths`, `isActive`. Percent 0–100, tối đa hai số lẻ; Fixed là VND nguyên. Ngày phải là ISO 8601 có `Z` hoặc offset. Xét số **dòng đủ điều kiện** theo package/duration và hiệu lực. Chọn một rule giảm tiền lớn nhất, bằng nhau chọn rule ID ổn định. Không cộng dồn; clamp theo subtotal hợp lệ, percent làm tròn VND AwayFromZero, phân bổ theo tỷ lệ lấy floor, số dư 1 VND theo line ID. Không áp rule cho dòng ngoài scope. Snapshot giữ rule/value/amount, danh sách dòng eligible và quy tắc rounding.
 
-Draft có 1–100 Building khác nhau, cùng tổ chức, active, có tên và địa chỉ. `New` dành cho Building chưa có lịch sử dịch vụ đã trả tiền; `Renewal` cần lịch sử entitlement paid (trial không tính). Body không nhận giá, tenant hoặc người tạo từ client:
+Draft có 1–100 Building khác nhau, cùng tổ chức, active, có tên và địa chỉ. Building không thuộc tổ chức hoặc đã archive → `404`; Building thiếu tên hoặc địa chỉ → `409 BUILDING_PROFILE_INCOMPLETE` với `errors.name` / `errors.address` và `buildingId`, để FE đưa người dùng tới hồ sơ Building (`PUT /api/buildings/{id}` với `location.address`). `New` dành cho Building chưa có lịch sử dịch vụ đã trả tiền; `Renewal` cần lịch sử entitlement paid (trial không tính). Body không nhận giá, tenant hoặc người tạo từ client:
 
 ```json
 {

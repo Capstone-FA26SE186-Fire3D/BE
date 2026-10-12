@@ -76,7 +76,7 @@ Lỗi nghiệp vụ thường dùng ProblemDetails:
 { "title": "Invalid email or password.", "status": 401, "code": "INVALID_CREDENTIALS" }
 ```
 
-Framework có thể thêm type/traceId/errors. Một số legacy response có thể thiếu code; publish và review trả ProblemDetails kèm code, traceId. Middleware 401/403/429 có thể không có JSON. Ưu tiên HTTP status rồi mới đọc body nếu có.
+Framework có thể thêm type/traceId/errors. Response lỗi từ handler luôn có `code`. Middleware 401/403 của xác thực có thể không có body; 429 luôn là ProblemDetails có `code`, `traceId` và header `Retry-After`. Ưu tiên HTTP status rồi mới đọc body nếu có.
 
 | Status | Ý nghĩa |
 | --- | --- |
@@ -84,12 +84,15 @@ Framework có thể thêm type/traceId/errors. Một số legacy response có th
 | 401 | Thiếu/sai/hết hiệu lực token hoặc sai thông tin đăng nhập |
 | 403 | Không đủ role; một số login báo tài khoản/tổ chức bị khóa |
 | 404 | Không thấy, ngoài phạm vi tổ chức hoặc ID URL không đúng định dạng GUID |
-| 409 | Trùng email/slug, xung đột version/trạng thái/idempotency |
-| 412 | Thiếu/sai If-Match khi lưu draft |
-| 422 | Không xác minh được object upload |
+| 409 | Trùng email/slug, xung đột nghiệp vụ/trạng thái, cùng `Idempotency-Key` nhưng input khác |
+| 412 | `If-Match` không khớp revision hiện tại (ETag cũ) |
+| 422 | Nội dung đúng JSON nhưng sai schema (editor `EDITOR_SCHEMA_INVALID`, `EDITOR_SCHEMA_VERSION_UNSUPPORTED`) hoặc không xác minh được object upload |
+| 428 | Thiếu header `If-Match` bắt buộc |
 | 429 | Vượt rate limit |
 
-Policy administration: **120 request/phút/IP** cho administration và IFC commands. `POST /api/auth/refresh` có policy riêng **10 request/phút/IP**, fixed window trong bộ nhớ mỗi instance, không Redis. Vượt quota trả `429 AUTH_REFRESH_RATE_LIMITED`, ProblemDetails có `traceId` và header `Retry-After` (giây). Trong quota, refresh token sai vẫn trả `401`; header IP client tự gửi không thay thế connection IP do middleware xử lý. CORS chạy trước rate limiter và expose `Retry-After` cho origin frontend được cho phép; preflight không tiêu thụ quota. Nhiều instance không chia sẻ quota này.
+Quy ước If-Match chung: thiếu → `428`, sai định dạng → `400`, cũ → `412`. Draft dùng mã `PRECONDITION_REQUIRED` / `INVALID_IF_MATCH`; JSON hỏng → `400 EDITOR_JSON_MALFORMED`.
+
+Policy administration: **120 request/phút/IP** cho administration và IFC commands; vượt quota trả `429 ADMINISTRATION_RATE_LIMITED`. `POST /api/auth/refresh` có policy riêng **10 request/phút/IP**; vượt quota trả `429 AUTH_REFRESH_RATE_LIMITED`. Cả hai là fixed window trong bộ nhớ mỗi instance, không Redis, và trả ProblemDetails có `traceId` cùng header `Retry-After` (giây); đọc thời gian chờ từ header, không từ text lỗi. Trong quota, refresh token sai vẫn trả `401`; header IP client tự gửi không thay thế connection IP do middleware xử lý. CORS chạy trước rate limiter và expose `ETag`, `Retry-After`, `X-Correlation-ID`, `Location` cho origin frontend được cho phép; preflight không tiêu thụ quota. Nhiều instance không chia sẻ quota này.
 
 Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. Search quản trị/building tối đa 200 ký tự. `Page<T>` bên dưới có dạng:
 

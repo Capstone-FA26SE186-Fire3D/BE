@@ -21,6 +21,13 @@ public sealed class SuccessResponseTransformer : IOpenApiOperationTransformer
             var schema=await context.GetOrCreateSchemaAsync(type,null,ct);
             operation.Responses["200"]=new OpenApiResponse{Description="OK",Content=new Dictionary<string,OpenApiMediaType>{["application/json"]=new(){Schema=schema}}};
         }
+        // Rate-limited endpoints document their 429 ProblemDetails; the rejection handler always writes one.
+        if(!operation.Responses.ContainsKey("429")&&context.Description.ActionDescriptor.EndpointMetadata.OfType<Microsoft.AspNetCore.RateLimiting.EnableRateLimitingAttribute>().Any())
+        {
+            var problem=await context.GetOrCreateSchemaAsync(typeof(ProblemDetails),null,ct);
+            operation.Responses["429"]=new OpenApiResponse{Description="Rate limit exceeded (code ADMINISTRATION_RATE_LIMITED or AUTH_REFRESH_RATE_LIMITED).",
+                Content=new Dictionary<string,OpenApiMediaType>{["application/problem+json"]=new(){Schema=problem}}};
+        }
         if(operation.Responses.TryGetValue("429",out var rejected)&&rejected is OpenApiResponse error)
         {
             error.Headers??=new Dictionary<string,IOpenApiHeader>();
