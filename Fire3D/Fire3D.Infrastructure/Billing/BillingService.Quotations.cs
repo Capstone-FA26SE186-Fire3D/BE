@@ -97,7 +97,13 @@ public sealed partial class BillingService
             await Lock("fire3d:building:"+input.BuildingId,true,ct);
             var building=await db.Buildings.AsNoTracking().Where(x=>x.Id==input.BuildingId&&x.OrganizationId==quote.OrganizationId&&x.IsActive&&x.DeletedAt==null)
                 .Select(x=>new {x.Name,Address=x.BuildingLocation==null?null:x.BuildingLocation.Address}).SingleOrDefaultAsync(ct);
-            if(building is null||!Text(building.Name,255)||!Text(building.Address,10000))throw Missing();
+            if(building is null)throw Missing();
+            // The line snapshot needs a name and an address; say which is missing so the client can send the user to the Building profile.
+            var incomplete=new Dictionary<string,string[]>();
+            if(!Text(building.Name,255))incomplete["name"]=["The Building needs a name (1-255 characters) before it can be quoted."];
+            if(!Text(building.Address,10000))incomplete["address"]=["The Building needs an address before it can be quoted."];
+            if(incomplete.Count>0)throw new BillingException(409,"BUILDING_PROFILE_INCOMPLETE","Complete the Building name and address before quoting it.",incomplete)
+                {Extensions=new Dictionary<string,object?>{["buildingId"]=input.BuildingId}};
             var package=await db.ServicePackages.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==input.ServicePackageId&&x.IsActive,ct)??throw Missing();
             if(!PackageView(package).IsPurchasable)throw new BillingException(409,"PACKAGE_NOT_PURCHASABLE","Choose a fully configured v7 package.");
             BillingQuotaPolicy? policy=null;

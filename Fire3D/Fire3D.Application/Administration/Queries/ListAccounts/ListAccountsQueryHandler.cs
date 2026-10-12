@@ -15,6 +15,8 @@ internal sealed class ListAccountsQueryHandler(IAdministrationStore store, IAuth
         if (!AdministrationSupport.ValidPage(filter.Page, filter.PageSize, filter.Search)
             || (filter.Role.HasValue && !Enum.IsDefined(filter.Role.Value)))
             return AdministrationSupport.Invalid<PageResponse<ManagedAccountResponse>>("Invalid filters. Page must be 1–100000, pageSize 1–100 and search at most 200 characters.");
+        if (!AdministrationSort.TryParse(filter.Sort, AdministrationSort.AccountFields, out _, out _))
+            return AdministrationSupport.Invalid<PageResponse<ManagedAccountResponse>>(AdministrationSupport.SortMessage(AdministrationSort.AccountFields));
         return AuthResult<PageResponse<ManagedAccountResponse>>.Ok(await store.ListAccountsAsync(filter, ct));
     }
 }

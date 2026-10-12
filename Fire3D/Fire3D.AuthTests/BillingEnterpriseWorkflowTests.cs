@@ -51,6 +51,8 @@ public sealed class BillingEnterpriseWorkflowTests
         Assert.Equal(401,(await Assert.ThrowsAsync<BillingException>(()=>billing.ListEnterpriseResponses(BillingDatabase.Owner,BillingDatabase.Owner,request.Id,1,20,default))).Status);
         Assert.Equal(closed.Revision,(await billing.CloseEnterpriseRequest(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("Customer signed elsewhere"),BillingETag.Format(request.Id,quoted.Revision),"close",default)).Revision);
         Assert.Equal("Draft",(string?)await db.Scalar($"SELECT status::text FROM quotations WHERE id='{quote.Id}'"));
+        var closeAudit=(Guid)(await db.Scalar($"SELECT id FROM audit_logs WHERE target_entity='enterprise_quote_requests' AND target_id='{request.Id}' AND new_values->>'Status'='Closed'"))!;
+        Assert.Equal("Customer signed elsewhere",(await new Fire3D.Infrastructure.Reporting.AuditQueries(context).Get(BillingDatabase.Admin,BillingDatabase.Admin,closeAudit,default)).Value!.Reason);
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
         Assert.Equal(409,(await Assert.ThrowsAsync<BillingException>(()=>billing.AddEnterpriseResponse(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("Late"),"reply-late",default))).Status);
         Assert.Equal(409,(await Assert.ThrowsAsync<BillingException>(()=>billing.UpdateEnterpriseStatus(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("Rejected"),BillingETag.Format(request.Id,closed.Revision),default))).Status);

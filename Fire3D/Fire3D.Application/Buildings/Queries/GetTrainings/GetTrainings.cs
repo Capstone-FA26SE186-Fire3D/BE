@@ -16,7 +16,10 @@ public sealed record TrainingDto(
     DateTime? StartDate,
     DateTime? EndDate,
     List<string> AllowedModes,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    string? ReleaseStatus = null,
+    Guid? ScenarioVersionId = null,
+    string ReviewStatus = "Approved"
 );
 
 public interface ITrainingReadStore

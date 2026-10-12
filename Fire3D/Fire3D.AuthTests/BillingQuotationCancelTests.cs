@@ -43,6 +43,10 @@ public sealed class BillingQuotationCancelTests
         Assert.Equal(HttpStatusCode.OK,(await owner.SendAsync(Cancel(draft.Id,await Revision(db,draft.Id),"cancel-2"))).StatusCode);
         Assert.Equal(1L,await db.Scalar($"SELECT count(*) FROM audit_logs WHERE target_id='{draft.Id}' AND new_values->>'status'='Cancelled'"));
         Assert.Equal("Customer changed plan",(string?)await db.Scalar($"SELECT new_values->>'reason' FROM audit_logs WHERE target_id='{draft.Id}' AND new_values->>'status'='Cancelled'"));
+        // Audit detail surfaces the cancellation reason.
+        var cancelAudit=(Guid)(await db.Scalar($"SELECT id FROM audit_logs WHERE target_id='{draft.Id}' AND new_values->>'status'='Cancelled'"))!;
+        await using(var reporting=db.Context())
+            Assert.Equal("Customer changed plan",(await new Fire3D.Infrastructure.Reporting.AuditQueries(reporting).Get(BillingDatabase.Admin,BillingDatabase.Admin,cancelAudit,default)).Value!.Reason);
         // Admin route cancels another tenant's Issued quotation; an Expired quotation keeps its status.
         var issued=await Draft(db);
         await using(var context=db.Context())

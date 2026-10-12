@@ -25,9 +25,9 @@ internal sealed class SetOrganizationActiveCommandHandler(IAdministrationStore s
             await store.SetOrganizationActiveAsync(target.Id, active, now, ct);
             await store.WriteAuditAsync(command.ActorId, target.Id, "organizations",
                 target.Id, target.IsActive, active, command.CorrelationId, now, ct);
-            target = (await store.FindOrganizationAsync(command.Id, ct))!;
         }
+        var view = await store.GetOrganizationViewAsync(command.Id, ct);
         await transaction.CommitAsync(ct);
-        return AuthResult<OrganizationResponse>.Ok(AdministrationSupport.ToResponse(target));
+        return AuthResult<OrganizationResponse>.Ok(view!);
     }
 }

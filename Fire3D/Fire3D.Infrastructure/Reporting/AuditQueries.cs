@@ -44,7 +44,10 @@ public sealed class AuditQueries(Fire3DDbContext db) : IAuditQueries
     {
         if(!await Authorized(actor,family,ct))return AuthResult<AuditDetail>.Fail("FORBIDDEN","Only an active PlatformAdmin session can read audit.",403);
         var item=await WithLabels(db.AuditLogs.AsNoTracking().Where(x=>x.Id==id)).SingleOrDefaultAsync(ct);
-        return item is null?AuthResult<AuditDetail>.Fail("NOT_FOUND","The audit record was not found.",404)
-            :AuthResult<AuditDetail>.Ok(new(item.Meta,SafeAuditChanges.Read(item.Log),SafeAuditChanges.Reason(item.Log)));
+        if(item is null)return AuthResult<AuditDetail>.Fail("NOT_FOUND","The audit record was not found.",404);
+        var reason=SafeAuditChanges.Reason(item.Log);
+        if(reason is null && SafeAuditChanges.RejectedReview(item.Log) is Guid review)
+            reason=await db.Database.SqlQuery<string?>($"SELECT audit_review_reason({review}) AS \"Value\"").SingleAsync(ct);
+        return AuthResult<AuditDetail>.Ok(new(item.Meta,SafeAuditChanges.Read(item.Log),reason));
     }
 }

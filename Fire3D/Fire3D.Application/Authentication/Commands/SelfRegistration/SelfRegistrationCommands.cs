@@ -14,7 +14,8 @@ public sealed record RegisterTraineeCommand(string Email, string Username, strin
 public sealed record RegisterOrganizationCommand(
     string Email, string Password, string ConfirmPassword, string? FullName,
     string OrganizationName, string OrganizationAddress, string OrganizationPhoneNumber,
-    DateOnly? Dob = null, UserGender? Gender = null, string? PhoneNumber = null, string? RegistrationToken = null)
+    DateOnly? Dob = null, UserGender? Gender = null, string? PhoneNumber = null, string? RegistrationToken = null,
+    string? Username = null)
     : IRequest<AuthResult<AccountResponse>>;
 
 public sealed class RegisterTraineeCommandHandler(IAuthStore store, IPasswordService passwords,
@@ -65,8 +66,13 @@ public sealed class RegisterOrganizationCommandHandler(IAuthStore store, IPasswo
         var address = SelfRegistrationValidation.NormalizeRequired(command.OrganizationAddress, 2_000);
         var organizationPhone = SelfRegistrationValidation.NormalizePhone(command.OrganizationPhoneNumber);
         var phoneNumber = command.PhoneNumber is null ? null : SelfRegistrationValidation.NormalizePhone(command.PhoneNumber);
+        // Username is optional for the owner; a blank form field means none.
+        var usernameSubmitted = !string.IsNullOrWhiteSpace(command.Username);
+        var username = usernameSubmitted ? SelfRegistrationValidation.NormalizeUsername(command.Username) : null;
         var errors = SelfRegistrationValidation.ValidateOrganization(command, email, fullName, organizationName, address,
             organizationPhone, phoneNumber, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime));
+        if (usernameSubmitted && username is null)
+            errors["username"] = ["Username phải dài 3-30 ký tự, chỉ gồm a-z, số, dấu chấm, gạch dưới hoặc gạch ngang."];
         if (errors.Count != 0) return SelfRegistrationValidation.Invalid<AccountResponse>(errors);
         if (string.IsNullOrWhiteSpace(command.RegistrationToken))
             return AuthResult<AccountResponse>.Fail("EMAIL_VERIFICATION_REQUIRED", "Verify your email before creating an account.", 400);
@@ -80,7 +86,7 @@ public sealed class RegisterOrganizationCommandHandler(IAuthStore store, IPasswo
         };
         var user = new User
         {
-            Id = Guid.NewGuid(), Email = email!, FullName = fullName, Dob = command.Dob, Gender = command.Gender,
+            Id = Guid.NewGuid(), Email = email!, Username = username, FullName = fullName, Dob = command.Dob, Gender = command.Gender,
             PhoneNumber = phoneNumber, Role = UserRole.OrganizationUser,
             OrganizationId = organization.Id, IsActive = true, CreatedAt = now, UpdatedAt = now,
             EmailVerifiedAt = now, RegistrationExpiresAt = null

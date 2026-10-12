@@ -16,11 +16,12 @@ Authorization is centralized in API/Authorization/AuthorizationPolicies.cs. Cont
 |---|---|---|
 | POST | /api/organizations | Create an active organization |
 | GET | /api/organizations | Paginated organizations |
-| GET | /api/organizations/{id} | Organization details |
-| PATCH | /api/organizations/{id}/status | Activate/deactivate organization |
+| GET | /api/organizations/{id} | Organization details, `ETag` |
+| PATCH | /api/organizations/{id} | Edit name/address/phone, `If-Match` required |
+| PATCH | /api/organizations/{id}/status | Activate/deactivate organization, `ETag` |
 | POST | /api/accounts | Existing account provisioning |
 | GET | /api/accounts | Paginated accounts |
-| GET | /api/accounts/{id} | Account details |
+| GET | /api/accounts/{id} | Account details, `ETag` (profile revision) |
 | PATCH | /api/accounts/{id}/status | Activate/deactivate account |
 
 Create an organization:
@@ -45,6 +46,28 @@ Use the returned organization id to provision an OrganizationUser:
 
 Only OrganizationUser has an organization. Trainee and PlatformAdmin use null. Role and organization cannot be reassigned; provision a separate account if a different role/scope is needed.
 
+The request carries the initial password in plain text: call it only over HTTPS and never log the body. The password is hashed before storage and never returned.
+
+## Organization profile (#60)
+
+`OrganizationResponse` (list, detail, create, status, edit): `id`, `name`, `slug`, `isActive`, `createdAt`, `updatedAt`, `address`, `phoneNumber`, `profileRevision`, `buildingCount` (active Buildings) and `accountCount` (non-deleted accounts of the organization).
+
+`GET /api/organizations/{id}` and both PATCH routes return `ETag: "<profileRevision>"`, the same revision as `/api/organizations/me`, so an Admin edit and a tenant edit never overwrite each other silently. A status change also moves the revision.
+
+`PATCH /api/organizations/{id}` takes the same partial body as `/me` (`name`, `address`, `phoneNumber`; omitted keeps, null/empty rejected) with `If-Match`:
+
+| Case | Response |
+|---|---|
+| Missing / malformed / stale `If-Match` | 428 `PRECONDITION_REQUIRED` / 400 `VALIDATION_ERROR` / 412 `PRECONDITION_FAILED` |
+| Invalid field | 400 `VALIDATION_ERROR` |
+| Phone held by another organization | 409 `ORGANIZATION_PHONE_EXISTS`, `errors.phoneNumber`; revision unchanged |
+| Unknown or deleted organization | 404 `NOT_FOUND` |
+| Success | 200 `OrganizationResponse` + new `ETag`; audit `organizations` Update with old/new values and `X-Correlation-ID` |
+
+An inactive organization stays editable by Admin. Slug, plan and status are not changed here.
+
+`ManagedAccountResponse` adds `username`, `phoneNumber`, `avatarUrl` and `profileRevision`. `GET /api/accounts/{id}` returns `ETag: "<profileRevision>"`.
+
 Both status endpoints accept:
 
 ```json
@@ -55,14 +78,16 @@ Use true to reactivate. Missing/null isActive is rejected with 400. Unknown/dele
 
 ## Lists and privacy
 
-Both list endpoints accept page (default 1, allowed 1–100000), pageSize (default 20, allowed 1–100), search (max 200 characters) and isActive. Account lists also accept role and organizationId.
+Both list endpoints accept page (default 1, allowed 1–100000), pageSize (default 20, allowed 1–100), search (max 200 characters), isActive and sort. Account lists also accept role and organizationId.
+
+`sort` is one field, optionally prefixed with `-` for descending (default `-createdAt`); ties break on id. Organizations: `createdAt`, `updatedAt`, `name`. Accounts: `createdAt`, `updatedAt`, `email`, `fullName`, `lastLoginAt`. Any other value returns 400 `VALIDATION_ERROR`.
 
 Examples:
 
 - /api/organizations?page=1&pageSize=20&search=fpt&isActive=true
 - /api/accounts?role=OrganizationUser&organizationId=<id>&isActive=true
 
-Responses contain items, totalCount, page and pageSize; ordering is createdAt descending then id. Search matches name/slug for organizations and email/fullName for accounts. Deleted records are excluded. Count and items use separate reads; concurrent writes may change the count between them.
+Responses contain items, totalCount, page and pageSize; ordering follows `sort` (default createdAt descending) then id. Search matches name/slug for organizations and email/fullName for accounts. Deleted records are excluded. Count and items use separate reads; concurrent writes may change the count between them.
 
 Account DTOs never expose password hashes, refresh tokens or entity navigation properties. Account isActive is the account's own state: an active OrganizationUser is still blocked while their organization is inactive. Organization status changes preserve individual account status.
 

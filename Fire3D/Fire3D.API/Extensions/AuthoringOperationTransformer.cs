@@ -21,6 +21,19 @@ public sealed class AuthoringOperationTransformer:IOpenApiOperationTransformer
       "X-Installation-Key"=>"Required installation ownership proof: 32 random bytes encoded as base64url, retained in secure storage with the UUID.",
       _=>header.Description};
     }
+  var optional=action.MethodInfo.GetParameters().Where(p=>p.GetCustomAttribute<OptionalRequestHeaderAttribute>() is not null)
+   .Select(p=>p.GetCustomAttribute<FromHeaderAttribute>()?.Name ?? p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+  foreach(var parameter in operation.Parameters ?? [])
+    if(parameter is OpenApiParameter header && header.In==ParameterLocation.Header && optional.Contains(header.Name)){
+     header.Required=false;
+     header.Description=header.Name switch {
+      "Idempotency-Key"=>"Optional; with a key the first success is replayed for the same key and input, even after the ETag moved. Another input under the key returns 409.",
+      _=>header.Description};
+    }
+  foreach(var info in action.MethodInfo.GetParameters())
+   if(info.GetCustomAttribute<DeprecatedParameterAttribute>() is {} deprecated)
+    foreach(var parameter in (operation.Parameters ?? []).OfType<OpenApiParameter>().Where(p=>string.Equals(p.Name,info.GetCustomAttribute<FromQueryAttribute>()?.Name ?? info.Name,StringComparison.OrdinalIgnoreCase)))
+     {parameter.Deprecated=true;parameter.Description=deprecated.Description;}
   foreach(var metadata in action.MethodInfo.GetCustomAttributes<ResponseHeaderAttribute>())
    foreach(var response in (operation.Responses ?? new OpenApiResponses()).Where(r=>int.TryParse(r.Key,out var status)&&status is >=200 and <300).Select(r=>r.Value).OfType<OpenApiResponse>()){
     response.Headers??=new Dictionary<string,IOpenApiHeader>();

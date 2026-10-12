@@ -11,6 +11,40 @@ public sealed record ScenarioDraftValidationResponse(Guid DraftId, uint Version,
     IReadOnlyList<ScenarioDraftValidationIssue> Issues);
 public sealed record ValidateScenarioDraftCommand(Guid ActorId, Guid DraftId)
     : IRequest<AuthResult<ScenarioDraftValidationResponse>>;
+/// <summary>Dry-run result. StateHash is the SHA-256 of the checked state as received, so a client can tell which edit the issues belong to;
+/// StoredVersion is the draft's current revision, which the dry run never changes.</summary>
+public sealed record ScenarioDraftDryRunResponse(Guid DraftId, uint StoredVersion, string StateHash, bool IsValid,
+    IReadOnlyList<ScenarioDraftValidationIssue> Issues);
+public sealed record ValidateScenarioDraftStateCommand(Guid ActorId, Guid DraftId, System.Text.Json.Nodes.JsonNode? State)
+    : IRequest<AuthResult<ScenarioDraftDryRunResponse>>;
+
+public sealed class ValidateScenarioDraftStateCommandHandler(IAuthStore accounts, IScenarioReadStore store, Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog.IRuntimeCatalogReadStore catalog)
+    : IRequestHandler<ValidateScenarioDraftStateCommand, AuthResult<ScenarioDraftDryRunResponse>>
+{
+    public async Task<AuthResult<ScenarioDraftDryRunResponse>> Handle(ValidateScenarioDraftStateCommand request, CancellationToken ct)
+    {
+        var scope = await IfcAccess.ResolveAsync(accounts, request.ActorId, ct);
+        if (!scope.IsSuccess) return new(default, scope.Error);
+        if (request.DraftId == Guid.Empty)
+            return AuthResult<ScenarioDraftDryRunResponse>.Fail("VALIDATION_ERROR", "Scenario draft ID is required.", 400);
+        if (request.State is not System.Text.Json.Nodes.JsonObject state)
+            return AuthResult<ScenarioDraftDryRunResponse>.Fail("VALIDATION_ERROR", "Draft state must be a JSON object.", 400);
+        var draft = await store.GetScenarioDraftAsync(request.DraftId, scope.Value!.OrganizationId, ct);
+        if (draft is null)
+            return AuthResult<ScenarioDraftDryRunResponse>.Fail("NOT_FOUND", "Scenario draft not found or access denied.", 404);
+
+        var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(state.ToJsonString())));
+        // Same checks as PUT followed by validate, without storing anything: shape problems are reported as issues instead of 422.
+        var normalized = UpdateScenarioDraft.DraftStateInput.Normalize(state);
+        IReadOnlyList<ScenarioDraftValidationIssue> issues;
+        if (!normalized.IsSuccess)
+            issues = normalized.Error!.Issues ?? [new(normalized.Error.Code, "$", normalized.Error.Message)];
+        else
+            issues = await VersionedDraftValidation.ValidateAsync(normalized.Value!, draft.RevisionId, store, catalog, ct)
+                ?? ScenarioDraftStructuralValidator.Validate(normalized.Value!).Concat(await store.ValidateReferencesAsync(draft.RevisionId, normalized.Value!, ct)).ToList();
+        return AuthResult<ScenarioDraftDryRunResponse>.Ok(new(draft.Id, draft.Version, hash, issues.Count == 0, issues));
+    }
+}
 
 public sealed class ValidateScenarioDraftCommandHandler(IAuthStore accounts, IScenarioReadStore store, Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog.IRuntimeCatalogReadStore catalog)
     : IRequestHandler<ValidateScenarioDraftCommand, AuthResult<ScenarioDraftValidationResponse>>

@@ -306,7 +306,7 @@ Library rubric samples and AI drafts. No pass threshold, weight or criterion is 
 - [ ] Gửi lại cùng `Idempotency-Key` → trả lại kết quả cũ, label được tính lại theo người gọi. Receipt không lưu label/email.
 - [ ] Tổ chức khác đọc ticket → `404`. Danh sách của tổ chức khác → `total = 0`.
 - [ ] User hoặc tổ chức bị xóa → Admin vẫn đọc được (`available:false`, `displayName:null`). Admin gửi message hoặc đổi status → `404 NOT_FOUND`.
-- [ ] `GET /api/admin/audit-logs` trả `actorDisplayName` / `organizationName`. `GET /api/admin/audit-logs/{id}` trả thêm `changes` và `reason` (chỉ từ support writer: PATCH ticket, PATCH feedback status). Lọc được theo `ActorId`, `OrganizationId`, `Action`, `TargetEntity`, `TargetId`, `CorrelationId`, `From`, `To`.
+- [ ] `GET /api/admin/audit-logs` trả `actorDisplayName` / `organizationName`. `GET /api/admin/audit-logs/{id}` trả thêm `changes` và `reason` (support writer PATCH ticket/feedback status, hủy quotation, đóng enterprise request, reject nội dung scenario). Lọc được theo `ActorId`, `OrganizationId`, `Action`, `TargetEntity`, `TargetId`, `CorrelationId`, `From`, `To`.
 - [ ] `GET /api/admin/organizations/{organizationId}/analytics/operations?from&to` trả Buildings, processing jobs và tickets của đúng tổ chức. Không có account, learner, revenue hay AI.
   - [ ] Khoảng `[from,to)` UTC, mặc định 30 ngày, tối đa 90 ngày.
   - [ ] Timestamp không có timezone, khoảng âm hoặc dài hơn 90 ngày → `400 VALIDATION_ERROR`.

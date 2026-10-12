@@ -41,6 +41,25 @@ public sealed class ScenarioReviewQueriesController(IScenarioReviewQueries queri
     public async Task<IActionResult> Version(Guid versionId,CancellationToken ct)
         =>Respond(await queries.DetailAsync(User.GetActorId(),User.GetSessionFamilyId(),versionId,true,ct));
 
+    /// <summary>Technical readiness of a scenario version (package job, QA outcome, blockers, confirmation, runtime artifact), readable before submission.</summary>
+    /// <remarks>Reports readiness only; confirm-for-training, release build and publish re-check it. Reads recheck account, organization and session family.</remarks>
+    [HttpGet("/api/scenario-versions/{versionId:guid}/readiness")]
+    [ProducesResponseType<ScenarioVersionReadiness>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> VersionReadiness(Guid versionId,CancellationToken ct)
+        =>Respond(await queries.VersionReadinessAsync(User.GetActorId(),User.GetSessionFamilyId(),versionId,ct));
+
+    /// <summary>Geometry processing and QA state of a revision with its technical confirmations, so editing can resume after a reload.</summary>
+    [HttpGet("/api/revisions/{revisionId:guid}/readiness")]
+    [ProducesResponseType<RevisionReadiness>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> RevisionReadiness(Guid revisionId,CancellationToken ct)
+        =>Respond(await queries.RevisionReadinessAsync(User.GetActorId(),User.GetSessionFamilyId(),revisionId,ct));
+
     private ObjectResult Respond<T>(AuthResult<T> result)=>result.IsSuccess?Ok(result.Value):Problem(statusCode:result.Error!.Status,title:result.Error.Message,
         extensions:new Dictionary<string,object?>{["code"]=result.Error.Code,["errors"]=result.Error.Errors});
 }

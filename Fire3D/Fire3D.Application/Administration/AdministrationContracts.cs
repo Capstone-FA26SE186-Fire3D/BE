@@ -6,8 +6,10 @@ namespace Fire3D.Application.Administration;
 
 public sealed record CreateOrganizationRequest(string Name, string Slug);
 public sealed record SetActiveRequest(bool? IsActive);
+/// <summary>Admin view of an organization. ProfileRevision is the ETag revision shared with /api/organizations/me; BuildingCount counts active Buildings.</summary>
 public sealed record OrganizationResponse(Guid Id, string Name, string Slug, bool IsActive,
-    DateTime CreatedAt, DateTime UpdatedAt);
+    DateTime CreatedAt, DateTime UpdatedAt, string? Address = null, string? PhoneNumber = null, long ProfileRevision = 1,
+    int BuildingCount = 0, int AccountCount = 0);
 public sealed record OrganizationProfileResponse(Guid Id, string Name, string Slug, string? Address, string? PhoneNumber,
     bool IsActive, long ProfileRevision, DateTime CreatedAt, DateTime UpdatedAt);
 public sealed record OrganizationProfileAuditChange(Guid ActorId, Guid OrganizationId, Guid CorrelationId,
@@ -68,8 +70,24 @@ public sealed class UpdateOrganizationProfileRequestJsonConverter : JsonConverte
 }
 public enum OrganizationProfileUpdateResult { Updated, PreconditionFailed, Unavailable, PhoneTaken }
 public sealed record ManagedAccountResponse(Guid Id, string Email, string? FullName, UserRole Role,
-    Guid? OrganizationId, bool IsActive, DateTime? LastLoginAt, DateTime CreatedAt, DateTime UpdatedAt);
+    Guid? OrganizationId, bool IsActive, DateTime? LastLoginAt, DateTime CreatedAt, DateTime UpdatedAt,
+    string? Username = null, string? PhoneNumber = null, string? AvatarUrl = null, long ProfileRevision = 1);
 public sealed record PageResponse<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
-public sealed record OrganizationFilter(int Page = 1, int PageSize = 20, string? Search = null, bool? IsActive = null);
+/// <summary>Sort is one field, optionally prefixed with '-' for descending; default -createdAt. Ties break on id.</summary>
+public sealed record OrganizationFilter(int Page = 1, int PageSize = 20, string? Search = null, bool? IsActive = null, string? Sort = null);
+/// <summary>Sort is one field, optionally prefixed with '-' for descending; default -createdAt. Ties break on id.</summary>
 public sealed record AccountFilter(int Page = 1, int PageSize = 20, string? Search = null,
-    bool? IsActive = null, UserRole? Role = null, Guid? OrganizationId = null);
+    bool? IsActive = null, UserRole? Role = null, Guid? OrganizationId = null, string? Sort = null);
+public static class AdministrationSort
+{
+    public static readonly string[] OrganizationFields = ["createdAt", "updatedAt", "name"];
+    public static readonly string[] AccountFields = ["createdAt", "updatedAt", "email", "fullName", "lastLoginAt"];
+    public static bool TryParse(string? sort, string[] allowed, out string field, out bool descending)
+    {
+        var value = string.IsNullOrWhiteSpace(sort) ? "-createdAt" : sort.Trim();
+        descending = value.StartsWith('-');
+        var name = descending ? value[1..] : value;
+        field = allowed.FirstOrDefault(x => string.Equals(x, name, StringComparison.OrdinalIgnoreCase)) ?? "";
+        return field.Length > 0;
+    }
+}

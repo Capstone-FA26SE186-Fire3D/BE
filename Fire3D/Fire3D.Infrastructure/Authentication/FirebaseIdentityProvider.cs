@@ -94,7 +94,8 @@ public class FirebaseIdentityProvider(
                 throw new GoogleIdentityException(GoogleIdentityFailure.InvalidToken);
             var displayName = claims.TryGetValue("name", out var name) && name is string nameText
                 ? GoogleAuthRules.NormalizeDisplayName(nameText) : null;
-            return new VerifiedIdentity(decoded.Uid, email, displayName);
+            return new VerifiedIdentity(decoded.Uid, email, displayName,
+                claims.TryGetValue("auth_time", out var authTime) ? AuthTime(authTime) : null);
         }
         catch (GoogleIdentityException) { throw; }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -110,6 +111,18 @@ public class FirebaseIdentityProvider(
             logger.LogWarning("Google verification unavailable. FailureKind={FailureKind}", ex.GetType().Name);
             throw new GoogleIdentityException(GoogleIdentityFailure.ProviderUnavailable);
         }
+    }
+
+    private static DateTimeOffset? AuthTime(object value)
+    {
+        long? seconds = value switch
+        {
+            long number => number, int number => number,
+            double number when double.IsFinite(number) => (long)number,
+            JValue { Type: JTokenType.Integer } token => token.Value<long>(),
+            _ => null
+        };
+        return seconds is >= 0 and <= 253402300799 ? DateTimeOffset.FromUnixTimeSeconds(seconds.Value) : null;
     }
 
     private static string? SignInProvider(object firebase) => firebase switch

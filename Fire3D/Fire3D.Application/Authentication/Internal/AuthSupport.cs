@@ -79,7 +79,8 @@ internal static class AuthSupport
 
     internal static AccountResponse ToAccount(User user) => new(user.Id, user.Email, user.FullName, user.Role, user.OrganizationId,
         user.Username, user.Dob, user.Gender, user.PhoneNumber, null, user.IsActive,
-        user.LastLoginAt, user.CreatedAt, user.UpdatedAt, user.EmailVerifiedAt, user.RegistrationExpiresAt, user.ProfileRevision);
+        user.LastLoginAt, user.CreatedAt, user.UpdatedAt, user.EmailVerifiedAt, user.RegistrationExpiresAt, user.ProfileRevision,
+        !string.IsNullOrEmpty(user.PasswordHash), user.FirebaseUid is not null);
 
     internal static bool IsPendingEmailVerification(User user) =>
         user.RegistrationExpiresAt.HasValue && !user.EmailVerifiedAt.HasValue;

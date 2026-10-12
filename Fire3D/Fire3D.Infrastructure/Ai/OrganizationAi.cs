@@ -21,6 +21,8 @@ public sealed class OrganizationAiGates(Fire3DDbContext db) : IOrganizationAiGat
 
     public Task<AuthResult<JsonElement>> OrganizationAsync(string action, Guid actor, Guid family, Guid resource, object input, string? key, CancellationToken ct) =>
         Result(Run("SELECT ai_org_gate(@action,@actor,@family,@resource,@input,@key)::text", ct, ("action", action), ("actor", actor), ("family", family), ("resource", resource), ("input", input), ("key", key)));
+    public Task<AuthResult<JsonElement>> OrganizationRequestsAsync(Guid actor, Guid family, object input, CancellationToken ct) =>
+        Result(Run("SELECT ai_org_request_list_gate(@actor,@family,@input)::text", ct, ("actor", actor), ("family", family), ("input", input)));
     public Task<AuthResult<JsonElement>> AdminAsync(string action, Guid actor, Guid family, Guid resource, object input, string? key, long? expected, CancellationToken ct) =>
         Result(Run("SELECT ai_admin_gate(@action,@actor,@family,@resource,@input,@key,@expected)::text", ct, ("action", action), ("actor", actor), ("family", family), ("resource", resource), ("input", input), ("key", key), ("expected", expected)));
     public Task<JsonElement> WorkerAsync(string action, string worker, Guid? request, Guid? lease, object input, CancellationToken ct) =>

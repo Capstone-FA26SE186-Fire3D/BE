@@ -37,6 +37,7 @@ public sealed class IfcUploadBindingTests
         var store = ResetProxy.For<IIfcUploadStore>((_, _) => throw new Exception("Expected SHA-256 is required before persisting intent"));
         var result = await new InitiateIfcUploadHandler(Accounts(), Flow(store, storage)).Handle(new(Actor.Id, Guid.NewGuid(), new(10,"model.ifc","v1")), default);
         Assert.Equal(400, result.Error?.Status);
+        Assert.Contains("sha256Hash", result.Error!.Errors!.Keys);
     }
     private static IfcUploadService Flow(IIfcUploadStore store, IStorageService storage) => new(store, storage,
         ResetProxy.For<IIfcSourceInspector>((_, _) => throw new Exception("Must not inspect unauthorized source")),

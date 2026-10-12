@@ -46,3 +46,9 @@ public interface IGoogleLinkService
 {
     Task<AuthResult<GoogleLinkResponse>> LinkAsync(Guid actorId, Guid sessionFamilyId, GoogleLinkRequest request, CancellationToken ct);
 }
+
+public sealed record SetPasswordRequest(string IdToken, string NewPassword);
+public interface IGooglePasswordService
+{
+    Task<AuthResult<bool>> SetAsync(Guid actorId, Guid sessionFamilyId, SetPasswordRequest request, CancellationToken ct);
+}

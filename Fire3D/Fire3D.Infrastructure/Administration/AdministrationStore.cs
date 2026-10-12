@@ -34,12 +34,12 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
         db.Organizations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
 
     public async Task<OrganizationProfileUpdateResult> UpdateOrganizationProfileAsync(Guid organizationId, long revision,
-        string name, string? address, string? phoneNumber, DateTime now, CancellationToken ct)
+        string name, string? address, string? phoneNumber, DateTime now, CancellationToken ct, bool allowInactive = false)
     {
         int changed;
         try
         {
-            changed = await db.Organizations.Where(x => x.Id == organizationId && x.IsActive && x.DeletedAt == null && x.ProfileRevision == revision)
+            changed = await db.Organizations.Where(x => x.Id == organizationId && (allowInactive || x.IsActive) && x.DeletedAt == null && x.ProfileRevision == revision)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, name).SetProperty(x => x.Address, address)
                     .SetProperty(x => x.PhoneNumber, phoneNumber).SetProperty(x => x.ProfileRevision, x => x.ProfileRevision + 1)
                     .SetProperty(x => x.UpdatedAt, now), ct);
@@ -51,7 +51,7 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
             return OrganizationProfileUpdateResult.PhoneTaken;
         }
         return changed == 1 ? OrganizationProfileUpdateResult.Updated
-            : await db.Organizations.AnyAsync(x => x.Id == organizationId && x.IsActive && x.DeletedAt == null, ct)
+            : await db.Organizations.AnyAsync(x => x.Id == organizationId && (allowInactive || x.IsActive) && x.DeletedAt == null, ct)
                 ? OrganizationProfileUpdateResult.PreconditionFailed : OrganizationProfileUpdateResult.Unavailable;
     }
 
@@ -67,6 +67,14 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
         }
     }
 
+    public Task<OrganizationResponse?> GetOrganizationViewAsync(Guid id, CancellationToken ct) =>
+        OrganizationViews(db.Organizations.AsNoTracking().Where(x => x.Id == id && x.DeletedAt == null)).SingleOrDefaultAsync(ct);
+
+    private IQueryable<OrganizationResponse> OrganizationViews(IQueryable<Organization> query) =>
+        query.Select(x => new OrganizationResponse(x.Id, x.Name, x.Slug, x.IsActive, x.CreatedAt, x.UpdatedAt, x.Address, x.PhoneNumber, x.ProfileRevision,
+            db.Buildings.Count(b => b.OrganizationId == x.Id && b.IsActive && b.DeletedAt == null),
+            db.Users.Count(u => u.OrganizationId == x.Id && u.DeletedAt == null)));
+
     public async Task<PageResponse<OrganizationResponse>> ListOrganizationsAsync(OrganizationFilter filter, CancellationToken ct)
     {
         var query = db.Organizations.AsNoTracking().Where(x => x.DeletedAt == null);
@@ -77,10 +85,17 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
             query = query.Where(x => x.Name.ToLower().Contains(search) || x.Slug.Contains(search));
         }
         var count = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
-            .Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize)
-            .Select(x => new OrganizationResponse(x.Id, x.Name, x.Slug, x.IsActive, x.CreatedAt, x.UpdatedAt))
-            .ToListAsync(ct);
+        AdministrationSort.TryParse(filter.Sort, AdministrationSort.OrganizationFields, out var field, out var descending);
+        var ordered = (field, descending) switch
+        {
+            ("name", false) => query.OrderBy(x => x.Name).ThenBy(x => x.Id),
+            ("name", true) => query.OrderByDescending(x => x.Name).ThenBy(x => x.Id),
+            ("updatedAt", false) => query.OrderBy(x => x.UpdatedAt).ThenBy(x => x.Id),
+            ("updatedAt", true) => query.OrderByDescending(x => x.UpdatedAt).ThenBy(x => x.Id),
+            ("createdAt", false) => query.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id),
+            _ => query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
+        };
+        var items = await OrganizationViews(ordered.Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize)).ToListAsync(ct);
         return new(items, count, filter.Page, filter.PageSize);
     }
 
@@ -96,10 +111,23 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
             query = query.Where(x => x.Email.Contains(search) || (x.FullName != null && x.FullName.ToLower().Contains(search)));
         }
         var count = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
-            .Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize)
+        AdministrationSort.TryParse(filter.Sort, AdministrationSort.AccountFields, out var field, out var descending);
+        var ordered = (field, descending) switch
+        {
+            ("email", false) => query.OrderBy(x => x.Email).ThenBy(x => x.Id),
+            ("email", true) => query.OrderByDescending(x => x.Email).ThenBy(x => x.Id),
+            ("fullName", false) => query.OrderBy(x => x.FullName).ThenBy(x => x.Id),
+            ("fullName", true) => query.OrderByDescending(x => x.FullName).ThenBy(x => x.Id),
+            ("lastLoginAt", false) => query.OrderBy(x => x.LastLoginAt).ThenBy(x => x.Id),
+            ("lastLoginAt", true) => query.OrderByDescending(x => x.LastLoginAt).ThenBy(x => x.Id),
+            ("updatedAt", false) => query.OrderBy(x => x.UpdatedAt).ThenBy(x => x.Id),
+            ("updatedAt", true) => query.OrderByDescending(x => x.UpdatedAt).ThenBy(x => x.Id),
+            ("createdAt", false) => query.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id),
+            _ => query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
+        };
+        var items = await ordered.Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize)
             .Select(x => new ManagedAccountResponse(x.Id, x.Email, x.FullName, x.Role, x.OrganizationId,
-                x.IsActive, x.LastLoginAt, x.CreatedAt, x.UpdatedAt)).ToListAsync(ct);
+                x.IsActive, x.LastLoginAt, x.CreatedAt, x.UpdatedAt, x.Username, x.PhoneNumber, x.AvatarUrl, x.ProfileRevision)).ToListAsync(ct);
         return new(items, count, filter.Page, filter.PageSize);
     }
 

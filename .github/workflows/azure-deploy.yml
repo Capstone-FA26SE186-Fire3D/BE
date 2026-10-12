@@ -67,3 +67,24 @@ jobs:
           done
           echo "Azure did not start the requested image version."
           exit 1
+
+      - name: Smoke test deployed API
+        shell: bash
+        run: |
+          # Readiness fails with 503 MIGRATIONS_PENDING when the database lags this build.
+          status="$(curl --silent --output ready.json --connect-timeout 10 --write-out '%{http_code}' "${APP_URL}/health/ready" || true)"
+          cat ready.json || true
+          echo
+          if [[ "${status}" != "200" ]]; then
+            echo "Readiness returned ${status}: apply pending migrations before using this deployment."
+            exit 1
+          fi
+          # Anonymous reads that touch the database must not return 5xx.
+          for path in /api/learn/situations /api/learn/posts /openapi/v1.json; do
+            status="$(curl --silent --output /dev/null --connect-timeout 10 --write-out '%{http_code}' "${APP_URL}${path}")"
+            echo "${path} -> ${status}"
+            if [[ "${status}" -ge 500 ]]; then
+              echo "Smoke test failed on ${path}."
+              exit 1
+            fi
+          done

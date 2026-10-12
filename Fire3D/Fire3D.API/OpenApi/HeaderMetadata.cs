@@ -4,6 +4,17 @@ namespace Fire3D.API.OpenApi;
 [AttributeUsage(AttributeTargets.Parameter)]
 public sealed class RequiredRequestHeaderAttribute : Attribute;
 
+/// <summary>Documents a header the endpoint accepts but does not require (for example a replay-only Idempotency-Key).</summary>
+[AttributeUsage(AttributeTargets.Parameter)]
+public sealed class OptionalRequestHeaderAttribute : Attribute;
+
+/// <summary>Marks a parameter kept only for compatibility; OpenAPI flags it deprecated with the given replacement.</summary>
+[AttributeUsage(AttributeTargets.Parameter)]
+public sealed class DeprecatedParameterAttribute(string description) : Attribute
+{
+    public string Description { get; } = description;
+}
+
 [AttributeUsage(AttributeTargets.Method, AllowMultiple=true)]
 public sealed class ResponseHeaderAttribute(string name) : Attribute
 {

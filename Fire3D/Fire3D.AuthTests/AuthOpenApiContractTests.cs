@@ -98,7 +98,7 @@ public sealed class AuthOpenApiContractTests
         using var client = factory.CreateClient(); using var json = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
         var actual = json.RootElement.GetProperty("paths").EnumerateObject()
             .Where(path => path.Name.StartsWith("/api/auth/", StringComparison.Ordinal) || path.Name.StartsWith("/api/me/avatar", StringComparison.Ordinal)
-                || path.Name is "/api/me/link-google" or "/api/organizations/me")
+                || path.Name is "/api/me/link-google" or "/api/me/password" or "/api/organizations/me")
             .SelectMany(path => path.Value.EnumerateObject().Where(method => method.Name is "get" or "post" or "put" or "patch" or "delete")
                 .Select(method => method.Name.ToUpperInvariant() + " " + path.Name)).OrderBy(x => x).ToArray();
         var markdown = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "auth-api-checklist.md"));

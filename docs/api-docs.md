@@ -24,7 +24,7 @@ OpenAPI tại host Azure tự báo build `d785937e5948f31486df66740a1f31ccd9ce25
 ## 1. Quy ước tích hợp
 
 - Dùng origin BE đang chạy làm `BASE_URL`; đường dẫn bên dưới đã có `/api`.
-- Swagger `/swagger`, OpenAPI `/openapi/v1.json` và health `/health` không tính vào số action controller. Health không chứng minh DB/Mailgun/Firebase/storage đã kết nối thành công.
+- Swagger `/swagger`, OpenAPI `/openapi/v1.json`, liveness `/health`, readiness `/health/ready` (DB + migration đã áp; 503 `MIGRATIONS_PENDING` kèm danh sách) và `/health/version` không tính vào số action controller. Xem [deployment readiness](deployment-readiness.md).
 - Body: `Content-Type: application/json`, tên thuộc tính `camelCase`, GUID là chuỗi UUID, ngày giờ ISO 8601.
 - Enum JSON dùng tên như `"OrganizationUser"`; không gửi số cho role.
 - Không có envelope chung `{success,data}`. Đọc trực tiếp DTO. `204` và một số `200` không có body; không luôn gọi `response.json()`.
@@ -66,7 +66,7 @@ Endpoint bảo vệ cần `Authorization: Bearer <Fire3D accessToken>`. Firebase
 
 Ba role hiện có: `PlatformAdmin`, `OrganizationUser`, `Trainee`. Không có `OrganizationAdmin`. OrganizationUser phải có tổ chức hoạt động; hai role còn lại không có organizationId. Public register không cho chọn role/tổ chức. JWT được kiểm tra cả tài khoản, tổ chức và phiên DB; chưa tới exp vẫn có thể mất hiệu lực khi phiên bị thu hồi.
 
-**Building CRUD:** create/update/archive kiểm actor/role/tenant từ DB và mutation/audit trong cùng transaction, khóa lifecycle/user. PlatformAdmin cần query `organizationId` đích cho mutation; OrganizationUser dùng tenant mình, không được đổi tenant. Body hiện chưa nhận tenant đích. Thiếu scope bị handler từ chối, không coi Guid.Empty là quyền admin. List/detail vẫn lọc organization claim (admin không có tenant có thể nhận list rỗng/404); không suy từ quyền mutation rằng read CRUD đã hỗ trợ admin toàn nền tảng.
+**Building CRUD:** create/update/archive kiểm actor/role/tenant từ DB và mutation/audit trong cùng transaction, khóa lifecycle/user. PlatformAdmin gửi `organizationId` đích trong **body** khi tạo; query `organizationId` chỉ là alias deprecated (khác body → 400). OrganizationUser dùng tenant mình, không được đổi tenant. Thiếu scope bị handler từ chối, không coi Guid.Empty là quyền admin. List/detail vẫn lọc organization claim (admin không có tenant có thể nhận list rỗng/404); không suy từ quyền mutation rằng read CRUD đã hỗ trợ admin toàn nền tảng.
 
 ### Lỗi và phân trang
 
@@ -76,7 +76,7 @@ Lỗi nghiệp vụ thường dùng ProblemDetails:
 { "title": "Invalid email or password.", "status": 401, "code": "INVALID_CREDENTIALS" }
 ```
 
-Framework có thể thêm type/traceId/errors. Một số legacy response có thể thiếu code; publish và review trả ProblemDetails kèm code, traceId. Middleware 401/403/429 có thể không có JSON. Ưu tiên HTTP status rồi mới đọc body nếu có.
+Framework có thể thêm type/traceId/errors. Response lỗi từ handler luôn có `code`. Middleware 401/403 của xác thực có thể không có body; 429 luôn là ProblemDetails có `code`, `traceId` và header `Retry-After`. Ưu tiên HTTP status rồi mới đọc body nếu có.
 
 | Status | Ý nghĩa |
 | --- | --- |
@@ -84,12 +84,15 @@ Framework có thể thêm type/traceId/errors. Một số legacy response có th
 | 401 | Thiếu/sai/hết hiệu lực token hoặc sai thông tin đăng nhập |
 | 403 | Không đủ role; một số login báo tài khoản/tổ chức bị khóa |
 | 404 | Không thấy, ngoài phạm vi tổ chức hoặc ID URL không đúng định dạng GUID |
-| 409 | Trùng email/slug, xung đột version/trạng thái/idempotency |
-| 412 | Thiếu/sai If-Match khi lưu draft |
-| 422 | Không xác minh được object upload |
+| 409 | Trùng email/slug, xung đột nghiệp vụ/trạng thái, cùng `Idempotency-Key` nhưng input khác |
+| 412 | `If-Match` không khớp revision hiện tại (ETag cũ) |
+| 422 | Nội dung đúng JSON nhưng sai schema (editor `EDITOR_SCHEMA_INVALID`, `EDITOR_SCHEMA_VERSION_UNSUPPORTED`) hoặc không xác minh được object upload |
+| 428 | Thiếu header `If-Match` bắt buộc |
 | 429 | Vượt rate limit |
 
-Policy administration: **120 request/phút/IP** cho administration và IFC commands. `POST /api/auth/refresh` có policy riêng **10 request/phút/IP**, fixed window trong bộ nhớ mỗi instance, không Redis. Vượt quota trả `429 AUTH_REFRESH_RATE_LIMITED`, ProblemDetails có `traceId` và header `Retry-After` (giây). Trong quota, refresh token sai vẫn trả `401`; header IP client tự gửi không thay thế connection IP do middleware xử lý. CORS chạy trước rate limiter và expose `Retry-After` cho origin frontend được cho phép; preflight không tiêu thụ quota. Nhiều instance không chia sẻ quota này.
+Quy ước If-Match chung: thiếu → `428`, sai định dạng → `400`, cũ → `412`. Draft dùng mã `PRECONDITION_REQUIRED` / `INVALID_IF_MATCH`; JSON hỏng → `400 EDITOR_JSON_MALFORMED`.
+
+Policy administration: **120 request/phút/IP** cho administration và IFC commands; vượt quota trả `429 ADMINISTRATION_RATE_LIMITED`. `POST /api/auth/refresh` có policy riêng **10 request/phút/IP**; vượt quota trả `429 AUTH_REFRESH_RATE_LIMITED`. Cả hai là fixed window trong bộ nhớ mỗi instance, không Redis, và trả ProblemDetails có `traceId` cùng header `Retry-After` (giây); đọc thời gian chờ từ header, không từ text lỗi. Trong quota, refresh token sai vẫn trả `401`; header IP client tự gửi không thay thế connection IP do middleware xử lý. CORS chạy trước rate limiter và expose `ETag`, `Retry-After`, `X-Correlation-ID`, `Location` cho origin frontend được cho phép; preflight không tiêu thụ quota. Nhiều instance không chia sẻ quota này.
 
 Phân trang mặc định page=1, pageSize=20; page 1..100000, pageSize 1..100. Search quản trị/building tối đa 200 ký tự. `Page<T>` bên dưới có dạng:
 
@@ -103,7 +106,7 @@ Số điện thoại tổ chức unique sau normalization giữa mọi tổ ch�
 
 Luồng và bằng chứng source chi tiết tại [authentication.md](authentication.md): cả Trainee và OrganizationUser dùng form → OTP → proof → register → login; JWT được cấp tại login/refresh, Google UID đã liên kết hoặc lần complete Google onboarding đầu tiên. Bảng dưới liệt kê API, không dùng số endpoint lịch sử để kết luận auth hoàn tất.
 
-[Checklist 28 endpoint auth](auth-api-checklist.md) tách code/test/provider và có contract test đối chiếu OpenAPI. Swagger source hiện hiển thị đúng field PATCH/null semantics, multipart `file`, enum tên, registrationToken và header bắt buộc. Production Swagger chỉ đổi sau deploy binary này; không suy từ Markdown rằng deployment đã cập nhật. [Avatar test và signed S3 URL](avatar-manual-test.md).
+[Checklist 29 endpoint auth](auth-api-checklist.md) tách code/test/provider và có contract test đối chiếu OpenAPI. Swagger source hiện hiển thị đúng field PATCH/null semantics, multipart `file`, enum tên, registrationToken và header bắt buộc. Production Swagger chỉ đổi sau deploy binary này; không suy từ Markdown rằng deployment đã cập nhật. [Avatar test và signed S3 URL](avatar-manual-test.md).
 
 | Method | Path | Quyền | Thành công |
 | --- | --- | --- | --- |
@@ -117,6 +120,7 @@ Luồng và bằng chứng source chi tiết tại [authentication.md](authentic
 | POST | `/api/auth/login` | Public | 200 LoginResponse |
 | POST | `/api/auth/login-firebase` | Public | 200 GoogleExchangeResponse; 401 invalid identity; 409 explicit link/race; 503 provider unavailable |
 | POST | `/api/me/link-google` | Live User + currentPassword + Google ID token | 200 GoogleLinkResponse + ETag; first link revokes sessions; 400/401/403/409/503 |
+| POST | `/api/me/password` | Live Google-only User + Google ID token (sign-in ≤ 5 phút) + newPassword | 204; revokes every session; 400/401/409/503 |
 | POST | `/api/auth/google/onboarding/complete` | Public + onboarding proof | 201 Authenticated + authentication; replay409 ONBOARDING_ALREADY_COMPLETED;400 field/invalid/expired;409 input/identity conflict;503 retry |
 | POST | `/api/auth/refresh` | Public | 200 TokenResponse |
 | POST | `/api/auth/logout` | User | 204 |
@@ -184,7 +188,7 @@ Tài khoản tự đăng ký chỉ được ghi sau khi token OTP được consu
 
 Lỗi: 400 VALIDATION_ERROR, 409 EMAIL_EXISTS hoặc USERNAME_EXISTS. AccountResponse từ nguồn tạo khác có thể có fullName/username null.
 
-`POST /api/auth/register` là alias tương thích cho request Trainee cùng contract. `POST /api/auth/register/organization` nhận email/password/confirmPassword, organizationName, organizationAddress, organizationPhoneNumber và các trường hồ sơ tùy chọn fullName/dob/gender/phoneNumber; backend tạo owner `OrganizationUser` cùng organization trong một transaction.
+`POST /api/auth/register` là alias tương thích cho request Trainee cùng contract. `POST /api/auth/register/organization` nhận email/password/confirmPassword, organizationName, organizationAddress, organizationPhoneNumber và các trường hồ sơ tùy chọn fullName/dob/gender/phoneNumber/username; backend tạo owner `OrganizationUser` cùng organization trong một transaction. `username` của owner tùy chọn, cùng luật với Trainee (3–30 ký tự `a-z 0-9 . _ -`, lưu chữ thường, duy nhất không phân biệt hoa thường trên mọi user); bỏ trống/chỉ khoảng trắng là không có username. Sai định dạng 400 `errors.username`, trùng 409 USERNAME_EXISTS; lỗi không consume proof.
 
 ### 2.2 Login local
 
@@ -265,7 +269,7 @@ Refresh không cần access token:
 
 Token không trống, tối đa 256. Thành công trả TokenResponse gồm accessToken/refreshToken/user, không có expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả401 INVALID_REFRESH_TOKEN; replay token đã consume/revoke thu hồi cả family.
 
-Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại; `/api/auth/logout-all` thu hồi toàn bộ family và vô hiệu push bindings. `GET /api/auth/me` trả AccountResponse cùng `ETag: "<profileRevision>"`; `PATCH /api/auth/me` nhận header đó trong `If-Match`, sửa fullName/username/dob/gender/phoneNumber, rồi trả ETag mới. Avatar hỗ trợ `POST /api/me/avatar/upload` nhận `multipart/form-data` với field `file` (JPEG/PNG/WebP, tối đa 5 MiB) để test S3 qua BE; route bắt buộc `If-Match`, rồi stream lên private staging object và hoàn tất theo cùng luồng Avatar. `POST /api/me/avatar/complete` và `DELETE /api/me/avatar` cũng yêu cầu cùng If-Match; thiếu trả 428, ETag cũ trả 412. `GET /api/organizations/me` trả OrganizationProfileResponse và ETag; PATCH chỉ sửa field được gửi, cần `If-Match`.
+Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại; `/api/auth/logout-all` thu hồi toàn bộ family và vô hiệu push bindings. `GET /api/auth/me` trả AccountResponse cùng `ETag: "<profileRevision>"`; AccountResponse có `hasLocalLogin` (đã có password local, đăng nhập email/password được) và `googleLinked` (đã link Google); `PATCH /api/auth/me` nhận header đó trong `If-Match`, sửa fullName/username/dob/gender/phoneNumber, rồi trả ETag mới. Avatar hỗ trợ `POST /api/me/avatar/upload` nhận `multipart/form-data` với field `file` (JPEG/PNG/WebP, tối đa 5 MiB) để test S3 qua BE; route bắt buộc `If-Match`, rồi stream lên private staging object và hoàn tất theo cùng luồng Avatar. `POST /api/me/avatar/complete` và `DELETE /api/me/avatar` cũng yêu cầu cùng If-Match; thiếu trả 428, ETag cũ trả 412. `GET /api/organizations/me` trả OrganizationProfileResponse và ETag; PATCH chỉ sửa field được gửi, cần `If-Match`.
 
 Devices upsert cho user hiện tại:
 
@@ -305,7 +309,9 @@ Sai email: 400 INVALID_EMAIL. Email đúng định dạng có/không tồn tại
 
 Phải dùng token thật từ email: 64 ký tự hex, hạn 30 phút, một lần; DB chỉ lưu hash token. Password 6–128, không chỉ khoảng trắng. Sai/hết hạn/đã dùng token: 400 INVALID_RESET_CODE; password sai: 400 INVALID_PASSWORD; thành công 204.
 
-Reset chỉ áp dụng cho tài khoản đã có password local. Backend đổi hash local, tiêu thụ token, vô hiệu token reset còn lại và thu hồi phiên Fire3D trong transaction. Phải login lại; không trả JWT mới. Tài khoản Google-only không nhận reset token và không thể dùng reset để thêm password local. Không đổi password Google/Firebase; không nhận oobCode Firebase cũ. Không có endpoint đọc password/hash/reset token.
+Reset chỉ áp dụng cho tài khoản đã có password local. Backend đổi hash local, tiêu thụ token, vô hiệu token reset còn lại và thu hồi phiên Fire3D trong transaction. Phải login lại; không trả JWT mới. Tài khoản Google-only không nhận reset token và không thể dùng reset để thêm password local; dùng `POST /api/me/password` (bên dưới). Không đổi password Google/Firebase; không nhận oobCode Firebase cũ. Không có endpoint đọc password/hash/reset token.
+
+`POST /api/me/password` thêm password local đầu tiên cho tài khoản Google-only (`hasLocalLogin=false`, `googleLinked=true`). Body `{ "idToken": "<Firebase ID token>", "newPassword": "..." }`; cần Bearer còn sống và idToken của lần đăng nhập Google trong 5 phút gần nhất (claim `auth_time`) đúng UID đã link, nên FE gọi Google Sign-In lại ngay trước khi gửi. newPassword theo luật reset (6–128 ký tự, không chỉ khoảng trắng, không trim). Thành công trả 204, đặt hash, vô hiệu reset proof, thu hồi mọi phiên và audit trong một transaction; đăng nhập lại bằng email/password hoặc Google. Lỗi: 400 VALIDATION_ERROR (`errors.idToken`/`errors.newPassword`) hoặc GOOGLE_LINK_REQUIRED; 401 UNAUTHORIZED, INVALID_FIREBASE_TOKEN (token sai hoặc tài khoản Google khác) hoặc RECENT_LOGIN_REQUIRED; 409 PASSWORD_ALREADY_SET (dùng change-password), ACCOUNT_CHANGED hoặc PASSWORD_RESET_PENDING; 503 GOOGLE_PROVIDER_UNAVAILABLE.
 
 Chi tiết vận hành: [password-reset.md](password-reset.md).
 
@@ -430,7 +436,7 @@ Tất cả cần Editor, rate limit administration. Storage phải được cấ
 | POST | `/api/revisions/{revisionId}/process` | Không body | 202 {jobId} |
 | POST | `/api/processing-jobs/{jobId}/retry` | requestId, reason | 202 RetryProcessingJobResponse |
 | POST | `/api/revisions/{revisionId}/confirm-for-training` | scenarioVersionId, validationRunId, annotationSetId | 200 {reviewId}; exact technical attestation |
-| POST | `/api/revisions/{revisionId}/reviews` | scenarioVersionId, action, validationRunId, message | 201 reviewId |
+| POST | `/api/revisions/{revisionId}/reviews` | scenarioVersionId, validationRunId, reviewMessage, annotationSetId nullable | 201 {id}; technical rejection only |
 
 ### 5.1 Initiate → upload → finalize
 
@@ -462,7 +468,7 @@ Kiểm chứng PostgreSQL cô lập + storage giả lập; migration upload đã
 
 ### 5.2 Process, retry, confirm
 
-Process yêu cầu `Idempotency-Key`, chỉ nhận source đã verified. 202 `{jobId}`/Location xác nhận job/audit/outbox/receipt bền vững; chưa chứng minh worker đã chạy. Cùng input/key replay; nhiều key đồng thời không tạo nhiều logical job. Legacy source chưa verified trả 422. Dispatcher mặc định tắt, worker HTTP/machine gates xem [processing worker](processing-worker.md).
+Process yêu cầu `Idempotency-Key` (1–128 ký tự in được; thiếu hoặc sai → `400 IDEMPOTENCY_KEY_REQUIRED`), chỉ nhận source đã verified. 202 `{jobId}`/Location xác nhận job/audit/outbox/receipt bền vững; chưa chứng minh worker đã chạy. Cùng input/key replay; nhiều key đồng thời không tạo nhiều logical job. Legacy source chưa verified trả 422. Dispatcher mặc định tắt, worker HTTP/machine gates xem [processing worker](processing-worker.md).
 
 Retry job Failed:
 
@@ -473,7 +479,7 @@ Retry job Failed:
 }
 ```
 
-requestId là UUID khác Guid.Empty; reason không trống, tối đa 1000, được trim. Response gồm jobId và outcome `Requeued`/`AlreadyRequeued`, status 202 và Location job detail. Gửi lại cùng key/input không requeue lặp. Key cũ/input khác: 409 IDEMPOTENCY_CONFLICT. Key mới khi job không thể retry: 409 JOB_CONFLICT hoặc JOB_NOT_CLAIMABLE. Tạo key mới cho một lần retry chủ động mới.
+Key retry là UUID khác Guid.Empty, gửi qua header `Idempotency-Key` (khuyến nghị, giống các lệnh khác) hoặc body `requestId` (giữ để tương thích). Gửi cả hai thì phải trùng nhau, header không phải UUID → `400 VALIDATION_ERROR`. Retry dùng UUID vì gate lưu key dạng uuid; đây là khác biệt duy nhất so với key chuỗi của các lệnh khác. reason không trống, tối đa 1000, được trim. Response gồm jobId và outcome `Requeued`/`AlreadyRequeued`, status 202 và Location job detail. Gửi lại cùng key/input không requeue lặp. Key cũ/input khác: 409 IDEMPOTENCY_CONFLICT. Key mới khi job không thể retry: 409 JOB_CONFLICT hoặc JOB_NOT_CLAIMABLE. Tạo key mới cho một lần retry chủ động mới.
 
 Confirm tạo technical review đúng revision–scenarioVersion–validationRun–annotation/artifact đã accept, Passed và không Error/Critical blocker. Thành công 200 {reviewId}; mismatch/blocker 409. Không tự tạo release/training hoặc approval nội dung. Xem [readiness và approval](scenario-readiness.md).
 
@@ -494,12 +500,16 @@ Tất cả cần Editor; list nhận page/pageSize. Sai filter/Guid.Empty 400, s
 
 | DTO | Thuộc tính JSON |
 | --- | --- |
-| ProcessingJobResponse | id, revisionId, sourceDocumentId, scenarioVersionId nullable, kind, status, createdAt |
+| ProcessingJobResponse | id, revisionId, sourceDocumentId, scenarioVersionId nullable, kind, status (`Queued`/`Running`/`Succeeded`/`Failed`/`Cancelled`), createdAt |
 | ProcessingJobDetailResponse | job (ProcessingJobResponse), inputHash, currentAttemptId nullable, currentAttempt nullable |
-| ProcessingAttemptResponse | id, attemptNumber, status, toolchainVersion, startedAt, finishedAt nullable, outputHash nullable |
-| ValidationRunResponse | id, revisionId, processingJobId, processingAttemptId, artifactId nullable, scenarioVersionId nullable, scope, validatorVersion, status, summary (JSON), startedAt/finishedAt nullable, createdAt |
+| ProcessingAttemptResponse | id, attemptNumber, status (`Running`/`Succeeded`/`Failed`/`Expired`), toolchainVersion, startedAt, finishedAt nullable, outputHash nullable |
+| ValidationRunResponse | id, revisionId, processingJobId, processingAttemptId, artifactId nullable, scenarioVersionId nullable, scope, validatorVersion, outcome (`Passed`/`Failed`), status (= outcome, giữ tương thích), summary (JSON), startedAt/finishedAt nullable, createdAt |
 | JobQaResponse | jobId, currentAttemptId nullable, validationRuns (Page<ValidationRunResponse>) |
-| RevisionIssueResponse | id, revisionId, validationRunId, processingAttemptId, artifactId nullable, issueCode, severity, status, message, evidence (JSON), isCurrentAttempt, createdAt |
+| RevisionIssueResponse | id, revisionId, validationRunId, processingAttemptId, artifactId nullable, issueCode, severity (`Info`/`Warning`/`Error`/`Critical`), status (`Open`), message, evidence (JSON), isCurrentAttempt, createdAt |
+
+Các giá trị trên được công bố thành `enum` trong OpenAPI; so sánh phân biệt hoa thường. Job `Succeeded` chỉ nghĩa là worker chạy xong; đạt QA là `outcome = Passed` của validation run và không còn issue `Error`/`Critical`.
+
+Chuỗi run → artifact → release: validation run của job Playtest/Release có `artifactId` là artifact ứng viên (ReleasePackage). `confirm-for-training` ghi nhận đúng cặp revision–scenarioVersion–validationRun–artifact, và `POST /api/releases` gửi `candidateArtifactId` = `artifactId` của run đó cùng `confirmationReviewId`. Gate từ chối nếu artifact không phải output đã accept của run hiện hành.
 | RevisionArtifactResponse | id, revisionId, jobId, attemptId, artifactType, sha256Hash, metadata (JSON), isRuntimeReady, isCurrentAttempt, createdAt |
 | BimFactResponse | id, revisionId, ifcGlobalId, entityType, propertyPath, value (JSON nullable), sourceHash, qualityFlags (JSON), createdAt |
 
@@ -640,13 +650,13 @@ Số endpoint không phản ánh mức độ hoàn thiện luồng. Cập nhật
 
 | Capability đích | Việc cần triển khai trong checklist |
 | --- | --- |
-| Organization Library / Admin approval | LIBRARY-01, APPROVAL-01: template/rubric/thiết bị version hóa; duyệt scenario/rubric đúng hash, tách readiness kỹ thuật. |
-| Private Building | Access/participation/list có source/test; migration/binary/client còn phải triển khai. Learner start gate và canonical QR vẫn backlog. |
-| Seats / session / Assessment | CAPACITY-01, SESSION-01, ASSESSMENT-01: distinct user/Building/kỳ tại start, pin entitlement/review/rubric, kết quả riêng completion; sync sau expiry/revoke. |
-| Gói 6/12 tháng / AI prepaid | BILLING-02, AI-01: snapshot seats/quota/policy, provisioning replay sau expiry; top-up không gia hạn Building, không invoice AI cuối kỳ. |
+| Organization Library / Admin approval | Đã có: Library template/rubric/thiết bị version hóa (`/api/library`, `/api/admin/library`); duyệt scenario/rubric đúng hash, readiness kỹ thuật tách riêng. |
+| Private Building | Access/participation/list, learner session start và QR (`/api/training/sessions`, `/api/qr/{token}`) đã có source/test; còn nghiệm thu client/Unity. |
+| Seats / session / Assessment | Đã có: seat theo user/Building/kỳ tại start, pin entitlement/review/rubric, kết quả tách completion (`Passed/NotPassed/Incomplete/NotAssessed`), sync sau expiry/revoke. |
+| Gói 6/12 tháng / AI prepaid | Đã có: snapshot seats/quota/policy, Upgrade, AI top-up không gia hạn Building, provisioning replay; quota `/api/organizations/me/ai-quota`. |
 | Learner-safe RAG | RAG-01: chỉ name/objectives/instructions approved/published; kiểm quyền mỗi retrieval và chặn AI trong Assessment. |
 
-Chi tiết và acceptance tại [implementation checklist](api-implementation-checklist.md). Capability chưa có route/DTO được ghi là thiết kế đích; method/path/payload thuộc task implementation sau. Learn không có approval riêng; approval v7 áp dụng scenario/rubric.
+Chi tiết và acceptance tại [implementation checklist](api-implementation-checklist.md) và [checklist API #52–#69](api-checklist-issues-52-69.md). Còn thiếu thật sự: AI provider thật (adapter), nghiệm thu Unity/Mobile runtime và deployment. Learn không có approval riêng; approval v7 áp dụng scenario/rubric.
 
 ## 10. Checklist tích hợp và test tay
 
@@ -685,7 +695,7 @@ Chi tiết và acceptance tại [implementation checklist](api-implementation-ch
 - IFC: [Application/Ifc](../Fire3D/Fire3D.Application/Ifc), [IfcWriteStore.cs](../Fire3D/Fire3D.Infrastructure/Ifc/IfcWriteStore.cs).
 - Draft: [ScenarioDraftStateDto.cs](../Fire3D/Fire3D.Application/Scenarios/Dto/ScenarioDraftStateDto.cs).
 - Playtest: [FailClosedPlaytestWriteStore.cs](../Fire3D/Fire3D.Infrastructure/Scenarios/FailClosedPlaytestWriteStore.cs).
-- Publish: [FailClosedReleaseStore.cs](../Fire3D/Fire3D.Infrastructure/Releases/FailClosedReleaseStore.cs).
+- Publish: [ReleaseWriteStore.cs](../Fire3D/Fire3D.Infrastructure/Releases/ReleaseWriteStore.cs) và gate [ReleasePublishReceipts.sql](../Fire3D/Fire3D.Infrastructure/Persistence/Sql/ReleasePublishReceipts.sql).
 
 Khi đổi API, cập nhật method/path, permission, request/response, status, validation và ví dụ. Đối chiếu handler/store, không chỉ annotation Swagger. Tài liệu được kiểm danh mục route, JSON và liên kết nội bộ; không thay báo cáo integration test.
 

@@ -6,7 +6,7 @@
 
 Content review is separate:
 
-1. OrganizationUser calls `POST /api/scenario-versions/{id}/submit`, `Idempotency-Key: submit-001`, no body. Response 201 includes `reviewId`, `status`, server `contentHash` and `rubricHash`.
+1. OrganizationUser calls `POST /api/scenario-versions/{id}/submit`, `Idempotency-Key: submit-001`, no body. Response 201 includes `code` (always `"OK"` on success, also on a replay), `reviewId`, `status`, server `contentHash` and `rubricHash`.
 2. PlatformAdmin calls `POST /api/admin/scenario-versions/{id}/approve` with another Idempotency-Key and `{ "contentHash": "<from submit>", "rubricHash": "<from submit>" }`. Response 200 is Approved.
 3. Alternatively reject at `/reject` with the same hashes plus `reason` (1–4000 characters). A rejected/approved decision is immutable; changes require a new scenario version and submission.
 
@@ -36,3 +36,18 @@ receipt input. Legacy family-less SQL entrypoints fail closed after migration.
 # Safe audit details
 
 New submission/approval/rejection records include a versioned safe audit snapshot of review status, review/version identifiers, actor and timestamps. Technical confirmation/rejection adds the exact revision, validation, artifact and optional annotation IDs. Mutations, receipts and audit remain in the same transaction. Audit detail projects only approved scalar fields; it excludes reasons, content/rubric hashes and content, email, phone, credentials and signed URLs. Legacy `ScenarioVersion` audits without the new contract marker remain metadata-only with `changes: []`; no history is backfilled.
+
+# Resume after reload (#53)
+
+A client can find its work from the Building or scenario without keeping IDs in the browser:
+
+| Route | Returns |
+| --- | --- |
+| `GET /api/scenarios/{scenarioId}` | adds `currentDraftId` / `currentDraftVersion` (most recently saved draft; send the version quoted as `If-Match`), `draftCount`, `latestVersionId` / `latestVersionNumber` |
+| `GET /api/scenarios/{scenarioId}/drafts?page&pageSize` | drafts without state, newest save first: `id`, `revisionId`, `draftNumber`, `source`, `schemaVersion`, `version` (ETag revision), `createdBy`, `createdAt`, `updatedAt`, `lastEditedById`, `lastEditedByName` (from the draft audit; the creator when never saved) |
+| `GET /api/scenario-versions/{versionId}/readiness` | technical readiness **before** submission: `reviewStatus`, `packageJob`, `validationRunId`, `outcome`, `blockerCount`, `blockers` (Error/Critical, up to 50), `confirmationReviewId`, `candidateArtifactId`, `technicalReady`, `missing` |
+| `GET /api/revisions/{revisionId}/readiness` | geometry processing/QA of the revision: `revisionStatus`, `geometryJob`, `validationRunId`, `outcome`, `issueCounts` by severity, `blockerCount`, `readyForScenario`, `missing`, `confirmations` (technical confirmations of versions on this revision) |
+
+`missing` codes — version: `PACKAGE_VALIDATION_REQUIRED`, `QA_NOT_PASSED`, `QA_BLOCKERS_PRESENT`, `CONFIRMATION_REQUIRED`, `RUNTIME_ARTIFACT_REQUIRED`; revision: `PROCESSING_REQUIRED`, `GEOMETRY_VALIDATION_REQUIRED`, `QA_NOT_PASSED`, `QA_BLOCKERS_PRESENT`. Readiness is reported only: confirm-for-training, release build and publish re-check every condition.
+
+Scope: OrganizationUser reads its own organization's active Buildings; PlatformAdmin reads every organization. Another tenant gets 404. The readiness reads go through `authoring_readiness_gate` (migration `20261012150000_AddAuthoringReadinessReads`, SECURITY DEFINER owned by `fet3d_ifc_upload_owner`; API roles only get EXECUTE) and recheck the account, organization and session family (401 when revoked).

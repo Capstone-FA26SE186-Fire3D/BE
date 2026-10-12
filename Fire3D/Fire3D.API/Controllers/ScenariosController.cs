@@ -5,6 +5,7 @@ using Fire3D.Application.Scenarios.Queries.ListBuildingScenarios;
 using Fire3D.Application.Scenarios.Queries.GetScenario;
 using Fire3D.Application.Scenarios.Queries.GetScenarioDraft;
 using Fire3D.Application.Scenarios.Queries.ListScenarioVersions;
+using Fire3D.Application.Scenarios.Queries.ListScenarioDrafts;
 using Fire3D.Application.Scenarios.Queries.GetScenarioVersion;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -28,6 +29,23 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
         var actor = User.GetActorId();
         var result = await sender.Send(
             new Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ValidateScenarioDraftCommand(actor, draftId), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
+    }
+
+    /// <summary>Dry run: validates an unsaved state against the draft's revision without storing it or changing the ETag.</summary>
+    /// <remarks>Body is the same state a PUT would send. Runs the PUT shape check and the full validation; shape problems come back as
+    /// issues (200, isValid=false) instead of 422. Response: draftId, storedVersion (unchanged), stateHash of the checked state, isValid, issues.
+    /// Malformed JSON 400 EDITOR_JSON_MALFORMED; non-object body 400; draft outside scope 404.</remarks>
+    [HttpPost("/api/scenario-drafts/{draftId:guid}/validate-state")]
+    [Fire3D.API.OpenApi.EditorJsonBody]
+    [ProducesResponseType<Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ScenarioDraftDryRunResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> ValidateScenarioDraftState(Guid draftId, [FromBody] System.Text.Json.Nodes.JsonNode? state, CancellationToken ct)
+    {
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ValidateScenarioDraftStateCommand(User.GetActorId(), draftId, state), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
@@ -73,6 +91,20 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
             var items=result.Value.Items.Where(v=>byId.ContainsKey(v.Id)).Select(v=>v with {ReviewStatus=byId[v.Id].ReviewStatus,ReviewId=byId[v.Id].ReviewId,RejectReason=byId[v.Id].RejectReason}).ToArray();
             return Ok(result.Value with {Items=items});
         }
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
+    }
+
+    /// <summary>Lists a scenario's drafts without their state, most recently saved first, so work can resume after a reload.</summary>
+    /// <remarks>Each item carries version (send it quoted as If-Match), schemaVersion and the last editor from the draft audit.</remarks>
+    [HttpGet("{scenarioId:guid}/drafts")]
+    [ProducesResponseType<Fire3D.Application.Administration.PageResponse<Fire3D.Application.Scenarios.ScenarioDraftSummaryResponse>>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> ListScenarioDrafts(Guid scenarioId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        var result = await sender.Send(new ListScenarioDraftsQuery(User.GetActorId(), scenarioId, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
@@ -200,6 +232,9 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
     [ProducesResponseType<ProblemDetails>(422)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(412)]
+    [ProducesResponseType<ProblemDetails>(428)]
     public async Task<IActionResult> SnapshotScenarioDraft(Guid draftId, CancellationToken ct, [FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch = null, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key = null)
     {
         var actor = User.GetActorId();

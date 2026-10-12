@@ -35,8 +35,9 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
     .AddSchemaTransformer<AuthProfileSchemaTransformer>()
     .AddOperationTransformer<AuthOperationTransformer>()
     .AddOperationTransformer<AuthoringOperationTransformer>()
+    .AddSchemaTransformer<ContractSchemaTransformer>()
     .AddOperationTransformer<SuccessResponseTransformer>());
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks().AddCheck<DatabaseReadinessCheck>("database", tags: [DatabaseReadinessCheck.Tag]);
 
 // Cấu hình Firebase Admin SDK
 var firebaseCredentialJson = FirebaseAdminConfiguration.GetCredentialJson(
@@ -65,7 +66,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(frontendUrls)
               .AllowAnyMethod()
               .AllowAnyHeader()
-              .WithExposedHeaders("ETag", "Retry-After")
+              .WithExposedHeaders("ETag", "Retry-After", "X-Correlation-ID", "Location")
               .AllowCredentials();
     });
 });
@@ -126,7 +127,9 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapHealthChecks("/health");
+// Liveness stays process-only so a database outage never makes the host restart the app; readiness checks DB and migrations.
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = check => !check.Tags.Contains(DatabaseReadinessCheck.Tag) });
+app.MapHealthChecks("/health/ready", DatabaseReadinessCheck.Options).AllowAnonymous();
 app.MapGet("/health/version", (IConfiguration configuration) => Results.Ok(new ArtifactVersionResponse(ArtifactVersion.Get(configuration))))
     .AllowAnonymous().Produces<ArtifactVersionResponse>(200);
 app.MapControllers();

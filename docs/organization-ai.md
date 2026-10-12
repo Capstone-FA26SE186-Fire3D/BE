@@ -110,6 +110,7 @@ validator. `Succeeded` needs at least one citation.
 | GET | `/api/ai/organization/sources` | OrganizationUser | Eligible sources now. |
 | POST | `/api/ai/organization/scenario-draft` | OrganizationUser | `{buildingId, prompt, sources?}` + Idempotency-Key → `202` + Location. |
 | POST | `/api/ai/organization/answer` | OrganizationUser | `{question, sources?}` + Idempotency-Key → `202`. |
+| GET | `/api/ai/requests?status=&operation=&mine=&page=&pageSize=` | OrganizationUser | Own organization only, newest first; same fields as the detail; `mine=true` keeps the caller's requests (#58). Invalid status/operation 400. |
 | GET | `/api/ai/requests/{requestId}` | OrganizationUser | Same organization only. |
 | GET | `/api/admin/ai/requests?status=&organizationId=` | PlatformAdmin | Includes allocations and `providerResult`. |
 | GET | `/api/admin/ai/requests/{requestId}` | PlatformAdmin | |

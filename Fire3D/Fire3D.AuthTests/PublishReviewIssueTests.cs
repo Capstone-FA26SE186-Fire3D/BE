@@ -175,6 +175,9 @@ public sealed partial class AuthIntegrationTests
         Assert.Single((await trainings.GetTrainingsByBuildingAsync(trainee,building,null,default,tf)).Value!);
         Assert.True((await store.RevokeAsync(f.Owner,built.Value.Id,null,"Withdraw publication",default,family)).IsSuccess);
         Assert.Empty((await trainings.GetTrainingsByBuildingAsync(trainee,building,null,default,tf)).Value!);
+        // Revoking archives the release's Trainings; an organization reader sees the withdrawn state explicitly.
+        Assert.Equal("Archived",await ScalarAsync($"SELECT status::text FROM trainings WHERE release_id='{built.Value.Id}'"));
+        Assert.Equal("Revoked",(await trainings.GetTrainingsByBuildingAsync(f.Owner,building,null,default,family)).Value!.Single().ReleaseStatus);
     }
 
     [PostgresFact]

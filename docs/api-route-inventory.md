@@ -1,13 +1,13 @@
 # Route inventory generated from OpenAPI
 
-235 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+245 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
-| GET | /api/accounts | Bearer | None | 200 |
-| POST | /api/accounts | Bearer | None | 201 |
-| GET | /api/accounts/{id} | Bearer | None | 200 |
-| PATCH | /api/accounts/{id}/status | Bearer | None | 200 |
+| GET | /api/accounts | Bearer | None | 200, 429 |
+| POST | /api/accounts | Bearer | None | 201, 429 |
+| GET | /api/accounts/{id} | Bearer | None | 200, 429 |
+| PATCH | /api/accounts/{id}/status | Bearer | None | 200, 429 |
 | GET | /api/admin/ai/policies | Bearer | None | 200 |
 | POST | /api/admin/ai/policies | Bearer | Idempotency-Key | 201, 409, 422 |
 | GET | /api/admin/ai/requests | Bearer | None | 200 |
@@ -62,6 +62,7 @@
 | GET | /api/admin/organizations/{organizationId}/ai-quota/grants | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/organizations/{organizationId}/ai-usage | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/organizations/{organizationId}/analytics/operations | Bearer | None | 200, 400, 401, 403, 404 |
+| GET | /api/admin/organizations/{organizationId}/analytics/training | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/admin/payments/payos/checkouts | Bearer | None | 200, 400, 401, 403, 404, 409, 503 |
 | POST | /api/admin/payments/payos/checkouts/{id}/reconcile | Bearer | None | 202, 400, 401, 403, 404, 409, 503 |
 | GET | /api/admin/payments/payos/requests | Bearer | None | 200, 400, 401, 403, 404, 409, 503 |
@@ -80,6 +81,7 @@
 | POST | /api/ai/organization/answer | Bearer | Idempotency-Key | 202, 409, 422, 503 |
 | POST | /api/ai/organization/scenario-draft | Bearer | Idempotency-Key | 202, 409, 422, 503 |
 | GET | /api/ai/organization/sources | Bearer | None | 200 |
+| GET | /api/ai/requests | Bearer | None | 200, 400 |
 | GET | /api/ai/requests/{requestId} | Bearer | None | 200, 404 |
 | POST | /api/auth/change-password | Bearer | None | 204, 400, 401 |
 | PUT | /api/auth/devices | Bearer | X-Installation-Key | 200, 400, 403, 409 |
@@ -88,7 +90,7 @@
 | POST | /api/auth/google/onboarding/complete | Anonymous | None | 201, 400, 403, 409, 503 |
 | POST | /api/auth/login | Anonymous | None | 200, 400, 401, 403 |
 | POST | /api/auth/login-firebase | Anonymous | None | 200, 400, 401, 403, 409, 429, 503 |
-| POST | /api/auth/logout | Bearer | None | 200 |
+| POST | /api/auth/logout | Bearer | None | 204 |
 | POST | /api/auth/logout-all | Bearer | None | 204, 401 |
 | GET | /api/auth/me | Bearer | None | 200 |
 | PATCH | /api/auth/me | Bearer | If-Match | 200, 400, 401, 409, 412, 428 |
@@ -118,7 +120,7 @@
 | GET | /api/buildings | Bearer | None | 200 |
 | POST | /api/buildings | Bearer | None | 201, 400, 401, 403, 409 |
 | GET | /api/buildings/{buildingId}/editor-preview | Bearer | None | 200, 400, 401, 403, 404, 503 |
-| POST | /api/buildings/{buildingId}/ifc | Bearer | Idempotency-Key | 201, 400, 404 |
+| POST | /api/buildings/{buildingId}/ifc | Bearer | Idempotency-Key | 201, 400, 404, 429 |
 | GET | /api/buildings/{buildingId}/qr-codes | Bearer | None | 200, 400, 404 |
 | POST | /api/buildings/{buildingId}/qr-codes | Bearer | None | 201, 400, 404, 409 |
 | POST | /api/buildings/{buildingId}/qr-codes/{qrId}/revoke | Bearer | None | 200, 404, 409 |
@@ -153,8 +155,9 @@
 | POST | /api/me/avatar/upload | Bearer | If-Match | 200, 400, 401, 409, 412, 428, 503 |
 | POST | /api/me/avatar/upload-intent | Bearer | None | 200, 400, 401 |
 | POST | /api/me/link-google | Bearer | None | 200, 400, 401, 403, 409, 503 |
-| GET | /api/organizations | Bearer | None | 200 |
-| POST | /api/organizations | Bearer | None | 201 |
+| POST | /api/me/password | Bearer | None | 204, 400, 401, 409, 503 |
+| GET | /api/organizations | Bearer | None | 200, 429 |
+| POST | /api/organizations | Bearer | None | 201, 429 |
 | GET | /api/organizations/me | Bearer | None | 200, 401, 403 |
 | PATCH | /api/organizations/me | Bearer | If-Match | 200, 400, 401, 403, 409, 412, 428 |
 | GET | /api/organizations/me/ai-quota | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
@@ -164,8 +167,9 @@
 | GET | /api/organizations/me/analytics/training | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/organizations/me/notifications | Bearer | None | 200, 400, 401, 403, 404 |
 | PATCH | /api/organizations/me/notifications/{id}/read | Bearer | None | 200, 400, 401, 403, 404 |
-| GET | /api/organizations/{id} | Bearer | None | 200 |
-| PATCH | /api/organizations/{id}/status | Bearer | None | 200 |
+| GET | /api/organizations/{id} | Bearer | None | 200, 429 |
+| PATCH | /api/organizations/{id} | Bearer | If-Match | 200, 400, 404, 409, 412, 428, 429 |
+| PATCH | /api/organizations/{id}/status | Bearer | None | 200, 429 |
 | GET | /api/payments/payos/checkouts/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 503 |
 | POST | /api/payments/payos/create | Bearer | Idempotency-Key | 200, 201, 202, 400, 401, 403, 404, 409, 503 |
 | GET | /api/payments/payos/requests/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 503 |
@@ -183,9 +187,10 @@
 | POST | /api/playtests/{playtestId}/start | Bearer | Idempotency-Key | 200, 400, 404, 409, 503 |
 | GET | /api/processing-jobs/{jobId} | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/processing-jobs/{jobId}/qa | Bearer | None | 200, 400, 401, 403, 404 |
-| POST | /api/processing-jobs/{jobId}/retry | Bearer | None | 202, 400, 401, 403, 404, 409 |
+| POST | /api/processing-jobs/{jobId}/retry | Bearer | None | 202, 400, 401, 403, 404, 409, 429 |
 | GET | /api/qr/{qrToken} | Bearer | None | 200, 404 |
 | GET | /api/qr/{qrToken}/trainings | Bearer | None | 200, 403, 404 |
+| GET | /api/releases | Bearer | None | 200, 400, 401, 403 |
 | POST | /api/releases | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
 | GET | /api/releases/{releaseId} | Bearer | None | 200, 401, 403, 404 |
 | POST | /api/releases/{releaseId}/publish | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409, 503 |
@@ -196,26 +201,31 @@
 | PUT | /api/revisions/{revisionId}/annotations | Bearer | If-Match | 200, 400, 412, 428 |
 | GET | /api/revisions/{revisionId}/artifacts | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/revisions/{revisionId}/bim-facts | Bearer | None | 200, 400, 401, 403, 404 |
-| POST | /api/revisions/{revisionId}/confirm-for-training | Bearer | None | 200, 400, 401, 403, 404, 409 |
+| POST | /api/revisions/{revisionId}/confirm-for-training | Bearer | None | 200, 400, 401, 403, 404, 409, 429 |
 | GET | /api/revisions/{revisionId}/issues | Bearer | None | 200, 400, 401, 403, 404 |
-| POST | /api/revisions/{revisionId}/process | Bearer | Idempotency-Key | 202, 400, 404, 409 |
+| POST | /api/revisions/{revisionId}/process | Bearer | Idempotency-Key | 202, 400, 404, 409, 429 |
 | GET | /api/revisions/{revisionId}/processing-jobs | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/revisions/{revisionId}/processing-logs | Bearer | None | 200, 400, 401, 403, 404 |
-| POST | /api/revisions/{revisionId}/reviews | Bearer | None | 201, 400, 401, 403, 404, 409 |
-| POST | /api/revisions/{revisionId}/upload-complete | Bearer | None | 204, 400, 404, 409, 410, 422, 503 |
+| GET | /api/revisions/{revisionId}/readiness | Bearer | None | 200, 401, 403, 404 |
+| POST | /api/revisions/{revisionId}/reviews | Bearer | None | 201, 400, 401, 403, 404, 409, 429 |
+| POST | /api/revisions/{revisionId}/upload-complete | Bearer | None | 204, 400, 404, 409, 410, 422, 429, 503 |
+| GET | /api/revisions/{revisionId}/validation-runs | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/scenario-drafts/{draftId} | Bearer | None | 200 |
 | PUT | /api/scenario-drafts/{draftId} | Bearer | If-Match | 204, 400, 404, 409, 412, 422, 428 |
-| POST | /api/scenario-drafts/{draftId}/snapshot | Bearer | If-Match, Idempotency-Key | 201, 400, 404, 422 |
+| POST | /api/scenario-drafts/{draftId}/snapshot | Bearer | If-Match, Idempotency-Key | 201, 400, 404, 409, 412, 422, 428 |
 | POST | /api/scenario-drafts/{draftId}/validate | Bearer | None | 200, 400, 403, 404 |
+| POST | /api/scenario-drafts/{draftId}/validate-state | Bearer | None | 200, 400, 403, 404 |
 | GET | /api/scenario-interactions/catalog | Bearer | None | 200 |
 | GET | /api/scenario-rubrics/catalog | Bearer | None | 200, 401, 403 |
 | POST | /api/scenario-versions/{id}/package-builds | Bearer | Idempotency-Key | 202, 400, 409 |
 | POST | /api/scenario-versions/{id}/submit | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
 | GET | /api/scenario-versions/{versionId} | Bearer | None | 200, 400, 403, 404 |
+| GET | /api/scenario-versions/{versionId}/readiness | Bearer | None | 200, 401, 403, 404 |
 | GET | /api/scenario-versions/{versionId}/review | Bearer | None | 200, 401, 403, 404 |
 | POST | /api/scenarios | Bearer | Idempotency-Key | 201, 400, 404 |
 | GET | /api/scenarios/{scenarioId} | Bearer | None | 200, 400, 403, 404 |
 | POST | /api/scenarios/{scenarioId}/draft | Bearer | Idempotency-Key | 201, 400, 404 |
+| GET | /api/scenarios/{scenarioId}/drafts | Bearer | None | 200, 400, 403, 404 |
 | POST | /api/scenarios/{scenarioId}/playtests | Bearer | Idempotency-Key | 201, 400, 404 |
 | GET | /api/scenarios/{scenarioId}/versions | Bearer | None | 200, 400, 403, 404 |
 | GET | /api/support/tickets | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |

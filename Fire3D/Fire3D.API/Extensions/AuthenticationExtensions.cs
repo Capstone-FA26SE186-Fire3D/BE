@@ -30,6 +30,7 @@ public static class AuthenticationExtensions
         services.AddScoped<IAuthStore, AuthStore>();
         services.AddScoped<IGoogleOnboardingService, GoogleOnboardingService>();
         services.AddScoped<IGoogleLinkService, GoogleLinkService>();
+        services.AddScoped<IGooglePasswordService, GooglePasswordService>();
         services.AddScoped<IRefreshTokenCleanupStore, RefreshTokenCleanupStore>();
         services.AddScoped<ILocalPasswordReset, LocalPasswordReset>();
         services.AddScoped<Fire3D.Application.Authentication.Services.Fire3DSessionIssuer>();
@@ -95,7 +96,13 @@ public static class AuthenticationExtensions
                 };
             });
         services.AddApiAuthorization();
-        services.AddProblemDetails();
+        services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
+        {
+            // An unhandled exception still gets a stable code and a traceId for log lookup; handler errors keep their own code.
+            if (context.ProblemDetails.Status == StatusCodes.Status500InternalServerError)
+                context.ProblemDetails.Extensions.TryAdd("code", "INTERNAL_ERROR");
+            context.ProblemDetails.Extensions.TryAdd("traceId", System.Diagnostics.Activity.Current?.Id ?? context.HttpContext.TraceIdentifier);
+        });
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -107,7 +114,13 @@ public static class AuthenticationExtensions
             options.OnRejected = async (rejection, ct) =>
             {
                 var context = rejection.HttpContext;
-                if (context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName != "auth-refresh") return;
+                var policy = context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
+                var (code, title) = policy switch
+                {
+                    "auth-refresh" => ("AUTH_REFRESH_RATE_LIMITED", "Too many refresh requests. Try again after the indicated delay."),
+                    "administration" => ("ADMINISTRATION_RATE_LIMITED", "Too many administration requests. Try again after the indicated delay."),
+                    _ => ("RATE_LIMITED", "Too many requests. Try again after the indicated delay.")
+                };
                 var retry = rejection.Lease.TryGetMetadata(MetadataName.RetryAfter, out var remaining)
                     ? Math.Max(1, (int)Math.Ceiling(remaining.TotalSeconds)) : 60;
                 context.Response.Headers.RetryAfter = retry.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -115,9 +128,9 @@ public static class AuthenticationExtensions
                 await context.Response.WriteAsJsonAsync(new Microsoft.AspNetCore.Mvc.ProblemDetails
                 {
                     Status = StatusCodes.Status429TooManyRequests,
-                    Title = "Too many refresh requests. Try again after the indicated delay.",
+                    Title = title,
                     Type = "https://www.rfc-editor.org/rfc/rfc6585#section-4",
-                    Extensions = { ["code"] = "AUTH_REFRESH_RATE_LIMITED",
+                    Extensions = { ["code"] = code,
                         ["traceId"] = System.Diagnostics.Activity.Current?.Id ?? context.TraceIdentifier }
                 }, options: null, contentType: "application/problem+json", cancellationToken: ct);
             };

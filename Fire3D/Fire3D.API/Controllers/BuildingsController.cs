@@ -32,7 +32,7 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(409)]
     [Authorize(Roles = "PlatformAdmin,OrganizationUser")]
-    public async Task<ActionResult<BuildingResponse>> CreateBuilding(CreateBuildingRequest request, [FromQuery] Guid? organizationId, CancellationToken ct)
+    public async Task<ActionResult<BuildingResponse>> CreateBuilding(CreateBuildingRequest request, [FromQuery, Fire3D.API.OpenApi.DeprecatedParameter("Deprecated alias; send organizationId in the body. A different value in query and body returns 400.")] Guid? organizationId, CancellationToken ct)
     {
         var result = await sender.Send(new CreateBuildingCommand(ActorId, organizationId, request), ct);
         return result.IsSuccess ? Created($"/api/buildings/{result.Value!.Id}", result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
