@@ -30,6 +30,7 @@
         <EmbeddedResource Include="Persistence/Sql/TrainingReleaseList.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.TrainingReleaseList.sql" />
         <EmbeddedResource Include="Persistence/Sql/ReviewFindingGates.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ReviewFindingGates.sql" />
         <EmbeddedResource Include="Persistence/Sql/MigrationHistoryRead.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.MigrationHistoryRead.sql" />
+        <EmbeddedResource Include="Persistence/Sql/RuntimeAvatarPayosGrants.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.RuntimeAvatarPayosGrants.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />
