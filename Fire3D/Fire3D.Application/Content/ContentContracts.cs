@@ -26,6 +26,8 @@ public interface IContentGates
     Task<AuthResult<JsonElement>> LibraryAsync(string action, Guid actor, Guid family, Guid resource, object input, string? key, long? expected, CancellationToken ct);
     /// <summary>PlatformAdmin editor catalogs: KnowledgeSources (visibility, status, search) and Situations (search, isActive), paged.</summary>
     Task<AuthResult<JsonElement>> CatalogAsync(string action, Guid actor, Guid family, object input, CancellationToken ct);
+    /// <summary>If-Match mutations of Learn ("learn") or Library ("library") with an optional Idempotency-Key that replays the first success.</summary>
+    Task<AuthResult<JsonElement>> LifecycleAsync(string gate, string action, Guid actor, Guid family, Guid resource, object input, string? key, long? expected, CancellationToken ct);
 }
 
 /// <summary>

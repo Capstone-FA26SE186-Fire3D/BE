@@ -24,6 +24,7 @@
         <EmbeddedResource Include="Persistence/Sql/CatalogLists.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.CatalogLists.sql" />
         <EmbeddedResource Include="Persistence/Sql/AuthoringReadiness.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.AuthoringReadiness.sql" />
         <EmbeddedResource Include="Persistence/Sql/ReleaseRevokeTrainings.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ReleaseRevokeTrainings.sql" />
+        <EmbeddedResource Include="Persistence/Sql/ContentLifecycleKeys.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ContentLifecycleKeys.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />

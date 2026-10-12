@@ -107,3 +107,9 @@ items, maximum 100. Library changes enqueue `PlatformCacheInvalidation` with `sc
 - `Fire3D.IfcTests/ContentValidationTests.cs`: URL canonicalisation, markup and strict-field rules, library payloads.
 - `Fire3D.AuthTests/ContentPostgresTests.cs`: Learn lifecycle, public reads, bookmarks, RAG eligibility, immutability,
   outbox; library publish/deactivate visibility; HTTP ETag/If-Match, anonymous reads and validation errors.
+
+## Idempotency on If-Match mutations (#57)
+
+`PUT /api/admin/learn/versions/{id}`, `POST /api/admin/learn/versions/{id}/publish`, `POST /api/admin/learn/posts/{id}/{hide|show|delete|restore}`, `PATCH /api/admin/library/items/{id}`, `PUT /api/admin/library/versions/{id}` and `POST /api/admin/library/versions/{id}/publish` accept an optional `Idempotency-Key` next to the required `If-Match`. With a key, the first successful response is stored and replayed for the same key and input (resource, body, If-Match), even after the ETag moved, so a retried request after a lost response does not fail with 412. Another input under the same key is `409 IDEMPOTENCY_KEY_CONFLICT`; a malformed key is `400 IDEMPOTENCY_KEY_REQUIRED`. Without a key the behaviour is unchanged. Create routes keep their required key. The create body field is `publish` (boolean), not `publishImmediately`. Migration: `20261012170000_AddContentLifecycleKeys` (`content_lifecycle_gate`, wrapping the existing gates).
+
+Roles: `/api/admin/learn/*` and `/api/admin/library/*` are PlatformAdmin only (OrganizationUser and Trainee get 403); `/api/library/*` is OrganizationUser and PlatformAdmin (Trainee 403); public Learn reads are anonymous.

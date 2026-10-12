@@ -22,10 +22,14 @@ public sealed class ContentGates(Fire3DDbContext db) : IContentGates
     public Task<AuthResult<JsonElement>> CatalogAsync(string action, Guid actor, Guid family, object input, CancellationToken ct) =>
         Run("SELECT catalog_list_gate(@action,@actor,@family,@input)::text", action, actor, family, null, input, null, null, ct);
 
-    private async Task<AuthResult<JsonElement>> Run(string sql, string action, Guid? actor, Guid? family, Guid? resource, object input, string? key, long? expected, CancellationToken ct)
+    public Task<AuthResult<JsonElement>> LifecycleAsync(string gate, string action, Guid actor, Guid family, Guid resource, object input, string? key, long? expected, CancellationToken ct) =>
+        Run("SELECT content_lifecycle_gate(@gate,@action,@actor,@family,@resource,@input,@key,@expected)::text", action, actor, family, resource, input, key, expected, ct, gate);
+
+    private async Task<AuthResult<JsonElement>> Run(string sql, string action, Guid? actor, Guid? family, Guid? resource, object input, string? key, long? expected, CancellationToken ct, string? gate = null)
     {
         await db.Database.OpenConnectionAsync(ct);
         await using var command = new NpgsqlCommand(sql, (NpgsqlConnection)db.Database.GetDbConnection());
+        if (gate is not null) command.Parameters.AddWithValue("gate", gate);
         command.Parameters.AddWithValue("action", action);
         command.Parameters.AddWithValue("actor", NpgsqlDbType.Uuid, (object?)actor ?? DBNull.Value);
         command.Parameters.AddWithValue("family", NpgsqlDbType.Uuid, (object?)family ?? DBNull.Value);
