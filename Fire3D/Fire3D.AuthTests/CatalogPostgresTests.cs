@@ -28,8 +28,9 @@ public sealed partial class AuthIntegrationTests
         await AdminJson(HttpMethod.Post,$"/api/admin/knowledge-sources/{approved["id"]}/approve",null,null,"\"1\"");
         await AdminJson(HttpMethod.Post,"/api/admin/knowledge-sources",new {visibility="Organization",organizationId=tenant.Org,title="Tenant manual",versionLabel="1",sourceHash=Hash("c")},"src-tenant");
 
-        // Common is the default scope; tenant sources never appear unless asked for explicitly.
-        var common=await AdminJson(HttpMethod.Get,"/api/admin/knowledge-sources");
+        // The admin registry lists every visibility so tenant sources can be reviewed; the editor asks for Common only.
+        Assert.Equal(3,(await AdminJson(HttpMethod.Get,"/api/admin/knowledge-sources"))["total"]!.GetValue<int>());
+        var common=await AdminJson(HttpMethod.Get,"/api/admin/knowledge-sources?visibility=Common");
         Assert.Equal(2,common["total"]!.GetValue<int>());
         Assert.DoesNotContain(common["items"]!.AsArray(),x=>x!["visibility"]!.GetValue<string>()!="Common");
         Assert.Equal(1,(await AdminJson(HttpMethod.Get,"/api/admin/knowledge-sources?visibility=Organization"))["total"]!.GetValue<int>());
@@ -40,10 +41,12 @@ public sealed partial class AuthIntegrationTests
         // Search treats wildcard characters literally.
         Assert.Equal(1,(await AdminJson(HttpMethod.Get,"/api/admin/knowledge-sources?search=100%25"))["total"]!.GetValue<int>());
         Assert.Equal(0,(await AdminJson(HttpMethod.Get,"/api/admin/knowledge-sources?search=_%25_"))["total"]!.GetValue<int>());
-        Assert.Equal(1,(await AdminJson(HttpMethod.Get,"/api/admin/knowledge-sources?pageSize=1&page=2"))["items"]!.AsArray().Count);
+        Assert.Single((await AdminJson(HttpMethod.Get,"/api/admin/knowledge-sources?visibility=Common&pageSize=1&page=2"))["items"]!.AsArray());
         // A chosen source can be reopened by ID after a reload, with the same flags.
         var detail=await AdminJson(HttpMethod.Get,$"/api/admin/knowledge-sources/{draft["id"]}");
         Assert.True(detail["canUseInDraft"]!.GetValue<bool>());Assert.False(detail["canPublishReference"]!.GetValue<bool>());
+        Assert.Equal(detail["revision"]!.GetValue<long>().ToString(),(await client.GetAsync($"/api/admin/knowledge-sources/{draft["id"]}")).Headers.ETag!.Tag.Trim('"'));
+        Assert.Equal(HttpStatusCode.NotFound,(await client.GetAsync($"/api/admin/knowledge-sources/{Guid.NewGuid()}")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await client.GetAsync("/api/admin/knowledge-sources?visibility=Tenant")).StatusCode);
 
         // Situations: paged admin catalog with search and isActive; the public list is unchanged.

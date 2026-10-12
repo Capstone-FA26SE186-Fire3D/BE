@@ -334,7 +334,7 @@ public static class ScenarioStateV1Validator
     private static readonly string[] Quaternion = ["x", "y", "z", "w"];
     private static readonly string[] Capability = ["id", "version"];
     private static readonly string[] Mode = ["allowedModes"];
-    private static readonly string[] Rubric = ["schema_version", "pass_threshold", "criteria"];
+    private static readonly string[] Rubric = RubricContract.RubricFields;
     private static readonly string[] Criterion = ["id", "metric", "mandatory", "weight", "threshold", "operator", "description"];
 
     /// <summary>
@@ -450,7 +450,7 @@ public static class ScenarioStateV1Validator
         if (rubric["schema_version"] is null) { if (complete) r.Add("FIELD_REQUIRED", "$.rubric.schema_version", "Required."); }
         else if (!RubricContract.IsSupportedVersion(rubric["schema_version"])) r.Add(RubricContract.UnsupportedCode, "$.rubric.schema_version", RubricContract.UnsupportedMessage);
         r.Number(rubric["pass_threshold"], "$.rubric.pass_threshold");
-        var criteria = r.Array(rubric["criteria"], "$.rubric.criteria", 100);
+        var criteria = r.Array(rubric["criteria"], "$.rubric.criteria", RubricContract.MaxCriteria);
         if (criteria is null) return;
         if (complete && criteria.Count == 0) r.Add("FIELD_REQUIRED", "$.rubric.criteria", "At least one criterion is required.");
         var ids = new HashSet<string>(StringComparer.Ordinal);
@@ -459,7 +459,7 @@ public static class ScenarioStateV1Validator
             var path = $"$.rubric.criteria[{i}]";
             var c = r.Object(criteria[i], path, Criterion);
             if (c is null) continue;
-            if (r.Text(c["id"], $"{path}.id", 128, pattern: EditorContract.IdPattern()) is { } id && !ids.Add(id))
+            if (r.Text(c["id"], $"{path}.id", RubricContract.CriterionIdMaxLength, pattern: EditorContract.IdPattern()) is { } id && !ids.Add(id))
                 r.Add("ID_DUPLICATE", $"{path}.id", "Criterion IDs must be unique.");
             if (r.Text(c["metric"], $"{path}.metric", 128, pattern: EditorContract.IdPattern()) is { } metric && complete && !EditorContract.LearnerMetrics.Contains(metric))
                 r.Add("RUBRIC_METRIC_UNSUPPORTED", $"{path}.metric", $"Use a server-computed metric: {string.Join(", ", EditorContract.LearnerMetrics)}.");
@@ -467,7 +467,7 @@ public static class ScenarioStateV1Validator
             r.Number(c["weight"], $"{path}.weight", min: 0);
             r.Number(c["threshold"], $"{path}.threshold");
             r.OneOf(c["operator"], $"{path}.operator", RubricContract.Operators);
-            if (c["description"] is not null) r.Text(c["description"], $"{path}.description", 1000);
+            if (c["description"] is not null) r.Text(c["description"], $"{path}.description", RubricContract.DescriptionMaxLength);
         }
     }
 }

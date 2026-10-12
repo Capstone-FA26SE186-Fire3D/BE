@@ -74,6 +74,9 @@ public sealed partial class AuthIntegrationTests
             Assert.False(orphan.GetProperty("createdBy").TryGetProperty("email", out _));
             Assert.Equal(JsonValueKind.Null, orphan.GetProperty("organization").GetProperty("name").ValueKind);
             Assert.True((await service.Execute("AdminGetTicket", adminId, af, id, new SupportQuery(), null, null, default)).IsSuccess);
+            // Reads stay reachable for Admin, but nothing is written to a deleted organization's resources.
+            Assert.Equal("NOT_FOUND", (await service.Execute("AdminMessage", adminId, af, id, new MessageRequest("Late reply"), "late", null, default)).Error?.Code);
+            Assert.Equal("NOT_FOUND", (await service.Execute("FeedbackStatus", adminId, af, fid, new AdminFeedbackUpdateRequest(Fire3D.Domain.Enums.FeedbackStatus.Reviewed), null, 1, default)).Error?.Code);
         });
     }
 

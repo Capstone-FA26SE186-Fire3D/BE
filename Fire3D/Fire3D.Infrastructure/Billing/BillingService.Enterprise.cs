@@ -8,6 +8,8 @@ namespace Fire3D.Infrastructure.Billing;
 
 public sealed partial class BillingService
 {
+    // Assignee and close reason are internal to PlatformAdmin; the requesting organization sees status and closedAt only.
+    private static EnterpriseQuoteResponse EnterpriseView(EnterpriseQuoteRequest item,Actor? viewer)=>viewer?.Role==UserRole.PlatformAdmin?EnterpriseView(item):EnterpriseView(item) with{AssignedTo=null,CloseReason=null};
     private static EnterpriseQuoteResponse EnterpriseView(EnterpriseQuoteRequest item)=>new(item.Id,item.OrganizationId,item.RequestedBuildingCount,
         item.RequestedDurationMonths,item.ContactName,item.ContactEmail,item.ContactPhone,item.Notes,item.Status,item.CreatedAt,item.Revision,item.QuotationId,
         item.AssignedTo,item.ClosedAt,item.CloseReason);
@@ -38,6 +40,6 @@ public sealed partial class BillingService
         Pagination(page,pageSize);await using var tx=await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead,ct);var identity=await Authorize(actor,false,ct);
         var query=db.Set<EnterpriseQuoteRequest>().AsNoTracking().Where(x=>identity.Role==UserRole.PlatformAdmin||x.OrganizationId==identity.OrganizationId);
         var total=await query.CountAsync(ct);var items=await query.OrderByDescending(x=>x.CreatedAt).ThenBy(x=>x.Id).Skip((page-1)*pageSize).Take(pageSize).ToListAsync(ct);
-        return new(items.Select(EnterpriseView).ToArray(),total,page,pageSize);
+        return new(items.Select(x=>EnterpriseView(x,identity)).ToArray(),total,page,pageSize);
     }
 }

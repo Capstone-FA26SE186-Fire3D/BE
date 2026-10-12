@@ -44,6 +44,26 @@ public sealed class BillingNotificationTests
     }
 
     [BillingPostgresFact]
+    public async Task Exhausted_expired_leases_fail_and_ended_entitlements_are_not_reminded()
+    {
+        await using var db=await BillingDatabase.Create();var (seedFactory,entitlement)=await ExpiringEntitlement(db);using var __=seedFactory;
+        var options=Options.Create(new BillingReminderOptions{Enabled=true,LeadDays=5,MaxAttempts=3,LeaseSeconds=30});
+        var email=new CountingEmail();
+        await using var context=db.Context();var reminders=new BillingReminders(context,email,options,NullLogger<BillingReminders>.Instance);
+        Assert.Equal(1,await reminders.ScheduleAsync(DateTime.UtcNow,default));
+        // A worker crashed on its last attempt: the delivery leaves Sending instead of staying stuck there.
+        await db.Sql("UPDATE notification_deliveries SET status='Sending',attempts=3,lease_token=gen_random_uuid(),lease_until=now()-interval '1 second' WHERE channel='Email'");
+        Assert.Equal(0,await reminders.DispatchAsync(default));
+        Assert.Equal("Failed",await db.Scalar("SELECT status FROM notification_deliveries WHERE channel='Email'"));
+        Assert.Equal("LEASE_EXPIRED_AFTER_MAX_ATTEMPTS",await db.Scalar("SELECT last_error FROM notification_deliveries WHERE channel='Email'"));
+        // An entitlement that ended (or was suspended) before sending is suppressed, not emailed.
+        await db.Sql($"UPDATE notification_deliveries SET status='Pending',attempts=0,last_error=NULL,lease_token=NULL,lease_until=NULL,next_attempt_at=now() WHERE channel='Email'; ALTER TABLE service_entitlements DISABLE TRIGGER USER; UPDATE service_entitlements SET status='Suspended' WHERE id='{entitlement}'; ALTER TABLE service_entitlements ENABLE TRIGGER USER");
+        await reminders.DispatchAsync(default);
+        Assert.Equal(0,email.Sent);
+        Assert.Equal("SUPPRESSED_ENTITLEMENT_ENDED",await db.Scalar("SELECT last_error FROM notification_deliveries WHERE channel='Email'"));
+    }
+
+    [BillingPostgresFact]
     public async Task Notifications_list_filter_and_mark_read_only_for_the_current_recipient()
     {
         await using var db=await BillingDatabase.Create();var (factory,entitlement)=await ExpiringEntitlement(db);using var ___=factory;

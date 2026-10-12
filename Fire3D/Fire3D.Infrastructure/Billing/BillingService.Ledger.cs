@@ -116,11 +116,11 @@ public sealed partial class BillingService
         return new(rows,total,page,pageSize);
     }
 
-    public async Task<EnterpriseQuoteResponse> GetEnterpriseRequest(Guid actor,Guid id,CancellationToken ct)
+    public async Task<EnterpriseQuoteResponse> GetEnterpriseRequest(Guid actor,Guid family,Guid id,CancellationToken ct)
     {
-        var identity=await Authorize(actor,false,ct);
+        var identity=await Authorize(actor,false,ct);await RequireLiveFamily(actor,family,ct);
         var item=await db.Set<EnterpriseQuoteRequest>().AsNoTracking().SingleOrDefaultAsync(x=>x.Id==id,ct)??throw Missing();
-        await Scope(identity,item.OrganizationId,ct);return EnterpriseView(item);
+        await Scope(identity,item.OrganizationId,ct);return EnterpriseView(item,identity);
     }
 
     public async Task<EnterpriseQuoteResponse> UpdateEnterpriseStatus(Guid actor,Guid family,Guid id,EnterpriseStatusRequest request,string? ifMatch,CancellationToken ct)

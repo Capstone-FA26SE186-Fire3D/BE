@@ -52,6 +52,12 @@ public sealed class BillingQuotationCancelTests
         await db.Sql($"UPDATE quotations SET status='Expired' WHERE id='{expiring}'");
         var expired=await owner.SendAsync(Cancel(expiring,await Revision(db,expiring),"expired"));
         Assert.Equal(HttpStatusCode.Conflict,expired.StatusCode);Assert.Contains("QUOTATION_EXPIRED",await expired.Content.ReadAsStringAsync());
+        // No job writes Expired: an Accepted quotation past validUntil is already expired for cancellation.
+        var lapsed=await PayosCheckoutTests.Accepted(db);
+        await db.Sql($"ALTER TABLE quotations DISABLE TRIGGER USER; UPDATE quotations SET valid_until=now()-interval '1 minute' WHERE id='{lapsed}'; ALTER TABLE quotations ENABLE TRIGGER USER");
+        var late=await owner.SendAsync(Cancel(lapsed,await Revision(db,lapsed),"lapsed"));
+        Assert.Equal(HttpStatusCode.Conflict,late.StatusCode);Assert.Contains("QUOTATION_EXPIRED",await late.Content.ReadAsStringAsync());
+        Assert.Equal("Accepted",(string?)await db.Scalar($"SELECT status::text FROM quotations WHERE id='{lapsed}'"));
     }
 
     [BillingPostgresFact]

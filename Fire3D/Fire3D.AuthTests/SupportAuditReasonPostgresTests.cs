@@ -36,7 +36,7 @@ public sealed partial class AuthIntegrationTests
 
             Assert.True((await service.Execute("TicketStatus", adminId, af, id, new AdminTicketUpdateRequest(SupportTicketStatus.InProgress, SupportPriority.High, adminId, " Checking logs "), null, 1, default)).IsSuccess);
             Assert.True((await service.Execute("FeedbackStatus", adminId, af, fid, new AdminFeedbackUpdateRequest(FeedbackStatus.Reviewed, "Duplicate of map bug"), null, 1, default)).IsSuccess);
-            Assert.True((await service.Execute("Message", tenant.User, tenant.Family, id, new MessageRequest("My bank account is 123"), "m", null, default)).IsSuccess);
+            Assert.True((await service.Execute("Message", tenant.User, tenant.Family, id, new MessageRequest("My bank account is 9876-SECRET"), "m", null, default)).IsSuccess);
         });
 
         await using var reader = BuildingContext(testConnection);
@@ -62,7 +62,7 @@ public sealed partial class AuthIntegrationTests
         var messageAudit = (Guid)(await ScalarAsync("SELECT id FROM audit_logs WHERE new_values->>'operation'='Message'"))!;
         var messageDetail = (await audits.Get(adminId, af, messageAudit, default)).Value!;
         Assert.Null(messageDetail.Reason);
-        Assert.DoesNotContain("123", System.Text.Json.JsonSerializer.Serialize(messageDetail));
+        Assert.DoesNotContain("SECRET", System.Text.Json.JsonSerializer.Serialize(messageDetail));
         var legacy = Guid.NewGuid();
         await ExecuteAsync($"INSERT INTO audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,new_values,created_at) VALUES('{legacy}','{tenant.User}','{tenant.Org}','System','Support','SupportTicket',gen_random_uuid(),gen_random_uuid(),'{{\"status\":\"Open\",\"reason\":\"token abc\",\"description\":\"iban 999\",\"supportAuditContract\":\"1\"}}',now())");
         var legacyDetail = (await audits.Get(adminId, af, legacy, default)).Value!;

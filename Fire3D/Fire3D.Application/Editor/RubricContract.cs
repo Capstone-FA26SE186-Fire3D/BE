@@ -18,6 +18,11 @@ public static class RubricContract
     public static readonly string[] SupportedSchemaVersions=[DefaultSchemaVersion];
     public static readonly string[] Operators=["gte","lte","eq"];
     public const int MaxCriteria=100;
+    public const int CriterionIdMaxLength=128;
+    public const int DescriptionMaxLength=1000;
+    public static readonly string[] CriterionRequiredFields=["id","metric","mandatory","weight","operator","threshold"];
+    public static readonly string[] CriterionOptionalFields=["description"];
+    public static readonly string[] RubricFields=["schema_version","pass_threshold","criteria"];
     public static bool IsSupportedVersion(JsonNode? node)=>node is JsonValue value&&value.TryGetValue<string>(out var text)&&SupportedSchemaVersions.Contains(text,StringComparer.Ordinal);
     public const string UnsupportedCode="RUBRIC_SCHEMA_VERSION_UNSUPPORTED";
     public static string UnsupportedMessage=>$"Use rubric schema_version \"{DefaultSchemaVersion}\" (string); supported: {string.Join(", ",SupportedSchemaVersions)}.";
@@ -32,6 +37,6 @@ public static class RubricContract
     };
     public static RubricCatalog Catalog { get; }=new(SupportedSchemaVersions,DefaultSchemaVersion,
         EditorContract.LearnerMetrics.Select(x=>new RubricMetric(x,MetricDescriptions.GetValueOrDefault(x,""))).ToArray(),Operators,
-        new(["id","metric","mandatory","weight","operator","threshold"],["description"],"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",128,1000,0m),
-        MaxCriteria,["schema_version","pass_threshold","criteria"]);
+        new(CriterionRequiredFields,CriterionOptionalFields,EditorContract.IdPattern().ToString(),CriterionIdMaxLength,DescriptionMaxLength,0m),
+        MaxCriteria,RubricFields);
 }

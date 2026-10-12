@@ -95,11 +95,11 @@ public interface IBillingService
     Task<QuotationResponse> CancelQuotation(Guid actor,Guid family,Guid id,CancelQuotationRequest request,string? ifMatch,string? idempotencyKey,bool admin,CancellationToken ct);
     Task<EnterpriseQuoteResponse> CreateEnterpriseRequest(Guid actor,Guid family,EnterpriseQuoteRequestBody request,string? key,CancellationToken ct);
     Task<BillingPage<EnterpriseQuoteResponse>> ListEnterpriseRequests(Guid actor,int page,int pageSize,CancellationToken ct);
-    Task<EnterpriseQuoteResponse> GetEnterpriseRequest(Guid actor,Guid id,CancellationToken ct)=>throw new NotSupportedException();
+    Task<EnterpriseQuoteResponse> GetEnterpriseRequest(Guid actor,Guid family,Guid id,CancellationToken ct)=>throw new NotSupportedException();
     Task<EnterpriseQuoteResponse> UpdateEnterpriseStatus(Guid actor,Guid family,Guid id,EnterpriseStatusRequest request,string? ifMatch,CancellationToken ct)=>throw new NotSupportedException();
     Task<QuotationResponse> CreateEnterpriseQuotation(Guid actor,Guid family,Guid id,EnterpriseQuotationRequest request,string? key,CancellationToken ct)=>throw new NotSupportedException();
     Task<EnterpriseResponseItem> AddEnterpriseResponse(Guid actor,Guid family,Guid id,EnterpriseResponseBody request,string? key,CancellationToken ct)=>throw new NotSupportedException();
-    Task<BillingPage<EnterpriseResponseItem>> ListEnterpriseResponses(Guid actor,Guid id,int page,int pageSize,CancellationToken ct)=>throw new NotSupportedException();
+    Task<BillingPage<EnterpriseResponseItem>> ListEnterpriseResponses(Guid actor,Guid family,Guid id,int page,int pageSize,CancellationToken ct)=>throw new NotSupportedException();
     Task<EnterpriseQuoteResponse> CloseEnterpriseRequest(Guid actor,Guid family,Guid id,EnterpriseCloseRequest request,string? ifMatch,string? key,CancellationToken ct)=>throw new NotSupportedException();
     Task<BuildingServiceEntitlementResponse> GetBuildingEntitlement(Guid actor,Guid buildingId,CancellationToken ct)=>throw new NotSupportedException();
     Task<AiQuotaBalanceResponse> GetAiQuota(Guid actor,Guid? organizationId,CancellationToken ct)=>throw new NotSupportedException();

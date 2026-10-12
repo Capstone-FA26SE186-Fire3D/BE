@@ -17,7 +17,10 @@ public sealed partial class PayosPayments
         // An AI top-up has no Building line: its single top-up line is the provisioning unit, never a failure by absence.
         var topUps=await db.Database.SqlQuery<Guid>($"""SELECT id AS "Value" FROM quotation_topup_items WHERE quotation_id={req.QuotationId} ORDER BY id""").ToListAsync(ct);
         items=items.Concat(topUps.Select(id=>new ProvisioningLineResponse(id,null,records.SingleOrDefault(x=>x.QuotationItemId==id)?.Status??"NotStarted",null,records.SingleOrDefault(x=>x.QuotationItemId==id)?.LastError))).ToArray();
-        var status=req.Status!=PaymentRequestStatus.Paid?"NotStarted":items.Length==0||items.Any(x=>x.Status is "NeedsReconcile" or "NotStarted")?"NeedsReconcile":items.All(x=>x.Status=="Succeeded")?"Succeeded":"Pending";
+        // Same rule as the ledger lists (PayosPayments.Ledger): Paid alone is never reported as provisioned.
+        var succeeded=records.Count(x=>x.Status=="Succeeded");
+        var status=req.Status!=PaymentRequestStatus.Paid?"NotStarted":records.Any(x=>x.Status=="NeedsReconcile")?"NeedsReconcile":records.Count==0?"Pending"
+            :succeeded==records.Count&&succeeded>=items.Length?"Succeeded":succeeded>0?"Partial":"Pending";
         var transaction=req.PaidTransactionId.HasValue?await db.PaymentTransactions.AsNoTracking().SingleAsync(x=>x.Id==req.PaidTransactionId,ct):null;
         return new(req.Id,req.QuotationId,req.OrderCode,req.ExpectedAmount,req.ExpectedCurrency,req.Status.ToString(),req.PaidAt,req.PaidTransactionId,transaction?.Status.ToString(),status,items);
     }

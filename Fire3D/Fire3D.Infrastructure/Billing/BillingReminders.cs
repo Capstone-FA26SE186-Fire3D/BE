@@ -66,6 +66,8 @@ public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOpt
     public async Task<int> DispatchAsync(CancellationToken ct)
     {
         var max=options.Value.MaxAttempts;var lease=Math.Clamp(options.Value.LeaseSeconds,30,3600);
+        // A delivery that lost its lease on the last allowed attempt can never be claimed again: close it instead of leaving it Sending.
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notification_deliveries SET status='Failed',last_error='LEASE_EXPIRED_AFTER_MAX_ATTEMPTS',lease_token=NULL,lease_until=NULL,updated_at=clock_timestamp() WHERE channel='Email' AND status='Sending' AND lease_until<=clock_timestamp() AND attempts>={max}",ct);
         var batch=await db.Database.SqlQuery<ClaimedEmail>($"""
             WITH due AS (
              SELECT d.id FROM notification_deliveries d WHERE d.channel='Email' AND d.attempts<{max}
@@ -93,6 +95,11 @@ public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOpt
                  AND r.payment_transaction_id IS NOT NULL AND r.status IN('Active','Suspended') AND r.starts_at>={item.ReferenceEndsAt}) AS "Value"
                 """).SingleAsync(ct);
             if(renewed){await Finish(claim,"Failed","SUPPRESSED_RENEWED",ct);continue;}
+            // The reminder is about a live period: a suspended, cancelled or already ended entitlement is not reminded.
+            if(!await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM service_entitlements WHERE id={item.EntitlementId} AND status='Active' AND ends_at>clock_timestamp()) AS \"Value\"").SingleAsync(ct))
+            {await Finish(claim,"Failed","SUPPRESSED_ENTITLEMENT_ENDED",ct);continue;}
+            // Renew the lease right before sending; if another worker already reclaimed it, leave the delivery to that worker.
+            if(await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notification_deliveries SET lease_until=clock_timestamp()+make_interval(secs=>{lease}),updated_at=clock_timestamp() WHERE id={claim.DeliveryId} AND status='Sending' AND lease_token={claim.LeaseToken} AND lease_until>clock_timestamp()",ct)!=1)continue;
             try
             {
                 await email.SendAsync(item.Recipient,item.Title,$"<p>{WebUtility.HtmlEncode(item.Body)}</p>",ct);
