@@ -14,7 +14,8 @@ public sealed class TrainingReadStore(Fire3DDbContext db):ITrainingReadStore
   var items=result.Value.Deserialize<List<TrainingDto>>(json)!;
   // The gate lists only Trainings pinned to an Approved content review; add the release state and version it serves.
   var ids=items.Select(x=>x.ReleaseId).Distinct().ToList();
-  var releases=await db.Releases.AsNoTracking().Where(x=>ids.Contains(x.Id)).Select(x=>new{x.Id,x.Status,x.ScenarioVersionId}).ToDictionaryAsync(x=>x.Id,ct);
-  return AuthResult<List<TrainingDto>>.Ok(items.Select(x=>releases.TryGetValue(x.ReleaseId,out var r)?x with{ReleaseStatus=r.Status.ToString(),ScenarioVersionId=r.ScenarioVersionId}:x).ToList());
+  var releases=(await db.Database.SqlQuery<ReleaseState>($"SELECT id AS \"Id\",status::text AS \"Status\",scenario_version_id AS \"ScenarioVersionId\" FROM releases WHERE id=ANY({ids.ToArray()})").ToListAsync(ct)).ToDictionary(x=>x.Id);
+  return AuthResult<List<TrainingDto>>.Ok(items.Select(x=>releases.TryGetValue(x.ReleaseId,out var r)?x with{ReleaseStatus=r.Status,ScenarioVersionId=r.ScenarioVersionId}:x).ToList());
  }
+ private sealed record ReleaseState(Guid Id,string Status,Guid ScenarioVersionId);
 }

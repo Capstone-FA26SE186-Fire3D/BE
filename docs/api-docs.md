@@ -692,7 +692,7 @@ Chi tiết và acceptance tại [implementation checklist](api-implementation-ch
 - IFC: [Application/Ifc](../Fire3D/Fire3D.Application/Ifc), [IfcWriteStore.cs](../Fire3D/Fire3D.Infrastructure/Ifc/IfcWriteStore.cs).
 - Draft: [ScenarioDraftStateDto.cs](../Fire3D/Fire3D.Application/Scenarios/Dto/ScenarioDraftStateDto.cs).
 - Playtest: [FailClosedPlaytestWriteStore.cs](../Fire3D/Fire3D.Infrastructure/Scenarios/FailClosedPlaytestWriteStore.cs).
-- Publish: [FailClosedReleaseStore.cs](../Fire3D/Fire3D.Infrastructure/Releases/FailClosedReleaseStore.cs).
+- Publish: [ReleaseWriteStore.cs](../Fire3D/Fire3D.Infrastructure/Releases/ReleaseWriteStore.cs) và gate [ReleasePublishReceipts.sql](../Fire3D/Fire3D.Infrastructure/Persistence/Sql/ReleasePublishReceipts.sql).
 
 Khi đổi API, cập nhật method/path, permission, request/response, status, validation và ví dụ. Đối chiếu handler/store, không chỉ annotation Swagger. Tài liệu được kiểm danh mục route, JSON và liên kết nội bộ; không thay báo cáo integration test.
 
