@@ -106,8 +106,8 @@
 | POST | /api/buildings | Bearer | None | 201, 400, 401, 403, 409 |
 | GET | /api/buildings/{buildingId}/editor-preview | Bearer | None | 200, 400, 401, 403, 404, 503 |
 | POST | /api/buildings/{buildingId}/ifc | Bearer | Idempotency-Key | 201, 400, 404 |
-| GET | /api/buildings/{buildingId}/qr-codes | Bearer | None | 200, 404 |
-| POST | /api/buildings/{buildingId}/qr-codes | Bearer | None | 201, 400, 404 |
+| GET | /api/buildings/{buildingId}/qr-codes | Bearer | None | 200, 400, 404 |
+| POST | /api/buildings/{buildingId}/qr-codes | Bearer | None | 201, 400, 404, 409 |
 | POST | /api/buildings/{buildingId}/qr-codes/{qrId}/revoke | Bearer | None | 200, 404, 409 |
 | POST | /api/buildings/{buildingId}/qr-codes/{qrId}/rotate | Bearer | None | 200, 404, 409 |
 | GET | /api/buildings/{buildingId}/scenarios | Bearer | None | 200, 400, 403, 404 |
