@@ -47,6 +47,15 @@ public sealed class OrganizationAiController(IOrganizationAiGates gates, IOption
         return Submit("Answer", new { question = request.Question, sources = request.Sources ?? [] }, issues, key, ct);
     }
 
+    /// <summary>The caller's organization AI requests, newest first, with the same fields as the detail.</summary>
+    /// <remarks>Filters: status (Queued, Running, Succeeded, InsufficientEvidence, SafetyRejected, Failed, NeedsReconcile), operation (ScenarioDraft, Answer),
+    /// mine=true for the caller's own requests. page defaults to 1, pageSize to 20 (maximum 100). Other organizations never appear.</remarks>
+    [HttpGet("api/ai/requests")]
+    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> List([FromQuery] string? status, [FromQuery] string? operation, [FromQuery] bool? mine, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
+        Paging(page, pageSize) ?? Reply(await gates.OrganizationRequestsAsync(Actor, Family, new { status, operation, mine, page, pageSize }, ct));
+
     [HttpGet("api/ai/requests/{requestId:guid}")]
     [ProducesResponseType<JsonElement>(200)]
     [ProducesResponseType<ProblemDetails>(404)]

@@ -35,6 +35,8 @@ public sealed class OrganizationAiOptions
 public interface IOrganizationAiGates
 {
     Task<AuthResult<JsonElement>> OrganizationAsync(string action, Guid actor, Guid family, Guid resource, object input, string? key, CancellationToken ct);
+    /// <summary>The caller's organization AI requests, newest first (status, operation, mine, page, pageSize).</summary>
+    Task<AuthResult<JsonElement>> OrganizationRequestsAsync(Guid actor, Guid family, object input, CancellationToken ct);
     Task<AuthResult<JsonElement>> AdminAsync(string action, Guid actor, Guid family, Guid resource, object input, string? key, long? expected, CancellationToken ct);
     Task<JsonElement> WorkerAsync(string action, string worker, Guid? request, Guid? lease, object input, CancellationToken ct);
 }
