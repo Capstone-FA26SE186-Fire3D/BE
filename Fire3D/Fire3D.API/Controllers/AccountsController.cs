@@ -3,6 +3,7 @@ using Fire3D.Application.Administration.Commands.SetAccountActive;
 using Fire3D.Application.Administration.Queries.GetAccount;
 using Fire3D.Application.Administration.Queries.ListAccounts;
 using Fire3D.Application.Authentication;
+using Fire3D.Application.Authentication.Avatar;
 using Fire3D.Application.Authentication.Commands.CreateAccount;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Fire3D.API.Controllers;
 
 [Route("api/accounts")]
-public sealed class AccountsController(ISender sender) : AdministrationControllerBase
+public sealed class AccountsController(ISender sender, IAvatarService? avatars = null) : AdministrationControllerBase
 {
     /// <summary>
     /// Tạo mới một tài khoản (chỉ dành cho PlatformAdmin).
@@ -29,7 +30,8 @@ public sealed class AccountsController(ISender sender) : AdministrationControlle
     /// <summary>
     /// Lấy danh sách tài khoản (có phân trang và tìm kiếm).
     /// </summary>
-    /// <remarks>sort: createdAt | updatedAt | email | fullName | lastLoginAt, thêm '-' để giảm dần; mặc định -createdAt. Giá trị khác → 400.</remarks>
+    /// <remarks>sort: createdAt | updatedAt | email | fullName | lastLoginAt, thêm '-' để giảm dần; mặc định -createdAt. Giá trị khác → 400.
+    /// avatarUrl luôn null ở danh sách; xem ảnh qua chi tiết tài khoản.</remarks>
     [HttpGet]
     public async Task<ActionResult<PageResponse<ManagedAccountResponse>>> List([FromQuery] AccountFilter filter, CancellationToken ct) =>
         Respond(await sender.Send(new ListAccountsQuery(ActorId, filter), ct));
@@ -37,14 +39,26 @@ public sealed class AccountsController(ISender sender) : AdministrationControlle
     /// <summary>
     /// Lấy chi tiết thông tin một tài khoản.
     /// </summary>
-    /// <remarks>ETag là profileRevision của tài khoản (cùng giá trị với /api/auth/me của chính người dùng).</remarks>
+    /// <remarks>ETag là profileRevision của tài khoản (cùng giá trị với /api/auth/me của chính người dùng).
+    /// avatarUrl là signed URL 5 phút như /api/auth/me; null khi chưa có ảnh hoặc tài khoản không hoạt động.</remarks>
     [HttpGet("{id:guid}")]
     [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<ActionResult<ManagedAccountResponse>> Get(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetAccountQuery(ActorId, id), ct);
-        if (result.IsSuccess) Response.Headers.ETag = ProfileEtag.Format(result.Value!.ProfileRevision);
+        if (result.IsSuccess)
+        {
+            Response.Headers.ETag = ProfileEtag.Format(result.Value!.ProfileRevision);
+            result = AuthResult<ManagedAccountResponse>.Ok(await WithAvatarAsync(result.Value, ct));
+        }
         return Respond(result);
+    }
+
+    private async Task<ManagedAccountResponse> WithAvatarAsync(ManagedAccountResponse account, CancellationToken ct)
+    {
+        if (avatars is null) return account;
+        var avatar = await avatars.GetAvatarAsync(account.Id, ct);
+        return avatar.IsSuccess ? account with { AvatarUrl = avatar.Value!.Url } : account;
     }
 
     /// <summary>

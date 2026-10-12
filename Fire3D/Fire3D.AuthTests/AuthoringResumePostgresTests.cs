@@ -27,6 +27,12 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal("NotSubmitted", before.ReviewStatus); Assert.Equal("Passed", before.Outcome); Assert.Equal(f.Run, before.ValidationRunId);
             Assert.NotNull(before.PackageJob); Assert.False(before.TechnicalReady); Assert.Equal(["CONFIRMATION_REQUIRED"], before.Missing);
 
+            // Confirm-for-training needs a runtime-ready artifact, so readiness names that blocker before any confirmation exists.
+            await ExecuteAsync($"UPDATE revision_artifacts SET is_runtime_ready=false WHERE id='{f.Artifact}'");
+            var noArtifact = (await queries.VersionReadinessAsync(f.Owner, f.Owner, f.Version, default)).Value!;
+            Assert.Equal(["RUNTIME_ARTIFACT_REQUIRED", "CONFIRMATION_REQUIRED"], noArtifact.Missing);
+            await ExecuteAsync($"UPDATE revision_artifacts SET is_runtime_ready=true WHERE id='{f.Artifact}'");
+
             await ApproveRelease(f);
             var after = (await queries.VersionReadinessAsync(f.Owner, f.Owner, f.Version, default)).Value!;
             Assert.True(after.TechnicalReady); Assert.Empty(after.Missing); Assert.Equal("Approved", after.ReviewStatus);
@@ -84,6 +90,9 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(1, (await client.GetFromJsonAsync<PageResponse<ReleaseSummaryResponse>>($"/api/releases?scenarioId={scenario}", Json))!.TotalCount);
         Assert.Equal(0, (await client.GetFromJsonAsync<PageResponse<ReleaseSummaryResponse>>($"/api/releases?buildingId={building}&status=Published", Json))!.TotalCount);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/releases?status=Live")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/releases?status=7")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/releases?status=Built,Revoked")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/releases?status=built")).StatusCode);
         var full = await client.GetFromJsonAsync<ReleaseResponse>($"/api/releases/{release.Id}", Json);
         Assert.True(full!.Entitlement!.Paid); Assert.Equal("Active", full.Entitlement.Status);
 

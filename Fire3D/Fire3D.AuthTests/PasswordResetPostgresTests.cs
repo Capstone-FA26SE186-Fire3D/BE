@@ -408,7 +408,9 @@ public sealed class PasswordResetPostgresTests
         await using var c=db.Context();var auth=new AuthStore(c);var resets=new PasswordResetStore(c,auth);
         await auth.AddRefreshTokenAsync(Token(user),default);
         await auth.AddRefreshTokenAsync(Token(user),default);
-        var stale=Token(user);
+        // Issued well before the reset finishes: the fence compares the DB clock with the host clock, so a token minted
+        // milliseconds earlier on a host whose clock runs ahead of the database would look newer than the reset.
+        var stale=Token(user,DateTime.UtcNow.AddMinutes(-1));
         var operation=await resets.BeginAsync(user,"uid",new string('a',64),default);
         Assert.NotNull(operation);
         Assert.Equal(2L,await db.Sql("SELECT count(*) FROM auth_refresh_tokens WHERE revoked_at IS NOT NULL"));

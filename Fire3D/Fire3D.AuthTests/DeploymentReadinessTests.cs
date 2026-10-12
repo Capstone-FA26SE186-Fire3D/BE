@@ -25,6 +25,26 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal("OK",body.GetProperty("checks").GetProperty("database").GetProperty("code").GetString());
         Assert.Equal("Healthy",await client.GetStringAsync("/health"));
 
+        // The restricted runtime login (member of fire3d_api, like Azure) can verify the migration history.
+        var login="ready_runtime_"+Guid.NewGuid().ToString("N");var password=new NpgsqlConnectionStringBuilder(testConnection).Password??"";
+        await using(var admin=new NpgsqlConnection(adminConnection)){await admin.OpenAsync();await new NpgsqlCommand($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{password.Replace("'","''")}' IN ROLE fire3d_api",admin).ExecuteNonQueryAsync();}
+        try
+        {
+            var runtime=new ServiceCollection();
+            runtime.AddDbContext<Fire3DDbContext>(options=>options.UseNpgsql(new NpgsqlConnectionStringBuilder(testConnection){Username=login,Pooling=false}.ConnectionString));
+            await using var runtimeProvider=runtime.BuildServiceProvider();
+            var restricted=await new DatabaseReadinessCheck(runtimeProvider.GetRequiredService<IServiceScopeFactory>()).CheckHealthAsync(new HealthCheckContext(),default);
+            Assert.Equal(HealthStatus.Healthy,restricted.Status);Assert.Equal("OK",restricted.Description);
+            await using(var admin=new NpgsqlConnection(testConnection)){await admin.OpenAsync();await new NpgsqlCommand("REVOKE SELECT ON \"__EFMigrationsHistory\" FROM fire3d_api",admin).ExecuteNonQueryAsync();}
+            var unreadable=await new DatabaseReadinessCheck(runtimeProvider.GetRequiredService<IServiceScopeFactory>()).CheckHealthAsync(new HealthCheckContext(),default);
+            Assert.Equal("MIGRATION_HISTORY_UNREADABLE",unreadable.Description);
+        }
+        finally
+        {
+            await using var admin=new NpgsqlConnection(testConnection);await admin.OpenAsync();
+            await new NpgsqlCommand($"GRANT SELECT ON \"__EFMigrationsHistory\" TO fire3d_api;DROP OWNED BY {login};DROP ROLE {login}",admin).ExecuteNonQueryAsync();
+        }
+
         // A database that lags the build is reported with the missing migration IDs, never a connection string.
         var empty="fire3d_ready_"+Guid.NewGuid().ToString("N");
         await using(var admin=new NpgsqlConnection(adminConnection)){await admin.OpenAsync();await new NpgsqlCommand($"CREATE DATABASE \"{empty}\"",admin).ExecuteNonQueryAsync();}
