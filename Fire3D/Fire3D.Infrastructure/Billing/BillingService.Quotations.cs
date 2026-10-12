@@ -71,9 +71,21 @@ public sealed partial class BillingService
         var terms=JsonDocument.Parse(quote.TermsSnapshot).RootElement;
         var topUp=quote.BillingPurpose==TopUpPurpose?await db.Set<QuotationTopUpItem>().AsNoTracking().Where(x=>x.QuotationId==quote.Id)
             .Select(x=>new TopUpLineResponse(x.Id,x.RequestedQuotaUnits,x.PolicyVersionId,x.QuotaUnit,x.QuotaUnits,x.Amount,x.StartsAt,x.EndsAt)).SingleOrDefaultAsync(ct):null;
+        var pricing=PricingStatus(quote.Status,quote.IssuedAt,quote.CommercialVersion);
         return new(quote.Id,quote.OrganizationId,quote.QuotationNumber,quote.Status.ToString(),quote.Revision,quote.Currency,
-            quote.SubtotalAmount,quote.DiscountAmount,quote.TaxAmount,quote.TotalAmount,quote.DiscountRuleId,
-            terms.TryGetProperty("text",out var text)?text.GetString():null,quote.ValidUntil,quote.AcceptedAt,lines,quote.CommercialVersion,quote.BillingPurpose,topUp);
+            quote.SubtotalAmount,quote.DiscountAmount,pricing=="Final"?quote.TaxAmount:null,quote.TotalAmount,quote.DiscountRuleId,
+            terms.TryGetProperty("text",out var text)?text.GetString():null,quote.ValidUntil,quote.AcceptedAt,lines,quote.CommercialVersion,quote.BillingPurpose,topUp,pricing,quote.IssuedAt);
+    }
+    // Issue fixes the price (issued_at is set and immutable afterwards); Draft and v7 quotations cancelled before Issue never had a fixed tax.
+    private static string PricingStatus(QuotationStatus status,DateTime? issuedAt,int commercialVersion)=>
+        status==QuotationStatus.Draft?"Estimated":issuedAt.HasValue?"Final":status==QuotationStatus.Cancelled&&commercialVersion>=7?"Estimated":"LegacyUnknown";
+    /// <summary>Replays a stored quotation response. Receipts written before PricingStatus existed are converted from their own snapshot, never from the current quotation.</summary>
+    private static QuotationResponse ReplayQuote(BillingCommandReceipt receipt)
+    {
+        var snapshot=Replay<QuotationResponse>(receipt);
+        if(snapshot.PricingStatus is not null)return snapshot;
+        var pricing=snapshot.Status switch {"Draft"=>"Estimated","Issued" or "Accepted" or "Expired"=>"Final",_=>"LegacyUnknown"};
+        return snapshot with {PricingStatus=pricing,TaxAmount=pricing=="Final"?snapshot.TaxAmount:null};
     }
     private async Task PriceLines(Quotation quote,IReadOnlyList<QuotationItemRequest> requested,CancellationToken ct)
     {
@@ -175,7 +187,7 @@ public sealed partial class BillingService
         await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await QuotationActor(actor,family,false,ct);
         if(identity.Role!=UserRole.OrganizationUser)throw new BillingException(403,"ORGANIZATION_USER_REQUIRED","An OrganizationUser creates their own Building quotation.");
         var previous=await Receipt(identity,"CreateQuotation",stableKey,inputHash,ct);
-        if(previous is not null){var replay=Replay<QuotationResponse>(previous);await Scope(identity,replay.OrganizationId,ct);return replay;}
+        if(previous is not null){var replay=ReplayQuote(previous);await Scope(identity,replay.OrganizationId,ct);return replay;}
         var quote=await NewDraft(identity.OrganizationId!.Value,actor,request,ct);
         var response=await QuoteView(quote,ct);SaveReceipt(identity,"CreateQuotation",stableKey,inputHash,quote.Id,response);
         Audit(identity,quote.OrganizationId,"quotations",quote.Id,AuditAction.Create,null,new {quote.Status,quote.BillingPurpose,quote.Quantity,quote.TotalAmount,quote.Revision});

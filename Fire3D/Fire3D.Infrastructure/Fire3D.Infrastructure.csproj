@@ -19,6 +19,9 @@
         <EmbeddedResource Include="Persistence/Sql/LearnLibrary.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.LearnLibrary.sql" />
         <EmbeddedResource Include="Persistence/Sql/OrganizationAi.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.OrganizationAi.sql" />
         <EmbeddedResource Include="Persistence/Sql/LearnerAnalytics.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.LearnerAnalytics.sql" />
+        <EmbeddedResource Include="Persistence/Sql/SupportResponseLabels.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.SupportResponseLabels.sql" />
+        <EmbeddedResource Include="Persistence/Sql/SupportAuditReason.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.SupportAuditReason.sql" />
+        <EmbeddedResource Include="Persistence/Sql/CatalogLists.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.CatalogLists.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />
@@ -49,6 +52,9 @@
         <EmbeddedResource Include="Billing/BillingV7Quotations.sql" LogicalName="Fire3D.Infrastructure.Billing.BillingV7Quotations.sql" />
         <EmbeddedResource Include="Billing/BillingV7Provisioning.sql" LogicalName="Fire3D.Infrastructure.Billing.BillingV7Provisioning.sql" />
         <EmbeddedResource Include="Billing/BillingV7UpgradeTopUp.sql" LogicalName="Fire3D.Infrastructure.Billing.BillingV7UpgradeTopUp.sql" />
+        <EmbeddedResource Include="Billing/BillingQuotationCancel.sql" LogicalName="Fire3D.Infrastructure.Billing.BillingQuotationCancel.sql" />
+        <EmbeddedResource Include="Billing/NotificationDeliveryLease.sql" LogicalName="Fire3D.Infrastructure.Billing.NotificationDeliveryLease.sql" />
+        <EmbeddedResource Include="Billing/EnterpriseWorkflow.sql" LogicalName="Fire3D.Infrastructure.Billing.EnterpriseWorkflow.sql" />
         <EmbeddedResource Include="Billing/Schema.sql" LogicalName="Fire3D.Infrastructure.Billing.Schema.sql" />
         <EmbeddedResource Include="Billing/Hardening.sql" LogicalName="Fire3D.Infrastructure.Billing.Hardening.sql" />
         <EmbeddedResource Include="Billing/PayosRuntime.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosRuntime.sql" />

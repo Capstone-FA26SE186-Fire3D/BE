@@ -10,6 +10,7 @@ public sealed class SupportService(Fire3DDbContext db):ISupportService
  {
   var errors=new Dictionary<string,string[]>();
   void Text(string field,string? text,int max){if(string.IsNullOrWhiteSpace(text)||text.Length>max)errors[field]=[$"Provide 1-{max} characters."];}
+  void Reason(string? reason){if(reason is not null)Text("reason",reason,1000);}
   switch(input)
   {
    case CreateFeedbackRequest r:
@@ -17,9 +18,9 @@ public sealed class SupportService(Fire3DDbContext db):ISupportService
     input=r with{Category=r.Category?.Trim()!,Message=r.Message?.Trim()!};break;
    case CreateTicketRequest r:Text("subject",r.Subject,255);Text("description",r.Description,10000);input=r with{Subject=r.Subject?.Trim()!,Description=r.Description?.Trim()!};break;
    case MessageRequest r:Text("message",r.Message,10000);input=r with{Message=r.Message?.Trim()!};break;
-   case AdminFeedbackUpdateRequest r:if(!Enum.IsDefined(r.Status))errors["status"]=["Invalid feedback status."];input=new{status=r.Status.ToString()};break;
+   case AdminFeedbackUpdateRequest r:if(!Enum.IsDefined(r.Status))errors["status"]=["Invalid feedback status."];Reason(r.Reason);input=new{status=r.Status.ToString(),reason=r.Reason?.Trim()};break;
    case AdminTicketUpdateRequest r:
-    if(!Enum.IsDefined(r.Status))errors["status"]=["Invalid ticket status."];if(!Enum.IsDefined(r.Priority))errors["priority"]=["Invalid ticket priority."];input=new{status=r.Status.ToString(),priority=r.Priority.ToString(),r.AssignedTo};break;
+    if(!Enum.IsDefined(r.Status))errors["status"]=["Invalid ticket status."];if(!Enum.IsDefined(r.Priority))errors["priority"]=["Invalid ticket priority."];Reason(r.Reason);input=new{status=r.Status.ToString(),priority=r.Priority.ToString(),r.AssignedTo,reason=r.Reason?.Trim()};break;
    case SupportQuery q:
     if(q.Page<1 || q.Page>100000)errors["page"]=["Page must be 1-100000."];
     if(q.PageSize<1 || q.PageSize>100)errors["pageSize"]=["Page size must be 1-100."];

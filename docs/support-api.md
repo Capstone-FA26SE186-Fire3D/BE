@@ -10,6 +10,16 @@ List and detail query page=1&pageSize=20 by default; maximum100. Lists ordered c
 
 Feedback body: category 1-100, message1-10000, optional rating1-5/sessionId. Ticket: subject1-255, description1-10000, optional feedbackId/sessionId. Message: message1-10000. References must belong to creator and a live scope. Validation returns VALIDATION_ERROR/errors by field/traceId; no attachments, rich HTML or notification delivery.
 
+## People and organization labels (#67)
+
+Ticket and feedback responses carry `createdBy {id,displayName,available,email?}` and `organization {id,name,available}` (null when the resource has no organization). Messages keep `authorId` and add `author {id,displayName,available,email?}`. `email` appears only in PlatformAdmin responses (`/api/admin/...`); a Trainee or OrganizationUser never sees an email, including the staff email on admin replies. `displayName` is the current label (`full_name`, else `username`), not a snapshot. The organization is the one stored on the resource (from the session/feedback at creation), not the creator's current membership. A missing or deleted user/organization keeps its ID with `displayName`/`name` null and `available:false`; Admin can still open such tickets.
+
+`GET /api/admin/feedback/{id}` (PlatformAdmin) returns the feedback with labels and `ETag "support-{revision}"` for `PATCH /api/admin/feedback/{id}/status`.
+
+Labels are joined once per page in the SQL gate (no per-row lookups, totals unchanged). Receipts store only the unlabelled representation; a replay first re-checks the caller and then adds labels for that caller, so an Admin email is never served from a receipt to a regular user. Migration: `20261012090000_AddSupportResponseLabels`.
+
+## Storage
+
 Migration 20261007110000_AddSupportCommandContracts adds revisions, receipts, paging indexes, constraints, append-only message protection and a restricted SQL gate. Preflight stops on invalid legacy content without changing it. Mutation/receipt/audit are atomic and audit tenant comes from the resource, including admin actions. API executor has gate EXECUTE, no direct mutation on support tables. Legacy history is preserved.
 
 Test manually: create ticket with key support-001; repeat identical request and verify same ID. Change subject with that key →409. GET detail and copy ETag; admin PATCH InProgress with that header →200/new ETag; repeat old ETag →412. Add a message with a new key, repeat and verify only one message. Another user cannot read/message. Complete Resolved→Closed; new message fails, then reopen and retry. Test pageSize=101 →400. Current evidence: disposable PostgreSQL actual migration history/restricted-role HTTP/race/rollback tests; migration and client/deployment acceptance remain separate, no real email/push sent.

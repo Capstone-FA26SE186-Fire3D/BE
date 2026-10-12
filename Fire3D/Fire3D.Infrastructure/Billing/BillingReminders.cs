@@ -15,6 +15,7 @@ public sealed class BillingReminderOptions
     public int LeadDays { get; set; } = 5;
     public int PollSeconds { get; set; } = 300;
     public int MaxAttempts { get; set; } = 5;
+    public int LeaseSeconds { get; set; } = 300;
 }
 
 /// <summary>
@@ -56,50 +57,67 @@ public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOpt
         return created/2;
     }
 
-    /// <summary>Sends pending emails outside any transaction; a renewal committed meanwhile suppresses the email.</summary>
+    /// <summary>
+    /// Claims email deliveries with a lease (status Sending, token, expiry) in one committed statement, sends outside any
+    /// transaction and completes or retries only while that lease is still held. A worker that crashed after claiming leaves an
+    /// expired lease that another worker reclaims; a crash after the provider accepted the email can send it twice
+    /// (at-least-once). Recipient, tenant and renewal are rechecked just before sending.
+    /// </summary>
     public async Task<int> DispatchAsync(CancellationToken ct)
     {
-        var max=options.Value.MaxAttempts;
-        List<PendingEmail> batch;
-        await using(var tx=await db.Database.BeginTransactionAsync(ct))
-        {
-            batch=await db.Database.SqlQuery<PendingEmail>($"""
-                SELECT d.id AS "DeliveryId",n.entitlement_id AS "EntitlementId",n.building_id AS "BuildingId",u.email AS "Recipient",n.title AS "Title",n.body AS "Body",n.reference_ends_at AS "ReferenceEndsAt"
-                FROM notification_deliveries d JOIN organization_notifications n ON n.id=d.notification_id JOIN users u ON u.id=n.recipient_user_id
-                WHERE d.channel='Email' AND d.status='Pending' AND d.attempts<{max} ORDER BY d.created_at,d.id LIMIT 20 FOR UPDATE OF d SKIP LOCKED
-                """).ToListAsync(ct);
-            foreach(var item in batch)
-                await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notification_deliveries SET attempts=attempts+1,updated_at=clock_timestamp() WHERE id={item.DeliveryId}",ct);
-            await tx.CommitAsync(ct);
-        }
+        var max=options.Value.MaxAttempts;var lease=Math.Clamp(options.Value.LeaseSeconds,30,3600);
+        var batch=await db.Database.SqlQuery<ClaimedEmail>($"""
+            WITH due AS (
+             SELECT d.id FROM notification_deliveries d WHERE d.channel='Email' AND d.attempts<{max}
+              AND ((d.status='Pending' AND d.next_attempt_at<=clock_timestamp()) OR (d.status='Sending' AND d.lease_until<=clock_timestamp()))
+             ORDER BY d.next_attempt_at,d.created_at,d.id LIMIT 20 FOR UPDATE SKIP LOCKED)
+            UPDATE notification_deliveries d SET status='Sending',lease_token=gen_random_uuid(),lease_until=clock_timestamp()+make_interval(secs=>{lease}),
+             attempts=d.attempts+1,updated_at=clock_timestamp() FROM due WHERE d.id=due.id
+            RETURNING d.id AS "DeliveryId",d.lease_token AS "LeaseToken",d.attempts AS "Attempts"
+            """).ToListAsync(ct);
         var sent=0;
-        foreach(var item in batch)
+        foreach(var claim in batch)
         {
+            var item=await db.Database.SqlQuery<PendingEmail>($"""
+                SELECT d.id AS "DeliveryId",n.entitlement_id AS "EntitlementId",n.building_id AS "BuildingId",u.email AS "Recipient",n.title AS "Title",n.body AS "Body",n.reference_ends_at AS "ReferenceEndsAt"
+                FROM notification_deliveries d JOIN organization_notifications n ON n.id=d.notification_id
+                JOIN users u ON u.id=n.recipient_user_id AND u.organization_id=n.organization_id AND u.role='OrganizationUser' AND u.is_active AND u.deleted_at IS NULL
+                 AND (u.registration_expires_at IS NULL OR u.email_verified_at IS NOT NULL)
+                JOIN organizations o ON o.id=n.organization_id AND o.is_active AND o.deleted_at IS NULL
+                JOIN buildings b ON b.id=n.building_id AND b.is_active AND b.deleted_at IS NULL
+                WHERE d.id={claim.DeliveryId}
+                """).SingleOrDefaultAsync(ct);
+            if(item is null){await Finish(claim,"Failed","SUPPRESSED_RECIPIENT_UNAVAILABLE",ct);continue;}
             var renewed=await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS(SELECT 1 FROM service_entitlements r WHERE r.building_id={item.BuildingId} AND r.id<>{item.EntitlementId}
                  AND r.payment_transaction_id IS NOT NULL AND r.status IN('Active','Suspended') AND r.starts_at>={item.ReferenceEndsAt}) AS "Value"
                 """).SingleAsync(ct);
-            if(renewed)
-            {
-                await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notification_deliveries SET status='Failed',last_error='SUPPRESSED_RENEWED',updated_at=clock_timestamp() WHERE id={item.DeliveryId} AND status='Pending'",ct);
-                continue;
-            }
+            if(renewed){await Finish(claim,"Failed","SUPPRESSED_RENEWED",ct);continue;}
             try
             {
                 await email.SendAsync(item.Recipient,item.Title,$"<p>{WebUtility.HtmlEncode(item.Body)}</p>",ct);
-                await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notification_deliveries SET status='Sent',sent_at=clock_timestamp(),last_error=NULL,updated_at=clock_timestamp() WHERE id={item.DeliveryId} AND status='Pending'",ct);
-                sent++;
+                if(await Finish(claim,"Sent",null,ct))sent++;
             }
             catch(OperationCanceledException) when(ct.IsCancellationRequested){throw;}
             catch(Exception ex)
             {
-                // Never log recipient or body; keep the delivery Pending until attempts are exhausted.
-                logger.LogWarning("Billing reminder delivery {DeliveryId} failed with {ErrorType}",item.DeliveryId,ex.GetType().Name);
-                await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notification_deliveries SET status=CASE WHEN attempts>={max} THEN 'Failed' ELSE 'Pending' END,last_error='EMAIL_UNAVAILABLE',updated_at=clock_timestamp() WHERE id={item.DeliveryId}",ct);
+                // Never log recipient or body; retry with backoff until attempts are exhausted.
+                logger.LogWarning("Billing reminder delivery {DeliveryId} failed with {ErrorType}",claim.DeliveryId,ex.GetType().Name);
+                await Finish(claim,claim.Attempts>=max?"Failed":"Pending","EMAIL_UNAVAILABLE",ct);
             }
         }
         return sent;
     }
+    private sealed record ClaimedEmail(Guid DeliveryId,Guid LeaseToken,int Attempts);
+    // Completes only while this worker still holds the lease; a reclaimed delivery is left to its new owner.
+    private async Task<bool> Finish(ClaimedEmail claim,string status,string? error,CancellationToken ct)=>
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE notification_deliveries SET status={status},last_error={error},lease_token=NULL,lease_until=NULL,
+             sent_at=CASE WHEN {status}='Sent' THEN clock_timestamp() ELSE sent_at END,
+             next_attempt_at=CASE WHEN {status}='Pending' THEN clock_timestamp()+make_interval(secs=>least(3600,60*power(2,least({claim.Attempts}-1,6)))::double precision) ELSE next_attempt_at END,
+             updated_at=clock_timestamp()
+            WHERE id={claim.DeliveryId} AND status='Sending' AND lease_token={claim.LeaseToken} AND lease_until>clock_timestamp()
+            """,ct)==1;
 }
 
 public sealed class BillingReminderWorker(IServiceScopeFactory scopes,IOptions<BillingReminderOptions> options,ILogger<BillingReminderWorker> logger):BackgroundService

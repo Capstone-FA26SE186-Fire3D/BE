@@ -16,6 +16,7 @@ public static class SafeAuditChanges
             "service_entitlements" when audit.Action is AuditAction.Payment or AuditAction.Grant => new[]{"commercialVersion","learnerLimit","startsAt","endsAt","buildingId","servicePackageId"},
             "billing_ai_quota_grants" when audit.Action==AuditAction.Grant => new[]{"quotaUnits","quotaUnit","startsAt","endsAt","policyVersionId","rollover"},
             "supportticket" or "support_tickets" when audit.Action is AuditAction.Update or AuditAction.Support => new[]{"status","priority","assignedTo","revision","resolvedAt"},
+            "feedback" when audit.Action==AuditAction.Support => new[]{"status","revision","reviewedBy","reviewedAt"},
             "scenario_content_reviews" when audit.Action is AuditAction.Create or AuditAction.Update or AuditAction.Reject => new[]{"status","reviewedBy","reviewedAt"},
             "scenarioversion" when audit.Action is AuditAction.Update or AuditAction.Reject or AuditAction.ConfirmForTraining
                 => new[]{"status","reviewId","scenarioVersionId","revisionId","validationRunId","candidateArtifactId","annotationSetId","submittedBy","submittedAt","reviewedBy","reviewedAt"},
@@ -37,6 +38,21 @@ public static class SafeAuditChanges
             return changes;
         }
         catch(JsonException){return [];}
+    }
+    /// <summary>
+    /// Administrative reason, only from support writers that mark supportAuditContract=1 (feedback/ticket status changes).
+    /// Legacy or unrecognised JSON yields null; other fields named "reason" are never read.
+    /// </summary>
+    public static string? Reason(AuditLog audit)
+    {
+        if(audit.Action!=AuditAction.Support || audit.TargetEntity is not ("Feedback" or "SupportTicket") || audit.NewValues is null || audit.NewValues.Length>65536)return null;
+        try
+        {
+            using var after=JsonDocument.Parse(audit.NewValues);var root=after.RootElement;
+            if(root.ValueKind!=JsonValueKind.Object || !root.TryGetProperty("supportAuditContract",out var version) || version.ValueKind!=JsonValueKind.Number || !version.TryGetInt32(out var number) || number!=1)return null;
+            return root.TryGetProperty("reason",out var reason) && reason.ValueKind==JsonValueKind.String && reason.GetString() is { Length:>0 and <=1000 } text && !string.IsNullOrWhiteSpace(text)?text:null;
+        }
+        catch(JsonException){return null;}
     }
     private static object? ReadField(JsonElement root,string field,out bool found)
     {

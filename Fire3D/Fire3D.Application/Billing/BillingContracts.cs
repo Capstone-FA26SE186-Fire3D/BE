@@ -15,6 +15,8 @@ public sealed record QuotationItemRequest(Guid BuildingId,Guid ServicePackageId,
 /// <summary>Purpose BuildingService (default, Building lines) or AIQuotaTopUp (no Building lines, optional requested units).</summary>
 public sealed record QuotationWriteRequest(IReadOnlyList<QuotationItemRequest>? Items,string? Purpose=null,TopUpDraftRequest? TopUp=null);
 public sealed record TopUpDraftRequest(int? RequestedQuotaUnits=null);
+/// <summary>Reason 1-1000 characters, recorded in the audit trail.</summary>
+public sealed record CancelQuotationRequest(string? Reason);
 public sealed record IssueQuotationRequest(decimal? TaxAmount,string? Terms,
     [property:JsonConverter(typeof(BillingTimestampConverter))] DateTimeOffset? ValidUntil,
     IReadOnlyList<QuotationPeriodRequest>? Items=null,IssueTopUpRequest? TopUp=null);
@@ -34,16 +36,28 @@ public sealed record QuotationLineResponse(Guid Id,Guid BuildingId,Guid ServiceP
     int CommercialVersion=1,long? PackageRevision=null,int? LearnerLimit=null,int? AiQuotaUnits=null,Guid? AiPolicyVersionId=null,string? AiQuotaUnit=null,DateTime? StartsAt=null,DateTime? EndsAt=null,
     string PricingBasis="Monthly",Guid? UpgradeEntitlementId=null,int? UpgradeBaseCapacityRevision=null,int? UpgradePreviousLearnerLimit=null);
 public sealed record TopUpLineResponse(Guid Id,int? RequestedQuotaUnits,Guid? PolicyVersionId,string? QuotaUnit,int? QuotaUnits,decimal? Amount,DateTime? StartsAt,DateTime? EndsAt);
+/// <summary>
+/// PricingStatus: Estimated (Draft, or cancelled before Issue: TaxAmount is null and TotalAmount is an estimate before tax),
+/// Final (Admin fixed the tax at Issue; TaxAmount may be 0), LegacyUnknown (legacy record without proof that the price was fixed;
+/// TaxAmount is null rather than an assumed approved 0). IssuedAt marks when the price was fixed.
+/// </summary>
 public sealed record QuotationResponse(Guid Id,Guid OrganizationId,string QuotationNumber,string Status,long Revision,string Currency,
-    decimal SubtotalAmount,decimal DiscountAmount,decimal TaxAmount,decimal TotalAmount,Guid? DiscountRuleId,
+    decimal SubtotalAmount,decimal DiscountAmount,decimal? TaxAmount,decimal TotalAmount,Guid? DiscountRuleId,
     string? Terms,DateTime ValidUntil,DateTime? AcceptedAt,IReadOnlyList<QuotationLineResponse> Items,int CommercialVersion=1,
-    string Purpose="BuildingService",TopUpLineResponse? TopUp=null);
+    string Purpose="BuildingService",TopUpLineResponse? TopUp=null,string? PricingStatus=null,DateTime? IssuedAt=null);
 public sealed record BillingPage<T>(IReadOnlyList<T> Items,int Total,int Page,int PageSize);
 public sealed record EnterpriseQuoteRequestBody(int RequestedBuildingCount,int? RequestedDurationMonths,string ContactName,string ContactEmail,string? ContactPhone=null,string? Notes=null);
 public sealed record EnterpriseQuoteResponse(Guid Id,Guid OrganizationId,int RequestedBuildingCount,int? RequestedDurationMonths,
-    string ContactName,string ContactEmail,string? ContactPhone,string? Notes,string Status,DateTime CreatedAt,long Revision=1,Guid? QuotationId=null);
+    string ContactName,string ContactEmail,string? ContactPhone,string? Notes,string Status,DateTime CreatedAt,long Revision=1,Guid? QuotationId=null,
+    Guid? AssignedTo=null,DateTime? ClosedAt=null,string? CloseReason=null);
+/// <summary>Append-only reply on an enterprise request, visible to Admin and the requesting organization.</summary>
+public sealed record EnterpriseResponseItem(Guid Id,Guid RequestId,Guid AuthorId,string? AuthorName,string Message,DateTime CreatedAt);
+public sealed record EnterpriseResponseBody(string? Message);
+/// <summary>Reason 1-1000 characters. Closing ends handling only; quotations and payments are untouched.</summary>
+public sealed record EnterpriseCloseRequest(string? Reason);
 /// <summary>Admin status change: Contacted, Rejected or Cancelled. Quoted is set only by creating a quotation.</summary>
-public sealed record EnterpriseStatusRequest(string Status);
+/// <summary>Every field is optional: an omitted field keeps its value. AssignedTo must be an active PlatformAdmin; ClearAssignment=true removes the assignee. Assignment never changes the status.</summary>
+public sealed record EnterpriseStatusRequest(string? Status=null,Guid? AssignedTo=null,bool ClearAssignment=false);
 public sealed record EnterpriseQuotationRequest(IReadOnlyList<QuotationItemRequest> Items);
 
 public sealed record EntitlementUpgradeView(Guid Id,int CapacityRevision,int PreviousLearnerLimit,int LearnerLimit,int AdditionalQuotaUnits,DateTime EffectiveFrom,DateTime CreatedAt);
@@ -78,11 +92,15 @@ public interface IBillingService
     Task<BillingPage<QuotationResponse>> ListQuotations(Guid actor,int page,int pageSize,CancellationToken ct);
     Task<QuotationResponse> IssueQuotation(Guid actor,Guid family,Guid id,IssueQuotationRequest request,string? ifMatch,CancellationToken ct);
     Task<QuotationResponse> AcceptQuotation(Guid actor,Guid family,Guid id,string? ifMatch,CancellationToken ct);
+    Task<QuotationResponse> CancelQuotation(Guid actor,Guid family,Guid id,CancelQuotationRequest request,string? ifMatch,string? idempotencyKey,bool admin,CancellationToken ct);
     Task<EnterpriseQuoteResponse> CreateEnterpriseRequest(Guid actor,Guid family,EnterpriseQuoteRequestBody request,string? key,CancellationToken ct);
     Task<BillingPage<EnterpriseQuoteResponse>> ListEnterpriseRequests(Guid actor,int page,int pageSize,CancellationToken ct);
     Task<EnterpriseQuoteResponse> GetEnterpriseRequest(Guid actor,Guid id,CancellationToken ct)=>throw new NotSupportedException();
     Task<EnterpriseQuoteResponse> UpdateEnterpriseStatus(Guid actor,Guid family,Guid id,EnterpriseStatusRequest request,string? ifMatch,CancellationToken ct)=>throw new NotSupportedException();
     Task<QuotationResponse> CreateEnterpriseQuotation(Guid actor,Guid family,Guid id,EnterpriseQuotationRequest request,string? key,CancellationToken ct)=>throw new NotSupportedException();
+    Task<EnterpriseResponseItem> AddEnterpriseResponse(Guid actor,Guid family,Guid id,EnterpriseResponseBody request,string? key,CancellationToken ct)=>throw new NotSupportedException();
+    Task<BillingPage<EnterpriseResponseItem>> ListEnterpriseResponses(Guid actor,Guid id,int page,int pageSize,CancellationToken ct)=>throw new NotSupportedException();
+    Task<EnterpriseQuoteResponse> CloseEnterpriseRequest(Guid actor,Guid family,Guid id,EnterpriseCloseRequest request,string? ifMatch,string? key,CancellationToken ct)=>throw new NotSupportedException();
     Task<BuildingServiceEntitlementResponse> GetBuildingEntitlement(Guid actor,Guid buildingId,CancellationToken ct)=>throw new NotSupportedException();
     Task<AiQuotaBalanceResponse> GetAiQuota(Guid actor,Guid? organizationId,CancellationToken ct)=>throw new NotSupportedException();
     Task<BillingPage<AiQuotaGrantView>> ListAiQuotaGrants(Guid actor,Guid? organizationId,int page,int pageSize,CancellationToken ct)=>throw new NotSupportedException();
@@ -94,6 +112,8 @@ public sealed class BillingException(int status,string code,string message,Dicti
     public int Status { get; }=status;
     public string Code { get; }=code;
     public Dictionary<string,string[]>? Errors { get; }=errors;
+    /// <summary>Extra ProblemDetails members (for example checkoutIds of an unresolved checkout).</summary>
+    public IReadOnlyDictionary<string,object?>? Extensions { get; init; }
 }
 
 public static class BillingETag

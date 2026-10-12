@@ -125,16 +125,27 @@ public sealed partial class BillingService
 
     public async Task<EnterpriseQuoteResponse> UpdateEnterpriseStatus(Guid actor,Guid family,Guid id,EnterpriseStatusRequest request,string? ifMatch,CancellationToken ct)
     {
-        Field(request.Status is "Contacted" or "Rejected" or "Cancelled","status","Use Contacted, Rejected or Cancelled; Quoted is set by creating a quotation.");
+        Field(request.Status is null or "Contacted" or "Rejected" or "Cancelled","status","Use Contacted, Rejected or Cancelled; Quoted is set by creating a quotation and Closed by the close action.");
+        Field(request.Status is not null||request.AssignedTo.HasValue||request.ClearAssignment,"status","Supply a status, an assignee or clearAssignment.");
+        Field(!(request.AssignedTo.HasValue&&request.ClearAssignment),"assignedTo","Use either assignedTo or clearAssignment.");
         await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await QuotationActor(actor,family,true,ct);
         await Lock("fet3d:billing:enterprise:"+id,false,ct);
         var item=await db.Set<EnterpriseQuoteRequest>().SingleOrDefaultAsync(x=>x.Id==id,ct)??throw Missing();
         BillingETag.Require(ifMatch,id,item.Revision);
-        var allowed=request.Status=="Contacted"?item.Status=="New":item.Status is "New" or "Contacted" or "Quoted";
-        if(!allowed)throw Conflict($"An enterprise request in {item.Status} cannot become {request.Status}.");
-        var old=new{item.Status,item.Revision};
-        item.Status=request.Status;item.Revision++;item.UpdatedAt=DateTime.UtcNow;
-        Audit(identity,item.OrganizationId,"enterprise_quote_requests",id,AuditAction.Update,old,new{item.Status,item.Revision});
+        if(item.Status=="Closed")throw new BillingException(409,"ENTERPRISE_REQUEST_CLOSED","A closed enterprise request cannot be changed.");
+        if(request.Status is not null)
+        {
+            var allowed=request.Status=="Contacted"?item.Status=="New":item.Status is "New" or "Contacted" or "Quoted";
+            if(!allowed)throw Conflict($"An enterprise request in {item.Status} cannot become {request.Status}.");
+        }
+        if(request.AssignedTo is {} assignee&&!await db.Users.AnyAsync(x=>x.Id==assignee&&x.Role==UserRole.PlatformAdmin&&x.IsActive&&x.DeletedAt==null,ct))
+            throw new BillingException(400,"BILLING_VALIDATION_FAILED","Assign an active PlatformAdmin.",new(){["assignedTo"]=["Assign an active PlatformAdmin."]});
+        var old=new{item.Status,item.Revision,assignedTo=item.AssignedTo};
+        // An omitted field keeps its value; assignment never changes the status.
+        if(request.Status is not null)item.Status=request.Status;
+        if(request.AssignedTo.HasValue)item.AssignedTo=request.AssignedTo;else if(request.ClearAssignment)item.AssignedTo=null;
+        item.Revision++;item.UpdatedAt=DateTime.UtcNow;
+        Audit(identity,item.OrganizationId,"enterprise_quote_requests",id,AuditAction.Update,old,new{item.Status,item.Revision,assignedTo=item.AssignedTo});
         await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return EnterpriseView(item);
     }
 
@@ -144,7 +155,7 @@ public sealed partial class BillingService
         var write=ValidateQuotation(new QuotationWriteRequest(request.Items));var hash=Hash(new{id,request=write});var stableKey=Key(key);
         await using var tx=await db.Database.BeginTransactionAsync(ct);await IdentityLock(ct);var identity=await QuotationActor(actor,family,true,ct);
         var previous=await Receipt(identity,"CreateEnterpriseQuotation",stableKey,hash,ct);
-        if(previous is not null)return Replay<QuotationResponse>(previous);
+        if(previous is not null)return ReplayQuote(previous);
         await Lock("fet3d:billing:enterprise:"+id,false,ct);
         var item=await db.Set<EnterpriseQuoteRequest>().SingleOrDefaultAsync(x=>x.Id==id,ct)??throw Missing();
         await Scope(identity,item.OrganizationId,ct);

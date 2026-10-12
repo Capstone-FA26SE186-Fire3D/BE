@@ -14,6 +14,56 @@ Organization AI pools prepaid Building/package and paid top-up grants. Top-up ha
 
 Provision replay returns a previously committed payment/line resource even after expiry; it must not grant twice or reject replay only because the period is no longer Active. See [current rollout and legacy compatibility](billing-v7-rollout.md), BILLING-02, CAPACITY-01 and AI-01 in the [implementation checklist](api-implementation-checklist.md). Admin configures prices, capacity, quota amount and unit; no business values are seeded. Upgrade price is a one-time fee fixed by Admin at Issue; no prorata formula is derived.
 
+## Quotation cancellation (#68)
+
+`POST /api/billing/quotations/{id}/cancel` (OrganizationUser, own tenant) and `POST /api/admin/quotations/{id}/cancel` (PlatformAdmin) take `If-Match`, `Idempotency-Key` and `{reason}` (1-1000 characters, recorded in the audit row).
+
+- Draft, Issued and Accepted can be cancelled while no payment is valid and no checkout is open. `Expired` keeps its status (`409 QUOTATION_EXPIRED`); an already `Cancelled` quotation returns its current state without another audit row.
+- A checkout in `Creating`, `Ready` or `NeedsReconcile` may still have a live provider link: `409 QUOTATION_CHECKOUT_UNRESOLVED` with `checkoutIds`. Cancel the payment request (`POST /api/payments/payos/requests/{id}/cancel`) or reconcile first; only a provider-confirmed `Cancelled`/`Expired` checkout counts as closed, never a local expiry time. The cancel API never calls PayOS itself.
+- A `Paid` request or an `Applied` transaction gives `409 QUOTATION_ALREADY_PAID`; there is no automatic refund.
+- Lock order matches issue/accept/checkout (identity, actor, quotation row), so a cancel and a checkout creation are serialized: either the cancel sees the open checkout, or the checkout sees a non-Accepted quotation and creates no link.
+- Same key and input replay the stored response after the scope check, even with the now stale ETag; the same key with another input is `409 IDEMPOTENCY_KEY_CONFLICT`.
+- Money that arrives after cancellation is still recorded with its provenance (`Applied`, request `Paid`), but its provisioning records stay `NeedsReconcile` with `PAYOS_QUOTATION_CANCELLED`: no entitlement or quota is activated and the quotation is not reopened. Migration: `20261012110000_AddBillingQuotationCancel`.
+
+## Enterprise request workflow (#68)
+
+Statuses: New → Contacted → Quoted, plus Rejected/Cancelled, and the new terminal `Closed`.
+
+- **Assignment.** `PATCH /api/admin/enterprise-quote-requests/{id}` (If-Match) takes optional `status`, `assignedTo` and `clearAssignment`. An omitted field keeps its value. The assignee must be an active PlatformAdmin, and assignment never changes the status. `Quoted` still comes only from creating a real quotation.
+- **Responses.** `POST /api/admin/enterprise-quote-requests/{id}/responses` (Idempotency-Key, `{message}` 1-10,000 characters) appends a reply. Replies are append-only, the text is never copied into audit, and a Closed request rejects new replies. Admin reads them at `GET /api/admin/enterprise-quote-requests/{id}/responses`.
+- **Organization reads.** The requesting organization reads `GET /api/billing/enterprise-quote-requests/{id}` and `/{id}/responses`; other tenants get 404.
+- **Close.** `POST /api/admin/enterprise-quote-requests/{id}/close` (If-Match, Idempotency-Key, `{reason}` 1-1000 characters) sets `Closed` with `closedAt` and `closeReason`. It never cancels a quotation or payment and grants no service. A replay or a repeated close returns the current state. Closed requests cannot be changed.
+- **Migrations.** `20261012130000_AddEnterpriseWorkflow` and the EF snapshot `20261012130100_SyncEnterpriseWorkflowModel`.
+
+## Expiry reminder notifications (#68)
+
+- `GET /api/organizations/me/notifications?unread=&type=&page=&pageSize=` (OrganizationUser, live session): reminders addressed to the caller in their current organization, newest first, default 20, maximum 100. Items carry type, title, body, Building (id and current name), entitlement, `referenceEndsAt`, `createdAt`, `readAt` and `stillRelevant`. `stillRelevant` becomes false after a renewal or once the period ended; the history is kept.
+- `PATCH /api/organizations/me/notifications/{id}/read`: idempotent; the first read time is kept. Another recipient's or tenant's notification is 404.
+
+The existing worker (`BillingReminders`) still creates one notification per entitlement period and recipient with Web and Email deliveries. Email delivery now uses a lease (`BillingReminders:LeaseSeconds`, default 300). A claim commits `Sending` with a lease token and expiry before any email is sent, so two instances never take the same delivery. Sending happens outside transactions, and complete/retry only apply while the lease is still held. Retries back off (60 s doubling, up to 1 h) until `MaxAttempts`. An expired lease (crashed worker) is reclaimed. Recipient, tenant, Building and renewal are rechecked just before sending. Email is at-least-once: a crash after the provider accepted a message can send it again. Tests use a fake email adapter, and the real-send flag is unchanged. Migration: `20261012120000_AddNotificationDeliveryLease`.
+
+## Draft tax and pricing status (#68)
+
+Quotation responses carry `pricingStatus`, nullable `taxAmount` and `issuedAt`:
+
+| pricingStatus | When | taxAmount |
+|---|---|---|
+| `Estimated` | Draft, or a v7 quotation cancelled before Issue | `null`; `totalAmount` is an estimate before tax and FE labels it as such |
+| `Final` | Issued, Accepted, Expired, or cancelled after Issue (`issuedAt` set) | number fixed by Admin at Issue, possibly `0` |
+| `LegacyUnknown` | legacy non-Draft record without proof that the price was fixed | `null`, never an assumed approved `0` |
+
+Stored ledger values are unchanged. Receipts written before this field existed are converted from their own snapshot (a replayed Draft stays `Estimated`), never from the current quotation. FE must handle a nullable `taxAmount` in the same release.
+
+## Payment and checkout lists (#68)
+
+- `GET /api/admin/payments/payos/checkouts` (PlatformAdmin): every checkout operation, including ones whose provider response was lost or that failed before a payment request was bound.
+- `GET /api/admin/payments/payos/requests` (PlatformAdmin): every payment request with its checkout.
+- `GET /api/billing/quotations/{id}/checkouts` (owning OrganizationUser or PlatformAdmin): checkout history of one quotation, so a reload of the quotation page finds its checkouts.
+
+Filters: `organizationId`, `quotationId`, `status` (checkout status, or payment request status on `/requests`), UTC `[from,to)` on creation with timezone-qualified timestamps; `page` default 1, `pageSize` default 20, maximum 100; ordered `createdAt DESC, id`.
+
+Each item links quotation (`quotationId`, `quotationNumber`, `purpose`), checkout (`checkoutId`, `checkoutStatus`, `checkoutError`), payment request (`paymentRequestId`, `paymentStatus`), transaction (`transactionId`, `transactionStatus`), `amount`/`currency`, `createdAt`/`paidAt` and provisioning. The three states stay separate. `provisioningStatus` is `NotStarted` until the request is Paid, then `Pending`, `Partial`, `Succeeded` or `NeedsReconcile` from the provisioning lines (`provisioningLines`, `provisioningSucceeded`). Lines are counted per purpose: Building lines for BuildingService/Upgrade, the top-up line for AIQuotaTopUp. Provisioning is aggregated per row, so several lines never duplicate a payment. Lists never contain QR data, the checkout URL, webhook payloads or bank data; the checkout URL is read from `GET /api/payments/payos/checkouts/{id}`. `GET /api/payments/payos/requests/{id}` now reports a top-up line (`buildingId: null`) instead of treating the missing Building line as a failure.
+
 ## Historical foundation and provider evidence
 
 The sections below retain earlier migration/provider evidence and legacy contracts. Their one-month package examples are historical and are not valid for new v7 sales. Use the [current Swagger test guide](publish-billing-v7-manual-test.md) for new packages, fixed service periods, publish and reporting.

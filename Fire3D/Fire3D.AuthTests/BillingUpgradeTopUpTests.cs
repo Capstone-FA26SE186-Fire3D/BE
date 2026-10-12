@@ -15,7 +15,7 @@ public sealed class BillingUpgradeTopUpTests
     private static string ETag(QuotationResponse q)=>BillingETag.Format(q.Id,q.Revision);
 
     // A paid v7 entitlement (learner limit 20) for the fixture Building, provisioned through the real PayOS gates.
-    private static async Task<(BillingApiTests.Factory Factory,Guid Entitlement,Guid Policy)> PaidEntitlement(BillingDatabase db,FakePayos? provider=null)
+    internal static async Task<(BillingApiTests.Factory Factory,Guid Entitlement,Guid Policy)> PaidEntitlement(BillingDatabase db,FakePayos? provider=null)
     {
         var quote=await PayosCheckoutTests.Accepted(db);
         var factory=new BillingApiTests.Factory(db,provider??new FakePayos());
@@ -150,6 +150,18 @@ public sealed class BillingUpgradeTopUpTests
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
         Assert.Equal(endsBefore,await db.Scalar($"SELECT ends_at FROM service_entitlements WHERE id='{entitlement}'"));
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM billing_service_reservations WHERE status='Reserved'"));
+        // A top-up has no Building line; its provisioning is still reported from the top-up line, not as a failure.
+        using(var adminClient=factory.As(BillingDatabase.Admin))
+        {
+            var ledger=JsonDocument.Parse(await adminClient.GetStringAsync($"/api/admin/payments/payos/requests?quotationId={topUp.Id}")).RootElement;
+            var row=Assert.Single(ledger.GetProperty("items").EnumerateArray());
+            Assert.Equal("AIQuotaTopUp",row.GetProperty("purpose").GetString());
+            Assert.Equal("Succeeded",row.GetProperty("provisioningStatus").GetString());
+            Assert.Equal(1,row.GetProperty("provisioningLines").GetInt32());
+            var payment=JsonDocument.Parse(await adminClient.GetStringAsync($"/api/payments/payos/requests/{row.GetProperty("paymentRequestId").GetGuid()}")).RootElement;
+            Assert.Equal("Succeeded",payment.GetProperty("provisioningStatus").GetString());
+            Assert.Equal(JsonValueKind.Null,Assert.Single(payment.GetProperty("items").EnumerateArray()).GetProperty("buildingId").ValueKind);
+        }
         // Another unit never combines with tokens.
         await db.Sql($"""
             INSERT INTO billing_quota_policy_versions(id,audience,policy_kind,quota_unit,effective_from,rollover,created_by,created_at) VALUES(gen_random_uuid(),'organization','quota','requests',now()-interval '1 day','None','{BillingDatabase.Admin}',now());
@@ -239,7 +251,12 @@ public sealed class BillingUpgradeTopUpTests
         Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM notification_deliveries WHERE channel='Web' AND status='Sent'"));
         Assert.Equal(0,await reminders.DispatchAsync(default));
         Assert.Equal("Pending",await db.Scalar("SELECT status FROM notification_deliveries WHERE channel='Email'"));
-        email.Fail=false;Assert.Equal(1,await reminders.DispatchAsync(default));
+        // Retries wait for their backoff; a stale lease is reclaimed by the next worker, a live one is not.
+        email.Fail=false;Assert.Equal(0,await reminders.DispatchAsync(default));
+        await db.Sql("UPDATE notification_deliveries SET status='Sending',lease_token=gen_random_uuid(),lease_until=now()+interval '1 minute' WHERE channel='Email'");
+        Assert.Equal(0,await reminders.DispatchAsync(default));
+        await db.Sql("UPDATE notification_deliveries SET status='Pending',lease_token=NULL,lease_until=NULL,next_attempt_at=now()-interval '1 second' WHERE channel='Email'");
+        Assert.Equal(1,await reminders.DispatchAsync(default));
         Assert.Equal(["owner@example.test"],email.Sent);Assert.Equal(0,await reminders.DispatchAsync(default));
         // A second period or a renewal already in place is not reminded; a pending email is suppressed after renewal.
         await db.Sql("DELETE FROM notification_deliveries; DELETE FROM organization_notifications");

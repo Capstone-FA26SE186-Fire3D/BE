@@ -40,3 +40,17 @@ Training modes use the database vocabulary `Learn`, `Guided`, `Assessment`. Rubr
 
 Structural validation is not geometry QA and not Unity acceptance. Object kinds are placement categories; behaviour
 comes only from capabilities published in the runtime catalog. No Unity behaviour is inferred or seeded here.
+
+## Rubric schema version (#69)
+
+`GET /api/scenario-rubrics/catalog` (OrganizationUser, PlatformAdmin) publishes the rubric contract: `supportedSchemaVersions`, `defaultSchemaVersion`, server-computed `metrics` with descriptions, `operators`, the criterion fields, ID pattern and limits, and `maxCriteria`. It suggests no pass threshold, weight or criterion.
+
+The first canonical rubric `schema_version` is the string `"1"`. The number `1`, `"v1"` and `"1.0"` are not aliases. One registry (`RubricContract`) validates the v1 editor contract, the legacy draft validator used before snapshot/submit, Library `RubricSample` payloads and AI scenario drafts. Any other value is `422 RUBRIC_SCHEMA_VERSION_UNSUPPORTED` at `$.rubric.schema_version` (`$.payload.rubric.schema_version` for Library). Stored snapshots are never rewritten. An unrecognised legacy version stays readable but cannot be snapshotted or submitted again, and a started session keeps the rubric it pinned.
+
+Preflight before rollout (read-only, lists legacy versions):
+
+```sql
+SELECT 'scenario_versions' AS source, rubric->>'schema_version' AS version, count(*) FROM scenario_versions WHERE rubric IS NOT NULL GROUP BY 2
+UNION ALL SELECT 'scenario_drafts', state->'rubric'->>'schema_version', count(*) FROM scenario_drafts WHERE state ? 'rubric' GROUP BY 2;
+```
+

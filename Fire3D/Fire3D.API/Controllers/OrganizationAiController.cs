@@ -65,7 +65,7 @@ public sealed class OrganizationAiController(IOrganizationAiGates gates, IOption
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.PlatformAdministration)]
 [Produces("application/json")]
-public sealed partial class AdminAiController(IOrganizationAiGates gates) : ContentControllerBase
+public sealed partial class AdminAiController(IOrganizationAiGates gates, Fire3D.Application.Content.IContentGates content) : ContentControllerBase
 {
     [GeneratedRegex("^[A-Za-z0-9._-]{1,100}$")] private static partial Regex VersionLabel();
 
@@ -112,16 +112,35 @@ public sealed partial class AdminAiController(IOrganizationAiGates gates) : Cont
         return result.IsSuccess ? Created("/api/admin/ai/policies", result.Value) : Problem(result.Error!);
     }
 
+    /// <summary>Knowledge source catalog. visibility defaults to Common (tenant sources only with visibility=Organization); status Draft/Approved/Retired; search on title, version label and jurisdiction. canUseInDraft: a Learn draft may cite it; canPublishReference: publish/RAG accept it now.</summary>
     [HttpGet("api/admin/knowledge-sources")]
     [ProducesResponseType<JsonElement>(200)]
-    public async Task<IActionResult> KnowledgeSources([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
-        Paging(page, pageSize) ?? Reply(await gates.AdminAsync("ListSources", Actor, Family, Guid.Empty, new { status, page, pageSize }, null, null, ct));
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> KnowledgeSources([FromQuery] string? visibility, [FromQuery] string? status, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        if (Paging(page, pageSize) is { } paging) return paging;
+        if (visibility is not (null or "Common" or "Organization") || status is not (null or "Draft" or "Approved" or "Retired") || search is { Length: > 200 })
+            return Problem(statusCode: 400, title: "Use visibility Common/Organization, status Draft/Approved/Retired and search up to 200 characters.", extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR" });
+        return Reply(await content.CatalogAsync("KnowledgeSources", Actor, Family, new { visibility, status, search, page, pageSize }, ct));
+    }
 
     [HttpGet("api/admin/knowledge-sources/{id:guid}")]
     [ProducesResponseType<JsonElement>(200)]
     [ProducesResponseType<ProblemDetails>(404)]
     [OpenApi.ResponseHeader("ETag")]
-    public async Task<IActionResult> KnowledgeSource(Guid id, CancellationToken ct) => WithETag(await gates.AdminAsync("GetSource", Actor, Family, id, new { }, null, null, ct));
+    public async Task<IActionResult> KnowledgeSource(Guid id, CancellationToken ct) => WithETag(WithSourceFlags(await gates.AdminAsync("GetSource", Actor, Family, id, new { }, null, null, ct)));
+    // Same rule as the catalog list, so a source picked earlier can be reopened by ID after a reload.
+    private static AuthResult<JsonElement> WithSourceFlags(AuthResult<JsonElement> result)
+    {
+        if (!result.IsSuccess) return result;
+        var node = System.Text.Json.Nodes.JsonNode.Parse(result.Value.GetRawText())!.AsObject();
+        var common = node["visibility"]?.GetValue<string>() == "Common"; var status = node["approvalStatus"]?.GetValue<string>();
+        var now = DateTimeOffset.UtcNow;
+        var from = node["effectiveFrom"] is { } f ? f.GetValue<DateTimeOffset>() : (DateTimeOffset?)null; var until = node["effectiveUntil"] is { } u ? u.GetValue<DateTimeOffset>() : (DateTimeOffset?)null;
+        node["canUseInDraft"] = common && status is "Draft" or "Approved";
+        node["canPublishReference"] = common && status == "Approved" && (from is null || from <= now) && (until is null || until > now);
+        return AuthResult<JsonElement>.Ok(JsonSerializer.SerializeToElement(node));
+    }
 
     /// <summary>Registers one source version as Draft. Common sources have no organization; Organization sources belong to one tenant. Idempotency-Key required.</summary>
     [HttpPost("api/admin/knowledge-sources")]

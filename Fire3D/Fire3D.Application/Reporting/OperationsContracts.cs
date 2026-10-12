@@ -8,8 +8,11 @@ public sealed record OrganizationCreated(int Buildings,int ProcessingJobs,int Ti
 public sealed record PlatformCreated(int Accounts,int Organizations,int Buildings,int ProcessingJobs,int Tickets);
 public sealed record PlatformOperations(DateTime AsOf,DateTime From,DateTime To,IReadOnlyDictionary<string,string> Definitions,IReadOnlyList<AccountCount> Accounts,IReadOnlyList<LifecycleCount> Organizations,IReadOnlyList<LifecycleCount> Buildings,IReadOnlyList<ProcessingCount> ProcessingJobs,IReadOnlyList<TicketCount> Tickets,PlatformCreated Created);
 public sealed record OrganizationOperations(DateTime AsOf,DateTime From,DateTime To,IReadOnlyDictionary<string,string> Definitions,IReadOnlyList<LifecycleCount> Buildings,IReadOnlyList<ProcessingCount> ProcessingJobs,IReadOnlyList<TicketCount> Tickets,OrganizationCreated Created);
+public sealed record OrganizationIdentity(Guid Id,string Name,bool IsActive);
+public sealed record AdminOrganizationOperations(OrganizationIdentity Organization,DateTime AsOf,DateTime From,DateTime To,IReadOnlyDictionary<string,string> Definitions,IReadOnlyList<LifecycleCount> Buildings,IReadOnlyList<ProcessingCount> ProcessingJobs,IReadOnlyList<TicketCount> Tickets,OrganizationCreated Created);
 public interface IOperationsQueries
 {
+    Task<AuthResult<AdminOrganizationOperations>> OrganizationForAdmin(Guid actor,Guid family,Guid organizationId,string? from,string? to,CancellationToken ct);
     Task<AuthResult<PlatformOperations>> Platform(Guid actor,Guid family,string? from,string? to,CancellationToken ct);
     Task<AuthResult<OrganizationOperations>> Organization(Guid actor,Guid family,string? from,string? to,CancellationToken ct);
 }

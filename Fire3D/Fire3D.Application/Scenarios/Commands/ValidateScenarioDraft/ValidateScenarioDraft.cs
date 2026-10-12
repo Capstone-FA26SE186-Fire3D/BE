@@ -116,6 +116,8 @@ public static class ScenarioDraftStructuralValidator
         bool Number(System.Text.Json.Nodes.JsonNode? n,out double number){number=0;return n is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<double>(out number)&&double.IsFinite(number);}
         if(rubric is null || !Text(rubric["schema_version"]) || !Number(rubric["pass_threshold"],out _) || rubric["criteria"] is not System.Text.Json.Nodes.JsonArray {Count:>0} criteria)
         {issues.Add(new("RUBRIC_REQUIRED","$.rubric","Provide schema_version, numeric pass_threshold and nonempty criteria."));return;}
+        if(!Fire3D.Application.Editor.RubricContract.IsSupportedVersion(rubric["schema_version"]))
+            issues.Add(new(Fire3D.Application.Editor.RubricContract.UnsupportedCode,"$.rubric.schema_version",Fire3D.Application.Editor.RubricContract.UnsupportedMessage));
         var ids=new HashSet<string>(StringComparer.Ordinal);
         for(var i=0;i<criteria.Count;i++)
         {

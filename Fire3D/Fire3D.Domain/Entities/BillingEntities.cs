@@ -63,6 +63,14 @@ public sealed class EnterpriseQuoteRequest
     public string Status { get; set; } = "";
     [Column("quotation_id")]
     public Guid? QuotationId { get; set; }
+    [Column("assigned_to")]
+    public Guid? AssignedTo { get; set; }
+    [Column("closed_at")]
+    public DateTime? ClosedAt { get; set; }
+    [Column("closed_by")]
+    public Guid? ClosedBy { get; set; }
+    [Column("close_reason")]
+    public string? CloseReason { get; set; }
     [Column("idempotency_key")]
     [MaxLength(255)]
     public string IdempotencyKey { get; set; } = "";

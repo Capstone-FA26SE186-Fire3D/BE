@@ -12,7 +12,7 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore=true,Location=ResponseCacheLocation.None)]
 public sealed class IfcCommandsController(ISender sender) : ControllerBase
 {
-    /// <summary>Records a rejection for one revisionâ€“scenario version pair without changing the shared revision status.</summary>
+    /// <summary>Records a rejection for one revision–scenario version pair without changing the shared revision status.</summary>
     [HttpPost("revisions/{revisionId:guid}/reviews")]
     [ProducesResponseType<Fire3D.Application.Scenarios.TechnicalRejectionResponse>(201)]
     [ProducesResponseType<ProblemDetails>(401)]
@@ -31,13 +31,13 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
-    /// <summary>Requeue má»™t processing job Failed qua gate database vÃ  transactional outbox.</summary>
+    /// <summary>Requeue một processing job Failed qua gate database và transactional outbox.</summary>
     /// <remarks>
-    /// OrganizationUser Ä‘Ãºng tenant hoáº·c PlatformAdmin. Body: requestId (UUID má»›i cho má»™t Ã½ Ä‘á»‹nh retry),
-    /// reason (1-1000 kÃ½ tá»±). Gá»­i láº¡i Ä‘Ãºng requestId/reason tráº£ AlreadyRequeued, ká»ƒ cáº£ job Ä‘Ã£ cháº¡y xong sau retry.
-    /// CÃ¹ng key khÃ¡c job/reason tráº£ 409; key má»›i chá»‰ dÃ¹ng vá»›i Failed. Cancelled/Succeeded khÃ´ng tá»± cháº¡y láº¡i.
-    /// Response 202 cÃ³ jobId/outcome vÃ  Location theo dÃµi job. 202 xÃ¡c nháº­n giao viá»‡c bá»n vá»¯ng, chÆ°a xÃ¡c nháº­n worker hoÃ n táº¥t.
-    /// Cáº§n gate requeue_processing_job, outbox vÃ  quyá»n DB theo v6.7; khÃ´ng ghi trá»±c tiáº¿p status Ä‘á»ƒ bá» qua gate.
+    /// OrganizationUser đúng tenant hoặc PlatformAdmin. Body: requestId (UUID mới cho một ý định retry),
+    /// reason (1-1000 ký tự). Gửi lại đúng requestId/reason trả AlreadyRequeued, kể cả job đã chạy xong sau retry.
+    /// Cùng key khác job/reason trả 409; key mới chỉ dùng với Failed. Cancelled/Succeeded không tự chạy lại.
+    /// Response 202 có jobId/outcome và Location theo dõi job. 202 xác nhận giao việc bền vững, chưa xác nhận worker hoàn tất.
+    /// Cần gate requeue_processing_job, outbox và quyền DB theo v6.7; không ghi trực tiếp status để bỏ qua gate.
     /// </remarks>
     [HttpPost("processing-jobs/{jobId:guid}/retry")]
     [ProducesResponseType<RetryProcessingJobResponse>(202)]

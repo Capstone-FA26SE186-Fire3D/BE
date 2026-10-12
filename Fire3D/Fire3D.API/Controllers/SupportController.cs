@@ -34,6 +34,11 @@ public sealed class SupportController(ISupportService service):ControllerBase
  [Authorize(Roles="PlatformAdmin")][HttpGet("api/admin/feedback")][ProducesResponseType(typeof(SupportPage<FeedbackResponse>),200)]
  public Task<IActionResult> AdminFeedback([FromQuery]SupportQuery query,CancellationToken ct)=>Run("AdminListFeedback",null,query,null,null,200,ct);
 
+ /// <summary>Feedback detail for PlatformAdmin with creator (including email) and organization labels; the ETag is the If-Match value for PATCH status.</summary>
+ [Authorize(Roles="PlatformAdmin")][HttpGet("api/admin/feedback/{id:guid}")][ProducesResponseType(typeof(FeedbackResponse),200)]
+ [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+ public Task<IActionResult> AdminFeedbackDetail(Guid id,CancellationToken ct)=>Run("AdminGetFeedback",id,new{},null,null,200,ct);
+
  [Authorize(Roles="PlatformAdmin")][HttpPatch("api/admin/feedback/{id:guid}/status")][ProducesResponseType(typeof(FeedbackResponse),200)]
  [Fire3D.API.OpenApi.ResponseHeader("ETag")]
  public Task<IActionResult> AdminUpdateFeedback(Guid id,AdminFeedbackUpdateRequest request,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? match,CancellationToken ct)=>Patch("FeedbackStatus",id,request,match,ct);
