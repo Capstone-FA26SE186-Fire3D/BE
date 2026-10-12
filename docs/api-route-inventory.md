@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-244 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+245 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -155,6 +155,7 @@
 | POST | /api/me/avatar/upload | Bearer | If-Match | 200, 400, 401, 409, 412, 428, 503 |
 | POST | /api/me/avatar/upload-intent | Bearer | None | 200, 400, 401 |
 | POST | /api/me/link-google | Bearer | None | 200, 400, 401, 403, 409, 503 |
+| POST | /api/me/password | Bearer | None | 204, 400, 401, 409, 503 |
 | GET | /api/organizations | Bearer | None | 200, 429 |
 | POST | /api/organizations | Bearer | None | 201, 429 |
 | GET | /api/organizations/me | Bearer | None | 200, 401, 403 |

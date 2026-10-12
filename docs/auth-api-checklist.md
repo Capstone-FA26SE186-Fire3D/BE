@@ -1,8 +1,8 @@
 # Checklist endpoint auth hiện tại
 
-Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn thực thi: `AuthController`, `GoogleOnboardingController`, `GoogleLinkController`, `AvatarController`, `OrganizationProfileController`, DI trong Program/AuthenticationExtensions. Phạm vi bảng là identity/auth/profile/Avatar, không gồm API quản trị tài khoản hoặc analytics tổ chức.
+Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn thực thi: `AuthController`, `GoogleOnboardingController`, `GoogleLinkController`, `GooglePasswordController`, `AvatarController`, `OrganizationProfileController`, DI trong Program/AuthenticationExtensions. Phạm vi bảng là identity/auth/profile/Avatar, không gồm API quản trị tài khoản hoặc analytics tổ chức.
 
-✅ = có đường thực thi source, không đồng nghĩa provider/deployment/FE hoàn tất. Các test đọc metadata và HTTP dùng PostgreSQL disposable, Firebase/S3/mail giả lập; giới hạn từng nhóm ở dưới. Có **28 cặp method–route** trong phạm vi này; contract test đối chiếu bảng với OpenAPI để phát hiện route thêm/bỏ.
+✅ = có đường thực thi source, không đồng nghĩa provider/deployment/FE hoàn tất. Các test đọc metadata và HTTP dùng PostgreSQL disposable, Firebase/S3/mail giả lập; giới hạn từng nhóm ở dưới. Có **29 cặp method–route** trong phạm vi này; contract test đối chiếu bảng với OpenAPI để phát hiện route thêm/bỏ.
 
 | Method | Route | Code | Quyền/input chính |
 | --- | --- | --- | --- |
@@ -10,7 +10,7 @@ Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn th
 | POST | `/api/auth/login-firebase` | ✅ | Public; Firebase ID token JSON string; Google verified/revocation |
 | POST | `/api/auth/register` | ✅ | Alias Trainee; deprecated, cùng proof/validation |
 | POST | `/api/auth/register/trainee` | ✅ | Public; toàn bộ form + registrationToken; server gán role |
-| POST | `/api/auth/register/organization` | ✅ | Public; form organization + registrationToken; owner/org atomic; phone conflict409/errors.organizationPhoneNumber |
+| POST | `/api/auth/register/organization` | ✅ | Public; form organization + registrationToken; owner/org atomic; phone conflict409/errors.organizationPhoneNumber; username tùy chọn (luật Trainee, trùng409 USERNAME_EXISTS) |
 | POST | `/api/auth/registration/request-otp` | ✅ | Public; email; gửi mã đầu, không tạo account |
 | POST | `/api/auth/registration/verify-otp` | ✅ | Public; email/OTP sáu số; trả proof, không tạo account |
 | POST | `/api/auth/resend-verification` | ✅ | Public; gửi OTP mới sau cooldown; không gửi link mới |
@@ -27,6 +27,7 @@ Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn th
 | POST | `/api/auth/change-password` | ✅ | Bearer + currentPassword/newPassword; live family kiểm dưới khóa |
 | POST | `/api/auth/google/onboarding/complete` | ✅ | Public + proof15m; trainee/organization (alias tên role);201 authentication; cùng input replay409 AlreadyCompleted → exchange recovery |
 | POST | `/api/me/link-google` | ✅ | Bearer + currentPassword + Google token; giữ role/tenant/email |
+| POST | `/api/me/password` | ✅ | Bearer + Google idToken đăng nhập trong 5 phút của UID đã link + newPassword; chỉ Google-only; 204, revoke mọi phiên/reset proof + audit atomic |
 | GET | `/api/organizations/me` | ✅ | OrganizationUser; profile tổ chức + ETag |
 | PATCH | `/api/organizations/me` | ✅ | OrganizationUser + If-Match; name/address/phoneNumber; phone conflict409/errors.phoneNumber |
 | POST | `/api/me/avatar/upload` | ✅ | Bearer + If-Match; multipart IFormFile `file` |
@@ -48,7 +49,7 @@ Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn th
 | Device | ✅ Installation proof/family/rotate/revoke có source/test | ❌ FCM thật và client secure installation storage |
 | Swagger | ✅ Schema PATCH/multipart/proof/enum/headers và security metadata; relative server `/`; HTTP contract checks | ❌ OpenAPI/binary deploy mới; không chứng minh provider hoạt động |
 
-Không đánh dấu toàn bộ audit hoàn tất từ bảng này. Google unlink, tạo local password cho Google-only và module ngoài auth không nằm trong đợt này. Không reset DB, thêm Redis hoặc sửa billing/training flow.
+Không đánh dấu toàn bộ audit hoàn tất từ bảng này. Google unlink và module ngoài auth không nằm trong đợt này. Tạo password local đầu tiên cho Google-only đã có (`POST /api/me/password`, 12/10/2026); `GET /api/auth/me` trả `hasPassword`/`googleLinked` để FE chọn đặt hay đổi mật khẩu. Không reset DB, thêm Redis hoặc sửa billing/training flow.
 
 ## Test tay sau khi deploy
 

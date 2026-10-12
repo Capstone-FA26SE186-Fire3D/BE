@@ -106,7 +106,7 @@ Số điện thoại tổ chức unique sau normalization giữa mọi tổ ch�
 
 Luồng và bằng chứng source chi tiết tại [authentication.md](authentication.md): cả Trainee và OrganizationUser dùng form → OTP → proof → register → login; JWT được cấp tại login/refresh, Google UID đã liên kết hoặc lần complete Google onboarding đầu tiên. Bảng dưới liệt kê API, không dùng số endpoint lịch sử để kết luận auth hoàn tất.
 
-[Checklist 28 endpoint auth](auth-api-checklist.md) tách code/test/provider và có contract test đối chiếu OpenAPI. Swagger source hiện hiển thị đúng field PATCH/null semantics, multipart `file`, enum tên, registrationToken và header bắt buộc. Production Swagger chỉ đổi sau deploy binary này; không suy từ Markdown rằng deployment đã cập nhật. [Avatar test và signed S3 URL](avatar-manual-test.md).
+[Checklist 29 endpoint auth](auth-api-checklist.md) tách code/test/provider và có contract test đối chiếu OpenAPI. Swagger source hiện hiển thị đúng field PATCH/null semantics, multipart `file`, enum tên, registrationToken và header bắt buộc. Production Swagger chỉ đổi sau deploy binary này; không suy từ Markdown rằng deployment đã cập nhật. [Avatar test và signed S3 URL](avatar-manual-test.md).
 
 | Method | Path | Quyền | Thành công |
 | --- | --- | --- | --- |
@@ -120,6 +120,7 @@ Luồng và bằng chứng source chi tiết tại [authentication.md](authentic
 | POST | `/api/auth/login` | Public | 200 LoginResponse |
 | POST | `/api/auth/login-firebase` | Public | 200 GoogleExchangeResponse; 401 invalid identity; 409 explicit link/race; 503 provider unavailable |
 | POST | `/api/me/link-google` | Live User + currentPassword + Google ID token | 200 GoogleLinkResponse + ETag; first link revokes sessions; 400/401/403/409/503 |
+| POST | `/api/me/password` | Live Google-only User + Google ID token (sign-in ≤ 5 phút) + newPassword | 204; revokes every session; 400/401/409/503 |
 | POST | `/api/auth/google/onboarding/complete` | Public + onboarding proof | 201 Authenticated + authentication; replay409 ONBOARDING_ALREADY_COMPLETED;400 field/invalid/expired;409 input/identity conflict;503 retry |
 | POST | `/api/auth/refresh` | Public | 200 TokenResponse |
 | POST | `/api/auth/logout` | User | 204 |
@@ -187,7 +188,7 @@ Tài khoản tự đăng ký chỉ được ghi sau khi token OTP được consu
 
 Lỗi: 400 VALIDATION_ERROR, 409 EMAIL_EXISTS hoặc USERNAME_EXISTS. AccountResponse từ nguồn tạo khác có thể có fullName/username null.
 
-`POST /api/auth/register` là alias tương thích cho request Trainee cùng contract. `POST /api/auth/register/organization` nhận email/password/confirmPassword, organizationName, organizationAddress, organizationPhoneNumber và các trường hồ sơ tùy chọn fullName/dob/gender/phoneNumber; backend tạo owner `OrganizationUser` cùng organization trong một transaction.
+`POST /api/auth/register` là alias tương thích cho request Trainee cùng contract. `POST /api/auth/register/organization` nhận email/password/confirmPassword, organizationName, organizationAddress, organizationPhoneNumber và các trường hồ sơ tùy chọn fullName/dob/gender/phoneNumber/username; backend tạo owner `OrganizationUser` cùng organization trong một transaction. `username` của owner tùy chọn, cùng luật với Trainee (3–30 ký tự `a-z 0-9 . _ -`, lưu chữ thường, duy nhất không phân biệt hoa thường trên mọi user); bỏ trống/chỉ khoảng trắng là không có username. Sai định dạng 400 `errors.username`, trùng 409 USERNAME_EXISTS; lỗi không consume proof.
 
 ### 2.2 Login local
 
@@ -268,7 +269,7 @@ Refresh không cần access token:
 
 Token không trống, tối đa 256. Thành công trả TokenResponse gồm accessToken/refreshToken/user, không có expiresAt. Refresh luân chuyển token; lưu cả cặp mới, tránh nhiều request refresh đồng thời. Không kéo dài thời hạn tuyệt đối của family. Token không hợp lệ trả401 INVALID_REFRESH_TOKEN; replay token đã consume/revoke thu hồi cả family.
 
-Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại; `/api/auth/logout-all` thu hồi toàn bộ family và vô hiệu push bindings. `GET /api/auth/me` trả AccountResponse cùng `ETag: "<profileRevision>"`; `PATCH /api/auth/me` nhận header đó trong `If-Match`, sửa fullName/username/dob/gender/phoneNumber, rồi trả ETag mới. Avatar hỗ trợ `POST /api/me/avatar/upload` nhận `multipart/form-data` với field `file` (JPEG/PNG/WebP, tối đa 5 MiB) để test S3 qua BE; route bắt buộc `If-Match`, rồi stream lên private staging object và hoàn tất theo cùng luồng Avatar. `POST /api/me/avatar/complete` và `DELETE /api/me/avatar` cũng yêu cầu cùng If-Match; thiếu trả 428, ETag cũ trả 412. `GET /api/organizations/me` trả OrganizationProfileResponse và ETag; PATCH chỉ sửa field được gửi, cần `If-Match`.
+Logout không body, cần Bearer, trả 204 và thu hồi family phiên hiện tại; `/api/auth/logout-all` thu hồi toàn bộ family và vô hiệu push bindings. `GET /api/auth/me` trả AccountResponse cùng `ETag: "<profileRevision>"`; AccountResponse có `hasPassword` (đã có password local) và `googleLinked` (đã link Google); `PATCH /api/auth/me` nhận header đó trong `If-Match`, sửa fullName/username/dob/gender/phoneNumber, rồi trả ETag mới. Avatar hỗ trợ `POST /api/me/avatar/upload` nhận `multipart/form-data` với field `file` (JPEG/PNG/WebP, tối đa 5 MiB) để test S3 qua BE; route bắt buộc `If-Match`, rồi stream lên private staging object và hoàn tất theo cùng luồng Avatar. `POST /api/me/avatar/complete` và `DELETE /api/me/avatar` cũng yêu cầu cùng If-Match; thiếu trả 428, ETag cũ trả 412. `GET /api/organizations/me` trả OrganizationProfileResponse và ETag; PATCH chỉ sửa field được gửi, cần `If-Match`.
 
 Devices upsert cho user hiện tại:
 
@@ -308,7 +309,9 @@ Sai email: 400 INVALID_EMAIL. Email đúng định dạng có/không tồn tại
 
 Phải dùng token thật từ email: 64 ký tự hex, hạn 30 phút, một lần; DB chỉ lưu hash token. Password 6–128, không chỉ khoảng trắng. Sai/hết hạn/đã dùng token: 400 INVALID_RESET_CODE; password sai: 400 INVALID_PASSWORD; thành công 204.
 
-Reset chỉ áp dụng cho tài khoản đã có password local. Backend đổi hash local, tiêu thụ token, vô hiệu token reset còn lại và thu hồi phiên Fire3D trong transaction. Phải login lại; không trả JWT mới. Tài khoản Google-only không nhận reset token và không thể dùng reset để thêm password local. Không đổi password Google/Firebase; không nhận oobCode Firebase cũ. Không có endpoint đọc password/hash/reset token.
+Reset chỉ áp dụng cho tài khoản đã có password local. Backend đổi hash local, tiêu thụ token, vô hiệu token reset còn lại và thu hồi phiên Fire3D trong transaction. Phải login lại; không trả JWT mới. Tài khoản Google-only không nhận reset token và không thể dùng reset để thêm password local; dùng `POST /api/me/password` (bên dưới). Không đổi password Google/Firebase; không nhận oobCode Firebase cũ. Không có endpoint đọc password/hash/reset token.
+
+`POST /api/me/password` thêm password local đầu tiên cho tài khoản Google-only (`hasPassword=false`, `googleLinked=true`). Body `{ "idToken": "<Firebase ID token>", "newPassword": "..." }`; cần Bearer còn sống và idToken của lần đăng nhập Google trong 5 phút gần nhất (claim `auth_time`) đúng UID đã link, nên FE gọi Google Sign-In lại ngay trước khi gửi. newPassword theo luật reset (6–128 ký tự, không chỉ khoảng trắng, không trim). Thành công trả 204, đặt hash, vô hiệu reset proof, thu hồi mọi phiên và audit trong một transaction; đăng nhập lại bằng email/password hoặc Google. Lỗi: 400 VALIDATION_ERROR (`errors.idToken`/`errors.newPassword`) hoặc GOOGLE_LINK_REQUIRED; 401 UNAUTHORIZED, INVALID_FIREBASE_TOKEN (token sai hoặc tài khoản Google khác) hoặc RECENT_LOGIN_REQUIRED; 409 PASSWORD_ALREADY_SET (dùng change-password), ACCOUNT_CHANGED hoặc PASSWORD_RESET_PENDING; 503 GOOGLE_PROVIDER_UNAVAILABLE.
 
 Chi tiết vận hành: [password-reset.md](password-reset.md).
 

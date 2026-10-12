@@ -2,6 +2,14 @@
 
 Tài liệu này là backlog đối chiếu code BE với chuẩn nghiệp vụ trong workspace [`Docs`](../../Docs/README.md). Contract gốc nằm ở [requirements](../../Docs/fire_evacuation_requirements.md), [workflows](../../Docs/fire-evacuation-training-workflows.md), [technology](../../Docs/fire-evacuation-training-technology.md), [schema SQL](../../Docs/fire_evacuation_schema.sql) và [ERD](../../Docs/fire_evacuation_erd.md). API guide mô tả hành vi source đang có; checklist này ghi phần còn phải sửa. Không coi tên entity, route hay thiết kế SQL là bằng chứng tính năng đã hoàn tất.
 
+## Tóm tắt trạng thái 12/10/2026
+
+- Mọi nhóm API trong backlog này đã có source và test HTTP/PostgreSQL (restricted runtime role, tenant isolation), trừ RAG-01.
+- **Ngoài phạm vi hiện tại:** RAG-01 / AI trả lời cho Trainee (`POST /api/ai/trainee/answer`) và adapter AI provider thật; không triển khai trong đợt này.
+- **Còn nghiệm thu provider/deployment, không phải thiếu API:** S3, Firebase, Mailgun, FCM, PayOS giao dịch thật, worker IFC/Unity/Mobile trên Azure.
+- Supabase đã áp toàn bộ migration tới `20261012200000_AddTrainingReleaseList` (85 migration) ngày 12/10/2026.
+- Nhãn P0/P1/GAP/VERIFY/LATER bên dưới là baseline 04/10; dòng "Trạng thái 12/10/2026" ở từng mục là trạng thái hiện hành.
+
 ## Kiểm chứng deployment bổ sung ngày 03/10/2026
 
 Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi baseline ghi kèm; bằng chứng mới về PayOS/deployment nằm tại [payos-deployment.md](payos-deployment.md).
@@ -55,13 +63,17 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 - Password verify/rehash ngoài lock, snapshot email/hash và lifecycle được kiểm lại dưới lock; login/session/audit và reset fence atomic. Middleware session authorization còn một SQL query, vẫn kiểm quyền live và family.
 - [Metric và giới hạn](auth-performance.md). Test không chứng minh p95 login Azure đã giảm; không thêm index trùng, giảm hash strength hay cache quyền. Google onboarding/link có source và regression, AUTH-02 chưa nghiệm thu Firebase/client/deployment.
 
-### DB-01 — P0 · GAP · Schema mapping
+### DB-01 — RÀ SOÁT CHUNG · Schema mapping
+
+- **Trạng thái 12/10/2026:** không còn API thiếu ở mục này. Test chạy trên lịch sử migration thật (không `EnsureCreated`) với restricted runtime role; Supabase đồng bộ tới `20261012200000`. Mapping v7 đầy đủ (bảng legacy `password_reset_tokens`) vẫn là việc dọn dẹp riêng, không chặn API. Nội dung dưới đây là baseline.
 
 - **Contract/current:** SQL v7 là đích; EF/migration/runtime chưa đồng bộ toàn bộ. `LocalPasswordReset` dùng `local_password_reset_tokens`, đã được v7 biểu diễn; EF vẫn giữ `password_reset_tokens` legacy. Chưa được suy môi trường hiện tại trống từ nhận định tháng 09; xem bằng chứng Supabase/PayOS phía trên.
 - **Sửa code:** Lập mapping entity/enum/query/grant sang v7, kiểm tra schema/dữ liệu từng môi trường và đường gọi reset trước khi xử lý bảng legacy. Dựng database test mới theo schema đích; không dùng `EnsureCreated` thay SQL/gates. Schema v7 đã syntax-load trên PostgreSQL disposable với stand-in pgvector theo contract Docs; cần kiểm actual extension/quyền/runtime riêng.
 - **Nghiệm thu:** Database test mới dựng được từ schema mục tiêu; enum/FK/constraint/grant và truy vấn task chạy đúng. Migration/backfill của môi trường khác phải dựa trên dữ liệu đã kiểm tra; không chạy destructive SQL lên DB dùng chung để kiểm chứng tài liệu.
 
-### AUTHZ-01 — P0 · GAP · Actor và tenant
+### AUTHZ-01 — RÀ SOÁT CHUNG · Actor và tenant
+
+- **Trạng thái 12/10/2026:** các gate SECURITY DEFINER kiểm actor/role/live session/tenant/lifecycle trong DB và có test tenant khác/role sai qua #46–#69. `Guid.Empty` còn lại trong controller chỉ là resource placeholder cho list/create, không tắt tenant check. Nội dung dưới đây là baseline.
 
 - **Contract/current:** Mọi thao tác phải kiểm actor, role, tenant và trạng thái resource ở BE. Một số luồng dùng `Guid.Empty` làm scope rộng hoặc dựa vào tenant claim mà chưa xác minh quan hệ resource.
 - **Sửa code:** Rà controller, handler và store; lấy actor từ phiên đã xác thực, xác minh tenant qua quan hệ trong DB và áp dụng permission matrix của Docs. Bỏ fallback ID rỗng có thể tắt tenant check.
@@ -69,7 +81,9 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 
 ## B. Tài khoản và xác thực
 
-### AUTH-01 — P1 · PARTIAL · Đăng ký local
+### AUTH-01 — CODE/TEST · Đăng ký local
+
+- **Trạng thái 12/10/2026:** OrganizationUser nhận `username` tùy chọn khi đăng ký (cùng luật Trainee, trùng 409 USERNAME_EXISTS, lỗi không consume proof). Còn nghiệm thu FE/inbox OTP trên bản deploy. Dòng "Còn thiếu" bên dưới là baseline.
 
 - **Contract/current:** FE nhập form trước → OTP → một nút gọi verify-otp rồi register với toàn bộ form + proof. `POST /api/auth/registration/request-otp` tạo challenge/job gửi mã nhưng không tạo identity; `POST /api/auth/resend-verification` gửi OTP mới sau cooldown và vô hiệu mã/proof cũ. Email đã có account trả 409 EMAIL_EXISTS + errors.email, không enqueue. Ba route register consume proof trong transaction tạo role/tenant server-owned và audit; form sai không consume proof. `/check-email/` là demo OTP, FE thật cần tích hợp riêng. `/verify-email` chỉ dành link pending legacy. Migration `20261003030000_AddNormalizedRegistrationEmail` bổ sung unique email trim/lowercase và guard legacy duplicates, không xóa/gộp dữ liệu; migration OTP/username cũ giữ nguyên. `/api/auth/register` là alias Trainee. [Test tay](registration-payos-manual-test.md); mức nghiệm thu DB/provider/FE phải ghi riêng.
 - **Còn thiếu:** username cá nhân tùy chọn cho đăng ký OrganizationUser. PATCH profile tổ chức đã có ở `OrganizationProfileController`; email verification, profile ETag, đổi username và avatar cần nghiệm thu provider/deployment riêng.
@@ -82,7 +96,9 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 - **Đã triển khai:** proof15 phút và replay24 giờ, Google-only Trainee/OrganizationUser; link explicit không auto-match email, không replacement/chiếm UID; lock lifecycle → UID → user.
 - **Nghiệm thu:** Kiểm tra UID mới/đã link, email local chưa link, token hết hạn, retry cùng/khác input và hai request đồng thời. Không tạo user/organization trùng hoặc đổi role/tenant tài khoản đã link.
 
-### AUTH-03 — P1 · PARTIAL · Profile, ETag và avatar
+### AUTH-03 — CODE/TEST · Profile, ETag và avatar
+
+- **Trạng thái 12/10/2026:** API profile/ETag/avatar đủ; AccountResponse có thêm `hasPassword`/`googleLinked`. Chỉ còn nghiệm thu S3/IAM/CORS thật.
 
 - **Contract/current:** `GET/PATCH /api/auth/me` trả/nhận ETag theo `profile_revision`; PATCH hỗ trợ full name, username, dob, gender và phone. `/api/me/avatar` có intent/complete/GET/delete, complete copy theo S3 ETag và không dùng chung final key giữa các request. `GET/PATCH /api/organizations/me` trả ETag và PATCH chỉ thay đổi field được gửi.
 - **✅ Code/test Avatar:** Candidate được lưu trước conditional copy; reserve/finalize chặn lease hết hạn theo clock DB sau khóa. Có PostgreSQL disposable test restricted role/RLS, rollback audit, cleanup/retry/protection, complete/delete cạnh tranh; SDK signing offline và stream S3 giả lập có test. [Test tay và giới hạn](avatar-manual-test.md).
@@ -95,7 +111,9 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 - **Sửa code:** Giữ reset và change là hai luồng riêng. Hoàn tất mapping sang schema đích; kiểm tra rollback, race login/reset và mọi refresh-token family. Không coi có worker là bằng chứng Mailgun production đã gửi thành công.
 - **Nghiệm thu:** Có PostgreSQL disposable regression cho restricted runtime role, reset replay/race/audit rollback, organization bị khóa, email legacy và change chờ khóa/family revoked. Migration database dùng chung và Mailgun/deployment thật cần nghiệm thu riêng; không đóng provider từ DB test.
 
-### AUTH-05 — P1 · VERIFY · FCM device token
+### AUTH-05 — CODE/TEST · FCM device token
+
+- **Trạng thái 12/10/2026:** `PUT/DELETE /api/auth/devices` có installation proof, family binding, rotate/revoke và test. Chỉ còn nghiệm thu FCM thật và lưu installation secret trên client.
 
 - **Contract/current:** AuthController có đăng ký/xóa device token và adapter FCM; v7 biểu diễn `device_installations` và binding user/session riêng. Code proof/family binding đã có, cần đối chiếu persistence/grants.
 - **Sửa code:** Rà ownership theo user/installation, rotate/revoke, validate token và che token khỏi log. FCM chỉ dùng push, không dùng để đăng nhập.
@@ -171,7 +189,8 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 - **✅ Kiểm chứng tự động:** SDK chữ ký offline, HTTP authorization/OpenAPI, PostgreSQL disposable cho replay/race/rollback/partial recovery, UTC month-end và grants executor. Kết quả cuối đợt ghi trong billing.md; không coi test mock là provider acceptance.
 - **✅ Kiểm chứng local/provider một phần:** Sáu migration PayOS và login/grants đã áp vào Supabase cho test local; tạo link/QR provider thật và replay cùng operation đạt. Chưa chuyển tiền.
 - **❌ Chưa nghiệm thu:** Runtime executor/worker deployment Azure, đăng ký webhook/probe PayOS, giao dịch thật với bank/provider và kiểm entitlement deployed. Không tick publish/playtest/training gate từ entitlement storage.
-- **❌ Backlog riêng:** Reminder 5 ngày, revenue, Upgrade, AI top-up/consume, hoàn tiền tự động, eInvoice và FE billing đầy đủ. Không lập AI invoice cuối kỳ hoặc overage debt.
+- **✅ Đã làm sau baseline:** Reminder 5 ngày (#68), revenue (#67), Upgrade, AI top-up/consume (#56), hủy báo giá/danh sách payment/enterprise workflow (#68).
+- **❌ Chưa làm:** hoàn tiền tự động, eInvoice và FE billing đầy đủ. Không lập AI invoice cuối kỳ hoặc overage debt.
 - **Nghiệm thu:** Return URL không ghi Paid; amount/currency/link sai không được apply; webhook/recovery/replay không cấp trùng; cùng payment có mốc kích hoạt chung, renewal nối kỳ đã mua; Paid và provisioning riêng biệt.
 ### NOTIFY-01 — SOURCE/HTTP/DB TESTED · Nhắc hết hạn
 
@@ -203,8 +222,10 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 
 - **Source:** package6/12 months, monthly price, learnerLimit and quota/policy configuration. Quote pins capacity/quota/policy and fixed UTC service interval before Issue. New/Renewal reservations prevent overlapping checkouts; Paid/Applied provisioning adds immutable entitlement and quota grant atomically from snapshot.
 - **Docker evidence:** actual migrations, constrained grants, snapshot/catalog mutation, quota coverage, ETag/Issue concurrency, reservation/cancellation/late payment, provisioning rollback and retries. Legacy checkout recovery remains; no new sales from incomplete legacy snapshots.
-- **Pending:** rollout of all API/worker instances and real provider evidence. Upgrade, top-up, AI reserve/consume and learner seat allocation are not implemented. See billing-v7-rollout.md and publish-billing-v7-manual-test.md.
-### RAG-01 — P1 · LATER · Learner-safe retrieval (FR-AI-03,05–06)
+- **Pending:** rollout of all API/worker instances and real provider evidence. Upgrade, top-up, AI reserve/consume and learner seat allocation were added in #56. See billing-v7-rollout.md and publish-billing-v7-manual-test.md.
+### RAG-01 — NGOÀI PHẠM VI HIỆN TẠI · Learner-safe retrieval (FR-AI-03,05–06)
+
+- **Trạng thái 12/10/2026:** không triển khai trong đợt này theo quyết định của nhóm; gồm `POST /api/ai/trainee/answer` và adapter AI provider thật. Nội dung dưới đây giữ làm yêu cầu khi mở lại.
 
 - **Contract/current:** V7 có `scenario_knowledge_documents`; chưa thấy index/retrieval authorization production tương ứng.
 - **Sửa code:** Chỉ index snapshot approved/published đúng hash gồm `name`, `objectives`, `instructions`; mỗi retrieval recheck current access/service trước vector retrieval. Loại draft/rubric/đáp án/private IFC. Learn pin post/version hợp lệ, Hidden có thể RAG, Deleted/Unpublished bị loại.
