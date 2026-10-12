@@ -518,14 +518,23 @@ Tất cả cần Editor. Đây là luồng tác giả thiết kế/thử kịch 
 | GET | `/api/scenarios/{scenarioId}` | Không body | 200 ScenarioDetailResponse |
 | POST | `/api/scenarios/{scenarioId}/draft` | revisionId | 201 {id} |
 | GET | `/api/scenario-drafts/{draftId}` | Không body | 200 ScenarioDraftResponse + ETag |
-| PUT | `/api/scenario-drafts/{draftId}` | State + If-Match | 204 + ETag |
+| PUT | `/api/scenario-drafts/{draftId}` | State + If-Match; versioned `fet3d.editor/1` hoặc legacy | 204 + ETag; 422 `EDITOR_SCHEMA_INVALID`/`EDITOR_SCHEMA_VERSION_UNSUPPORTED`; 400 `EDITOR_JSON_MALFORMED` |
 | POST | `/api/scenario-drafts/{draftId}/validate` | Không body | 200 ScenarioDraftValidationResponse |
-| POST | `/api/scenario-drafts/{draftId}/snapshot` | Không body | 201 {id} |
+| POST | `/api/scenario-drafts/{draftId}/snapshot` | Không body | 201 {id}; draft versioned không hợp lệ 422 `EDITOR_SCHEMA_INVALID` |
 | GET | `/api/scenarios/{scenarioId}/versions` | page, pageSize | 200 Page<ScenarioVersionSummaryResponse> |
 | GET | `/api/scenario-versions/{versionId}` | Không body | 200 ScenarioVersionDetailResponse |
-| GET | `/api/scenario-interactions/catalog` | Không body | 200 RuntimeCatalogDto[] |
+| GET | `/api/scenario-interactions/catalog` | Không body | 200 RuntimeCatalogDto[] kèm `capabilityContracts` hợp lệ |
 | POST | `/api/scenarios/{scenarioId}/playtests` | Optional buildingId; exact draft/version + Idempotency-Key; OrganizationUser | 201 PlaytestPreparation |
-| POST | `/api/playtests/{playtestId}/start` | runtimeVersion + Idempotency-Key; OrganizationUser owner | 200 PlaytestLaunch with 5-minute grant |
+| POST | `/api/playtests/{playtestId}/start` | runtimeVersion + Idempotency-Key; OrganizationUser launching session | 200 PlaytestLaunch with 5-minute grant, status Launching |
+| GET | `/api/playtests/{playtestId}` | Owner | 200 PlaytestStatusResponse |
+| POST | `/api/playtests/{playtestId}/handoffs` | Idempotency-Key; owner, Created | 201 PlaytestHandoffResponse (5-minute single-use code) |
+| POST | `/api/playtests/handoffs/redeem` | code; another session of the same owner | 200 PlaytestStatusResponse |
+| POST | `/api/playtests/{playtestId}/launch-grants` | Idempotency-Key; launching session, Launching | 200 PlaytestLaunch (next generation) |
+| POST | `/api/playtests/{playtestId}/launched` | generation | 200 PlaytestStatusResponse (Running) |
+| POST | `/api/playtests/{playtestId}/heartbeat` | No body | 200 PlaytestHeartbeatResponse |
+| POST | `/api/playtests/{playtestId}/events:batch` | events[] | 200 PlaytestEventsResponse |
+| POST | `/api/playtests/{playtestId}/complete` | lastEventSequence, summary + Idempotency-Key | 200 PlaytestStatusResponse (Completed) |
+| POST | `/api/playtests/{playtestId}/cancel` | Idempotency-Key | 200 PlaytestStatusResponse (Cancelled) |
 | POST | `/api/revisions/{revisionId}/reviews` | scenarioVersionId, validationRunId, reviewMessage, annotationSetId nullable | 201 {id} |
 
 ### 7.1 Scenario/draft
@@ -583,7 +592,17 @@ Snapshot không body, trả 201 id ScenarioVersion. Đây là snapshot state, kh
 
 Catalog trả mảng `{runtimeVersion, protocolVersion, manifestSchemaVersion, capabilities}`; capabilities là JSON. Dùng giá trị catalog/package thực tế khi tích hợp runtime.
 
-Playtest prepare/start use the session-bound PostgreSQL gate: exact accepted immutable PlaytestPackage, live OrganizationUser owner/tenant, runtime catalog compatibility and Building entitlement. Preparation assigns no entitlement and consumes no Trial; start does. See [requests, configuration and manual tests](playtest-manual-test.md). The legacy unrestricted store is not registered and refuses mutations without session proof.
+Playtest prepare/start use the session-bound PostgreSQL gate: exact accepted immutable PlaytestPackage, live OrganizationUser owner/tenant, runtime catalog compatibility and Building entitlement. Preparation assigns no entitlement and consumes no Trial; start does (once) and enters `Launching`; the runtime confirms `Running` with the current grant generation. Mobile handoff, grant reissue, heartbeat, telemetry, complete and cancel with error codes: [requests, configuration and manual tests](playtest-manual-test.md). The legacy unrestricted store is not registered and refuses mutations without session proof.
+
+### 7.4 Learner sessions và QR Building
+
+Trainee prepare/start/launched/heartbeat/events/complete/result/continuation/reconcile dưới `/api/training/...`, seat theo Trainee/Building/kỳ entitlement, continuation 7 ngày cho đồng bộ offline, kết quả rubric do server tính và QR Building (`/api/buildings/{id}/qr-codes`, `/api/qr/{qrToken}`): xem [learner-sessions.md](learner-sessions.md).
+
+Learn CMS công khai (`/api/learn/...`, bookmark của Trainee, quản trị `/api/admin/learn/...` với version bất biến, Hidden/Deleted/restore→Hidden, allowlist video YouTube/TikTok/Facebook) và Organization Library (`/api/library/...`, `/api/admin/library/...`): xem [learn-library.md](learn-library.md).
+
+Organization AI qua adapter FastAPI (`/api/ai/organization/...`, `/api/ai/requests/{id}`), policy reserve quota, registry nguồn tri thức và đối soát Admin (`/api/admin/ai/...`, `/api/admin/knowledge-sources`): xem [organization-ai.md](organization-ai.md). Mặc định tắt; chưa cấu hình adapter trả `503 AI_PROVIDER_UNAVAILABLE`.
+
+Analytics dữ liệu thật: `/api/organizations/me/analytics/training`, `/api/admin/analytics/training`, `/api/admin/analytics/revenue` (cohort theo thời điểm start, heartbeat server, kết quả server, doanh thu theo giao dịch Applied, AI usage đã settle): xem [learner-analytics.md](learner-analytics.md).
 
 ## 8. Release lifecycle và Building access
 
@@ -677,12 +696,21 @@ Cả ba operation yêu cầu Bearer Fire3D hợp lệ. Backend đọc lại acco
 | Method | Route | Request | Thành công |
 |---|---|---|---|
 | GET | `/api/buildings/{buildingId}/editor-preview?revisionId={revisionId}` | Bắt buộc chọn revision thuộc Building | 200 `EditorPreviewResponse` |
+| GET | `/api/revisions/{revisionId}/floors` | Không body | 200 `RevisionFloorsResponse` |
 | GET | `/api/revisions/{revisionId}/annotations` | Không có body | 200 snapshot + header `ETag` |
 | PUT | `/api/revisions/{revisionId}/annotations` | Body bên dưới; header `If-Match` lấy từ GET | 200 snapshot mới + `ETag` mới |
 
-Preview trả `buildingId`, `revisionId`, `revisionStatus`, `status` (`Ready`/`NotReady`), `artifactId`, `attemptId`, `sha256Hash`, `downloadUrl`, `expiresAt`, `coordinateTransform`, `floors`, `semanticMapping`. Không trả storage key. Signed GET URL tồn tại 5 phút, chỉ ký khi artifact `preview_glb` thuộc current attempt của Geometry job, job/attempt đều Succeeded và input hash khớp; hash SHA-256 và metadata bắt buộc hợp lệ. Chưa đủ dữ liệu trả 200 `NotReady`, URL/expiry null. Sai/missing GUID đầu vào trả 400. Trạng thái Ready không cấp quyền publish hoặc training.
+Preview trả `buildingId`, `revisionId`, `revisionStatus`, `status`, `artifactId`, `attemptId`, `sha256Hash`, `downloadUrl`, `expiresAt`, `coordinateTransform`, `floors`, `semanticMapping`, `schemaVersion`, `units`, `upAxis`, `handedness`. Không trả storage key. Chỉ xét artifact `preview_glb` thuộc current attempt của Geometry job, job/attempt Succeeded và input hash khớp.
 
-Worker contract hiện tại: metadata của chính artifact chứa `coordinateTransform` là mảng phẳng 16 số hữu hạn, `floors` là array, `semanticMapping` là object. Không ghép metadata từ revision khác. Worker chưa xuất các trường này thì preview vẫn NotReady. Backend chưa HEAD object S3 để xác minh file thực sự tồn tại; việc ký URL không chứng minh worker upload thành công.
+- `Ready`: metadata đạt contract [`fet3d.editor/1`](../contracts/editor/v1/README.md), hash SHA-256 hợp lệ, S3 HEAD xác nhận object và kích thước; trả signed GET URL 5 phút cùng tọa độ.
+- `NotReady`: chưa có artifact được chấp nhận, hoặc object chưa xác nhận được; URL/expiry null.
+- `ReprocessRequired`: có artifact nhưng metadata là legacy (không có `schemaVersion`) hoặc không đạt contract. Không ký URL và không trả `coordinateTransform`/`floors`/`semanticMapping`, để không phát tọa độ giả; cần chạy lại Geometry bằng worker xuất contract mới.
+
+Contract tọa độ: GLB đơn vị mét, Y-up, hệ tay phải; ma trận là 16 số hữu hạn, column-major, nhân column vector (`x' = m0·x + m4·y + m8·z + m12`), hàng 4 là `0,0,0,1` và phải khả nghịch. `coordinateTransform` là IFC→GLB, đã gồm đổi đơn vị và origin; `floors[].transform` là tọa độ cục bộ tầng→GLB. `semanticMapping` là mảng `{ifcGlobalId,nodeId,floorId,semanticType}`. JSON Schema, fixture và điểm mẫu nằm trong [contracts/editor/v1](../contracts/editor/v1/README.md).
+
+Worker gửi metadata Geometry có `schemaVersion` phải đạt schema trước khi output được nhận: sai trả `422 EDITOR_SCHEMA_INVALID` kèm `issues`, version lạ trả `422 EDITOR_SCHEMA_VERSION_UNSUPPORTED`. Metadata không có `schemaVersion` vẫn được nhận như legacy nhưng luôn bị đọc là `ReprocessRequired`. Sai/missing GUID đầu vào trả 400. Trạng thái Ready không cấp quyền publish hoặc training, và không phải nghiệm thu geometry QA hay Unity.
+
+`GET /api/revisions/{revisionId}/floors` dùng cùng artifact và cùng phân loại: `Ready` trả `floors` (ID ổn định trong revision, tên, `elevationMeters`, `ifcGlobalId` nếu có, `transform`), `NotReady`/`ReprocessRequired` trả `floors: null`. Không cần S3.
 
 Annotations GET khi chưa có bản lưu trả `version: 0`, `id: null`, `data: {"items":[]}`, header `ETag: "0"`. Snapshot có `revisionId`, `id`, `version`, `data`, `provenance`, `createdBy`, `createdAt`, `eTag`. PUT gửi:
 
@@ -733,6 +761,8 @@ Selected Task 6 source/HTTP/isolated PostgreSQL/runtime-fake evidence: [playtest
 | GET | `/api/scenario-versions/{versionId}/review` | 200 ScenarioReviewDetail; own-tenant OrganizationUser or PlatformAdmin |
 
 Review detail has nested `review` metadata (hashes, names, submitter/decision/reason), frozen `content`/`rubric`/objectives/instructions and `readiness`. Scenario version detail/list add reviewStatus/reviewId/rejectReason. Queue defaults20/max100, stable submittedAt/ID descending. Invalid filters400, foreign tenant404, revoked family401; no direct review-table SELECT for runtime. [Readiness and review contract](scenario-readiness.md).
+
+Upgrade (`purchaseAction: Upgrade`, one-time Admin price, same period/seats), AI top-up (`purpose: AIQuotaTopUp`), `GET /api/buildings/{id}/service-entitlement`, `GET /api/organizations/me/ai-quota[/grants]`, `GET /api/organizations/me/ai-usage`, the Admin organization equivalents, enterprise detail/status/quotation and expiry reminders are documented with error codes in the [rollout notes](billing-v7-rollout.md).
 
 See [current contract and migrations](billing-v7-rollout.md), [safe reporting DTOs](reporting-operations.md), and [Swagger manual acceptance](publish-billing-v7-manual-test.md). Package6/12-month pricing stays monthly; quotation pins service periods/capacity/quota before Issue. Publish uses paid approval/readiness/package gates when enabled; operational metrics are not learner/revenue analytics. Source/Docker tests do not establish shared DB/provider deployment.
 # Selected worker/API contract update

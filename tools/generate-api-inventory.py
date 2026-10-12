@@ -12,7 +12,7 @@ for path, item in sorted(doc["paths"].items()):
         auth = ", ".join(sorted({key for requirement in security for key in requirement})) or "Anonymous"
         headers = ", ".join(p["name"] for p in operation.get("parameters", []) if p.get("in") == "header" and p.get("required"))
         responses = ", ".join(sorted(operation.get("responses", {})))
-        rows.append(f"| {method.upper()} | {path} | {auth} | {headers or '—'} | {responses} |")
+        rows.append(f"| {method.upper()} | {path} | {auth} | {headers or 'None'} | {responses} |")
 text = f"""# Route inventory generated from OpenAPI
 
 {len(rows)} HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).

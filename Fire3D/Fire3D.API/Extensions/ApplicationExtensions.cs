@@ -15,6 +15,20 @@ public static class ApplicationExtensions
     {
         services.AddSingleton(configuration);
         services.AddScoped<Fire3D.Application.Billing.IBillingService,Fire3D.Infrastructure.Billing.BillingService>();
+        Fire3D.API.Authorization.LearnerContinuationAuthentication.AddLearnerContinuation(services,configuration);
+        services.AddScoped<Fire3D.Application.Learning.ILearnerSessions,Fire3D.Infrastructure.Learning.LearnerSessions>();
+        services.AddScoped<Fire3D.Application.Learning.IBuildingQrCodes,Fire3D.Infrastructure.Learning.BuildingQrCodes>();
+        services.AddScoped<Fire3D.Application.Content.IContentGates,Fire3D.Infrastructure.Content.ContentGates>();
+        services.AddOptions<Fire3D.Application.Ai.OrganizationAiOptions>().Bind(configuration.GetSection(Fire3D.Application.Ai.OrganizationAiOptions.Section))
+            .Validate(o => !o.Enabled || o.Configured, "OrganizationAi:BaseUrl must be an absolute HTTPS (or loopback) URL when enabled.")
+            .Validate(o => o.TimeoutSeconds is >= 5 and <= 600 && o.LeaseSeconds > o.TimeoutSeconds && o.LeaseSeconds <= 3600 && o.MaxAttempts is >= 1 and <= 10
+                && o.BackoffSeconds is >= 1 and <= 3600 && o.PollSeconds is >= 1 and <= 300, "OrganizationAi timing settings are out of range.")
+            .ValidateOnStart();
+        services.AddScoped<Fire3D.Application.Ai.IOrganizationAiGates,Fire3D.Infrastructure.Ai.OrganizationAiGates>();
+        services.AddScoped<Fire3D.Application.Ai.IAiProviderClient,Fire3D.Infrastructure.Ai.FastApiAiClient>();
+        services.AddHttpClient(Fire3D.Infrastructure.Ai.FastApiAiClient.ClientName);
+        services.AddSingleton<Fire3D.Infrastructure.Ai.OrganizationAiWorker>();
+        services.AddHostedService(sp => sp.GetRequiredService<Fire3D.Infrastructure.Ai.OrganizationAiWorker>());
         services.AddExceptionHandler<BillingExceptionHandler>();
         services.AddOptions<Fire3D.Application.Billing.PayosOptions>()
             .Bind(configuration.GetSection(Fire3D.Application.Billing.PayosOptions.Section))
@@ -30,9 +44,15 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Infrastructure.Billing.PayosExecutor>();
         services.AddScoped<Fire3D.Application.Billing.IPayosPayments,Fire3D.Infrastructure.Billing.PayosPayments>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.PayosRecoveryWorker>();
+        services.Configure<Fire3D.Infrastructure.Billing.BillingReminderOptions>(configuration.GetSection("BillingReminders"));
+        services.AddScoped<Fire3D.Infrastructure.Billing.BillingReminders>();
+        services.AddHostedService<Fire3D.Infrastructure.Billing.BillingReminderWorker>();
         services.AddScoped<IAdministrationStore, AdministrationStore>();
         services.AddScoped<Fire3D.Application.Reporting.IAuditQueries,Fire3D.Infrastructure.Reporting.AuditQueries>();
         services.AddScoped<Fire3D.Application.Reporting.IOperationsQueries,Fire3D.Infrastructure.Reporting.OperationsQueries>();
+        services.AddOptions<Fire3D.Application.Reporting.LearnerAnalyticsOptions>().Bind(configuration.GetSection(Fire3D.Application.Reporting.LearnerAnalyticsOptions.Section))
+            .Validate(o => o.ActiveSessionSeconds is >= 10 and <= 3600, "Analytics:ActiveSessionSeconds must be 10-3600.").ValidateOnStart();
+        services.AddScoped<Fire3D.Application.Reporting.ILearnerAnalytics,Fire3D.Infrastructure.Reporting.LearnerAnalytics>();
         services.AddScoped<AvatarStore>();
         services.AddScoped<IAvatarStore>(provider => provider.GetRequiredService<AvatarStore>());
         services.AddScoped<IAvatarCleanupStore>(provider => provider.GetRequiredService<AvatarStore>());

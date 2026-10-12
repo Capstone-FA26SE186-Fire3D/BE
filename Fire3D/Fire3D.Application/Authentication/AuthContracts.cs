@@ -21,7 +21,8 @@ public sealed record GoogleOnboardingDetails(string Token, DateTime ExpiresAt, s
 public sealed record ForgotPasswordRequest(string Email);
 public sealed record ResetPasswordRequest(Guid Token, string NewPassword);
 public sealed record AuthError(string Code, string Message, int Status,
-    IReadOnlyDictionary<string, string[]>? Errors = null, int? RetryAfterSeconds = null);
+    IReadOnlyDictionary<string, string[]>? Errors = null, int? RetryAfterSeconds = null,
+    IReadOnlyList<Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ScenarioDraftValidationIssue>? Issues = null);
 public sealed record AuthResult<T>(T? Value, AuthError? Error)
 {
     public bool IsSuccess => Error is null;

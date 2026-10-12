@@ -17,15 +17,15 @@ public partial class Session
 
     public Guid TraineeUserId { get; set; }
 
-    public Guid DeviceId { get; set; }
+    public Guid? DeviceId { get; set; }
 
-    public Guid QrCodeId { get; set; }
+    public Guid? QrCodeId { get; set; }
 
     public Guid StartKey { get; set; }
 
-    public string AppVersion { get; set; } = null!;
+    public string? AppVersion { get; set; }
 
-    public string UnityVersion { get; set; } = null!;
+    public string? UnityVersion { get; set; }
 
     public string ProtocolVersion { get; set; } = null!;
 

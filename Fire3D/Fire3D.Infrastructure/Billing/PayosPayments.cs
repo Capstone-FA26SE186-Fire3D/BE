@@ -71,12 +71,17 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
             await Lock("fet3d:payos:quotation:"+request.QuotationId,ct);
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM quotations WHERE id={request.QuotationId} FOR UPDATE",ct);
             var quote=await db.Quotations.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==request.QuotationId,ct)??throw Missing();Scope(actor,quote.OrganizationId);
-            if(quote.BillingPurpose!="BuildingService"||quote.Status!=QuotationStatus.Accepted||quote.ValidUntil<=Now||quote.Currency!="VND"||quote.TotalAmount<=0||quote.TotalAmount!=decimal.Truncate(quote.TotalAmount))
-                throw Conflict("QUOTATION_NOT_PAYABLE","An unexpired Accepted BuildingService quotation in VND is required.");
+            if(quote.BillingPurpose is not ("BuildingService" or "AIQuotaTopUp")||quote.Status!=QuotationStatus.Accepted||quote.ValidUntil<=Now||quote.Currency!="VND"||quote.TotalAmount<=0||quote.TotalAmount!=decimal.Truncate(quote.TotalAmount))
+                throw Conflict("QUOTATION_NOT_PAYABLE","An unexpired Accepted BuildingService or AIQuotaTopUp quotation in VND is required.");
             if(await db.PayosPaymentRequests.AnyAsync(x=>x.QuotationId==quote.Id&&x.Status==PaymentRequestStatus.Paid,ct))
                 throw Conflict("QUOTATION_ALREADY_PAID","The quotation is already paid.");
             var lines=await db.Set<QuotationBuildingItem>().AsNoTracking().Where(x=>x.QuotationId==quote.Id).ToListAsync(ct);
-            if(lines.Count==0||await db.Buildings.CountAsync(x=>lines.Select(l=>l.BuildingId).Contains(x.Id)&&x.OrganizationId==quote.OrganizationId&&x.IsActive&&x.DeletedAt==null,ct)!=lines.Count)
+            if(quote.BillingPurpose=="AIQuotaTopUp")
+            {
+                if(lines.Count>0||!await db.Set<QuotationTopUpItem>().AnyAsync(x=>x.QuotationId==quote.Id&&x.PolicyVersionId!=null&&x.QuotaUnits>0&&x.Amount>0&&x.StartsAt!=null&&x.EndsAt!=null,ct))
+                    throw Conflict("QUOTATION_V7_REQUIRED","Top-up checkout requires a complete issued top-up line.");
+            }
+            else if(lines.Count==0||await db.Buildings.CountAsync(x=>lines.Select(l=>l.BuildingId).Contains(x.Id)&&x.OrganizationId==quote.OrganizationId&&x.IsActive&&x.DeletedAt==null,ct)!=lines.Count)
                 throw Conflict("BUILDING_UNAVAILABLE","Every quotation Building must remain active in the organization.");
             op=(await db.Set<BillingCheckoutOperation>().AsNoTracking().SingleOrDefaultAsync(x=>x.QuotationId==quote.Id&&(x.Status=="Creating"||x.Status=="Ready"||x.Status=="NeedsReconcile"),ct))!;
             var isNew=op is null;
@@ -97,7 +102,7 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
             if(isNew)
             {
                 try{await db.Database.ExecuteSqlInterpolatedAsync($"SELECT reserve_payos_service_periods({op.Id},{actorId},{family})",ct);}
-                catch(Npgsql.PostgresException ex) when(ex.SqlState=="P0001"&&ex.MessageText is "PAYOS_SERVICE_PERIOD_RESERVED" or "PAYOS_SERVICE_PERIOD_INVALID")
+                catch(Npgsql.PostgresException ex) when(ex.SqlState=="P0001"&&ex.MessageText is "PAYOS_SERVICE_PERIOD_RESERVED" or "PAYOS_SERVICE_PERIOD_INVALID" or "PAYOS_UPGRADE_RESERVED" or "PAYOS_UPGRADE_BASELINE_CHANGED")
                 {throw Conflict(ex.MessageText,"The quoted service period is unavailable. Create a current quotation.");}
             }
             await tx.CommitAsync(ct);

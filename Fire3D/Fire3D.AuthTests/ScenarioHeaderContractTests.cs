@@ -14,7 +14,7 @@ public sealed class ScenarioHeaderContractTests
     {
         var sender=ResetProxy.For<ISender>((_,_)=>throw new Exception("Invalid header must not reach mutation"));
         var controller=new ScenariosController(sender, ResetProxy.For<Fire3D.Application.Scenarios.IScenarioReviewQueries>((_,_)=>throw new Exception("Review reads must not run for draft mutations"))){ControllerContext=new ControllerContext{HttpContext=new DefaultHttpContext{User=new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity([new System.Security.Claims.Claim("sub",Guid.NewGuid().ToString())],"test"))}}};
-        var result=await controller.UpdateScenarioDraft(Guid.NewGuid(),new ScenarioDraftStateDto([],[],new(0,60,0),new([])),header,default);
+        var result=await controller.UpdateScenarioDraft(Guid.NewGuid(),System.Text.Json.JsonSerializer.SerializeToNode(new ScenarioDraftStateDto([],[],new(0,60,0),new([]))),header,default);
         Assert.Equal(status,Assert.IsType<ObjectResult>(result).StatusCode);
     }
 }

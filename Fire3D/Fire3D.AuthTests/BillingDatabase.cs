@@ -77,7 +77,8 @@ internal sealed class BillingDatabase : IAsyncDisposable
                     foreach (var operation in new Fire3D.Infrastructure.Migrations.AddBillingV7QuotationSnapshots().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
                         await result.Sql(operation.Sql);
                     if(applyPayos)
-                        foreach (var operation in new Fire3D.Infrastructure.Migrations.AddBillingV7Provisioning().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
+                        foreach (var operation in new Fire3D.Infrastructure.Migrations.AddBillingV7Provisioning().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>()
+                            .Concat(new Fire3D.Infrastructure.Migrations.AddBillingUpgradeTopUp().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>()))
                             await result.Sql(operation.Sql);
                 }
             }

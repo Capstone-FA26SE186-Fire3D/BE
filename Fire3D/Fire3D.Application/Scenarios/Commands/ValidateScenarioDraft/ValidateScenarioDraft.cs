@@ -12,7 +12,7 @@ public sealed record ScenarioDraftValidationResponse(Guid DraftId, uint Version,
 public sealed record ValidateScenarioDraftCommand(Guid ActorId, Guid DraftId)
     : IRequest<AuthResult<ScenarioDraftValidationResponse>>;
 
-public sealed class ValidateScenarioDraftCommandHandler(IAuthStore accounts, IScenarioReadStore store)
+public sealed class ValidateScenarioDraftCommandHandler(IAuthStore accounts, IScenarioReadStore store, Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog.IRuntimeCatalogReadStore catalog)
     : IRequestHandler<ValidateScenarioDraftCommand, AuthResult<ScenarioDraftValidationResponse>>
 {
     public async Task<AuthResult<ScenarioDraftValidationResponse>> Handle(ValidateScenarioDraftCommand request, CancellationToken ct)
@@ -26,9 +26,33 @@ public sealed class ValidateScenarioDraftCommandHandler(IAuthStore accounts, ISc
         if (draft is null)
             return AuthResult<ScenarioDraftValidationResponse>.Fail("NOT_FOUND", "Scenario draft not found or access denied.", 404);
 
-        var issues = ScenarioDraftStructuralValidator.Validate(draft.State).Concat(await store.ValidateReferencesAsync(draft.RevisionId,draft.State,ct)).ToList();
+        var issues = await VersionedDraftValidation.ValidateAsync(draft.State, draft.RevisionId, store, catalog, ct)
+            ?? ScenarioDraftStructuralValidator.Validate(draft.State).Concat(await store.ValidateReferencesAsync(draft.RevisionId,draft.State,ct)).ToList();
         return AuthResult<ScenarioDraftValidationResponse>.Ok(
             new ScenarioDraftValidationResponse(draft.Id, draft.Version, issues.Count == 0, issues));
+    }
+}
+
+public static class VersionedDraftValidation
+{
+    /// <summary>
+    /// Complete validation for a versioned draft: schema, completeness and capability parameters in .NET, then revision
+    /// references (pinned Geometry, floors, anchors, runtime contracts) by the database function the snapshot gate reuses.
+    /// Returns null for legacy drafts so the historical validator stays unchanged.
+    /// </summary>
+    public static async Task<List<ScenarioDraftValidationIssue>?> ValidateAsync(System.Text.Json.Nodes.JsonNode state, Guid revisionId,
+        IScenarioReadStore store, Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog.IRuntimeCatalogReadStore catalog, CancellationToken ct)
+    {
+        var version = Fire3D.Application.Editor.EditorContract.DeclaredVersion(state);
+        if (version is null) return null;
+        if (!Fire3D.Application.Editor.EditorContract.IsSupported(version))
+            return [new("EDITOR_SCHEMA_VERSION_UNSUPPORTED", "$.schemaVersion", "Schema version is not supported.")];
+        var runtime = state["runtimeVersion"] is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var text) ? await catalog.GetActiveRuntimeAsync(text, ct) : null;
+        var issues = Fire3D.Application.Editor.ScenarioStateV1Validator.ValidateComplete(state,
+            Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog.RuntimeCatalogContracts.For(runtime)).ToList();
+        foreach (var issue in await store.ValidateReferencesAsync(revisionId, state, ct))
+            if (!issues.Any(x => x.Code == issue.Code && x.Path == issue.Path)) issues.Add(issue);
+        return issues;
     }
 }
 

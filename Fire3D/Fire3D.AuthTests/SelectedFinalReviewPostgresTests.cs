@@ -16,18 +16,18 @@ using Xunit;
 namespace Fire3D.AuthTests;
 public sealed partial class AuthIntegrationTests
 {
- private async Task<(Guid Revision,Guid Job,Guid Run)> FinalReviewGeometry(string outcome,object[] issues)
+ private async Task<(Guid Revision,Guid Job,Guid Run)> FinalReviewGeometry(string outcome,object[] issues,object? metadata=null)
  {
   var revision=await SeedVerifiedIfcRevision();Guid job=default,run=default;
   await WithProcessingRuntime(async(api,worker)=>
   {
    await using var db=BuildingContext(api);
    var store=new ProcessingRuntimeStore(db,new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{["ConnectionStrings:ProcessingExecutor"]=worker}).Build());
-   var requested=await store.RequestAsync(adminId,revision,"geometry-review",default);Assert.True(requested.IsSuccess,requested.Error?.Code);job=requested.Value;
+   var requested=await store.RequestAsync(adminId,revision,"geometry-review-"+revision,default);Assert.True(requested.IsSuccess,requested.Error?.Code);job=requested.Value;
    var delivery=await store.ExecuteAsync("Claim",null,null,null,default);
    var claimed=await store.ExecuteAsync("Claim",job,WorkerInput(new{eventKey=delivery.GetProperty("eventKey").GetString(),payloadHash=delivery.GetProperty("payloadHash").GetString(),inputHash=IfcHash,toolchainVersion="fake-ifc-review"}),default);Assert.True(claimed.IsSuccess,claimed.Error?.Code);
    var attemptId=claimed.Value.GetProperty("attemptId").GetGuid();var leaseToken=claimed.Value.GetProperty("leaseToken").GetGuid();
-   var output=new{artifactType="preview_glb",objectKey=claimed.Value.GetProperty("outputPrefix").GetString()+"preview.glb",sha256Hash=IfcHash,sizeBytes=100L,schemaVersion="1",metadata=new{objectAnchors=new[]{"door-1"}},validatorVersion="fake-review",outcome,issues};
+   var output=new{artifactType="preview_glb",objectKey=claimed.Value.GetProperty("outputPrefix").GetString()+"preview.glb",sha256Hash=IfcHash,sizeBytes=100L,schemaVersion="1",metadata=metadata??new{objectAnchors=new[]{"door-1"}},validatorVersion="fake-review",outcome,issues};
    var registered=await store.ExecuteAsync("Output",job,WorkerInput(new{attemptId,leaseToken,output}),default);Assert.True(registered.IsSuccess,registered.Error?.Code);
    var completed=await store.ExecuteAsync("Complete",job,WorkerInput(new{attemptId,leaseToken,outputHash=registered.Value.GetProperty("outputHash").GetString()}),default);Assert.True(completed.IsSuccess,completed.Error?.Code);run=completed.Value.GetProperty("validationRunId").GetGuid();
   });

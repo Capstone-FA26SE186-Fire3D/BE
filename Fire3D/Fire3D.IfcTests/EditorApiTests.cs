@@ -36,14 +36,18 @@ public sealed class EditorApiTests
             .Handle(new(actor.Id,Guid.NewGuid(),Guid.NewGuid()),default)).Error?.Status);
     }
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Only_complete_metadata_is_signed(bool complete)
+    [InlineData("legacy","ReprocessRequired",0)]
+    [InlineData("invalid","ReprocessRequired",0)]
+    [InlineData("v1","Ready",1)]
+    public async Task Only_valid_versioned_metadata_is_signed_and_returns_coordinates(string kind,string status,int signs)
     {
         var actor=RevisionAccessTests.Actor(UserRole.OrganizationUser);
+        var metadata=kind switch {
+            "legacy"=>JsonSerializer.SerializeToElement(new{coordinateTransform=new int[16],floors=Array.Empty<object>(),semanticMapping=new{}}),
+            "invalid"=>JsonSerializer.SerializeToElement(new{schemaVersion="fet3d.editor/1",units="m"}),
+            _=>Fire3D.Tests.Shared.EditorContractFixtures.GeometryElement()};
         var source=new EditorPreviewSource(Guid.NewGuid(),Guid.NewGuid(),"Processing",Guid.NewGuid(),Guid.NewGuid(),
-            "private/key",new string('a',64),JsonSerializer.SerializeToElement(complete?new int[16]:new int[3]),
-            JsonSerializer.SerializeToElement(Array.Empty<object>()),JsonSerializer.SerializeToElement(new {}),100);
+            "private/key",new string('a',64),metadata,100);
         var store=StubProxy.For<IEditorPreviewStore>((_,args)=> {
             Assert.Equal(actor.OrganizationId,args[2]); return Task.FromResult<EditorPreviewSource?>(source);
         });
@@ -51,8 +55,10 @@ public sealed class EditorApiTests
         var signer=StubProxy.For<IPreviewDownloadSigner>((_,args)=> {calls++;Assert.Equal(100L,args[1]);return Task.FromResult<SignedDownload?>(new("https://example.test/signed",DateTimeOffset.UtcNow.AddMinutes(5)));});
         var result=await new GetEditorPreviewHandler(RevisionAccessTests.Accounts(actor),store,signer)
             .Handle(new(actor.Id,source.BuildingId,source.RevisionId),default);
-        Assert.Equal(complete?"Ready":"NotReady",result.Value?.Status);
-        Assert.Equal(complete?1:0,calls);
+        Assert.Equal(status,result.Value?.Status);
+        Assert.Equal(signs,calls);
+        Assert.Equal(kind=="v1",result.Value!.CoordinateTransform is not null);
+        Assert.Equal(kind=="v1"?"fet3d.editor/1":null,result.Value.SchemaVersion);
     }
 }
 
@@ -89,6 +95,8 @@ public sealed class EditorApiSqlTests(IfcReadDatabase database) : IClassFixture<
         Assert.Null(await preview.ReadAsync(database.Building,database.Revision,database.OtherTenant,default));
         Assert.Null(await preview.ReadAsync(Guid.NewGuid(),database.Revision,database.Tenant,default));
         await db.Database.ExecuteSqlRawAsync("UPDATE processing_jobs SET status='Succeeded'; UPDATE processing_job_attempts SET status='Succeeded'; UPDATE revision_artifacts SET storage_key='private/preview.glb'");
+        Assert.Null((await preview.ReadByRevisionAsync(database.Revision,database.OtherTenant,default)));
+        Assert.Equal(database.Artifact,(await preview.ReadByRevisionAsync(database.Revision,database.Tenant,default))!.ArtifactId);
         Assert.Equal(database.Artifact,(await preview.ReadAsync(database.Building,database.Revision,database.Tenant,default))!.ArtifactId);
         await db.Database.ExecuteSqlRawAsync("UPDATE processing_job_attempts SET input_hash='mismatch'");
         Assert.Null((await preview.ReadAsync(database.Building,database.Revision,database.Tenant,default))!.ArtifactId);

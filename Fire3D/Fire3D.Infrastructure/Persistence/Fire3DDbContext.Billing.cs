@@ -63,6 +63,16 @@ public partial class Fire3DDbContext
         model.Entity<OrganizationNotification>();
         model.Entity<NotificationDelivery>();
         model.Entity<EnterpriseQuoteRequest>();
+        model.Entity<EnterpriseQuoteRequest>().Property(x=>x.Revision).HasDefaultValue(1L).IsConcurrencyToken();
+        model.Entity<QuotationBuildingItem>().Property(x=>x.PricingBasis).HasDefaultValue("Monthly");
+        model.Entity<QuotationBuildingItem>().HasOne<ServiceEntitlement>().WithMany().HasForeignKey(x=>x.UpgradeEntitlementId).OnDelete(DeleteBehavior.Restrict);
+        model.Entity<QuotationTopUpItem>(e=>{
+            e.HasIndex(x=>x.QuotationId).IsUnique();
+            e.HasIndex(x=>x.LineProvisioningKey).IsUnique();
+            e.HasOne<Quotation>().WithMany().HasForeignKey(x=>x.QuotationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Organization>().WithMany().HasForeignKey(x=>x.OrganizationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<BillingQuotaPolicy>().WithMany().HasForeignKey(x=>x.PolicyVersionId).OnDelete(DeleteBehavior.Restrict);
+        });
         model.Entity<BillingCommandReceipt>().HasIndex(x=>new {x.ActorId,x.Operation,x.IdempotencyKey}).IsUnique();
         model.Entity<BillingCheckoutOperation>().HasIndex(x=>new {x.ActorId,x.IdempotencyKey}).IsUnique();
         model.Entity<BillingCheckoutOperation>().HasIndex(x=>x.OrderCode).IsUnique();

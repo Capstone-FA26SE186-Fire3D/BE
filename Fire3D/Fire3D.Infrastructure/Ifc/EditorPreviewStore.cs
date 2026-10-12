@@ -9,7 +9,13 @@ namespace Fire3D.Infrastructure.Ifc;
 
 public sealed class EditorPreviewStore(Fire3DDbContext db) : IEditorPreviewStore
 {
-    public async Task<EditorPreviewSource?> ReadAsync(Guid buildingId, Guid revisionId, Guid? tenant, CancellationToken ct)
+    public Task<EditorPreviewSource?> ReadAsync(Guid buildingId, Guid revisionId, Guid? tenant, CancellationToken ct) =>
+        QueryAsync(revisionId, buildingId, tenant, ct);
+
+    public Task<EditorPreviewSource?> ReadByRevisionAsync(Guid revisionId, Guid? tenant, CancellationToken ct) =>
+        QueryAsync(revisionId, null, tenant, ct);
+
+    private async Task<EditorPreviewSource?> QueryAsync(Guid revisionId, Guid? buildingId, Guid? tenant, CancellationToken ct)
     {
         await db.Database.OpenConnectionAsync(ct);
         try
@@ -17,8 +23,7 @@ public sealed class EditorPreviewStore(Fire3DDbContext db) : IEditorPreviewStore
             await using var cmd = new NpgsqlCommand("""
                 SELECT jsonb_build_object('buildingId', b.id, 'revisionId', r.id, 'revisionStatus', r.status,
                     'artifactId', x.id, 'attemptId', x.attempt_id, 'storageKey', x.storage_key,
-                    'sha256Hash', x.sha256_hash, 'sizeBytes', x.size_bytes, 'coordinateTransform', x.metadata->'coordinateTransform',
-                    'floors', x.metadata->'floors', 'semanticMapping', x.metadata->'semanticMapping')::text
+                    'sha256Hash', x.sha256_hash, 'sizeBytes', x.size_bytes, 'metadata', x.metadata)::text
                 FROM public.revisions r
                 JOIN public.buildings b ON b.id=r.building_id
                 JOIN public.organizations o ON o.id=b.organization_id
@@ -32,12 +37,12 @@ public sealed class EditorPreviewStore(Fire3DDbContext db) : IEditorPreviewStore
                         AND a.attempt_id=j.current_attempt_id
                     ORDER BY a.created_at DESC, a.id LIMIT 1
                 ) x ON true
-                WHERE r.id=@revision AND b.id=@building
+                WHERE r.id=@revision AND (@building IS NULL OR b.id=@building)
                     AND b.is_active AND b.deleted_at IS NULL AND o.is_active AND o.deleted_at IS NULL
                     AND (@tenant IS NULL OR b.organization_id=@tenant)
                 """, (NpgsqlConnection)db.Database.GetDbConnection());
             cmd.Parameters.AddWithValue("revision", revisionId);
-            cmd.Parameters.AddWithValue("building", buildingId);
+            cmd.Parameters.Add(new NpgsqlParameter("building", NpgsqlDbType.Uuid) { Value = (object?)buildingId ?? DBNull.Value });
             cmd.Parameters.Add(new NpgsqlParameter("tenant", NpgsqlDbType.Uuid) { Value = (object?)tenant ?? DBNull.Value });
             var json = await cmd.ExecuteScalarAsync(ct);
             return json is string value ? JsonSerializer.Deserialize<EditorPreviewSource>(value, new JsonSerializerOptions(JsonSerializerDefaults.Web)) : null;
