@@ -26,7 +26,9 @@ public sealed record RevisionConfirmation(Guid ReviewId, Guid ScenarioVersionId,
 /// GEOMETRY_VALIDATION_REQUIRED, QA_NOT_PASSED, QA_BLOCKERS_PRESENT.</summary>
 public sealed record RevisionReadiness(Guid RevisionId, Guid BuildingId, string RevisionStatus, ReadinessJob? GeometryJob,
     Guid? ValidationRunId, string? Outcome, long BlockerCount, IReadOnlyDictionary<string, long> IssueCounts, bool ReadyForScenario,
-    IReadOnlyList<string> Missing, IReadOnlyList<RevisionConfirmation> Confirmations);
+    IReadOnlyList<string> Missing, IReadOnlyList<RevisionConfirmation> Confirmations, IReadOnlyList<RevisionJobSummary>? LatestJobs = null);
+/// <summary>Newest processing job of each kind on the revision. A Succeeded job is not a QA pass; read the run outcome.</summary>
+public sealed record RevisionJobSummary(string Kind, Guid JobId, string Status, Guid? ScenarioVersionId, DateTimeOffset CreatedAt);
 
 public interface IScenarioReviewQueries
 {

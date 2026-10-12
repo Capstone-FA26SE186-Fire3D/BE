@@ -33,6 +33,23 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
+    /// <summary>Dry run: validates an unsaved state against the draft's revision without storing it or changing the ETag.</summary>
+    /// <remarks>Body is the same state a PUT would send. Runs the PUT shape check and the full validation; shape problems come back as
+    /// issues (200, isValid=false) instead of 422. Response: draftId, storedVersion (unchanged), stateHash of the checked state, isValid, issues.
+    /// Malformed JSON 400 EDITOR_JSON_MALFORMED; non-object body 400; draft outside scope 404.</remarks>
+    [HttpPost("/api/scenario-drafts/{draftId:guid}/validate-state")]
+    [Fire3D.API.OpenApi.EditorJsonBody]
+    [ProducesResponseType<Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ScenarioDraftDryRunResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> ValidateScenarioDraftState(Guid draftId, [FromBody] System.Text.Json.Nodes.JsonNode? state, CancellationToken ct)
+    {
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ValidateScenarioDraftStateCommand(User.GetActorId(), draftId, state), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
+    }
+
     /// <summary>Loads one immutable scenario snapshot with its complete configuration.</summary>
     [HttpGet("/api/scenario-versions/{versionId:guid}")]
     [ProducesResponseType<Fire3D.Application.Scenarios.ScenarioVersionDetailResponse>(200)]

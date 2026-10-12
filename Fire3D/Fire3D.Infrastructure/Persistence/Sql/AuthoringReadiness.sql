@@ -79,6 +79,8 @@ BEGIN
   'validationRunId',run.id,'outcome',run.outcome,'blockerCount',COALESCE(blockers,0),
   'issueCounts',COALESCE((SELECT jsonb_object_agg(severity,n) FROM (SELECT severity,count(*) n FROM revision_issues WHERE validation_run_id=run.id GROUP BY severity) c),'{}'),
   'readyForScenario',COALESCE(rv.status='ReadyForScenario' AND run.outcome='Passed' AND blockers=0,false),'missing',to_jsonb(missing),
+  'latestJobs',COALESCE((SELECT jsonb_agg(jsonb_build_object('kind',k.kind,'jobId',k.id,'status',k.status,'scenarioVersionId',k.scenario_version_id,'createdAt',k.created_at) ORDER BY k.kind)
+    FROM (SELECT DISTINCT ON (kind) * FROM processing_jobs WHERE revision_id=rv.id ORDER BY kind,created_at DESC,id DESC) k),'[]'),
   'confirmations',COALESCE((SELECT jsonb_agg(jsonb_build_object('reviewId',x.id,'scenarioVersionId',x.scenario_version_id,'validationRunId',x.validation_run_id,'reviewedAt',x.reviewed_at) ORDER BY x.reviewed_at DESC,x.id DESC)
     FROM (SELECT * FROM revision_reviews WHERE revision_id=rv.id AND action='ConfirmForTraining' ORDER BY reviewed_at DESC,id DESC LIMIT 50) x),'[]')));
 END $$;

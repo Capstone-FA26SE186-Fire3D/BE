@@ -125,6 +125,26 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
     /// Revision hợp lệ chưa có dữ liệu trả items rỗng; revision không tồn tại/ngoài scope trả 404.
     /// Mỗi issue có validationRunId,processingAttemptId,artifactId,severity,status,evidence và isCurrentAttempt. Kết quả lịch sử được gắn isCurrentAttempt=false.
     /// </remarks>
+    /// <summary>Lịch sử validation run của một revision (mọi attempt), lọc theo jobId tùy chọn.</summary>
+    /// <remarks>
+    /// OrganizationUser đúng tenant hoặc PlatformAdmin. page mặc định 1; pageSize 20, tối đa 100; mới nhất trước.
+    /// isCurrent=true chỉ cho attempt hiện hành đã accept của job Succeeded. Run lịch sử chỉ để đọc: không bao giờ được dùng
+    /// cho confirm-for-training, release hay publish. Revision ngoài scope trả 404.
+    /// </remarks>
+    [HttpGet("revisions/{revisionId:guid}/validation-runs")]
+    [ProducesResponseType<PageResponse<ValidationRunHistoryItem>>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<ActionResult<PageResponse<ValidationRunHistoryItem>>> ListValidationRuns(Guid revisionId, [FromQuery] Guid? jobId = null,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        var result = await sender.Send(new ListValidationRunsQuery(User.GetActorId(), revisionId, jobId, page, pageSize), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
+            title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+    }
+
     [HttpGet("revisions/{revisionId:guid}/issues")]
     [ProducesResponseType<PageResponse<RevisionIssueResponse>>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
