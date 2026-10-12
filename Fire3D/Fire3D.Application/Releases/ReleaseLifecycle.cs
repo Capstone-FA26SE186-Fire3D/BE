@@ -51,12 +51,21 @@ public sealed record ReleaseResponse(
     DateTime? RevokedAt,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    ReleasePackageResponse Package);
+    ReleasePackageResponse Package,
+    ReleaseEntitlementSummary? Entitlement = null);
+
+/// <summary>The Building service period covering now (paid or trial); null when the Building has none. Publish re-checks a paid period.</summary>
+public sealed record ReleaseEntitlementSummary(Guid Id, string Status, DateTime StartsAt, DateTime EndsAt, bool Paid, int? LearnerLimit);
+public sealed record ReleaseSummaryResponse(Guid Id, Guid BuildingId, Guid ScenarioId, Guid ScenarioVersionId, int VersionNumber, string ScenarioName,
+    string Status, DateTime CreatedAt, DateTime? PublishedAt, DateTime? RevokedAt);
+public sealed record ReleaseFilter(Guid? BuildingId = null, Guid? ScenarioId = null, string? Status = null, int Page = 1, int PageSize = 20);
+public sealed record ListReleasesQuery(Guid ActorId, ReleaseFilter Filter) : IRequest<AuthResult<Fire3D.Application.Administration.PageResponse<ReleaseSummaryResponse>>>;
 
 public interface IReleaseStore
 {
     Task<AuthResult<ReleaseResponse>> BuildAsync(Guid actorId, Guid? organizationId, BuildReleaseRequest request, CancellationToken ct, string? key = null, Guid? family = null);
     Task<ReleaseResponse?> GetAsync(Guid releaseId, Guid? organizationId, CancellationToken ct);
+    Task<Fire3D.Application.Administration.PageResponse<ReleaseSummaryResponse>> ListAsync(Guid? organizationId, ReleaseFilter filter, CancellationToken ct);
     Task<AuthResult<ReleaseResponse>> PublishAsync(Guid actorId, Guid releaseId, Guid? organizationId, CancellationToken ct, Guid? family = null, string? key = null);
     Task<AuthResult<bool>> RevokeAsync(Guid actorId, Guid releaseId, Guid? organizationId, string reason, CancellationToken ct, Guid? family = null);
 }
@@ -75,6 +84,24 @@ public sealed class BuildReleaseHandler(IAuthStore accounts, IReleaseStore store
         if (!ReleaseValidation.IsValid(command.Request))
             return AuthResult<ReleaseResponse>.Fail("VALIDATION_ERROR", "Release package metadata is invalid.", 400);
         return await store.BuildAsync(command.ActorId, scope.Value!.OrganizationId, command.Request, ct, command.Key, command.Family);
+    }
+}
+
+public sealed class ListReleasesHandler(IAuthStore accounts, IReleaseStore store)
+    : IRequestHandler<ListReleasesQuery, AuthResult<Fire3D.Application.Administration.PageResponse<ReleaseSummaryResponse>>>
+{
+    public async Task<AuthResult<Fire3D.Application.Administration.PageResponse<ReleaseSummaryResponse>>> Handle(ListReleasesQuery query, CancellationToken ct)
+    {
+        var scope = await IfcAccess.ResolveAsync(accounts, query.ActorId, ct);
+        if (!scope.IsSuccess) return new(default, scope.Error);
+        var filter = query.Filter;
+        var errors = new Dictionary<string, string[]>();
+        if (filter.Status is not null && !Enum.TryParse<Fire3D.Domain.Enums.ReleaseStatus>(filter.Status, false, out _)) errors["status"] = ["Use Built, Published or Revoked."];
+        if (filter.BuildingId == Guid.Empty) errors["buildingId"] = ["Use a non-empty Building id."];
+        if (filter.ScenarioId == Guid.Empty) errors["scenarioId"] = ["Use a non-empty scenario id."];
+        if (filter.Page is < 1 or > 100000 || filter.PageSize is < 1 or > 100) errors["page"] = ["page must be 1-100000 and pageSize 1-100."];
+        if (errors.Count > 0) return AuthResult<Fire3D.Application.Administration.PageResponse<ReleaseSummaryResponse>>.Fail("VALIDATION_ERROR", "Release filters are invalid.", 400, errors);
+        return AuthResult<Fire3D.Application.Administration.PageResponse<ReleaseSummaryResponse>>.Ok(await store.ListAsync(scope.Value!.OrganizationId, filter, ct));
     }
 }
 

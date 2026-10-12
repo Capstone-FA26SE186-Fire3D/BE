@@ -87,8 +87,39 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
         if (organizationId.HasValue) query = query.Where(s => s.OrganizationId == organizationId.Value);
 
         return query.Where(s => s.Building.IsActive && s.Building.DeletedAt == null)
-            .Select(s => new ScenarioDetailResponse(s.Id, s.BuildingId, s.OrganizationId, s.Name, s.CreatedAt))
+            .Select(s => new ScenarioDetailResponse(s.Id, s.BuildingId, s.OrganizationId, s.Name, s.CreatedAt,
+                db.ScenarioDrafts.Where(d => d.ScenarioId == s.Id).OrderByDescending(d => d.UpdatedAt).ThenByDescending(d => d.DraftNumber).Select(d => (Guid?)d.Id).FirstOrDefault(),
+                db.ScenarioDrafts.Where(d => d.ScenarioId == s.Id).OrderByDescending(d => d.UpdatedAt).ThenByDescending(d => d.DraftNumber).Select(d => (uint?)d.Version).FirstOrDefault(),
+                db.ScenarioDrafts.Count(d => d.ScenarioId == s.Id),
+                s.ScenarioVersions.OrderByDescending(v => v.VersionNumber).Select(v => (Guid?)v.Id).FirstOrDefault(),
+                s.ScenarioVersions.OrderByDescending(v => v.VersionNumber).Select(v => (int?)v.VersionNumber).FirstOrDefault()))
             .SingleOrDefaultAsync(ct);
+    }
+
+    private sealed record DraftRow(Guid Id, Guid ScenarioId, Guid RevisionId, int DraftNumber, string Source, string? SchemaVersion,
+        long Version, Guid CreatedBy, DateTime CreatedAt, DateTime UpdatedAt, Guid? LastEditedById, string? LastEditedByName);
+
+    public async Task<PageResponse<ScenarioDraftSummaryResponse>?> ListScenarioDraftsAsync(Guid scenarioId, Guid? organizationId, int page, int pageSize, CancellationToken ct)
+    {
+        var scenarioExists = await db.Scenarios.AsNoTracking().AnyAsync(s =>
+            s.Id == scenarioId && s.Building.IsActive && s.Building.DeletedAt == null
+            && (!organizationId.HasValue || s.OrganizationId == organizationId.Value), ct);
+        if (!scenarioExists) return null;
+        var drafts = db.ScenarioDrafts.AsNoTracking().Where(d => d.ScenarioId == scenarioId && (!organizationId.HasValue || d.OrganizationId == organizationId.Value));
+        var total = await drafts.CountAsync(ct);
+        // State is not loaded: only its schemaVersion marker. The last editor is the newest draft audit actor.
+        var rows = await db.Database.SqlQuery<DraftRow>($"""
+            SELECT d.id AS "Id",d.scenario_id AS "ScenarioId",d.revision_id AS "RevisionId",d.draft_number AS "DraftNumber",d.source AS "Source",
+             d.state->>'schemaVersion' AS "SchemaVersion",d.xmin::text::bigint AS "Version",d.created_by AS "CreatedBy",d.created_at AS "CreatedAt",d.updated_at AS "UpdatedAt",
+             COALESCE(e.user_id,d.created_by) AS "LastEditedById",COALESCE(NULLIF(btrim(u.full_name),''),u.username) AS "LastEditedByName"
+            FROM scenario_drafts d
+            LEFT JOIN LATERAL(SELECT a.user_id FROM audit_logs a WHERE a.target_entity='ScenarioDraft' AND a.target_id=d.id ORDER BY a.created_at DESC,a.id DESC LIMIT 1) e ON true
+            LEFT JOIN users u ON u.id=COALESCE(e.user_id,d.created_by) AND u.deleted_at IS NULL
+            WHERE d.scenario_id={scenarioId} AND ({organizationId}::uuid IS NULL OR d.organization_id={organizationId})
+            ORDER BY d.updated_at DESC,d.draft_number DESC,d.id OFFSET {(long)(page - 1) * pageSize} LIMIT {pageSize}
+            """).ToListAsync(ct);
+        return new(rows.Select(r => new ScenarioDraftSummaryResponse(r.Id, r.ScenarioId, r.RevisionId, r.DraftNumber, r.Source, r.SchemaVersion,
+            (uint)r.Version, r.CreatedBy, r.CreatedAt, r.UpdatedAt, r.LastEditedById, r.LastEditedByName)).ToList(), total, page, pageSize);
     }
 
     public async Task<PageResponse<ScenarioSummaryResponse>?> ListBuildingScenariosAsync(

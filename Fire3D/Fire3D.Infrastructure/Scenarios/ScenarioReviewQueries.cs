@@ -31,4 +31,12 @@ public sealed class ScenarioReviewQueries(Fire3DDbContext db) : IScenarioReviewQ
         var result=await JsonCommandGate.Execute(db,"scenario_review_read_gate","States",actor,family,null,new{ids},null,null,ct);
         return result.IsSuccess?AuthResult<IReadOnlyList<ScenarioVersionReviewState>>.Ok(result.Value.Deserialize<List<ScenarioVersionReviewState>>(JsonCommandGate.Json)!):new(default,result.Error);
     }
+    public Task<AuthResult<ScenarioVersionReadiness>> VersionReadinessAsync(Guid actor,Guid? family,Guid versionId,CancellationToken ct)=>Readiness<ScenarioVersionReadiness>("Version",actor,family,versionId,ct);
+    public Task<AuthResult<RevisionReadiness>> RevisionReadinessAsync(Guid actor,Guid? family,Guid revisionId,CancellationToken ct)=>Readiness<RevisionReadiness>("Revision",actor,family,revisionId,ct);
+    private async Task<AuthResult<T>> Readiness<T>(string action,Guid actor,Guid? family,Guid id,CancellationToken ct)
+    {
+        if(id==Guid.Empty) return AuthResult<T>.Fail("VALIDATION_ERROR","A non-empty id is required.",400);
+        var result=await JsonCommandGate.Execute(db,"authoring_readiness_gate",action,actor,family,id,new{},null,null,ct);
+        return result.IsSuccess?AuthResult<T>.Ok(result.Value.Deserialize<T>(JsonCommandGate.Json)!):new(default,result.Error);
+    }
 }

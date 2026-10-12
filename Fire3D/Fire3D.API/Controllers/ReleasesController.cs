@@ -28,7 +28,22 @@ public class ReleasesController(ISender sender) : ControllerBase
             : ReleaseProblem(result.Error!);
     }
 
-    /// <summary>Gets a release and its pinned package metadata.</summary>
+    /// <summary>Lists releases in the caller's scope, newest first, so a client can find them from a Building or scenario after a reload.</summary>
+    /// <remarks>Filters: buildingId, scenarioId, status (Built | Published | Revoked). page defaults to 1, pageSize to 20 (maximum 100).
+    /// OrganizationUser sees only their organization; PlatformAdmin sees every organization.</remarks>
+    [HttpGet]
+    [ProducesResponseType<Fire3D.Application.Administration.PageResponse<ReleaseSummaryResponse>>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    public async Task<IActionResult> ListReleases([FromQuery] ReleaseFilter filter, CancellationToken ct)
+    {
+        var result = await sender.Send(new ListReleasesQuery(User.GetActorId(), filter), ct);
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
+    }
+
+    /// <summary>Gets a release, its pinned package metadata and the Building service period covering now.</summary>
     [HttpGet("{releaseId:guid}")]
     [ProducesResponseType<ReleaseResponse>(200)]
     [ProducesResponseType<ProblemDetails>(401)]

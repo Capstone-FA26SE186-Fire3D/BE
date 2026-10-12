@@ -5,6 +5,7 @@ using Fire3D.Application.Scenarios.Queries.ListBuildingScenarios;
 using Fire3D.Application.Scenarios.Queries.GetScenario;
 using Fire3D.Application.Scenarios.Queries.GetScenarioDraft;
 using Fire3D.Application.Scenarios.Queries.ListScenarioVersions;
+using Fire3D.Application.Scenarios.Queries.ListScenarioDrafts;
 using Fire3D.Application.Scenarios.Queries.GetScenarioVersion;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -73,6 +74,20 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
             var items=result.Value.Items.Where(v=>byId.ContainsKey(v.Id)).Select(v=>v with {ReviewStatus=byId[v.Id].ReviewStatus,ReviewId=byId[v.Id].ReviewId,RejectReason=byId[v.Id].RejectReason}).ToArray();
             return Ok(result.Value with {Items=items});
         }
+        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
+            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
+    }
+
+    /// <summary>Lists a scenario's drafts without their state, most recently saved first, so work can resume after a reload.</summary>
+    /// <remarks>Each item carries version (send it quoted as If-Match), schemaVersion and the last editor from the draft audit.</remarks>
+    [HttpGet("{scenarioId:guid}/drafts")]
+    [ProducesResponseType<Fire3D.Application.Administration.PageResponse<Fire3D.Application.Scenarios.ScenarioDraftSummaryResponse>>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> ListScenarioDrafts(Guid scenarioId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        var result = await sender.Send(new ListScenarioDraftsQuery(User.GetActorId(), scenarioId, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
