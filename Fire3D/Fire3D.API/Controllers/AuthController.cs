@@ -92,8 +92,10 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     /// across all organizations, including inactive/deleted; no country-code equivalence is inferred.
     /// Duplicate phone returns 409 ORGANIZATION_PHONE_EXISTS with errors.organizationPhoneNumber.
     /// Personal phone is independently unique across users; conflict returns 409 PHONE_NUMBER_EXISTS with errors.phoneNumber. No user/organization cross-uniqueness or country-code equivalence is inferred.
+    /// Optional username uses the Trainee rules (3-30 of a-z, digits, dot, underscore, hyphen; stored lowercase) and is
+    /// unique case-insensitively across all users; omitted or blank means none. Conflict returns 409 USERNAME_EXISTS with errors.username.
     /// The failed registration does not consume the proof or create an organization/owner/audit;
-    /// correct the phone and retry with the same unexpired proof.</remarks>
+    /// correct the phone or username and retry with the same unexpired proof.</remarks>
     [HttpPost("register/organization")]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]

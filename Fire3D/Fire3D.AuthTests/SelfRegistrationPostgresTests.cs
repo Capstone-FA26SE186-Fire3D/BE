@@ -93,6 +93,50 @@ public sealed partial class AuthIntegrationTests
             new { baseRequest.email, baseRequest.username, baseRequest.password, baseRequest.confirmPassword, registrationToken = secondProof })).StatusCode);
     }
 
+    [PostgresFact]
+    public async Task Organization_registration_accepts_optional_unique_username_and_keeps_proof_on_conflict()
+    {
+        var traineeProof = await VerifyRegistrationEmailAsync("taken@example.test");
+        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/auth/register/trainee", new
+        {
+            email = "taken@example.test", username = "fire.owner", password = "StrongPassword12!",
+            confirmPassword = "StrongPassword12!", registrationToken = traineeProof
+        })).StatusCode);
+
+        var proof = await VerifyRegistrationEmailAsync("named@example.test");
+        var form = new
+        {
+            email = "named@example.test", password = "StrongPassword12!", confirmPassword = "StrongPassword12!",
+            organizationName = "Named Co", organizationAddress = "2 Fire Street", organizationPhoneNumber = "+84123450001",
+            registrationToken = proof, username = "ab"
+        };
+        var invalid = await client.PostAsJsonAsync("/api/auth/register/organization", form);
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        Assert.Contains("\"username\"", await invalid.Content.ReadAsStringAsync());
+
+        var conflict = await client.PostAsJsonAsync("/api/auth/register/organization", form with { username = "FIRE.Owner" });
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        var body = await conflict.Content.ReadAsStringAsync();
+        Assert.Contains("USERNAME_EXISTS", body);
+        Assert.Contains("\"username\"", body);
+        Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM organizations WHERE name='Named Co'"));
+        Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM users WHERE email='named@example.test'"));
+
+        // The proof survives both failures; the corrected form succeeds with it.
+        var created = await client.PostAsJsonAsync("/api/auth/register/organization", form with { username = " Owner.Named " });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Equal("owner.named", await ScalarAsync("SELECT username FROM users WHERE email='named@example.test'"));
+
+        var blankProof = await VerifyRegistrationEmailAsync("blank@example.test");
+        var blank = await client.PostAsJsonAsync("/api/auth/register/organization", form with
+        {
+            email = "blank@example.test", organizationName = "Blank Co", organizationPhoneNumber = "+84123450002",
+            registrationToken = blankProof, username = "  "
+        });
+        Assert.Equal(HttpStatusCode.Created, blank.StatusCode);
+        Assert.Equal(DBNull.Value, await ScalarAsync("SELECT username FROM users WHERE email='blank@example.test'") ?? DBNull.Value);
+    }
+
     private async Task<string> VerifyRegistrationEmailAsync(string email)
     {
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/auth/registration/request-otp", new { email })).StatusCode);
