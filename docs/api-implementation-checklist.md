@@ -98,7 +98,7 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 
 ### AUTH-03 — CODE/TEST · Profile, ETag và avatar
 
-- **Trạng thái 12/10/2026:** API profile/ETag/avatar đủ; AccountResponse có thêm `hasPassword`/`googleLinked`. Chỉ còn nghiệm thu S3/IAM/CORS thật.
+- **Trạng thái 12/10/2026:** API profile/ETag/avatar đủ; AccountResponse có thêm `hasLocalLogin`/`googleLinked`. Chỉ còn nghiệm thu S3/IAM/CORS thật.
 
 - **Contract/current:** `GET/PATCH /api/auth/me` trả/nhận ETag theo `profile_revision`; PATCH hỗ trợ full name, username, dob, gender và phone. `/api/me/avatar` có intent/complete/GET/delete, complete copy theo S3 ETag và không dùng chung final key giữa các request. `GET/PATCH /api/organizations/me` trả ETag và PATCH chỉ thay đổi field được gửi.
 - **✅ Code/test Avatar:** Candidate được lưu trước conditional copy; reserve/finalize chặn lease hết hạn theo clock DB sau khóa. Có PostgreSQL disposable test restricted role/RLS, rollback audit, cleanup/retry/protection, complete/delete cạnh tranh; SDK signing offline và stream S3 giả lập có test. [Test tay và giới hạn](avatar-manual-test.md).

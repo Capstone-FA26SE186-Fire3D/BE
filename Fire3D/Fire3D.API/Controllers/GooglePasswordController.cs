@@ -15,7 +15,7 @@ public sealed class GooglePasswordController(IGooglePasswordService passwords) :
     /// <remarks>Requires a live BE Bearer session and the Firebase idToken of a Google sign-in made within the last
     /// 5 minutes for the linked Google account; sign in with Google again just before calling. newPassword uses the
     /// reset rules (6-128 characters, not only whitespace, not trimmed). Success revokes every session and reset proof
-    /// and returns 204; sign in again with email/password or Google. GET /api/auth/me reports hasPassword/googleLinked.
+    /// and returns 204; sign in again with email/password or Google. GET /api/auth/me reports hasLocalLogin/googleLinked.
     /// 400 VALIDATION_ERROR (errors.idToken/newPassword) or GOOGLE_LINK_REQUIRED; 401 UNAUTHORIZED, INVALID_FIREBASE_TOKEN
     /// (invalid or another Google account) or RECENT_LOGIN_REQUIRED; 409 PASSWORD_ALREADY_SET (use change-password),
     /// ACCOUNT_CHANGED or PASSWORD_RESET_PENDING; 503 GOOGLE_PROVIDER_UNAVAILABLE.</remarks>

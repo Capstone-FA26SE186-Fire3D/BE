@@ -49,7 +49,7 @@ Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn th
 | Device | ✅ Installation proof/family/rotate/revoke có source/test | ❌ FCM thật và client secure installation storage |
 | Swagger | ✅ Schema PATCH/multipart/proof/enum/headers và security metadata; relative server `/`; HTTP contract checks | ❌ OpenAPI/binary deploy mới; không chứng minh provider hoạt động |
 
-Không đánh dấu toàn bộ audit hoàn tất từ bảng này. Google unlink và module ngoài auth không nằm trong đợt này. Tạo password local đầu tiên cho Google-only đã có (`POST /api/me/password`, 12/10/2026); `GET /api/auth/me` trả `hasPassword`/`googleLinked` để FE chọn đặt hay đổi mật khẩu. Không reset DB, thêm Redis hoặc sửa billing/training flow.
+Không đánh dấu toàn bộ audit hoàn tất từ bảng này. Google unlink và module ngoài auth không nằm trong đợt này. Tạo password local đầu tiên cho Google-only đã có (`POST /api/me/password`, 12/10/2026); `GET /api/auth/me` trả `hasLocalLogin`/`googleLinked` để FE chọn đặt hay đổi mật khẩu. Không reset DB, thêm Redis hoặc sửa billing/training flow.
 
 ## Test tay sau khi deploy
 

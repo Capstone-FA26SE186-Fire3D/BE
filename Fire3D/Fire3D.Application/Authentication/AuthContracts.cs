@@ -13,7 +13,7 @@ public sealed record AccountResponse(Guid Id, string Email, string? FullName,
     string? PhoneNumber = null, string? AvatarUrl = null, bool IsActive = true,
     DateTime? LastLoginAt = null, DateTime? CreatedAt = null, DateTime? UpdatedAt = null,
     DateTime? EmailVerifiedAt = null, DateTime? RegistrationExpiresAt = null, long ProfileRevision = 1,
-    bool HasPassword = false, bool GoogleLinked = false);
+    bool HasLocalLogin = false, bool GoogleLinked = false);
 public sealed record LoginResponse(string AccessToken, string RefreshToken, AccountResponse User);
 public sealed record TokenResponse(string AccessToken, string RefreshToken, AccountResponse User);
 public sealed record GoogleExchangeResponse(string Status, TokenResponse? Authentication = null,

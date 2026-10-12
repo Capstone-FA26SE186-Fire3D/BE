@@ -56,7 +56,7 @@ public sealed class GooglePasswordPostgresTests
         Assert.True(GoogleLinkPostgresTests.Passwords.Verify(user!, NewPassword, out _));
         Assert.Equal(Uid, user!.FirebaseUid);
         var account = GoogleAuthRules.ToAccount(user);
-        Assert.True(account.HasPassword); Assert.True(account.GoogleLinked);
+        Assert.True(account.HasLocalLogin); Assert.True(account.GoogleLinked);
         Assert.Equal(0L, await db.Scalar($"SELECT count(*) FROM auth_refresh_tokens WHERE user_id='{BillingDatabase.Owner}' AND revoked_at IS NULL"));
         Assert.Equal(1L, await db.Scalar($"SELECT count(*) FROM auth_refresh_tokens WHERE user_id='{BillingDatabase.Other}' AND revoked_at IS NULL"));
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM local_password_reset_tokens WHERE used_at IS NOT NULL"));

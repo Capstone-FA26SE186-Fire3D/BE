@@ -58,7 +58,7 @@ public class Fire3DSessionIssuer(IAuthStore authStore, ITokenService tokens, Tim
                 user.FullName,
                 user.Role,
                 user.OrganizationId,
-                HasPassword: !string.IsNullOrEmpty(user.PasswordHash),
+                HasLocalLogin: !string.IsNullOrEmpty(user.PasswordHash),
                 GoogleLinked: user.FirebaseUid is not null
             )
         );
