@@ -1,5 +1,6 @@
 -- Editor catalogs for PlatformAdmin: knowledge sources (visibility/status/search, paged) and Learn situations (search/active,
--- paged). Read-only gates; nothing is seeded. A tenant source is listed only when visibility=Organization is requested explicitly.
+-- paged). Read-only gates; nothing is seeded. The editor asks for visibility=Common so tenant sources never enter its catalog;
+-- the admin registry lists every visibility by default so tenant sources can still be reviewed and approved.
 CREATE TEMP TABLE catalog_lists_permissions(original_set boolean,original_inherit boolean,changed boolean,had_create boolean) ON COMMIT DROP;
 DO $$ DECLARE os boolean;oi boolean;c boolean;BEGIN
  SELECT set_option,inherit_option INTO os,oi FROM pg_auth_members WHERE roleid='fet3d_ifc_upload_owner'::regrole AND member=current_user::regrole;
@@ -25,8 +26,8 @@ BEGIN
  IF page<1 OR size NOT BETWEEN 1 AND 100 THEN RETURN jsonb_build_object('code','VALIDATION_ERROR','status',400);END IF;
  pattern:=catalog_search_pattern(p_input->>'search');
  IF p_action='KnowledgeSources' THEN
-  -- Common is the default scope, so the editor catalog never shows tenant sources unless explicitly asked.
-  WITH f AS MATERIALIZED(SELECT k.* FROM knowledge_sources k WHERE k.visibility=COALESCE(p_input->>'visibility','Common')
+  WITH f AS MATERIALIZED(SELECT k.* FROM knowledge_sources k WHERE (p_input->>'visibility' IS NULL OR k.visibility=p_input->>'visibility')
+    AND (p_input->>'id' IS NULL OR k.id=(p_input->>'id')::uuid)
     AND (p_input->>'status' IS NULL OR k.approval_status=p_input->>'status')
     AND (pattern IS NULL OR k.title ILIKE pattern ESCAPE '\' OR k.version_label ILIKE pattern ESCAPE '\' OR COALESCE(k.jurisdiction,'') ILIKE pattern ESCAPE '\'))
   SELECT (SELECT count(*) FROM f),COALESCE((SELECT jsonb_agg(x.item ORDER BY x.created_at DESC,x.id) FROM (

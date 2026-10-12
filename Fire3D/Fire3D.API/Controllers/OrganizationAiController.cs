@@ -112,7 +112,7 @@ public sealed partial class AdminAiController(IOrganizationAiGates gates, Fire3D
         return result.IsSuccess ? Created("/api/admin/ai/policies", result.Value) : Problem(result.Error!);
     }
 
-    /// <summary>Knowledge source catalog. visibility defaults to Common (tenant sources only with visibility=Organization); status Draft/Approved/Retired; search on title, version label and jurisdiction. canUseInDraft: a Learn draft may cite it; canPublishReference: publish/RAG accept it now.</summary>
+    /// <summary>Knowledge source registry and editor catalog. Without visibility every source is listed (admin review); the Learn editor passes visibility=Common so tenant sources never enter its catalog. status Draft/Approved/Retired; search on title, version label and jurisdiction. canUseInDraft: a Learn draft may cite it; canPublishReference: publish/Hidden/RAG accept it now.</summary>
     [HttpGet("api/admin/knowledge-sources")]
     [ProducesResponseType<JsonElement>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
@@ -128,18 +128,14 @@ public sealed partial class AdminAiController(IOrganizationAiGates gates, Fire3D
     [ProducesResponseType<JsonElement>(200)]
     [ProducesResponseType<ProblemDetails>(404)]
     [OpenApi.ResponseHeader("ETag")]
-    public async Task<IActionResult> KnowledgeSource(Guid id, CancellationToken ct) => WithETag(WithSourceFlags(await gates.AdminAsync("GetSource", Actor, Family, id, new { }, null, null, ct)));
-    // Same rule as the catalog list, so a source picked earlier can be reopened by ID after a reload.
-    private static AuthResult<JsonElement> WithSourceFlags(AuthResult<JsonElement> result)
+    public async Task<IActionResult> KnowledgeSource(Guid id, CancellationToken ct)
     {
-        if (!result.IsSuccess) return result;
-        var node = System.Text.Json.Nodes.JsonNode.Parse(result.Value.GetRawText())!.AsObject();
-        var common = node["visibility"]?.GetValue<string>() == "Common"; var status = node["approvalStatus"]?.GetValue<string>();
-        var now = DateTimeOffset.UtcNow;
-        var from = node["effectiveFrom"] is { } f ? f.GetValue<DateTimeOffset>() : (DateTimeOffset?)null; var until = node["effectiveUntil"] is { } u ? u.GetValue<DateTimeOffset>() : (DateTimeOffset?)null;
-        node["canUseInDraft"] = common && status is "Draft" or "Approved";
-        node["canPublishReference"] = common && status == "Approved" && (from is null || from <= now) && (until is null || until > now);
-        return AuthResult<JsonElement>.Ok(JsonSerializer.SerializeToElement(node));
+        // Same gate and flag rule as the list, so a source picked earlier can be reopened by ID after a reload.
+        var result = await content.CatalogAsync("KnowledgeSources", Actor, Family, new { id, page = 1, pageSize = 1 }, ct);
+        if (!result.IsSuccess) return Problem(result.Error!);
+        var items = result.Value.GetProperty("items");
+        if (items.GetArrayLength() == 0) return Problem(new AuthError("NOT_FOUND", "The knowledge source was not found.", 404));
+        return WithETag(AuthResult<JsonElement>.Ok(items[0].Clone()));
     }
 
     /// <summary>Registers one source version as Draft. Common sources have no organization; Organization sources belong to one tenant. Idempotency-Key required.</summary>

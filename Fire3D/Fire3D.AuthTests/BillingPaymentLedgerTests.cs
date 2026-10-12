@@ -73,5 +73,13 @@ public sealed class BillingPaymentLedgerTests
         Assert.Equal(HttpStatusCode.Forbidden,(await owner.GetAsync("/api/admin/payments/payos/checkouts")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,(await other.GetAsync($"/api/billing/quotations/{multi}/checkouts")).StatusCode);
         Assert.Equal(1,(await Get(admin,$"/api/billing/quotations/{multi}/checkouts")).GetProperty("total").GetInt32());
+        // The request list reports the payment request time it sorts by, not the checkout time.
+        await db.Sql($"ALTER TABLE payos_payment_requests DISABLE TRIGGER USER; UPDATE payos_payment_requests SET created_at='2021-03-04T05:06:07Z' WHERE quotation_id='{multi}'; ALTER TABLE payos_payment_requests ENABLE TRIGGER USER");
+        Assert.Equal(new DateTime(2021,3,4,5,6,7,DateTimeKind.Utc),(await Get(admin,$"/api/admin/payments/payos/requests?quotationId={multi}")).GetProperty("items")[0].GetProperty("createdAt").GetDateTime().ToUniversalTime());
+        // A revoked session family cannot read the ledger lists.
+        await db.Sql($"UPDATE auth_refresh_tokens SET revoked_at=now() WHERE user_id IN ('{BillingDatabase.Owner}','{BillingDatabase.Admin}')");
+        Assert.Equal(HttpStatusCode.Unauthorized,(await owner.GetAsync($"/api/billing/quotations/{multi}/checkouts")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,(await admin.GetAsync("/api/admin/payments/payos/checkouts")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,(await admin.GetAsync("/api/admin/payments/payos/requests")).StatusCode);
     }
 }

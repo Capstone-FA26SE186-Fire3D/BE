@@ -28,7 +28,9 @@ public sealed partial class BillingService
         if(receipt is not null){var replay=ReplayQuote(receipt);await tx.CommitAsync(ct);return replay;}
         if(quote.Status==QuotationStatus.Cancelled){var current=await QuoteView(quote,ct);await tx.CommitAsync(ct);return current;}
         BillingETag.Require(ifMatch,id,quote.Revision);
-        if(quote.Status==QuotationStatus.Expired)throw new BillingException(409,"QUOTATION_EXPIRED","An expired quotation keeps its status.");
+        // Expiry is time-based (no job writes Expired): an Issued/Accepted quotation past validUntil is expired and keeps its status.
+        if(quote.Status==QuotationStatus.Expired||quote.Status is QuotationStatus.Issued or QuotationStatus.Accepted&&quote.ValidUntil<=DateTime.UtcNow)
+            throw new BillingException(409,"QUOTATION_EXPIRED","An expired quotation keeps its status.");
         if(await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM payos_payment_requests r WHERE r.quotation_id={id} AND (r.status='Paid'
               OR EXISTS(SELECT 1 FROM payment_transactions t WHERE t.payment_request_id=r.id AND t.status='Applied'))) AS "Value"

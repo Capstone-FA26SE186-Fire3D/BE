@@ -31,7 +31,7 @@
       "description": "Required for snapshot.",
       "type": "object", "additionalProperties": false, "required": ["schema_version", "pass_threshold", "criteria"],
       "properties": {
-        "schema_version": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "schema_version": { "const": "1", "description": "Rubric contract version; see GET /api/scenario-rubrics/catalog." },
         "pass_threshold": { "type": "number" },
         "criteria": {
           "type": "array", "maxItems": 100,

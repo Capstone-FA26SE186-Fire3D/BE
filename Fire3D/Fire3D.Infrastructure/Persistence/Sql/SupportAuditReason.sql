@@ -36,7 +36,7 @@ BEGIN
    IF t.id IS NULL THEN RETURN jsonb_build_object('code','NOT_FOUND','status',404);END IF;org:=t.organization_id;
   END IF;
   -- Admin reads keep resources of inactive/deleted organizations reachable; user-side access still requires a live organization.
-  IF NOT is_admin AND org IS NOT NULL AND NOT EXISTS(SELECT 1 FROM organizations WHERE id=org AND is_active AND deleted_at IS NULL) THEN RETURN jsonb_build_object('code','NOT_FOUND','status',404);END IF;
+  IF (mutation OR NOT is_admin) AND org IS NOT NULL AND NOT EXISTS(SELECT 1 FROM organizations WHERE id=org AND is_active AND deleted_at IS NULL) THEN RETURN jsonb_build_object('code','NOT_FOUND','status',404);END IF;
  END IF;
  IF NOT EXISTS(SELECT 1 FROM auth_refresh_tokens WHERE user_id=p_actor AND family_id=p_family AND consumed_at IS NULL AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RETURN jsonb_build_object('code','UNAUTHORIZED','status',401);END IF;
  IF p_action IN('CreateFeedback','CreateTicket','Message','AdminMessage') THEN

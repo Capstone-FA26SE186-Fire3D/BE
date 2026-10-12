@@ -214,7 +214,7 @@ public sealed class BillingUpgradeTopUpTests
     {
         await using var db=await BillingDatabase.Create();await using var context=db.Context();var billing=new BillingService(context);
         var request=await billing.CreateEnterpriseRequest(BillingDatabase.Owner,BillingDatabase.Owner,new(5,12,"Contact","contact@example.test"),"ent",default);
-        var detail=await billing.GetEnterpriseRequest(BillingDatabase.Admin,request.Id,default);Assert.Equal(1,detail.Revision);
+        var detail=await billing.GetEnterpriseRequest(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,default);Assert.Equal(1,detail.Revision);
         Assert.Equal(412,(await Assert.ThrowsAsync<BillingException>(()=>billing.UpdateEnterpriseStatus(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("Contacted"),BillingETag.Format(request.Id,9),default))).Status);
         Assert.Equal(428,(await Assert.ThrowsAsync<BillingException>(()=>billing.UpdateEnterpriseStatus(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("Contacted"),null,default))).Status);
         var contacted=await billing.UpdateEnterpriseStatus(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("Contacted"),BillingETag.Format(request.Id,1),default);
@@ -224,7 +224,7 @@ public sealed class BillingUpgradeTopUpTests
         var quote=await billing.CreateEnterpriseQuotation(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new([new(BillingDatabase.Building,package.Id,"New")]),"ent-quote",default);
         Assert.Equal(BillingDatabase.Org,quote.OrganizationId);Assert.Equal("Draft",quote.Status);
         Assert.Equal(quote.Id,(await billing.CreateEnterpriseQuotation(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new([new(BillingDatabase.Building,package.Id,"New")]),"ent-quote",default)).Id);
-        var quoted=await billing.GetEnterpriseRequest(BillingDatabase.Admin,request.Id,default);Assert.Equal("Quoted",quoted.Status);Assert.Equal(quote.Id,quoted.QuotationId);
+        var quoted=await billing.GetEnterpriseRequest(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,default);Assert.Equal("Quoted",quoted.Status);Assert.Equal(quote.Id,quoted.QuotationId);
         Assert.Equal(409,(await Assert.ThrowsAsync<BillingException>(()=>billing.CreateEnterpriseQuotation(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new([new(BillingDatabase.Building,package.Id,"New")]),"ent-quote-2",default))).Status);
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM service_entitlements"));
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM payos_payment_requests"));

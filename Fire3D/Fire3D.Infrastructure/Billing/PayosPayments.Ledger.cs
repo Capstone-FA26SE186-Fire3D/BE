@@ -20,7 +20,7 @@ public sealed partial class PayosPayments
          t.status::text AS "TransactionStatus",COALESCE(r.expected_amount,q.total_amount) AS "Amount",COALESCE(r.expected_currency,q.currency) AS "Currency",
          CASE WHEN r.status IS DISTINCT FROM 'Paid' THEN 'NotStarted' WHEN pr.bad>0 THEN 'NeedsReconcile' WHEN pr.total=0 THEN 'Pending'
           WHEN pr.ok=pr.total AND pr.ok>=lines.expected THEN 'Succeeded' WHEN pr.ok>0 THEN 'Partial' ELSE 'Pending' END AS "ProvisioningStatus",
-         lines.expected::int AS "ProvisioningLines",pr.ok::int AS "ProvisioningSucceeded",COALESCE(op.created_at,r.created_at) AS "CreatedAt",r.paid_at AS "PaidAt"
+         lines.expected::int AS "ProvisioningLines",pr.ok::int AS "ProvisioningSucceeded",{0} AS "CreatedAt",r.paid_at AS "PaidAt"
         """;
     private const string LedgerJoins="""
          LEFT JOIN payment_transactions t ON t.id=r.paid_transaction_id
@@ -43,40 +43,40 @@ public sealed partial class PayosPayments
     }
     private static void LedgerPage(int page,int size){if(page<1||size is <1 or >100||page>1000000)throw new BillingException(400,"BILLING_PAGINATION_INVALID","page must be positive and pageSize must be 1–100.");}
 
-    public async Task<BillingPage<PayosLedgerItem>> AdminCheckouts(Guid actorId,PayosLedgerQuery query,CancellationToken ct)
+    public async Task<BillingPage<PayosLedgerItem>> AdminCheckouts(Guid actorId,Guid family,PayosLedgerQuery query,CancellationToken ct)
     {
         LedgerPage(query.Page,query.PageSize);var from=LedgerTime(query.From,"from");var to=LedgerTime(query.To,"to");
         if(query.Status is not null&&!CheckoutStatuses.Contains(query.Status))throw new BillingException(400,"BILLING_VALIDATION_FAILED","Unknown checkout status.",new(){["status"]=[string.Join(", ",CheckoutStatuses)]});
         await using var tx=await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead,ct);
-        var actor=await ActorFor(actorId,false,ct);if(actor.Role!=UserRole.PlatformAdmin)throw new BillingException(403,"BILLING_ROLE_FORBIDDEN","Only PlatformAdmin can list all checkouts.");
-        return await Ledger(CheckoutFrom,CheckoutWhere,"op.created_at DESC,op.id",query.OrganizationId,query.QuotationId,query.Status,from,to,query.Page,query.PageSize,ct);
+        var actor=await ActorFor(actorId,false,ct);await Family(actorId,family,ct);if(actor.Role!=UserRole.PlatformAdmin)throw new BillingException(403,"BILLING_ROLE_FORBIDDEN","Only PlatformAdmin can list all checkouts.");
+        return await Ledger(CheckoutFrom,CheckoutWhere,"op.created_at","op.created_at DESC,op.id",query.OrganizationId,query.QuotationId,query.Status,from,to,query.Page,query.PageSize,ct);
     }
-    public async Task<BillingPage<PayosLedgerItem>> AdminRequests(Guid actorId,PayosLedgerQuery query,CancellationToken ct)
+    public async Task<BillingPage<PayosLedgerItem>> AdminRequests(Guid actorId,Guid family,PayosLedgerQuery query,CancellationToken ct)
     {
         LedgerPage(query.Page,query.PageSize);var from=LedgerTime(query.From,"from");var to=LedgerTime(query.To,"to");
         if(query.Status is not null&&!RequestStatuses.Contains(query.Status))throw new BillingException(400,"BILLING_VALIDATION_FAILED","Unknown payment request status.",new(){["status"]=[string.Join(", ",RequestStatuses)]});
         await using var tx=await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead,ct);
-        var actor=await ActorFor(actorId,false,ct);if(actor.Role!=UserRole.PlatformAdmin)throw new BillingException(403,"BILLING_ROLE_FORBIDDEN","Only PlatformAdmin can list all payment requests.");
-        return await Ledger(RequestFrom,RequestWhere,"r.created_at DESC,r.id",query.OrganizationId,query.QuotationId,query.Status,from,to,query.Page,query.PageSize,ct);
+        var actor=await ActorFor(actorId,false,ct);await Family(actorId,family,ct);if(actor.Role!=UserRole.PlatformAdmin)throw new BillingException(403,"BILLING_ROLE_FORBIDDEN","Only PlatformAdmin can list all payment requests.");
+        return await Ledger(RequestFrom,RequestWhere,"r.created_at","r.created_at DESC,r.id",query.OrganizationId,query.QuotationId,query.Status,from,to,query.Page,query.PageSize,ct);
     }
     /// <summary>Checkout history of one quotation for the owning OrganizationUser or PlatformAdmin, so a reload finds its checkouts.</summary>
-    public async Task<BillingPage<PayosLedgerItem>> QuotationCheckouts(Guid actorId,Guid quotationId,int page,int pageSize,CancellationToken ct)
+    public async Task<BillingPage<PayosLedgerItem>> QuotationCheckouts(Guid actorId,Guid family,Guid quotationId,int page,int pageSize,CancellationToken ct)
     {
         LedgerPage(page,pageSize);
         await using var tx=await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead,ct);
-        var actor=await ActorFor(actorId,false,ct);
+        var actor=await ActorFor(actorId,false,ct);await Family(actorId,family,ct);
         var org=await db.Quotations.AsNoTracking().Where(x=>x.Id==quotationId).Select(x=>(Guid?)x.OrganizationId).SingleOrDefaultAsync(ct)??throw Missing();
         Scope(actor,org);
-        return await Ledger(CheckoutFrom,CheckoutWhere,"op.created_at DESC,op.id",null,quotationId,null,null,null,page,pageSize,ct);
+        return await Ledger(CheckoutFrom,CheckoutWhere,"op.created_at","op.created_at DESC,op.id",null,quotationId,null,null,null,page,pageSize,ct);
     }
-    private async Task<BillingPage<PayosLedgerItem>> Ledger(string from,string where,string order,Guid? org,Guid? quotation,string? status,DateTime? start,DateTime? end,int page,int size,CancellationToken ct)
+    private async Task<BillingPage<PayosLedgerItem>> Ledger(string from,string where,string createdAt,string order,Guid? org,Guid? quotation,string? status,DateTime? start,DateTime? end,int page,int size,CancellationToken ct)
     {
         NpgsqlParameter[] Parameters()=>[
             new("org",NpgsqlDbType.Uuid){Value=(object?)org??DBNull.Value},new("quotation",NpgsqlDbType.Uuid){Value=(object?)quotation??DBNull.Value},
             new("status",NpgsqlDbType.Text){Value=(object?)status??DBNull.Value},new("from",NpgsqlDbType.TimestampTz){Value=(object?)start??DBNull.Value},
             new("to",NpgsqlDbType.TimestampTz){Value=(object?)end??DBNull.Value}];
         var total=await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\""+from+where,Parameters()).SingleAsync(ct);
-        var items=await db.Database.SqlQueryRaw<PayosLedgerItem>(LedgerSelect+from+LedgerJoins+where+$" ORDER BY {order} OFFSET {(long)(page-1)*size} LIMIT {size}",Parameters()).ToListAsync(ct);
+        var items=await db.Database.SqlQueryRaw<PayosLedgerItem>(LedgerSelect.Replace("{0}",createdAt)+from+LedgerJoins+where+$" ORDER BY {order} OFFSET {(long)(page-1)*size} LIMIT {size}",Parameters()).ToListAsync(ct);
         return new(items,total,page,size);
     }
 }

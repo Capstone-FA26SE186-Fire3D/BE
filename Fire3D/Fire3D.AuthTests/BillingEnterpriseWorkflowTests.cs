@@ -17,6 +17,8 @@ public sealed class BillingEnterpriseWorkflowTests
         // Assignment keeps the status; omitted fields keep their value; only an active PlatformAdmin can be assigned.
         var assigned=await billing.UpdateEnterpriseStatus(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new(AssignedTo:BillingDatabase.Admin),BillingETag.Format(request.Id,1),default);
         Assert.Equal("New",assigned.Status);Assert.Equal(BillingDatabase.Admin,assigned.AssignedTo);Assert.Equal(2,assigned.Revision);
+        // The organization sees its request but not the internal assignee.
+        Assert.Null((await billing.GetEnterpriseRequest(BillingDatabase.Owner,BillingDatabase.Owner,request.Id,default)).AssignedTo);
         Assert.Equal(400,(await Assert.ThrowsAsync<BillingException>(()=>billing.UpdateEnterpriseStatus(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new(AssignedTo:BillingDatabase.Owner),BillingETag.Format(request.Id,2),default))).Status);
         Assert.Equal(412,(await Assert.ThrowsAsync<BillingException>(()=>billing.UpdateEnterpriseStatus(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("Contacted"),BillingETag.Format(request.Id,1),default))).Status);
         var contacted=await billing.UpdateEnterpriseStatus(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("Contacted"),BillingETag.Format(request.Id,2),default);
@@ -29,19 +31,24 @@ public sealed class BillingEnterpriseWorkflowTests
         Assert.Equal(reply.Id,(await billing.AddEnterpriseResponse(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("We will call you tomorrow."),"reply-1",default)).Id);
         Assert.Equal(409,(await Assert.ThrowsAsync<BillingException>(()=>billing.AddEnterpriseResponse(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("Other text"),"reply-1",default))).Status);
         Assert.Equal(403,(await Assert.ThrowsAsync<BillingException>(()=>billing.AddEnterpriseResponse(BillingDatabase.Owner,BillingDatabase.Owner,request.Id,new("Self reply"),"reply-owner",default))).Status);
-        Assert.Equal(1,(await billing.ListEnterpriseResponses(BillingDatabase.Owner,request.Id,1,20,default)).Total);
-        Assert.Equal(404,(await Assert.ThrowsAsync<BillingException>(()=>billing.ListEnterpriseResponses(BillingDatabase.Other,request.Id,1,20,default))).Status);
+        Assert.Equal(1,(await billing.ListEnterpriseResponses(BillingDatabase.Owner,BillingDatabase.Owner,request.Id,1,20,default)).Total);
+        Assert.Equal(404,(await Assert.ThrowsAsync<BillingException>(()=>billing.ListEnterpriseResponses(BillingDatabase.Other,BillingDatabase.Other,request.Id,1,20,default))).Status);
         await Assert.ThrowsAnyAsync<Exception>(()=>db.Sql($"UPDATE enterprise_quote_responses SET message='edited' WHERE id='{reply.Id}'"));
         Assert.DoesNotContain("call you",(string)(await db.Scalar($"SELECT string_agg(new_values::text,';') FROM audit_logs WHERE target_id='{request.Id}'"))!);
 
         // A quotation linked to the request survives closing; closing replays and needs a reason.
         var package=await billing.SavePackage(BillingDatabase.Admin,BillingDatabase.Admin,null,new("ENT","Enterprise",1000,12,true,null,100,0),null,default);
         var quote=await billing.CreateEnterpriseQuotation(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new([new(BillingDatabase.Building,package.Id,"New")]),"ent-quote",default);
-        var quoted=await billing.GetEnterpriseRequest(BillingDatabase.Admin,request.Id,default);
+        var quoted=await billing.GetEnterpriseRequest(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,default);
         Assert.Equal(400,(await Assert.ThrowsAsync<BillingException>(()=>billing.CloseEnterpriseRequest(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("  "),BillingETag.Format(request.Id,quoted.Revision),"close",default))).Status);
         Assert.Equal(403,(await Assert.ThrowsAsync<BillingException>(()=>billing.CloseEnterpriseRequest(BillingDatabase.Owner,BillingDatabase.Owner,request.Id,new("done"),BillingETag.Format(request.Id,quoted.Revision),"close-owner",default))).Status);
         var closed=await billing.CloseEnterpriseRequest(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("Customer signed elsewhere"),BillingETag.Format(request.Id,quoted.Revision),"close",default);
         Assert.Equal("Closed",closed.Status);Assert.Equal("Customer signed elsewhere",closed.CloseReason);Assert.Equal(quote.Id,closed.QuotationId);
+        var ownerView=await billing.GetEnterpriseRequest(BillingDatabase.Owner,BillingDatabase.Owner,request.Id,default);
+        Assert.Equal("Closed",ownerView.Status);Assert.Null(ownerView.CloseReason);Assert.Null(ownerView.AssignedTo);
+        await db.Sql($"UPDATE auth_refresh_tokens SET revoked_at=now() WHERE user_id='{BillingDatabase.Owner}'");
+        Assert.Equal(401,(await Assert.ThrowsAsync<BillingException>(()=>billing.GetEnterpriseRequest(BillingDatabase.Owner,BillingDatabase.Owner,request.Id,default))).Status);
+        Assert.Equal(401,(await Assert.ThrowsAsync<BillingException>(()=>billing.ListEnterpriseResponses(BillingDatabase.Owner,BillingDatabase.Owner,request.Id,1,20,default))).Status);
         Assert.Equal(closed.Revision,(await billing.CloseEnterpriseRequest(BillingDatabase.Admin,BillingDatabase.Admin,request.Id,new("Customer signed elsewhere"),BillingETag.Format(request.Id,quoted.Revision),"close",default)).Revision);
         Assert.Equal("Draft",(string?)await db.Scalar($"SELECT status::text FROM quotations WHERE id='{quote.Id}'"));
         Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM service_entitlements"));

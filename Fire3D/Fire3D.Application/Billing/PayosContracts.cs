@@ -56,7 +56,7 @@ public interface IPayosPayments
     Task Reconcile(Guid actor,Guid family,Guid checkoutId,CancellationToken ct);
     Task<BillingPage<EntitlementResponse>> Entitlements(Guid actor,Guid? organizationId,Guid? buildingId,int page,int pageSize,CancellationToken ct);
     Task Recover(CancellationToken ct);
-    Task<BillingPage<PayosLedgerItem>> AdminCheckouts(Guid actor,PayosLedgerQuery query,CancellationToken ct);
-    Task<BillingPage<PayosLedgerItem>> AdminRequests(Guid actor,PayosLedgerQuery query,CancellationToken ct);
-    Task<BillingPage<PayosLedgerItem>> QuotationCheckouts(Guid actor,Guid quotationId,int page,int pageSize,CancellationToken ct);
+    Task<BillingPage<PayosLedgerItem>> AdminCheckouts(Guid actor,Guid family,PayosLedgerQuery query,CancellationToken ct);
+    Task<BillingPage<PayosLedgerItem>> AdminRequests(Guid actor,Guid family,PayosLedgerQuery query,CancellationToken ct);
+    Task<BillingPage<PayosLedgerItem>> QuotationCheckouts(Guid actor,Guid family,Guid quotationId,int page,int pageSize,CancellationToken ct);
 }

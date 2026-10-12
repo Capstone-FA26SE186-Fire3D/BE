@@ -143,7 +143,7 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     [ProducesResponseType<EnterpriseQuoteResponse>(200)]
     [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<ActionResult<EnterpriseQuoteResponse>> AdminEnterpriseRequest(Guid id,CancellationToken ct)
-    {var response=await billing.GetEnterpriseRequest(Actor,id,ct);ETag(id,response.Revision);return Ok(response);}
+    {var response=await billing.GetEnterpriseRequest(Actor,User.GetSessionFamilyId(),id,ct);ETag(id,response.Revision);return Ok(response);}
     /// <summary>Admin changes status to Contacted, Rejected or Cancelled with If-Match. No charge or service grant.</summary>
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     [HttpPatch("api/admin/enterprise-quote-requests/{id:guid}")]
@@ -160,7 +160,7 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     [HttpGet("api/admin/enterprise-quote-requests/{id:guid}/responses")]
     public async Task<ActionResult<BillingPage<EnterpriseResponseItem>>> AdminEnterpriseResponses(Guid id,[FromQuery]int page=1,[FromQuery]int pageSize=20,CancellationToken ct=default)
-        =>Ok(await billing.ListEnterpriseResponses(Actor,id,page,pageSize,ct));
+        =>Ok(await billing.ListEnterpriseResponses(Actor,User.GetSessionFamilyId(),id,page,pageSize,ct));
     /// <summary>Admin closes handling with If-Match, Idempotency-Key and a reason. Linked quotations and payments are not cancelled; no service is granted.</summary>
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     [HttpPost("api/admin/enterprise-quote-requests/{id:guid}/close")]
@@ -171,11 +171,11 @@ public sealed class BillingController(IBillingService billing) : ControllerBase
     /// <summary>OrganizationUser reads one enterprise request of their organization.</summary>
     [HttpGet("api/billing/enterprise-quote-requests/{id:guid}")]
     [ProducesResponseType<EnterpriseQuoteResponse>(200)]
-    public async Task<ActionResult<EnterpriseQuoteResponse>> EnterpriseRequest(Guid id,CancellationToken ct)=>Ok(await billing.GetEnterpriseRequest(Actor,id,ct));
+    public async Task<ActionResult<EnterpriseQuoteResponse>> EnterpriseRequest(Guid id,CancellationToken ct)=>Ok(await billing.GetEnterpriseRequest(Actor,User.GetSessionFamilyId(),id,ct));
     /// <summary>OrganizationUser reads the Admin replies on one enterprise request of their organization, oldest first.</summary>
     [HttpGet("api/billing/enterprise-quote-requests/{id:guid}/responses")]
     public async Task<ActionResult<BillingPage<EnterpriseResponseItem>>> EnterpriseResponses(Guid id,[FromQuery]int page=1,[FromQuery]int pageSize=20,CancellationToken ct=default)
-        =>Ok(await billing.ListEnterpriseResponses(Actor,id,page,pageSize,ct));
+        =>Ok(await billing.ListEnterpriseResponses(Actor,User.GetSessionFamilyId(),id,page,pageSize,ct));
     /// <summary>Admin drafts a Building quotation for the requesting OrganizationUser and marks the request Quoted. Idempotency-Key required; no service is granted.</summary>
     [Authorize(Policy=AuthorizationPolicies.PlatformAdministration)]
     [HttpPost("api/admin/enterprise-quote-requests/{id:guid}/quotations")]

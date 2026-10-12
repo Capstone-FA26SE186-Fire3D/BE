@@ -38,9 +38,9 @@ public sealed partial class BillingService
         await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return response;
     }
 
-    public async Task<BillingPage<EnterpriseResponseItem>> ListEnterpriseResponses(Guid actor,Guid id,int page,int pageSize,CancellationToken ct)
+    public async Task<BillingPage<EnterpriseResponseItem>> ListEnterpriseResponses(Guid actor,Guid family,Guid id,int page,int pageSize,CancellationToken ct)
     {
-        Pagination(page,pageSize);await using var tx=await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead,ct);var identity=await Authorize(actor,false,ct);
+        Pagination(page,pageSize);await using var tx=await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead,ct);var identity=await Authorize(actor,false,ct);await RequireLiveFamily(actor,family,ct);
         var item=await db.Set<EnterpriseQuoteRequest>().AsNoTracking().SingleOrDefaultAsync(x=>x.Id==id,ct)??throw Missing();
         await Scope(identity,item.OrganizationId,ct);
         var total=await db.Database.SqlQuery<int>($"""SELECT count(*)::int AS "Value" FROM enterprise_quote_responses WHERE request_id={id}""").SingleAsync(ct);
