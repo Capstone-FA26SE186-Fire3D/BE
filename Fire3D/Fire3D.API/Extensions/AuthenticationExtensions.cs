@@ -95,7 +95,13 @@ public static class AuthenticationExtensions
                 };
             });
         services.AddApiAuthorization();
-        services.AddProblemDetails();
+        services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
+        {
+            // An unhandled exception still gets a stable code and a traceId for log lookup; handler errors keep their own code.
+            if (context.ProblemDetails.Status == StatusCodes.Status500InternalServerError)
+                context.ProblemDetails.Extensions.TryAdd("code", "INTERNAL_ERROR");
+            context.ProblemDetails.Extensions.TryAdd("traceId", System.Diagnostics.Activity.Current?.Id ?? context.HttpContext.TraceIdentifier);
+        });
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
