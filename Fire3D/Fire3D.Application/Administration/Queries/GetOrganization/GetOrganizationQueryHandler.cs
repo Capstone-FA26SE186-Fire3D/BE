@@ -11,9 +11,7 @@ internal sealed class GetOrganizationQueryHandler(IAdministrationStore store, IA
     {
         if (!await AdministrationSupport.IsAdminAsync(auth, query.ActorId, ct))
             return AdministrationSupport.Forbidden<OrganizationResponse>();
-        var target = await store.FindOrganizationAsync(query.Id, ct);
-        return target is null || target.DeletedAt.HasValue
-            ? AdministrationSupport.NotFound<OrganizationResponse>()
-            : AuthResult<OrganizationResponse>.Ok(AdministrationSupport.ToResponse(target));
+        var target = await store.GetOrganizationViewAsync(query.Id, ct);
+        return target is null ? AdministrationSupport.NotFound<OrganizationResponse>() : AuthResult<OrganizationResponse>.Ok(target);
     }
 }

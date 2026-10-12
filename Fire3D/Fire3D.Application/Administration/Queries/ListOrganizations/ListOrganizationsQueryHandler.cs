@@ -14,6 +14,8 @@ internal sealed class ListOrganizationsQueryHandler(IAdministrationStore store, 
         var filter = query.Filter;
         if (!AdministrationSupport.ValidPage(filter.Page, filter.PageSize, filter.Search))
             return AdministrationSupport.Invalid<PageResponse<OrganizationResponse>>("Invalid filters. Page must be 1–100000, pageSize 1–100 and search at most 200 characters.");
+        if (!AdministrationSort.TryParse(filter.Sort, AdministrationSort.OrganizationFields, out _, out _))
+            return AdministrationSupport.Invalid<PageResponse<OrganizationResponse>>(AdministrationSupport.SortMessage(AdministrationSort.OrganizationFields));
         return AuthResult<PageResponse<OrganizationResponse>>.Ok(await store.ListOrganizationsAsync(filter, ct));
     }
 }

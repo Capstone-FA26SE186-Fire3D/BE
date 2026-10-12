@@ -15,6 +15,7 @@ public sealed class AccountsController(ISender sender) : AdministrationControlle
     /// <summary>
     /// Tạo mới một tài khoản (chỉ dành cho PlatformAdmin).
     /// </summary>
+    /// <remarks>Body chứa mật khẩu dạng thô: chỉ gọi qua HTTPS, không log body. Role và tổ chức không đổi được sau khi tạo.</remarks>
     [HttpPost]
     [ProducesResponseType<AccountResponse>(201)]
     public async Task<ActionResult<AccountResponse>> Create(CreateAccountRequest request, CancellationToken ct)
@@ -28,6 +29,7 @@ public sealed class AccountsController(ISender sender) : AdministrationControlle
     /// <summary>
     /// Lấy danh sách tài khoản (có phân trang và tìm kiếm).
     /// </summary>
+    /// <remarks>sort: createdAt | updatedAt | email | fullName | lastLoginAt, thêm '-' để giảm dần; mặc định -createdAt. Giá trị khác → 400.</remarks>
     [HttpGet]
     public async Task<ActionResult<PageResponse<ManagedAccountResponse>>> List([FromQuery] AccountFilter filter, CancellationToken ct) =>
         Respond(await sender.Send(new ListAccountsQuery(ActorId, filter), ct));
@@ -35,9 +37,15 @@ public sealed class AccountsController(ISender sender) : AdministrationControlle
     /// <summary>
     /// Lấy chi tiết thông tin một tài khoản.
     /// </summary>
+    /// <remarks>ETag là profileRevision của tài khoản (cùng giá trị với /api/auth/me của chính người dùng).</remarks>
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<ManagedAccountResponse>> Get(Guid id, CancellationToken ct) =>
-        Respond(await sender.Send(new GetAccountQuery(ActorId, id), ct));
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+    public async Task<ActionResult<ManagedAccountResponse>> Get(Guid id, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetAccountQuery(ActorId, id), ct);
+        if (result.IsSuccess) Response.Headers.ETag = ProfileEtag.Format(result.Value!.ProfileRevision);
+        return Respond(result);
+    }
 
     /// <summary>
     /// Kích hoạt hoặc vô hiệu hóa một tài khoản.

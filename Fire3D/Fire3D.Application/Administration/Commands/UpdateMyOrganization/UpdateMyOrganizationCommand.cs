@@ -1,3 +1,4 @@
+using Fire3D.Application.Administration.Internal;
 using Fire3D.Application.Authentication;
 using Fire3D.Application.Authentication.Commands.RegisterUser;
 using Fire3D.Application.Authentication.Commands.SelfRegistration;
@@ -15,12 +16,8 @@ public sealed class UpdateMyOrganizationCommandHandler(IAuthStore accounts, IAdm
 {
     public async Task<AuthResult<OrganizationProfileResponse>> Handle(UpdateMyOrganizationCommand command, CancellationToken ct)
     {
-        if (!ProfileEtag.TryParse(command.IfMatch, out var revision))
-            return AuthResult<OrganizationProfileResponse>.Fail(string.IsNullOrWhiteSpace(command.IfMatch) ? "PRECONDITION_REQUIRED" : "VALIDATION_ERROR", "Send the organization ETag in If-Match.", string.IsNullOrWhiteSpace(command.IfMatch) ? 428 : 400);
-        if (command.Request is null)
-            return AuthResult<OrganizationProfileResponse>.Fail("VALIDATION_ERROR", "Organization profile request is required.", 400);
-        if (!command.Request.NameSpecified && !command.Request.AddressSpecified && !command.Request.PhoneNumberSpecified)
-            return AuthResult<OrganizationProfileResponse>.Fail("VALIDATION_ERROR", "Send at least one organization profile field.", 400);
+        if (OrganizationProfileEdit.Precheck<OrganizationProfileResponse>(command.IfMatch, command.Request, out var revision) is { } rejected)
+            return rejected;
 
         await using var transaction = await organizations.BeginManagementTransactionAsync(ct);
         var actor = await accounts.FindUserAsync(command.ActorId, ct);
@@ -29,22 +26,12 @@ public sealed class UpdateMyOrganizationCommandHandler(IAuthStore accounts, IAdm
         var organization = await organizations.FindOrganizationAsync(organizationId, ct);
         if (organization is null || !organization.IsActive || organization.DeletedAt.HasValue)
             return AuthResult<OrganizationProfileResponse>.Fail("UNAUTHORIZED", "Organization is unavailable.", 401);
-        var name = command.Request.NameSpecified ? command.Request.Name?.Trim() : organization.Name;
-        var address = command.Request.AddressSpecified ? command.Request.Address?.Trim() : organization.Address;
-        var phone = command.Request.PhoneNumberSpecified
-            ? command.Request.PhoneNumber is null ? null : SelfRegistrationValidation.NormalizePhone(command.Request.PhoneNumber)
-            : organization.PhoneNumber;
-        if (string.IsNullOrWhiteSpace(name) || name.Length > 255
-            || (command.Request.AddressSpecified && (string.IsNullOrWhiteSpace(address) || address.Length > 2000))
-            || (command.Request.PhoneNumberSpecified && (command.Request.PhoneNumber is null || phone is null)))
-            return AuthResult<OrganizationProfileResponse>.Fail("VALIDATION_ERROR", "Name, address, or phone number is invalid.", 400);
+        if (OrganizationProfileEdit.Resolve(organization, command.Request) is not var (name, address, phone))
+            return OrganizationProfileEdit.Invalid<OrganizationProfileResponse>();
         var now = AuthSupport.UtcNow(clock);
         var result = await organizations.UpdateOrganizationProfileAsync(organizationId, revision, name, address, phone, now, ct);
-        if (result == OrganizationProfileUpdateResult.PhoneTaken)
-            return AuthResult<OrganizationProfileResponse>.Fail("ORGANIZATION_PHONE_EXISTS", "Số điện thoại đã được một tổ chức sử dụng.", 409,
-                new Dictionary<string, string[]> { ["phoneNumber"] = ["Chọn số điện thoại khác cho tổ chức."] });
-        if (result == OrganizationProfileUpdateResult.PreconditionFailed)
-            return AuthResult<OrganizationProfileResponse>.Fail("PRECONDITION_FAILED", "The organization profile changed. Reload it and retry.", 412);
+        if (result == OrganizationProfileUpdateResult.PhoneTaken) return OrganizationProfileEdit.PhoneTaken<OrganizationProfileResponse>();
+        if (result == OrganizationProfileUpdateResult.PreconditionFailed) return OrganizationProfileEdit.Stale<OrganizationProfileResponse>();
         if (result == OrganizationProfileUpdateResult.Unavailable)
             return AuthResult<OrganizationProfileResponse>.Fail("UNAUTHORIZED", "Organization is unavailable.", 401);
         await organizations.WriteOrganizationProfileAuditAsync(new(actor.Id, organizationId, Guid.NewGuid(),

@@ -18,7 +18,9 @@ internal static class AdministrationSupport
     internal static AuthResult<T> NotFound<T>() => AuthResult<T>.Fail("NOT_FOUND", "Resource was not found.", 404);
     internal static AuthResult<T> Invalid<T>(string message) => AuthResult<T>.Fail("VALIDATION_ERROR", message, 400);
     internal static OrganizationResponse ToResponse(Organization x) =>
-        new(x.Id, x.Name, x.Slug, x.IsActive, x.CreatedAt, x.UpdatedAt);
+        new(x.Id, x.Name, x.Slug, x.IsActive, x.CreatedAt, x.UpdatedAt, x.Address, x.PhoneNumber, x.ProfileRevision);
     internal static ManagedAccountResponse ToResponse(User x) =>
-        new(x.Id, x.Email, x.FullName, x.Role, x.OrganizationId, x.IsActive, x.LastLoginAt, x.CreatedAt, x.UpdatedAt);
+        new(x.Id, x.Email, x.FullName, x.Role, x.OrganizationId, x.IsActive, x.LastLoginAt, x.CreatedAt, x.UpdatedAt,
+            x.Username, x.PhoneNumber, x.AvatarUrl, x.ProfileRevision);
+    internal static string SortMessage(string[] fields) => $"sort must be one of {string.Join(", ", fields)}, optionally prefixed with '-'.";
 }
