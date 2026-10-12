@@ -24,7 +24,7 @@ public sealed class ReleaseWriteStore(Fire3DDbContext db, TimeProvider clock, IO
             .SingleOrDefaultAsync(x => x.Id == releaseId
                 && (!organizationId.HasValue || x.OrganizationId == organizationId.Value), ct);
         if (release?.ReleasePackage is null) return null;
-        var now = DateTime.UtcNow;
+        var now = clock.GetUtcNow().UtcDateTime;
         var entitlement = await db.Set<ServiceEntitlement>().AsNoTracking()
             .Where(x => x.BuildingId == release.BuildingId && (x.Status == "Active" || x.Status == "Trial") && x.StartsAt <= now && x.EndsAt > now)
             .OrderByDescending(x => x.PaymentTransactionId != null).ThenByDescending(x => x.EndsAt).ThenBy(x => x.Id)

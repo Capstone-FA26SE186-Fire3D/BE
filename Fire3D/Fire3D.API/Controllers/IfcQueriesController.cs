@@ -118,13 +118,6 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
-    /// <summary>Liệt kê lỗi/cảnh báo validation của revision.</summary>
-    /// <remarks>
-    /// OrganizationUser đúng tenant hoặc PlatformAdmin. Trainee trả 403.
-    /// page mặc định 1; pageSize 20, tối đa 100. Response items,totalCount,page,pageSize.
-    /// Revision hợp lệ chưa có dữ liệu trả items rỗng; revision không tồn tại/ngoài scope trả 404.
-    /// Mỗi issue có validationRunId,processingAttemptId,artifactId,severity,status,evidence và isCurrentAttempt. Kết quả lịch sử được gắn isCurrentAttempt=false.
-    /// </remarks>
     /// <summary>Lịch sử validation run của một revision (mọi attempt), lọc theo jobId tùy chọn.</summary>
     /// <remarks>
     /// OrganizationUser đúng tenant hoặc PlatformAdmin. page mặc định 1; pageSize 20, tối đa 100; mới nhất trước.
@@ -145,6 +138,13 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
             title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
     }
 
+    /// <summary>Liệt kê lỗi/cảnh báo validation của revision.</summary>
+    /// <remarks>
+    /// OrganizationUser đúng tenant hoặc PlatformAdmin. Trainee trả 403.
+    /// page mặc định 1; pageSize 20, tối đa 100. Response items,totalCount,page,pageSize.
+    /// Revision hợp lệ chưa có dữ liệu trả items rỗng; revision không tồn tại/ngoài scope trả 404.
+    /// Mỗi issue có validationRunId,processingAttemptId,artifactId,severity,status,evidence và isCurrentAttempt. Kết quả lịch sử được gắn isCurrentAttempt=false.
+    /// </remarks>
     [HttpGet("revisions/{revisionId:guid}/issues")]
     [ProducesResponseType<PageResponse<RevisionIssueResponse>>(200)]
     [ProducesResponseType<ProblemDetails>(400)]

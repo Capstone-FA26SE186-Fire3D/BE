@@ -127,7 +127,7 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
         };
         var items = await ordered.Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize)
             .Select(x => new ManagedAccountResponse(x.Id, x.Email, x.FullName, x.Role, x.OrganizationId,
-                x.IsActive, x.LastLoginAt, x.CreatedAt, x.UpdatedAt, x.Username, x.PhoneNumber, x.AvatarUrl, x.ProfileRevision)).ToListAsync(ct);
+                x.IsActive, x.LastLoginAt, x.CreatedAt, x.UpdatedAt, x.Username, x.PhoneNumber, null, x.ProfileRevision)).ToListAsync(ct);
         return new(items, count, filter.Page, filter.PageSize);
     }
 

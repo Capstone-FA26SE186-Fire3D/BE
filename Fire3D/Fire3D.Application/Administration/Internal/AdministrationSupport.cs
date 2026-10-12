@@ -21,6 +21,6 @@ internal static class AdministrationSupport
         new(x.Id, x.Name, x.Slug, x.IsActive, x.CreatedAt, x.UpdatedAt, x.Address, x.PhoneNumber, x.ProfileRevision);
     internal static ManagedAccountResponse ToResponse(User x) =>
         new(x.Id, x.Email, x.FullName, x.Role, x.OrganizationId, x.IsActive, x.LastLoginAt, x.CreatedAt, x.UpdatedAt,
-            x.Username, x.PhoneNumber, x.AvatarUrl, x.ProfileRevision);
+            x.Username, x.PhoneNumber, null, x.ProfileRevision);
     internal static string SortMessage(string[] fields) => $"sort must be one of {string.Join(", ", fields)}, optionally prefixed with '-'.";
 }

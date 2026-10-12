@@ -28,6 +28,7 @@
         <EmbeddedResource Include="Persistence/Sql/OrganizationAiRequestList.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.OrganizationAiRequestList.sql" />
         <EmbeddedResource Include="Persistence/Sql/AdminOrganizationAnalytics.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.AdminOrganizationAnalytics.sql" />
         <EmbeddedResource Include="Persistence/Sql/TrainingReleaseList.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.TrainingReleaseList.sql" />
+        <EmbeddedResource Include="Persistence/Sql/ReviewFindingGates.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ReviewFindingGates.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />

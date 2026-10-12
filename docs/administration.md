@@ -66,7 +66,7 @@ The request carries the initial password in plain text: call it only over HTTPS 
 
 An inactive organization stays editable by Admin. Slug, plan and status are not changed here.
 
-`ManagedAccountResponse` adds `username`, `phoneNumber`, `avatarUrl` and `profileRevision`. `GET /api/accounts/{id}` returns `ETag: "<profileRevision>"`.
+`ManagedAccountResponse` adds `username`, `phoneNumber`, `avatarUrl` and `profileRevision`. `avatarUrl` is a 5-minute signed URL on `GET /api/accounts/{id}` only, like `/api/auth/me`; it is null in lists, when no avatar is set or when the account is inactive. The legacy `avatar_url` column is never served. `GET /api/accounts/{id}` returns `ETag: "<profileRevision>"`.
 
 Both status endpoints accept:
 

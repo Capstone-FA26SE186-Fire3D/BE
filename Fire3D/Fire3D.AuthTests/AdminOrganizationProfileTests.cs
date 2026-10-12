@@ -86,13 +86,16 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/accounts?sort=password")).StatusCode);
 
         var tenant = await SeedAiTenant();
-        await ExecuteAsync($"UPDATE users SET username='lan.nguyen',phone_number='0912345678' WHERE id='{tenant.User}'");
+        // The legacy avatar_url column is never served; avatars come from the storage key as signed URLs.
+        await ExecuteAsync($"UPDATE users SET username='lan.nguyen',phone_number='0912345678',avatar_url='https://legacy.example.test/a.png' WHERE id='{tenant.User}'");
         var accounts = await client.GetFromJsonAsync<JsonElement>($"/api/accounts?organizationId={tenant.Org}&sort=email");
         var account = accounts.GetProperty("items").EnumerateArray().Single();
         Assert.Equal("lan.nguyen", account.GetProperty("username").GetString());
         Assert.Equal("0912345678", account.GetProperty("phoneNumber").GetString());
-        Assert.True(account.TryGetProperty("avatarUrl", out _));
+        Assert.Equal(JsonValueKind.Null, account.GetProperty("avatarUrl").ValueKind);
         var detail = await client.GetAsync($"/api/accounts/{tenant.User}");
-        Assert.Equal($"\"{(await detail.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("profileRevision").GetInt64()}\"", detail.Headers.ETag!.ToString());
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal($"\"{detailBody.GetProperty("profileRevision").GetInt64()}\"", detail.Headers.ETag!.ToString());
+        Assert.Equal(JsonValueKind.Null, detailBody.GetProperty("avatarUrl").ValueKind);
     }
 }

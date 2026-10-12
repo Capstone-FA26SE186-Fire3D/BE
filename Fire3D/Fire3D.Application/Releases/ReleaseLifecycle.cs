@@ -96,7 +96,7 @@ public sealed class ListReleasesHandler(IAuthStore accounts, IReleaseStore store
         if (!scope.IsSuccess) return new(default, scope.Error);
         var filter = query.Filter;
         var errors = new Dictionary<string, string[]>();
-        if (filter.Status is not null && !Enum.TryParse<Fire3D.Domain.Enums.ReleaseStatus>(filter.Status, false, out _)) errors["status"] = ["Use Built, Published or Revoked."];
+        if (filter.Status is not null && !Enum.GetNames<Fire3D.Domain.Enums.ReleaseStatus>().Contains(filter.Status, StringComparer.Ordinal)) errors["status"] = ["Use Built, Published or Revoked."];
         if (filter.BuildingId == Guid.Empty) errors["buildingId"] = ["Use a non-empty Building id."];
         if (filter.ScenarioId == Guid.Empty) errors["scenarioId"] = ["Use a non-empty scenario id."];
         if (filter.Page is < 1 or > 100000 || filter.PageSize is < 1 or > 100) errors["page"] = ["page must be 1-100000 and pageSize 1-100."];
