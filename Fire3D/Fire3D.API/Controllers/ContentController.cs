@@ -99,7 +99,7 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     [ProducesResponseType<ProblemDetails>(422)]
     [ProducesResponseType<ProblemDetails>(428)]
     [OpenApi.ResponseHeader("ETag")]
-    public async Task<IActionResult> UpdateVersion(Guid versionId, LearnVersionInput request, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key")] string? key = null)
+    public async Task<IActionResult> UpdateVersion(Guid versionId, LearnVersionInput request, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key"), OpenApi.OptionalRequestHeader] string? key = null)
     {
         if (Precondition(ifMatch, out var expected) is { } bad) return bad;
         var (issues, content) = LearnContent.Normalize(request);
@@ -115,7 +115,7 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
     [OpenApi.ResponseHeader("ETag")]
-    public async Task<IActionResult> Publish(Guid versionId, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key")] string? key = null) =>
+    public async Task<IActionResult> Publish(Guid versionId, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key"), OpenApi.OptionalRequestHeader] string? key = null) =>
         Precondition(ifMatch, out var expected) ?? WithETag(await gates.LifecycleAsync("learn", "PublishVersion", Actor, Family, versionId, new { }, key, expected, ct));
 
     /// <summary>Post lifecycle with If-Match = post ETag: hide (Published→Hidden), show (Hidden→Published), delete, restore (to Hidden when it was ever published, otherwise Unpublished).</summary>
@@ -126,7 +126,7 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
     [OpenApi.ResponseHeader("ETag")]
-    public async Task<IActionResult> Lifecycle(Guid id, string operation, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key")] string? key = null) =>
+    public async Task<IActionResult> Lifecycle(Guid id, string operation, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key"), OpenApi.OptionalRequestHeader] string? key = null) =>
         Precondition(ifMatch, out var expected) ?? WithETag(await gates.LifecycleAsync("learn", LifecycleAction(operation), Actor, Family, id, new { }, key, expected, ct));
 
     /// <summary>PlatformAdmin situation catalog for the editor: search on slug/name, isActive filter, ordered by name; default 20, max 100. The public GET stays unchanged.</summary>
@@ -194,7 +194,7 @@ public sealed class LibraryController(IContentGates gates) : ContentControllerBa
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
     [OpenApi.ResponseHeader("ETag")]
-    public async Task<IActionResult> UpdateItem(Guid id, UpdateLibraryItemRequest request, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key")] string? key = null) =>
+    public async Task<IActionResult> UpdateItem(Guid id, UpdateLibraryItemRequest request, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key"), OpenApi.OptionalRequestHeader] string? key = null) =>
         Precondition(ifMatch, out var expected) ?? WithETag(await gates.LifecycleAsync("library", "UpdateItem", Actor, Family, id, request, key, expected, ct));
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPost("api/admin/library/items/{id:guid}/versions")]
     [ProducesResponseType<JsonElement>(201)]
@@ -219,7 +219,7 @@ public sealed class LibraryController(IContentGates gates) : ContentControllerBa
     [ProducesResponseType<ProblemDetails>(422)]
     [ProducesResponseType<ProblemDetails>(428)]
     [OpenApi.ResponseHeader("ETag")]
-    public async Task<IActionResult> UpdateLibraryVersion(Guid id, LibraryVersionInput request, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key")] string? key = null)
+    public async Task<IActionResult> UpdateLibraryVersion(Guid id, LibraryVersionInput request, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key"), OpenApi.OptionalRequestHeader] string? key = null)
     {
         if (Precondition(ifMatch, out var expected) is { } bad) return bad;
         var version = await gates.LibraryAsync("GetVersion", Actor, Family, id, new { admin = true }, null, null, ct);
@@ -234,7 +234,7 @@ public sealed class LibraryController(IContentGates gates) : ContentControllerBa
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
     [OpenApi.ResponseHeader("ETag")]
-    public async Task<IActionResult> PublishLibraryVersion(Guid id, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key")] string? key = null) =>
+    public async Task<IActionResult> PublishLibraryVersion(Guid id, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key"), OpenApi.OptionalRequestHeader] string? key = null) =>
         Precondition(ifMatch, out var expected) ?? WithETag(await gates.LifecycleAsync("library", "PublishVersion", Actor, Family, id, new { }, key, expected, ct));
 }
 

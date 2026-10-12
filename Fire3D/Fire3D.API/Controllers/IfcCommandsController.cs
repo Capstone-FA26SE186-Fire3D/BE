@@ -47,7 +47,7 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<ActionResult<RetryProcessingJobResponse>> RetryJob(Guid jobId,
-        RetryProcessingJobRequest request,CancellationToken ct,[FromHeader(Name="Idempotency-Key")] string? key=null)
+        RetryProcessingJobRequest request,CancellationToken ct,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.OptionalRequestHeader] string? key=null)
     {
         var actor = User.GetActorId();
         if(key is not null)

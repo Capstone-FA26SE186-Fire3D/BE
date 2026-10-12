@@ -38,7 +38,7 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 | Idempotency-Key,200 Published DTO, GET/revoke/current Training visibility | Implemented; receipt replay never republishes | Receipt/conflict/race/audit rollback and HTTP readback | Azure/real Unity acceptance separate |
 | Admin review queue/detail with filters/names/content/rubric/readiness | Implemented | HTTP and restricted runtime SQL tests | New read-gate migration required |
 | Organization version detail/list reviewStatus/reviewId/rejectReason | Implemented | Reload, role/session and tenant isolation tests | FE/binary integration separate |
-| Draft/release/readiness lists and typed editor schemas from additional issues | Pending | Not claimed | Pending |
+| Draft/release/readiness lists and typed editor schemas from additional issues | Implemented (#53, #54, #66) | HTTP, restricted runtime SQL and tenant isolation tests | New read-gate migrations required |
 
 [Exact contracts, error codes and manual tests](publish-review-manual-test.md). Do not infer deployment from source or mock worker results.
 
@@ -109,7 +109,9 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 - **Kiểm chứng:** HTTP/PostgreSQL với runtime gate-only roles kiểm code sai, grant user khác, rotation/revoke, tenant và atomic audit. Supabase schema/ACL đã áp; binary/client chưa smoke test.
 - **Còn chờ:** Learner package/preparation/start recheck và sync theo started snapshot thuộc SESSION-01; list/grant không chứng minh pipeline này đã có.
 
-### LIBRARY-01 — P1 · LATER · Thư viện Organization (FR-LIBRARY-01–02)
+### LIBRARY-01 — SOURCE/HTTP/DB TESTED · Thư viện Organization (FR-LIBRARY-01–02)
+
+- **Trạng thái 12/10/2026:** đã có `/api/library/*` (OrganizationUser/PlatformAdmin đọc) và `/api/admin/library/*` (PlatformAdmin quản trị) với version hóa template/rubric/thiết bị, publish bất biến và Idempotency-Key cho mutation (#57). Capability thiết bị chưa đối chiếu Unity. Nội dung dưới đây là lịch sử.
 
 - **Contract/current:** Chưa thấy module library v7 trong source; catalog scenario cũ không chứng minh thư viện đã có.
 - **Sửa code:** PlatformAdmin maintain template/rubric mẫu/metadata thiết bị có version; OrganizationUser đọc trong console để author. Template tùy chọn, capability chỉ chọn runtime hỗ trợ; tách Learn và kho riêng tenant.
@@ -145,13 +147,17 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 - **Source:** DI uses ReleaseWriteStore with Publishing:Enabled=false by default. Publish checks live family/lifecycle/tenant, matching Active Training, current paid Building entitlement (Trial insufficient), exact approved content/rubric, readiness revision/version/validation/annotation and accepted current package/manifest/runtime provenance.
 - **Docker evidence:** restricted executor, missing/revoked family, Trial/missing paid entitlement, stale attempt, lifecycle, concurrent publication, receipt/audit rollback and authorized replay are tested. Built does not certify real Unity output.
 - **Pending:** Supabase gate/ACL migration, matching binary and feature-flag smoke, real provider/package/runtime acceptance. Learner launch and seat allocation remain separate.
-### SESSION-01 — P1 · LATER · QR và training session
+### SESSION-01 — SOURCE/HTTP/DB TESTED · QR và training session
+
+- **Trạng thái 12/10/2026:** đã có QR cấp Building, prepare/start/heartbeat/continuation (`/api/training/sessions`, `/api/qr/{token}`), seat tại start và sync sau expiry. Còn nghiệm thu Unity/Mobile. Nội dung dưới đây là lịch sử.
 
 - **Contract/current:** QR Building, Training list, session preparation/start, launch grant và offline continuation/sync chưa có đủ API production.
 - **Sửa code:** Sau ACCESS-01, APPROVAL-01, CAPACITY-01 và release/entitlement gates, triển khai QR cấp Building; list/package/prepare kiểm access, prepare pin release/scenario/package. Explicit online start recheck access/approved/published/entitlement/runtime, phân suất nguyên tử rồi cấp grant; pin entitlement/review/rubric.
 - **Nghiệm thu:** Package cache không mở session mới offline; prepare/playtest không tính seat. Retry start không tạo session/seat trùng. Phiên đã start tiếp tục/sync sau expiry, rotate/revoke quyền hoặc account bị khóa; event/result vẫn kiểm owner và replay hash.
 
-### ASSESSMENT-01 — P1 · LATER · Kết quả theo rubric (FR-TRAINING-01,08)
+### ASSESSMENT-01 — SOURCE/HTTP/DB TESTED · Kết quả theo rubric (FR-TRAINING-01,08)
+
+- **Trạng thái 12/10/2026:** kết quả theo rubric hash đã duyệt, outcome `Passed|NotPassed|Incomplete|NotAssessed` tách completion; rubric `schema_version` chuẩn `"1"` (#69). Nội dung dưới đây là lịch sử.
 
 - **Contract/current:** Chưa có đầy đủ runtime/result API v7; session Completed không suy ra Passed.
 - **Sửa code:** Lưu rubric hash đã duyệt, criterion results, score, outcome `Passed|NotPassed|Incomplete|NotAssessed` và lý do theo session/version. Trainee tự chọn mode, retry không giới hạn; AI bị chặn trong Assessment.
@@ -167,25 +173,33 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 - **❌ Chưa nghiệm thu:** Runtime executor/worker deployment Azure, đăng ký webhook/probe PayOS, giao dịch thật với bank/provider và kiểm entitlement deployed. Không tick publish/playtest/training gate từ entitlement storage.
 - **❌ Backlog riêng:** Reminder 5 ngày, revenue, Upgrade, AI top-up/consume, hoàn tiền tự động, eInvoice và FE billing đầy đủ. Không lập AI invoice cuối kỳ hoặc overage debt.
 - **Nghiệm thu:** Return URL không ghi Paid; amount/currency/link sai không được apply; webhook/recovery/replay không cấp trùng; cùng payment có mốc kích hoạt chung, renewal nối kỳ đã mua; Paid và provisioning riêng biệt.
-### NOTIFY-01 — P1 · LATER · Nhắc hết hạn
+### NOTIFY-01 — SOURCE/HTTP/DB TESTED · Nhắc hết hạn
+
+- **Trạng thái 12/10/2026:** worker nhắc trước 5 ngày (mặc định tắt), web notification `/api/organizations/me/notifications`, email có lease/at-least-once (#68). Mailgun thật chưa nghiệm thu. Nội dung dưới đây là lịch sử.
 
 - **Contract/current:** Mailgun hiện phục vụ reset; reminder dịch vụ chưa có. Docs yêu cầu web/email trước 5 ngày.
 - **Sửa code:** Thêm scheduler/outbox/delivery idempotent theo entitlement, kỳ và channel; gia hạn phải vô hiệu reminder cho kỳ cũ.
 - **Nghiệm thu:** Retry/duplicate không gửi trùng một kỳ/kênh; email và in-app notification cùng đúng entitlement; kiểm provider thật riêng với unit test.
 
-### AI-01 — P1 · LATER · AI request và quota
+### AI-01 — SOURCE/HTTP/DB TESTED · AI request và quota
+
+- **Trạng thái 12/10/2026:** request/quota pooled, reserve/settle/release, reconcile Admin, danh sách request của Organization (`GET /api/ai/requests`, #58). AI provider thật chưa có adapter (503 `AI_PROVIDER_UNAVAILABLE`). Nội dung dưới đây là lịch sử.
 
 - **Contract/current:** V7 dùng Organization quota pooled trả trước từ Building/package/top-up và Trainee daily quota riêng; chưa có luồng production BE request/quota đầy đủ. Không còn overage consent, AI billing period hoặc nợ trả sau.
 - **Sửa code:** Durable request/result qua BE; reserve quota trước billable work, settle/release idempotent và reconcile timeout. Giữ policy/usage/grant provenance, lock order request → ledger/reservation → grants theo ID. Quota request không tạo invoice; BILLING-02 cấp quota qua payment đã áp dụng.
 - **Nghiệm thu:** Concurrent reserve không vượt quota; thiếu quota chặn request mới; duplicate/hash conflict, late result/timeout/release không trừ trùng; quota Trainee không consume pool Organization. Provider nằm ngoài transaction DB.
 
-### CAPACITY-01 — P1 · LATER · Hạn mức người theo kỳ (FR-BILLING-11)
+### CAPACITY-01 — SOURCE/HTTP/DB TESTED · Hạn mức người theo kỳ (FR-BILLING-11)
+
+- **Trạng thái 12/10/2026:** seat theo distinct user/Building/kỳ tại start, Upgrade giữ kỳ và seat đã dùng (#56). Nội dung dưới đây là lịch sử.
 
 - **Contract/current:** Chưa thấy learner-seat/upgrade v7 trong source.
 - **Sửa code:** Một distinct Trainee user ID chiếm một seat tại Building/entitlement khi start lần đầu; nhiều bài/lượt cùng kỳ chỉ một seat. Tòa khác/kỳ renewal mới tính riêng. Upgrade giữ kỳ và số seat đã dùng; user đã tính được start tiếp khi access/service hợp lệ.
 - **Nghiệm thu:** Hai user tranh suất cuối chỉ một thành công; retry cùng user không tăng count; login/list/prepare/playtest không tính. Upgrade không reset seats hoặc chồng kỳ cam kết.
 
-### BILLING-02 — SOURCE/HTTP/DB TESTED · New/Renewal v7; Upgrade/top-up pending
+### BILLING-02 — SOURCE/HTTP/DB TESTED · New/Renewal/Upgrade/top-up v7
+
+- **Trạng thái 12/10/2026:** Upgrade, AI top-up, AI reserve/consume và learner seat allocation đã có (#56); hủy báo giá, danh sách payment, enterprise workflow (#68). Còn rollout và bằng chứng provider thật. Dòng "Pending" bên dưới là lịch sử.
 
 - **Source:** package6/12 months, monthly price, learnerLimit and quota/policy configuration. Quote pins capacity/quota/policy and fixed UTC service interval before Issue. New/Renewal reservations prevent overlapping checkouts; Paid/Applied provisioning adds immutable entitlement and quota grant atomically from snapshot.
 - **Docker evidence:** actual migrations, constrained grants, snapshot/catalog mutation, quota coverage, ETag/Issue concurrency, reservation/cancellation/late payment, provisioning rollback and retries. Legacy checkout recovery remains; no new sales from incomplete legacy snapshots.
@@ -196,13 +210,17 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 - **Sửa code:** Chỉ index snapshot approved/published đúng hash gồm `name`, `objectives`, `instructions`; mỗi retrieval recheck current access/service trước vector retrieval. Loại draft/rubric/đáp án/private IFC. Learn pin post/version hợp lệ, Hidden có thể RAG, Deleted/Unpublished bị loại.
 - **Nghiệm thu:** Access/service mất quyền chặn Building retrieval mới dù index/cache còn; vẫn đọc giải thích kết quả của chính mình đã lưu và Common hợp lệ. Assessment chặn AI; nguồn/version khác tenant bị từ chối.
 
-### LEARN-01 — P1 · LATER · CMS và bookmark
+### LEARN-01 — SOURCE/HTTP/DB TESTED · CMS và bookmark
+
+- **Trạng thái 12/10/2026:** đã có post/version/situation/source/bookmark, public chỉ đọc Published, Hidden 410, media allowlist, danh mục nguồn/tình huống (#69) và Idempotency-Key cho lifecycle (#57). Nội dung dưới đây là lịch sử.
 
 - **Contract/current:** Chưa có CMS/API/persistence Learn production. Docs quy định PlatformAdmin quản trị; không có bước approve riêng.
 - **Sửa code:** Thêm post/version/situation/source/bookmark; public chỉ đọc Published; Hidden không public nhưng được phép RAG, Deleted bị loại; validate provider URL; audit/idempotency và cache invalidation qua outbox.
 - **Nghiệm thu:** Draft không public; version Published bất biến; Hidden/Deleted không trả public, Deleted không vào RAG; bookmark chỉ thuộc Trainee; không thêm approve route ngoài contract.
 
-### REPORT-01 — P2 · PARTIAL · Analytics/support/audit views
+### REPORT-01 — SOURCE/HTTP/DB TESTED · Analytics/support/audit views
+
+- **Trạng thái 12/10/2026:** learner analytics (`/api/organizations/me/analytics/training`, `/api/admin/analytics/training`, theo tổ chức `/api/admin/organizations/{id}/analytics/training`), revenue, audit có tên/lý do (#67). Nội dung dưới đây là lịch sử.
 
 - **Contract/current:** Có feedback/ticket/message cho user và admin, audit metadata admin-only, cùng operations analytics cho platform/organization. Operations analytics không phải learner analytics; chỉ số plays, active sessions, completion/duration chưa có nguồn session chuẩn.
 - **Support đã sửa:** Canonical receipts, ETag/428/400/412, lifecycle/owner/admin locks, bounded pagination/filter và append-only messages; HTTP/PostgreSQL race/replay/rollback tests có bằng chứng. Supabase migration/ACL đã áp. **Còn chờ:** Support binary/client smoke test; audit filters/allowlist and readonly RepeatableRead operations snapshots now have source/Docker tests; deployment and learner analytics remain pending, learner metrics cần start/heartbeat/result chuẩn.

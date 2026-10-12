@@ -194,6 +194,7 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     /// </summary>
     [HttpPost("logout")]
     [Authorize]
+    [ProducesResponseType(204)]
     public async Task<IActionResult> Logout(CancellationToken ct)
     {
         await sender.Send(new LogoutCommand(User.GetActorId(), User.GetSessionFamilyId()), ct);

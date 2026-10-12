@@ -19,7 +19,8 @@ public sealed class WorkerApiOpenApiTests
         var controllers=typeof(Program).Assembly.GetTypes().Where(t=>typeof(ControllerBase).IsAssignableFrom(t));
         foreach(var method in controllers.SelectMany(t=>t.GetMethods(BindingFlags.Public|BindingFlags.Instance|BindingFlags.DeclaredOnly)))
             foreach(var parameter in method.GetParameters().Where(p=>p.GetCustomAttribute<FromHeaderAttribute>() is not null))
-                Assert.NotNull(parameter.GetCustomAttribute<RequiredRequestHeaderAttribute>());
+                Assert.True(parameter.GetCustomAttribute<RequiredRequestHeaderAttribute>() is not null || parameter.GetCustomAttribute<OptionalRequestHeaderAttribute>() is not null,
+                    $"{method.DeclaringType?.Name}.{method.Name}.{parameter.Name} needs header metadata.");
         var put=paths.GetProperty("/api/revisions/{revisionId}/annotations").GetProperty("put");
         Assert.True(Assert.Single(put.GetProperty("parameters").EnumerateArray(),p=>p.GetProperty("name").GetString()=="If-Match").GetProperty("required").GetBoolean());
         foreach(var verb in new[]{"get","put"})Assert.True(paths.GetProperty("/api/revisions/{revisionId}/annotations").GetProperty(verb).GetProperty("responses").GetProperty("200").GetProperty("headers").TryGetProperty("ETag",out _));

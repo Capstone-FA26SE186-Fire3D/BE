@@ -433,7 +433,7 @@ Tất cả cần Editor, rate limit administration. Storage phải được cấ
 | POST | `/api/revisions/{revisionId}/process` | Không body | 202 {jobId} |
 | POST | `/api/processing-jobs/{jobId}/retry` | requestId, reason | 202 RetryProcessingJobResponse |
 | POST | `/api/revisions/{revisionId}/confirm-for-training` | scenarioVersionId, validationRunId, annotationSetId | 200 {reviewId}; exact technical attestation |
-| POST | `/api/revisions/{revisionId}/reviews` | scenarioVersionId, action, validationRunId, message | 201 reviewId |
+| POST | `/api/revisions/{revisionId}/reviews` | scenarioVersionId, validationRunId, reviewMessage, annotationSetId nullable | 201 {id}; technical rejection only |
 
 ### 5.1 Initiate → upload → finalize
 
@@ -647,13 +647,13 @@ Số endpoint không phản ánh mức độ hoàn thiện luồng. Cập nhật
 
 | Capability đích | Việc cần triển khai trong checklist |
 | --- | --- |
-| Organization Library / Admin approval | LIBRARY-01, APPROVAL-01: template/rubric/thiết bị version hóa; duyệt scenario/rubric đúng hash, tách readiness kỹ thuật. |
-| Private Building | Access/participation/list có source/test; migration/binary/client còn phải triển khai. Learner start gate và canonical QR vẫn backlog. |
-| Seats / session / Assessment | CAPACITY-01, SESSION-01, ASSESSMENT-01: distinct user/Building/kỳ tại start, pin entitlement/review/rubric, kết quả riêng completion; sync sau expiry/revoke. |
-| Gói 6/12 tháng / AI prepaid | BILLING-02, AI-01: snapshot seats/quota/policy, provisioning replay sau expiry; top-up không gia hạn Building, không invoice AI cuối kỳ. |
+| Organization Library / Admin approval | Đã có: Library template/rubric/thiết bị version hóa (`/api/library`, `/api/admin/library`); duyệt scenario/rubric đúng hash, readiness kỹ thuật tách riêng. |
+| Private Building | Access/participation/list, learner session start và QR (`/api/training/sessions`, `/api/qr/{token}`) đã có source/test; còn nghiệm thu client/Unity. |
+| Seats / session / Assessment | Đã có: seat theo user/Building/kỳ tại start, pin entitlement/review/rubric, kết quả tách completion (`Passed/NotPassed/Incomplete/NotAssessed`), sync sau expiry/revoke. |
+| Gói 6/12 tháng / AI prepaid | Đã có: snapshot seats/quota/policy, Upgrade, AI top-up không gia hạn Building, provisioning replay; quota `/api/organizations/me/ai-quota`. |
 | Learner-safe RAG | RAG-01: chỉ name/objectives/instructions approved/published; kiểm quyền mỗi retrieval và chặn AI trong Assessment. |
 
-Chi tiết và acceptance tại [implementation checklist](api-implementation-checklist.md). Capability chưa có route/DTO được ghi là thiết kế đích; method/path/payload thuộc task implementation sau. Learn không có approval riêng; approval v7 áp dụng scenario/rubric.
+Chi tiết và acceptance tại [implementation checklist](api-implementation-checklist.md) và [checklist API #52–#69](api-checklist-issues-52-69.md). Còn thiếu thật sự: AI provider thật (adapter), nghiệm thu Unity/Mobile runtime và deployment. Learn không có approval riêng; approval v7 áp dụng scenario/rubric.
 
 ## 10. Checklist tích hợp và test tay
 

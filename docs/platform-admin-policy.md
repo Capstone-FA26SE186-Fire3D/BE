@@ -8,9 +8,9 @@ Quyết định phạm vi sản phẩm ngày 2026-09-15: PlatformAdmin được 
 |---|---|---|
 | Tổ chức | Quản trị xuyên tổ chức | Có tạo, danh sách, chi tiết, đổi trạng thái |
 | Tài khoản | Tạo, xem thông tin cá nhân, đổi trạng thái | Đã có; chỉ PlatformAdmin được gọi API quản trị |
-| Tòa nhà / revision / IFC | Thực hiện nghiệp vụ thay tổ chức | Yêu cầu cho module tương lai; chưa có API |
-| Kịch bản / phiên bản / release | Thực hiện nghiệp vụ thay tổ chức | Yêu cầu cho module tương lai; chưa có API |
-| Huấn luyện / phiên / kết quả | Quản trị, xem dữ liệu phục vụ hỗ trợ tổ chức | Yêu cầu cho module tương lai; chưa có API |
+| Tòa nhà / revision / IFC | Thực hiện nghiệp vụ thay tổ chức | Đã có: tạo/liệt kê Building với `organizationId` (body), đọc chi tiết, revision, IFC upload/process/QA, readiness (`/api/revisions/{id}/readiness`) |
+| Kịch bản / phiên bản / release | Thực hiện nghiệp vụ thay tổ chức | Đã có: scenario, draft (`/api/scenarios/{id}/drafts`), version, review queue/duyệt (`/api/admin/scenario-reviews`), release build/list/publish/revoke (`/api/releases`) |
+| Huấn luyện / phiên / kết quả | Quản trị, xem dữ liệu phục vụ hỗ trợ tổ chức | Đã có: trainings theo Building, analytics training toàn nền tảng và theo tổ chức (`/api/admin/organizations/{id}/analytics/training`), vận hành (`/api/admin/organizations/{id}/analytics/operations`) |
 
 Quyền quản trị không tự tạo ra chức năng chưa có, không bỏ qua validation, trạng thái hay quy tắc nghiệp vụ. Việc sửa kết quả huấn luyện đã hoàn tất cần có use case hiệu chỉnh và lịch sử riêng được team chốt; quyết định này không mặc nhiên cho phép ghi đè kết quả gốc.
 
