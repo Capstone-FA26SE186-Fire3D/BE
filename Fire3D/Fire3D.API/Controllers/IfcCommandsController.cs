@@ -33,8 +33,8 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
 
     /// <summary>Requeue một processing job Failed qua gate database và transactional outbox.</summary>
     /// <remarks>
-    /// OrganizationUser đúng tenant hoặc PlatformAdmin. Body: requestId (UUID mới cho một ý định retry),
-    /// reason (1-1000 ký tự). Gửi lại đúng requestId/reason trả AlreadyRequeued, kể cả job đã chạy xong sau retry.
+    /// OrganizationUser đúng tenant hoặc PlatformAdmin. Key của một ý định retry là UUID, gửi qua header Idempotency-Key
+    /// (khuyến nghị, giống các lệnh khác) hoặc body requestId (tương thích cũ); gửi cả hai thì phải trùng nhau. Body: reason (1-1000 ký tự). Gửi lại đúng requestId/reason trả AlreadyRequeued, kể cả job đã chạy xong sau retry.
     /// Cùng key khác job/reason trả 409; key mới chỉ dùng với Failed. Cancelled/Succeeded không tự chạy lại.
     /// Response 202 có jobId/outcome và Location theo dõi job. 202 xác nhận giao việc bền vững, chưa xác nhận worker hoàn tất.
     /// Cần gate requeue_processing_job, outbox và quyền DB theo v6.7; không ghi trực tiếp status để bỏ qua gate.
@@ -47,9 +47,17 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<ActionResult<RetryProcessingJobResponse>> RetryJob(Guid jobId,
-        RetryProcessingJobRequest request,CancellationToken ct)
+        RetryProcessingJobRequest request,CancellationToken ct,[FromHeader(Name="Idempotency-Key")] string? key=null)
     {
         var actor = User.GetActorId();
+        if(key is not null)
+        {
+            // The retry gate keys on a UUID; the header is the same key as body requestId, not a second one.
+            if(!Guid.TryParse(key,out var headerId)||headerId==Guid.Empty||(request.RequestId!=Guid.Empty&&request.RequestId!=headerId))
+                return Problem(statusCode:400,title:"Idempotency-Key must be a UUID and match requestId when both are sent.",
+                    extensions:new Dictionary<string,object?> {["code"]="VALIDATION_ERROR"});
+            request=request with {RequestId=headerId};
+        }
         var result=await sender.Send(new RetryProcessingJobCommand(actor,jobId,request),ct);
         return result.IsSuccess ? Accepted($"/api/processing-jobs/{jobId}",result.Value)
             : Problem(statusCode:result.Error!.Status,title:result.Error.Message,

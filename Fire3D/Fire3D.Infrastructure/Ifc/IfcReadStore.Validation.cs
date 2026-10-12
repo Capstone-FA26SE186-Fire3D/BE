@@ -6,7 +6,7 @@ public sealed partial class IfcReadStore
         jsonb_build_object('id',v.id,'revisionId',v.revision_id,'processingJobId',v.processing_job_id,
             'processingAttemptId',v.processing_attempt_id,'artifactId',v.artifact_id,
             'scenarioVersionId',v.scenario_version_id,'scope',v.scope,'validatorVersion',v.validator_version,
-            'status',v.status,'summary',v.summary,'startedAt',v.started_at,'finishedAt',v.finished_at,'createdAt',v.created_at)
+            'status',v.status,'outcome',v.outcome,'summary',v.summary,'startedAt',v.started_at,'finishedAt',v.finished_at,'createdAt',v.created_at)
         """;
     public Task<ValidationRunResponse?> GetValidationAsync(Guid validationRunId, Guid? organizationId, CancellationToken ct) =>
         ReadJsonAsync<ValidationRunResponse>("SELECT " + ValidationJson + "::text FROM public.validation_runs v " +

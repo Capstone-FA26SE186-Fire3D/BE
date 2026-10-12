@@ -4,7 +4,7 @@ using MediatR;
 namespace Fire3D.Application.Ifc;
 public sealed record ValidationRunResponse(Guid Id, Guid RevisionId, Guid ProcessingJobId, Guid ProcessingAttemptId,
     Guid? ArtifactId, Guid? ScenarioVersionId, string Scope, string ValidatorVersion, string Status,
-    JsonElement Summary, DateTime? StartedAt, DateTime? FinishedAt, DateTime CreatedAt);
+    JsonElement Summary, DateTime? StartedAt, DateTime? FinishedAt, DateTime CreatedAt, string? Outcome = null);
 public sealed record GetValidationRunQuery(Guid ActorId, Guid ValidationRunId) : IRequest<AuthResult<ValidationRunResponse>>;
 public sealed class GetValidationRunHandler(IAuthStore accounts, IIfcReadStore store)
     : IRequestHandler<GetValidationRunQuery, AuthResult<ValidationRunResponse>>

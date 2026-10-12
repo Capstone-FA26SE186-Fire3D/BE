@@ -6,7 +6,7 @@
 
 Content review is separate:
 
-1. OrganizationUser calls `POST /api/scenario-versions/{id}/submit`, `Idempotency-Key: submit-001`, no body. Response 201 includes `reviewId`, `status`, server `contentHash` and `rubricHash`.
+1. OrganizationUser calls `POST /api/scenario-versions/{id}/submit`, `Idempotency-Key: submit-001`, no body. Response 201 includes `code` (always `"OK"` on success, also on a replay), `reviewId`, `status`, server `contentHash` and `rubricHash`.
 2. PlatformAdmin calls `POST /api/admin/scenario-versions/{id}/approve` with another Idempotency-Key and `{ "contentHash": "<from submit>", "rubricHash": "<from submit>" }`. Response 200 is Approved.
 3. Alternatively reject at `/reject` with the same hashes plus `reason` (1–4000 characters). A rejected/approved decision is immutable; changes require a new scenario version and submission.
 

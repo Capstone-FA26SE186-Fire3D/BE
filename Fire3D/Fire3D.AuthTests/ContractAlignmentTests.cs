@@ -34,4 +34,21 @@ public sealed partial class AuthIntegrationTests
         var limited=paths.GetProperty("/api/accounts").GetProperty("get").GetProperty("responses").GetProperty("429");
         Assert.True(limited.GetProperty("headers").TryGetProperty("Retry-After",out _));
     }
+
+    [PostgresFact]
+    public async Task OpenAPI_publishes_processing_enums_retry_key_and_deprecated_building_query()
+    {
+        var root=await OpenApiRoot();var schemas=root.GetProperty("components").GetProperty("schemas");
+        string?[] Values(string schema,string property)=>schemas.GetProperty(schema).GetProperty("properties").GetProperty(property).GetProperty("enum").EnumerateArray().Select(x=>x.GetString()).ToArray();
+        Assert.Equal(["Queued","Running","Succeeded","Failed","Cancelled"],Values("ProcessingJobResponse","status"));
+        Assert.Equal(["Running","Succeeded","Failed","Expired"],Values("ProcessingAttemptResponse","status"));
+        Assert.Equal(["Passed","Failed"],Values("ValidationRunResponse","outcome"));
+        Assert.Equal(["Passed","Failed"],Values("ValidationRunResponse","status"));
+        Assert.Equal(["Info","Warning","Error","Critical"],Values("RevisionIssueResponse","severity"));
+        Assert.Equal(["reason"],Names(schemas.GetProperty("RetryProcessingJobRequest").GetProperty("required")));
+        var create=root.GetProperty("paths").GetProperty("/api/buildings").GetProperty("post").GetProperty("parameters").EnumerateArray().Single(x=>x.GetProperty("name").GetString()=="organizationId");
+        Assert.True(create.GetProperty("deprecated").GetBoolean());
+        var retry=root.GetProperty("paths").GetProperty("/api/processing-jobs/{jobId}/retry").GetProperty("post").GetProperty("parameters").EnumerateArray();
+        Assert.Contains(retry,x=>x.GetProperty("name").GetString()=="Idempotency-Key");
+    }
 }

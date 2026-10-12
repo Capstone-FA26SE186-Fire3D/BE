@@ -34,7 +34,7 @@ public sealed partial class IfcReadSqlTests
         var store=new IfcReadStore(db);
         var current=await store.GetValidationAsync(database.Validation,database.Tenant,default);
         Assert.NotNull(current); Assert.Equal(database.Attempt,current.ProcessingAttemptId);
-        Assert.Equal("Passed",current.Status);
+        Assert.Equal("Passed",current.Status);Assert.Equal("Passed",current.Outcome);
         Assert.Null(await store.GetValidationAsync(database.Validation,database.OtherTenant,default));
         Assert.Null(await store.GetValidationAsync(database.PreviousValidation,database.Tenant,default));
         Assert.NotNull(await store.GetValidationAsync(database.Validation,null,default));

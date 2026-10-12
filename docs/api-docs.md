@@ -66,7 +66,7 @@ Endpoint bảo vệ cần `Authorization: Bearer <Fire3D accessToken>`. Firebase
 
 Ba role hiện có: `PlatformAdmin`, `OrganizationUser`, `Trainee`. Không có `OrganizationAdmin`. OrganizationUser phải có tổ chức hoạt động; hai role còn lại không có organizationId. Public register không cho chọn role/tổ chức. JWT được kiểm tra cả tài khoản, tổ chức và phiên DB; chưa tới exp vẫn có thể mất hiệu lực khi phiên bị thu hồi.
 
-**Building CRUD:** create/update/archive kiểm actor/role/tenant từ DB và mutation/audit trong cùng transaction, khóa lifecycle/user. PlatformAdmin cần query `organizationId` đích cho mutation; OrganizationUser dùng tenant mình, không được đổi tenant. Body hiện chưa nhận tenant đích. Thiếu scope bị handler từ chối, không coi Guid.Empty là quyền admin. List/detail vẫn lọc organization claim (admin không có tenant có thể nhận list rỗng/404); không suy từ quyền mutation rằng read CRUD đã hỗ trợ admin toàn nền tảng.
+**Building CRUD:** create/update/archive kiểm actor/role/tenant từ DB và mutation/audit trong cùng transaction, khóa lifecycle/user. PlatformAdmin gửi `organizationId` đích trong **body** khi tạo; query `organizationId` chỉ là alias deprecated (khác body → 400). OrganizationUser dùng tenant mình, không được đổi tenant. Thiếu scope bị handler từ chối, không coi Guid.Empty là quyền admin. List/detail vẫn lọc organization claim (admin không có tenant có thể nhận list rỗng/404); không suy từ quyền mutation rằng read CRUD đã hỗ trợ admin toàn nền tảng.
 
 ### Lỗi và phân trang
 
@@ -465,7 +465,7 @@ Kiểm chứng PostgreSQL cô lập + storage giả lập; migration upload đã
 
 ### 5.2 Process, retry, confirm
 
-Process yêu cầu `Idempotency-Key`, chỉ nhận source đã verified. 202 `{jobId}`/Location xác nhận job/audit/outbox/receipt bền vững; chưa chứng minh worker đã chạy. Cùng input/key replay; nhiều key đồng thời không tạo nhiều logical job. Legacy source chưa verified trả 422. Dispatcher mặc định tắt, worker HTTP/machine gates xem [processing worker](processing-worker.md).
+Process yêu cầu `Idempotency-Key` (1–128 ký tự in được; thiếu hoặc sai → `400 IDEMPOTENCY_KEY_REQUIRED`), chỉ nhận source đã verified. 202 `{jobId}`/Location xác nhận job/audit/outbox/receipt bền vững; chưa chứng minh worker đã chạy. Cùng input/key replay; nhiều key đồng thời không tạo nhiều logical job. Legacy source chưa verified trả 422. Dispatcher mặc định tắt, worker HTTP/machine gates xem [processing worker](processing-worker.md).
 
 Retry job Failed:
 
@@ -476,7 +476,7 @@ Retry job Failed:
 }
 ```
 
-requestId là UUID khác Guid.Empty; reason không trống, tối đa 1000, được trim. Response gồm jobId và outcome `Requeued`/`AlreadyRequeued`, status 202 và Location job detail. Gửi lại cùng key/input không requeue lặp. Key cũ/input khác: 409 IDEMPOTENCY_CONFLICT. Key mới khi job không thể retry: 409 JOB_CONFLICT hoặc JOB_NOT_CLAIMABLE. Tạo key mới cho một lần retry chủ động mới.
+Key retry là UUID khác Guid.Empty, gửi qua header `Idempotency-Key` (khuyến nghị, giống các lệnh khác) hoặc body `requestId` (giữ để tương thích). Gửi cả hai thì phải trùng nhau, header không phải UUID → `400 VALIDATION_ERROR`. Retry dùng UUID vì gate lưu key dạng uuid; đây là khác biệt duy nhất so với key chuỗi của các lệnh khác. reason không trống, tối đa 1000, được trim. Response gồm jobId và outcome `Requeued`/`AlreadyRequeued`, status 202 và Location job detail. Gửi lại cùng key/input không requeue lặp. Key cũ/input khác: 409 IDEMPOTENCY_CONFLICT. Key mới khi job không thể retry: 409 JOB_CONFLICT hoặc JOB_NOT_CLAIMABLE. Tạo key mới cho một lần retry chủ động mới.
 
 Confirm tạo technical review đúng revision–scenarioVersion–validationRun–annotation/artifact đã accept, Passed và không Error/Critical blocker. Thành công 200 {reviewId}; mismatch/blocker 409. Không tự tạo release/training hoặc approval nội dung. Xem [readiness và approval](scenario-readiness.md).
 
@@ -497,12 +497,16 @@ Tất cả cần Editor; list nhận page/pageSize. Sai filter/Guid.Empty 400, s
 
 | DTO | Thuộc tính JSON |
 | --- | --- |
-| ProcessingJobResponse | id, revisionId, sourceDocumentId, scenarioVersionId nullable, kind, status, createdAt |
+| ProcessingJobResponse | id, revisionId, sourceDocumentId, scenarioVersionId nullable, kind, status (`Queued`/`Running`/`Succeeded`/`Failed`/`Cancelled`), createdAt |
 | ProcessingJobDetailResponse | job (ProcessingJobResponse), inputHash, currentAttemptId nullable, currentAttempt nullable |
-| ProcessingAttemptResponse | id, attemptNumber, status, toolchainVersion, startedAt, finishedAt nullable, outputHash nullable |
-| ValidationRunResponse | id, revisionId, processingJobId, processingAttemptId, artifactId nullable, scenarioVersionId nullable, scope, validatorVersion, status, summary (JSON), startedAt/finishedAt nullable, createdAt |
+| ProcessingAttemptResponse | id, attemptNumber, status (`Running`/`Succeeded`/`Failed`/`Expired`), toolchainVersion, startedAt, finishedAt nullable, outputHash nullable |
+| ValidationRunResponse | id, revisionId, processingJobId, processingAttemptId, artifactId nullable, scenarioVersionId nullable, scope, validatorVersion, outcome (`Passed`/`Failed`), status (= outcome, giữ tương thích), summary (JSON), startedAt/finishedAt nullable, createdAt |
 | JobQaResponse | jobId, currentAttemptId nullable, validationRuns (Page<ValidationRunResponse>) |
-| RevisionIssueResponse | id, revisionId, validationRunId, processingAttemptId, artifactId nullable, issueCode, severity, status, message, evidence (JSON), isCurrentAttempt, createdAt |
+| RevisionIssueResponse | id, revisionId, validationRunId, processingAttemptId, artifactId nullable, issueCode, severity (`Info`/`Warning`/`Error`/`Critical`), status (`Open`), message, evidence (JSON), isCurrentAttempt, createdAt |
+
+Các giá trị trên được công bố thành `enum` trong OpenAPI; so sánh phân biệt hoa thường. Job `Succeeded` chỉ nghĩa là worker chạy xong; đạt QA là `outcome = Passed` của validation run và không còn issue `Error`/`Critical`.
+
+Chuỗi run → artifact → release: validation run của job Playtest/Release có `artifactId` là artifact ứng viên (ReleasePackage). `confirm-for-training` ghi nhận đúng cặp revision–scenarioVersion–validationRun–artifact, và `POST /api/releases` gửi `candidateArtifactId` = `artifactId` của run đó cùng `confirmationReviewId`. Gate từ chối nếu artifact không phải output đã accept của run hiện hành.
 | RevisionArtifactResponse | id, revisionId, jobId, attemptId, artifactType, sha256Hash, metadata (JSON), isRuntimeReady, isCurrentAttempt, createdAt |
 | BimFactResponse | id, revisionId, ifcGlobalId, entityType, propertyPath, value (JSON nullable), sourceHash, qualityFlags (JSON), createdAt |
 

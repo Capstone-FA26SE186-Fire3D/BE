@@ -21,6 +21,10 @@ public sealed class AuthoringOperationTransformer:IOpenApiOperationTransformer
       "X-Installation-Key"=>"Required installation ownership proof: 32 random bytes encoded as base64url, retained in secure storage with the UUID.",
       _=>header.Description};
     }
+  foreach(var info in action.MethodInfo.GetParameters())
+   if(info.GetCustomAttribute<DeprecatedParameterAttribute>() is {} deprecated)
+    foreach(var parameter in (operation.Parameters ?? []).OfType<OpenApiParameter>().Where(p=>string.Equals(p.Name,info.GetCustomAttribute<FromQueryAttribute>()?.Name ?? info.Name,StringComparison.OrdinalIgnoreCase)))
+     {parameter.Deprecated=true;parameter.Description=deprecated.Description;}
   foreach(var metadata in action.MethodInfo.GetCustomAttributes<ResponseHeaderAttribute>())
    foreach(var response in (operation.Responses ?? new OpenApiResponses()).Where(r=>int.TryParse(r.Key,out var status)&&status is >=200 and <300).Select(r=>r.Value).OfType<OpenApiResponse>()){
     response.Headers??=new Dictionary<string,IOpenApiHeader>();
