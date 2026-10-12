@@ -25,15 +25,19 @@ public sealed class LearnerAnalytics(Fire3DDbContext db,IOptions<LearnerAnalytic
         ["rates"]="A rate without samples is null, not 0.",
         ["consistency"]="Authorization and every aggregate share one read-only RepeatableRead PostgreSQL snapshot."
     };
-    public async Task<AuthResult<JsonElement>> Read(string report,Guid actor,Guid family,string? from,string? to,CancellationToken ct)
+    public Task<AuthResult<JsonElement>> Read(string report,Guid actor,Guid family,string? from,string? to,CancellationToken ct)=>
+        Query("SELECT analytics_gate(@report,@actor,@family,@from,@to,@active)::text",command=>command.Parameters.AddWithValue("report",report),actor,family,from,to,ct);
+    public Task<AuthResult<JsonElement>> ReadOrganization(Guid actor,Guid family,Guid organizationId,string? from,string? to,CancellationToken ct)=>
+        Query("SELECT analytics_organization_gate(@actor,@family,@organization,@from,@to,@active)::text",command=>command.Parameters.AddWithValue("organization",NpgsqlDbType.Uuid,organizationId),actor,family,from,to,ct);
+    private async Task<AuthResult<JsonElement>> Query(string sql,Action<NpgsqlCommand> bind,Guid actor,Guid family,string? from,string? to,CancellationToken ct)
     {
         await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead,ct);
         await db.Database.ExecuteSqlRawAsync("SET TRANSACTION READ ONLY",ct);
         var asOf=await db.Database.SqlQueryRaw<DateTime>("SELECT transaction_timestamp() AS \"Value\"").SingleAsync(ct);
         if(!ReportingRange.TryParse(from,to,asOf,out var range))
             return AuthResult<JsonElement>.Fail("VALIDATION_ERROR","Use timezone-qualified timestamps and a positive range of at most 90 days.",400);
-        await using var command=new NpgsqlCommand("SELECT analytics_gate(@report,@actor,@family,@from,@to,@active)::text",(NpgsqlConnection)db.Database.GetDbConnection(),(NpgsqlTransaction)tx.GetDbTransaction());
-        command.Parameters.AddWithValue("report",report);
+        await using var command=new NpgsqlCommand(sql,(NpgsqlConnection)db.Database.GetDbConnection(),(NpgsqlTransaction)tx.GetDbTransaction());
+        bind(command);
         command.Parameters.AddWithValue("actor",NpgsqlDbType.Uuid,actor);
         command.Parameters.AddWithValue("family",NpgsqlDbType.Uuid,family);
         command.Parameters.AddWithValue("from",NpgsqlDbType.TimestampTz,DateTime.SpecifyKind(range.From,DateTimeKind.Utc));
@@ -47,6 +51,7 @@ public sealed class LearnerAnalytics(Fire3DDbContext db,IOptions<LearnerAnalytic
         {
             "FORBIDDEN"=>"This session cannot read these analytics.",
             "UNAUTHORIZED"=>"The session is no longer active.",
+            "NOT_FOUND"=>"The organization was not found.",
             _=>"Analytics request was rejected."
         },value.GetProperty("status").GetInt32());
         var body=JsonNode.Parse(value.GetProperty("result").GetRawText())!.AsObject();

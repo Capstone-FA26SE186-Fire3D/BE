@@ -40,19 +40,50 @@ public static class SafeAuditChanges
         catch(JsonException){return [];}
     }
     /// <summary>
-    /// Administrative reason, only from support writers that mark supportAuditContract=1 (feedback/ticket status changes).
-    /// Legacy or unrecognised JSON yields null; other fields named "reason" are never read.
+    /// Administrative reason from known writers only: support writers that mark supportAuditContract=1 (feedback/ticket status changes),
+    /// quotation cancellation (status Cancelled) and enterprise request close (status Closed). Legacy or unrecognised JSON yields null;
+    /// other fields named "reason" are never read. Content-review rejections keep the text on the review, read by the audit query.
     /// </summary>
     public static string? Reason(AuditLog audit)
     {
-        if(audit.Action!=AuditAction.Support || audit.TargetEntity is not ("Feedback" or "SupportTicket") || audit.NewValues is null || audit.NewValues.Length>65536)return null;
+        var writer=(audit.Action,audit.TargetEntity) switch
+        {
+            (AuditAction.Support,"Feedback" or "SupportTicket") => "support",
+            (AuditAction.Update,"quotations") => "Cancelled",
+            (AuditAction.Update,"enterprise_quote_requests") => "Closed",
+            _ => null
+        };
+        if(writer is null || audit.NewValues is null || audit.NewValues.Length>65536)return null;
         try
         {
             using var after=JsonDocument.Parse(audit.NewValues);var root=after.RootElement;
-            if(root.ValueKind!=JsonValueKind.Object || !root.TryGetProperty("supportAuditContract",out var version) || version.ValueKind!=JsonValueKind.Number || !version.TryGetInt32(out var number) || number!=1)return null;
+            if(root.ValueKind!=JsonValueKind.Object)return null;
+            if(writer=="support")
+            {
+                if(!root.TryGetProperty("supportAuditContract",out var version) || version.ValueKind!=JsonValueKind.Number || !version.TryGetInt32(out var number) || number!=1)return null;
+            }
+            else if(Status(root)!=writer)return null;
             return root.TryGetProperty("reason",out var reason) && reason.ValueKind==JsonValueKind.String && reason.GetString() is { Length:>0 and <=1000 } text && !string.IsNullOrWhiteSpace(text)?text:null;
         }
         catch(JsonException){return null;}
+    }
+    /// <summary>Content-review id of a ScenarioVersion rejection audit written under auditContractVersion 1, or null.</summary>
+    public static Guid? RejectedReview(AuditLog audit)
+    {
+        if(audit.Action!=AuditAction.Reject || !audit.TargetEntity.Equals("ScenarioVersion",StringComparison.OrdinalIgnoreCase) || audit.NewValues is null || audit.NewValues.Length>65536)return null;
+        try
+        {
+            using var after=JsonDocument.Parse(audit.NewValues);var root=after.RootElement;
+            return root.ValueKind==JsonValueKind.Object && root.TryGetProperty("auditContractVersion",out var version) && version.ValueKind==JsonValueKind.Number && version.TryGetInt32(out var number) && number==1
+                && Status(root)=="Rejected" && root.TryGetProperty("reviewId",out var review) && review.ValueKind==JsonValueKind.String && review.TryGetGuid(out var id)?id:null;
+        }
+        catch(JsonException){return null;}
+    }
+    private static string? Status(JsonElement root)
+    {
+        foreach(var property in root.EnumerateObject())
+            if(property.Name.Equals("status",StringComparison.OrdinalIgnoreCase) && property.Value.ValueKind==JsonValueKind.String)return property.Value.GetString();
+        return null;
     }
     private static object? ReadField(JsonElement root,string field,out bool found)
     {

@@ -29,6 +29,21 @@ public sealed class LearnerAnalyticsController(ILearnerAnalytics analytics) : Co
     [ProducesResponseType<ProblemDetails>(403)]
     public Task<IActionResult> PlatformTraining([FromQuery]string? from,[FromQuery]string? to,CancellationToken ct)=>Read("PlatformTraining",from,to,ct);
 
+    /// <summary>PlatformAdmin training analytics and AI usage of one organization, with the same definitions as the organization's own report.</summary>
+    /// <remarks>UTC [from,to), default 30 days, maximum 90. Inactive organizations are included; deleted or unknown ones return 404.</remarks>
+    [Authorize(Roles="PlatformAdmin")]
+    [HttpGet("api/admin/organizations/{organizationId:guid}/analytics/training")]
+    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> OrganizationTraining(Guid organizationId,[FromQuery]string? from,[FromQuery]string? to,CancellationToken ct)
+    {
+        var result=await analytics.ReadOrganization(User.GetActorId(),User.GetSessionFamilyId(),organizationId,from,to,ct);
+        return result.IsSuccess?Ok(result.Value):Problem(statusCode:result.Error!.Status,title:result.Error.Message,extensions:new Dictionary<string,object?>{["code"]=result.Error.Code});
+    }
+
     /// <summary>PlatformAdmin revenue: Applied payment transactions by receipt time, per currency, purpose and UTC day.</summary>
     [Authorize(Roles="PlatformAdmin")]
     [HttpGet("api/admin/analytics/revenue")]

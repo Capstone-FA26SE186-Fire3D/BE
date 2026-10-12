@@ -8,6 +8,7 @@ Migration: `20261011150000_AddLearnerAnalytics` (`Persistence/Sql/LearnerAnalyti
 |---|---|---|---|
 | GET | `/api/organizations/me/analytics/training?from=&to=` | OrganizationUser | Training metrics for the caller's organization and its `aiUsage`. |
 | GET | `/api/admin/analytics/training?from=&to=` | PlatformAdmin | Platform totals, `byOrganization` (top 100) and platform `aiUsage`. |
+| GET | `/api/admin/organizations/{organizationId}/analytics/training?from=&to=` | PlatformAdmin | One organization: `organization {id,name,isActive}`, the same metrics as the organization's own report and its `aiUsage` (#67). Inactive organizations included; deleted/unknown 404. |
 | GET | `/api/admin/analytics/revenue?from=&to=` | PlatformAdmin | Money received per currency, purpose and UTC day. |
 
 The range is UTC `[from,to)` with timezone-qualified ISO timestamps. It defaults to the last 30 days and allows at most

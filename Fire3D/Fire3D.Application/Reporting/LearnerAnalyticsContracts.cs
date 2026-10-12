@@ -11,4 +11,6 @@ public sealed class LearnerAnalyticsOptions
 public interface ILearnerAnalytics
 {
     Task<AuthResult<JsonElement>> Read(string report,Guid actor,Guid family,string? from,string? to,CancellationToken ct);
+    /// <summary>PlatformAdmin training and AI analytics of one organization (inactive included, deleted 404).</summary>
+    Task<AuthResult<JsonElement>> ReadOrganization(Guid actor,Guid family,Guid organizationId,string? from,string? to,CancellationToken ct);
 }
