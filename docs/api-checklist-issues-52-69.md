@@ -10,7 +10,7 @@ Nguồn: OpenAPI dump của nhánh `feature/support-billing-catalog-contracts`, 
 | Quyền | Route `/api/admin/**` chỉ dành cho PlatformAdmin. Sai role → `403`. Truy cập tài nguyên của tổ chức khác → `404` (không lộ là tài nguyên có tồn tại). |
 | Idempotency | Lệnh tạo dùng header `Idempotency-Key`. Cùng key + cùng input → trả lại kết quả cũ. Cùng key + input khác → `409`. Thiếu key → `400`/`428`, tùy module. |
 | ETag / If-Match | Billing: `"billing-{id:N}-{revision}"`. Support: `"support-{revision}"`. Knowledge source: `"{revision}"`. Thiếu If-Match → `428` (`IF_MATCH_REQUIRED` / `PRECONDITION_REQUIRED`). Sai revision → `412` (`REVISION_MISMATCH` / `PRECONDITION_FAILED`). |
-| Phân trang | `page` ≥ 1, `pageSize` 1–100. Vượt giới hạn → `400`. Response `{ items, total, page, pageSize }`. |
+| Phân trang | `page` ≥ 1, `pageSize` 1–100. Vượt giới hạn → `400`. Response `{ items, total, page, pageSize }` (Billing, Support, Audit, Learn/Catalog); Administration, review queue và scenario list dùng `totalCount` thay cho `total`. |
 | Lỗi | ProblemDetails với `code` (PayOS dùng `errorCode`). Cột "Mã nghiệp vụ" liệt kê các mã đọc từ service/gate. |
 | Email | Email người tạo/tác giả chỉ trả cho Admin. Owner chỉ thấy `displayName`. |
 | Thời gian | Filter `from`/`to` phải là ISO-8601 có timezone (`2026-10-12T00:00:00Z`). Thiếu timezone → `400` (PayOS ledger, analytics). |
@@ -306,7 +306,7 @@ Library rubric samples and AI drafts. No pass threshold, weight or criterion is 
 - [ ] Gửi lại cùng `Idempotency-Key` → trả lại kết quả cũ, label được tính lại theo người gọi. Receipt không lưu label/email.
 - [ ] Tổ chức khác đọc ticket → `404`. Danh sách của tổ chức khác → `total = 0`.
 - [ ] User hoặc tổ chức bị xóa → Admin vẫn đọc được (`available:false`, `displayName:null`). Admin gửi message hoặc đổi status → `404 NOT_FOUND`.
-- [ ] `GET /api/admin/audit-logs` trả `actor`/`organization` name và `reason`. Lọc được theo `ActorId`, `OrganizationId`, `Action`, `TargetEntity`, `TargetId`, `CorrelationId`, `From`, `To`.
+- [ ] `GET /api/admin/audit-logs` trả `actorDisplayName` / `organizationName`. `GET /api/admin/audit-logs/{id}` trả thêm `changes` và `reason` (chỉ từ support writer: PATCH ticket, PATCH feedback status). Lọc được theo `ActorId`, `OrganizationId`, `Action`, `TargetEntity`, `TargetId`, `CorrelationId`, `From`, `To`.
 - [ ] `GET /api/admin/organizations/{organizationId}/analytics/operations?from&to` trả Buildings, processing jobs và tickets của đúng tổ chức. Không có account, learner, revenue hay AI.
   - [ ] Khoảng `[from,to)` UTC, mặc định 30 ngày, tối đa 90 ngày.
   - [ ] Timestamp không có timezone, khoảng âm hoặc dài hơn 90 ngày → `400 VALIDATION_ERROR`.
