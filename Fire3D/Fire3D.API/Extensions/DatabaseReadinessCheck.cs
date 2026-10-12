@@ -27,6 +27,11 @@ public sealed class DatabaseReadinessCheck(IServiceScopeFactory scopes) : IHealt
                 ? HealthCheckResult.Healthy("OK")
                 : HealthCheckResult.Unhealthy("MIGRATIONS_PENDING", data: new Dictionary<string, object> { ["pendingMigrations"] = pending });
         }
+        catch (Npgsql.PostgresException ex) when (ex.SqlState == Npgsql.PostgresErrorCodes.InsufficientPrivilege)
+        {
+            // The runtime login must be able to read __EFMigrationsHistory (granted by GrantMigrationHistoryRead).
+            return HealthCheckResult.Unhealthy("MIGRATION_HISTORY_UNREADABLE");
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Only the exception type is reported; connection details never leave the process.
