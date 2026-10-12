@@ -30,6 +30,7 @@ public static class AuthenticationExtensions
         services.AddScoped<IAuthStore, AuthStore>();
         services.AddScoped<IGoogleOnboardingService, GoogleOnboardingService>();
         services.AddScoped<IGoogleLinkService, GoogleLinkService>();
+        services.AddScoped<IGooglePasswordService, GooglePasswordService>();
         services.AddScoped<IRefreshTokenCleanupStore, RefreshTokenCleanupStore>();
         services.AddScoped<ILocalPasswordReset, LocalPasswordReset>();
         services.AddScoped<Fire3D.Application.Authentication.Services.Fire3DSessionIssuer>();

@@ -43,6 +43,21 @@ public sealed class FirebaseGoogleVerificationTests
         Assert.Equal("user@example.test", identity.Email);
     }
 
+    [Fact]
+    public async Task Auth_time_is_exposed_for_recent_sign_in_checks_and_absent_when_missing()
+    {
+        var claims = Claims(); claims["auth_time"] = 1_760_000_000L;
+        var identity = await Provider(new Verifier((_, _) => Task.FromResult(new VerifiedFirebaseClaims("google-uid", claims))))
+            .VerifyGoogleTokenAsync("id-token", default);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1_760_000_000), identity.AuthTime);
+        claims["auth_time"] = "1760000000";
+        Assert.Null((await Provider(new Verifier((_, _) => Task.FromResult(new VerifiedFirebaseClaims("google-uid", claims))))
+            .VerifyGoogleTokenAsync("id-token", default)).AuthTime);
+        claims.Remove("auth_time");
+        Assert.Null((await Provider(new Verifier((_, _) => Task.FromResult(new VerifiedFirebaseClaims("google-uid", claims))))
+            .VerifyGoogleTokenAsync("id-token", default)).AuthTime);
+    }
+
     [Theory]
     [InlineData("password")]
     [InlineData("anonymous")]
