@@ -51,6 +51,11 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
     private readonly string password = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
     private string adminConnection = null!;
     private string testConnection = null!;
+    // FIRE3D_TEST_RUNTIME_LOGIN=1: the app connects like Azure, as a login that is only a member of fire3d_api.
+    // Fixture setup and assertions keep using testConnection (the migration owner).
+    private readonly string? runtimeLogin = Environment.GetEnvironmentVariable("FIRE3D_TEST_RUNTIME_LOGIN") == "1"
+        ? "fire3d_rt_" + Guid.NewGuid().ToString("N")[..20] : null;
+    private readonly string runtimePassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
     private WebApplicationFactory<Program>? factory;
     private HttpClient client = null!;
     private bool created;
@@ -91,13 +96,19 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "002_password_reset_recovery.sql")));
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "003_local_password.sql")));
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "005_email_verification.sql")));
+        var appConnection = testConnection;
+        if (runtimeLogin is not null)
+        {
+            await ExecuteAsync($"CREATE ROLE {runtimeLogin} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD '{runtimePassword}' IN ROLE fire3d_api");
+            appConnection = new NpgsqlConnectionStringBuilder(testConnection) { Username = runtimeLogin, Password = runtimePassword }.ConnectionString;
+        }
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(web =>
         {
             web.UseEnvironment("Development");
             web.ConfigureLogging(logging => logging.ClearProviders().AddConsole());
             var settings = new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = testConnection,
+                ["ConnectionStrings:DefaultConnection"] = appConnection,
                 ["Jwt:Issuer"] = "Fire3D.Tests", ["Jwt:Audience"] = "Fire3D.Tests.Client",
                 ["Jwt:SigningKey"] = signingKey, ["Logging:LogLevel:Default"] = "Critical",
                 ["Mailgun:ApiKey"] = "test-key", ["Mailgun:Domain"] = "example.test",
@@ -401,6 +412,7 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
         await using var admin = new NpgsqlConnection(adminConnection);
         await admin.OpenAsync();
         await new NpgsqlCommand($"DROP DATABASE \"{databaseName}\"", admin).ExecuteNonQueryAsync();
+        if (runtimeLogin is not null) await new NpgsqlCommand($"DROP ROLE IF EXISTS {runtimeLogin}", admin).ExecuteNonQueryAsync();
     }
 }
 
