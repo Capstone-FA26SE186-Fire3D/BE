@@ -57,16 +57,24 @@ Every state change enqueues a `PlatformCacheInvalidation` outbox event with `{sc
 | GET | `/api/learn/posts?search=&situation=&kind=&page=&pageSize=` | anonymous | Published post with a Published version only, newest first (publishedAt, id). `search` 2–100 chars on title+summary, case- and Vietnamese-diacritic-insensitive (`chay` finds `Cháy`, `duong` finds `Đường`; folded in SQL, no `unaccent` extension). Repeat `situation` (≤10 active slugs) and `kind` (Article/Tip/Video): values of one filter are OR, filters are AND. Filters run before paging; `total` is exact. Invalid values → 400 `VALIDATION_ERROR` with `errors`. (#79) |
 | GET | `/api/learn/posts/{slug}` | anonymous | Published version only, no draft history. |
 | GET | `/api/learn/bookmarks` | Trainee | Paged. |
+| GET | `/api/learn/bookmarks/{postId}` | Trainee | `{postId, bookmarked}` for one post, without loading every bookmark (#86). |
 | PUT/DELETE | `/api/learn/bookmarks/{postId}` | Trainee | Idempotent. |
-| GET | `/api/admin/learn/posts?status=` | PlatformAdmin | All states with version list. |
+| GET | `/api/admin/learn/posts?status=` | PlatformAdmin | All states. Each row adds `title`, `kind`, `latestVersionNumber`, `latestVersionStatus` (latest version, also for never-published posts), `draftVersionId`/`draftVersionNumber` (newest open Draft or null) and `versionCount` (#86). |
 | GET | `/api/admin/learn/posts/{id}` | PlatformAdmin | `ETag` = post revision. |
 | POST | `/api/admin/learn/posts` | PlatformAdmin | `{slug, publish, version}` + Idempotency-Key → `201`. |
 | POST | `/api/admin/learn/posts/{id}/versions` | PlatformAdmin | New Draft + Idempotency-Key. |
 | GET/PUT | `/api/admin/learn/versions/{versionId}` | PlatformAdmin | PUT only on Draft, If-Match version revision. |
 | POST | `/api/admin/learn/versions/{versionId}/publish` | PlatformAdmin | If-Match version revision. |
-| POST | `/api/admin/learn/posts/{id}/hide\|show\|delete\|restore` | PlatformAdmin | If-Match post revision. |
+| POST | `/api/admin/learn/posts/{id}/hide\|show\|delete\|restore` | PlatformAdmin | If-Match post revision. `show` re-applies the publish rules to the published version: every cited source still Approved Common (`409 LEARN_SOURCE_NOT_APPROVED`) and every situation active (`409 LEARN_SITUATION_INVALID`). |
 | POST | `/api/admin/learn/situations` | PlatformAdmin | Idempotency-Key. |
+| PATCH | `/api/admin/learn/situations/{id}` | PlatformAdmin | `{name?, description?, isActive?}` (at least one; empty description clears it). Slug never changes and situations are never deleted. Inactive situations leave public filters and block publish/show of versions using them; audited and cache-invalidated. |
 | POST | `/api/admin/learn/media/validate` | PlatformAdmin | Preview of URL canonicalisation. |
+
+## Policies clarified for #86
+
+- Several Draft versions of one post may exist at once; publish names the exact version, and the others stay Draft.
+- RAG eligibility (`learn_rag_eligible`) requires the current published version of a Published or Hidden post **and** every cited source still Approved Common. Retiring a source removes the post from retrieval immediately; Deleted is never eligible.
+- Video blocks are stored as `{type:"video", provider, videoId, url}` from the allowlist only; content never holds HTML or iframes. A client that embeds builds the player URL itself from `provider` + `videoId` and allows only these hosts in its CSP `frame-src`: YouTube `https://www.youtube-nocookie.com/embed/{videoId}`, TikTok `https://www.tiktok.com/embed/v2/{videoId}`, Facebook `https://www.facebook.com/plugins/video.php?href={url-encoded url}`. Otherwise link out to `url`.
 
 ## Editor catalogs (#69)
 

@@ -70,6 +70,14 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     public async Task<IActionResult> Bookmark(Guid postId, CancellationToken ct) =>
         Reply(await gates.LearnPublicAsync("Bookmark", User.GetActorId(), User.GetSessionFamilyId(), new { postId }, ct));
 
+    /// <summary>Whether the signed-in Trainee bookmarked this post, without loading every bookmark.</summary>
+    [Authorize(Roles = "Trainee"), HttpGet("api/learn/bookmarks/{postId:guid}")]
+    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    public async Task<IActionResult> BookmarkState(Guid postId, CancellationToken ct) =>
+        Reply(await gates.LearnPublicAsync("BookmarkState", User.GetActorId(), User.GetSessionFamilyId(), new { postId }, ct));
+
     [Authorize(Roles = "Trainee"), HttpDelete("api/learn/bookmarks/{postId:guid}")]
     [ProducesResponseType<JsonElement>(200)]
     public async Task<IActionResult> Unbookmark(Guid postId, CancellationToken ct) =>
@@ -169,6 +177,24 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     {
         var result = await gates.LearnAdminAsync("CreateSituation", Actor, Family, Guid.Empty, request, key, null, ct);
         return result.IsSuccess ? Created("/api/learn/situations", result.Value) : Problem(result.Error!);
+    }
+
+    /// <summary>Renames, describes or deactivates a situation (PlatformAdmin). Situations are never deleted.</summary>
+    /// <remarks>Send at least one of name, description, isActive. Inactive situations stop matching public filters and block
+    /// publishing or showing a version that uses them; already published links stay. Audited and cache-invalidated.</remarks>
+    [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPatch("api/admin/learn/situations/{id:guid}")]
+    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> UpdateSituation(Guid id, UpdateLearnSituationRequest request, CancellationToken ct)
+    {
+        var input = new Dictionary<string, object?>();
+        if (request.Name is not null) input["name"] = request.Name;
+        if (request.Description is not null) input["description"] = request.Description;
+        if (request.IsActive is not null) input["isActive"] = request.IsActive;
+        if (input.Count == 0 || request.Name is { } name && (string.IsNullOrWhiteSpace(name) || name.Length > 255) || request.Description is { Length: > 2000 })
+            return Problem(statusCode: 400, title: "Send name (1-255), description (max 2000) or isActive.", extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR" });
+        return Reply(await gates.LearnAdminAsync("UpdateSituation", Actor, Family, id, input, null, null, ct));
     }
 
     /// <summary>Validates a YouTube, Facebook or TikTok video URL and returns its canonical descriptor. The URL is never fetched.</summary>

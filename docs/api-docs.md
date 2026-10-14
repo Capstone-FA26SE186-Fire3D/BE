@@ -780,3 +780,14 @@ See [current contract and migrations](billing-v7-rollout.md), [safe reporting DT
 # Selected worker/API contract update
 
 Selected mutations recheck the JWT session family under lifecycle/actor/resource locks, including readiness, content approval and catalog/discount/quota-policy changes. The client never supplies the family in JSON. Revoked/expired family returns401 before receipt replay. Annotations PUT requires quoted If-Match (428/400/412), appends a version atomically and validates anchors against accepted current Geometry provenance; GET/PUT declare ETag. Preview HEAD checks size before URL signing; missing/size mismatch is NotReady, provider failure503 PREVIEW_STORAGE_UNAVAILABLE. New readiness/approval audits expose only safe allowlisted changes. See [manual checks](api-worker-contract-manual-test.md) and [worker SQL permissions](worker-permissions.md) for schema-first rollout and deployment evidence boundaries.
+
+## Bổ sung contract FE — 14/10/2026 (#84, #85, #86)
+
+- **QR (#84):** xem [learner-sessions.md](learner-sessions.md#building-qr): `serviceStatus`/`serviceEndsAt`/`canStartNewSessions`, `410 QR_REVOKED`, `replacedId`, `content` để in QR.
+- **Playtest (#85):** `GET /api/scenarios/{id}/playtests`, `GET /api/scenarios/{id}/playtest-availability`, `recovery.canIssueHandoff`, `openHandoffId` (bảng mục 7).
+- **Learn (#86):** danh sách admin có title/kind/draft, `GET /api/learn/bookmarks/{postId}`, `PATCH /api/admin/learn/situations/{id}`, quy tắc `show`/RAG và cách nhúng video: [learn-library.md](learn-library.md).
+- **Review (#86):** `ScenarioReviewSummary` có thêm `submittedByName`, `decidedByName` (họ tên, nếu trống thì username/email).
+- **Analytics (#86):** `GET /api/admin/analytics/training`: `byTraining[].trainingName`, `byOrganization[].organizationName`.
+- **Người phụ trách enterprise (#86):** danh sách PlatformAdmin để chọn dùng route có sẵn `GET /api/accounts?role=PlatformAdmin&isActive=true`.
+- **Audit (#86):** list/detail có thêm `actorType` (`User`/`System`); `actorDisplayName` vẫn là nhãn hiển thị.
+- Ngoài phạm vi đợt này: quota AI bị trừ sau reconcile (#86 mục 8) thuộc phần AI đang tạm dừng.

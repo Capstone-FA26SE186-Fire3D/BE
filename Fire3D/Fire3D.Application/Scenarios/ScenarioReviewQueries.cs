@@ -7,7 +7,7 @@ namespace Fire3D.Application.Scenarios;
 public sealed record ScenarioReviewSummary(Guid ReviewId, Guid ScenarioVersionId, string Status, string ContentHash,
     string RubricHash, Guid SubmittedBy, DateTimeOffset SubmittedAt, Guid? DecidedBy, DateTimeOffset? DecidedAt,
     string? Reason, Guid OrganizationId, string OrganizationName, Guid BuildingId, string BuildingName,
-    Guid ScenarioId, string ScenarioName, int VersionNumber);
+    Guid ScenarioId, string ScenarioName, int VersionNumber, string? SubmittedByName = null, string? DecidedByName = null);
 public sealed record ScenarioReviewReadiness(Guid? ValidationRunId, string? Outcome, long BlockerCount,
     Guid? ConfirmationReviewId, Guid? CandidateArtifactId, bool TechnicalReady);
 public sealed record ScenarioReviewDetail(ScenarioReviewSummary Review, JsonNode? Content, JsonNode? Rubric,

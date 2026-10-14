@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-248 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+250 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -47,6 +47,7 @@
 | POST | /api/admin/learn/posts/{id}/{operation} | Bearer | If-Match | 200, 409, 412, 428 |
 | GET | /api/admin/learn/situations | Bearer | None | 200, 400 |
 | POST | /api/admin/learn/situations | Bearer | Idempotency-Key | 201, 409 |
+| PATCH | /api/admin/learn/situations/{id} | Bearer | None | 200, 400, 404 |
 | GET | /api/admin/learn/versions/{versionId} | Bearer | None | 200, 404 |
 | PUT | /api/admin/learn/versions/{versionId} | Bearer | If-Match | 200, 409, 412, 422, 428 |
 | POST | /api/admin/learn/versions/{versionId}/publish | Bearer | If-Match | 200, 409, 412, 428 |
@@ -142,6 +143,7 @@
 | POST | /api/feedback | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/learn/bookmarks | Bearer | None | 200 |
 | DELETE | /api/learn/bookmarks/{postId} | Bearer | None | 200 |
+| GET | /api/learn/bookmarks/{postId} | Bearer | None | 200, 401, 403 |
 | PUT | /api/learn/bookmarks/{postId} | Bearer | None | 200, 404 |
 | GET | /api/learn/posts | Anonymous | None | 200, 400 |
 | GET | /api/learn/posts/{slug} | Anonymous | None | 200, 404, 410 |

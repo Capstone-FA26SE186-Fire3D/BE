@@ -12,6 +12,8 @@ public sealed record LearnVersionInput(string Kind, string Title, string Summary
 public sealed record LearnSourceInput(Guid SourceId, string Role = "Reference", JsonObject? Locator = null);
 public sealed record CreateLearnPostRequest(string Slug, LearnVersionInput Version, bool Publish = false);
 public sealed record CreateLearnSituationRequest(string Slug, string Name, string? Description = null);
+/// <summary>Send at least one field. Name 1-255 characters; an empty Description clears it; IsActive=false hides the situation from public filters and new publishes. The slug never changes.</summary>
+public sealed record UpdateLearnSituationRequest(string? Name = null, string? Description = null, bool? IsActive = null);
 public sealed record MediaValidationRequest(string Url);
 public sealed record MediaDescriptor(string Provider, string VideoId, string CanonicalUrl);
 public sealed record CreateLibraryItemRequest(string Kind, string Code);
