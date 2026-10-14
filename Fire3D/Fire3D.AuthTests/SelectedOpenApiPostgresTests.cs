@@ -11,6 +11,9 @@ public sealed partial class AuthIntegrationTests
   using var doc=JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));var root=doc.RootElement;var paths=root.GetProperty("paths");
   foreach(var (path,method,header) in new[]{
    ("/api/releases","post","Idempotency-Key"),
+   ("/api/buildings","post","Idempotency-Key"),
+   ("/api/buildings/{id}","put","If-Match"),
+   ("/api/buildings/{id}","delete","If-Match"),
    ("/api/buildings/{id}/access","patch","If-Match"),
    ("/api/buildings/{id}/participation-code/rotate","post","If-Match"),
    ("/api/buildings/{id}/participation-code","delete","If-Match"),

@@ -127,7 +127,7 @@
 | GET | /api/billing/service-packages | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/billing/service-packages/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/buildings | Bearer | None | 200 |
-| POST | /api/buildings | Bearer | None | 201, 400, 401, 403, 409 |
+| POST | /api/buildings | Bearer | Idempotency-Key | 201, 400, 401, 403, 409 |
 | GET | /api/buildings/{buildingId}/editor-preview | Bearer | None | 200, 400, 401, 403, 404, 503 |
 | POST | /api/buildings/{buildingId}/ifc | Bearer | Idempotency-Key | 201, 400, 404, 429 |
 | GET | /api/buildings/{buildingId}/qr-codes | Bearer | None | 200, 400, 401, 403, 404 |
@@ -135,9 +135,9 @@
 | POST | /api/buildings/{buildingId}/qr-codes/{qrId}/revoke | Bearer | None | 200, 401, 403, 404, 409 |
 | POST | /api/buildings/{buildingId}/qr-codes/{qrId}/rotate | Bearer | None | 200, 401, 403, 404, 409 |
 | GET | /api/buildings/{buildingId}/scenarios | Bearer | None | 200, 400, 403, 404 |
-| DELETE | /api/buildings/{id} | Bearer | None | 200 |
-| GET | /api/buildings/{id} | Bearer | None | 200 |
-| PUT | /api/buildings/{id} | Bearer | None | 200 |
+| DELETE | /api/buildings/{id} | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/buildings/{id} | Bearer | None | 200, 401, 403, 404 |
+| PUT | /api/buildings/{id} | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/buildings/{id}/access | Bearer | None | 200 |
 | PATCH | /api/buildings/{id}/access | Bearer | If-Match | 200 |
 | DELETE | /api/buildings/{id}/participation-code | Bearer | If-Match | 200 |

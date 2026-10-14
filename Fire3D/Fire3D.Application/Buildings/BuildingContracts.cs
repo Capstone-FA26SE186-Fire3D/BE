@@ -40,8 +40,9 @@ public sealed record BuildingSummaryResponse(
     string Name, 
     string? BuildingType, 
     int TotalFloors, 
-    bool IsActive, 
-    DateTime CreatedAt);
+    bool IsActive,
+    DateTime CreatedAt,
+    DateTime UpdatedAt);
 
 public sealed record BuildingFilter(int Page, int PageSize, string? Search, bool? IsActive);
 

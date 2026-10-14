@@ -9,9 +9,12 @@ internal sealed class CreateBuildingCommandHandler(IBuildingStore store, IAuthSt
 {
     public async Task<AuthResult<BuildingResponse>> Handle(CreateBuildingCommand command, CancellationToken ct)
     {
+        if (!BuildingCommandKey.IsValid(command.IdempotencyKey))
+            return AuthResult<BuildingResponse>.Fail("IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key must contain 1–128 printable non-whitespace characters.", 400,
+                new Dictionary<string, string[]> { ["idempotencyKey"] = ["Send a new Idempotency-Key for each Building you create."] });
         var request = command.Request;
         var name = request.Name?.Trim();
-        
+
         var errors = BuildingValidation.Validate(name, request.BuildingType, request.TotalFloors, request.Location, request.Contact);
         var actor = await accounts.FindUserAsync(command.ActorId, ct);
         var alias = command.OrganizationId == Guid.Empty ? null : command.OrganizationId;
@@ -24,7 +27,7 @@ internal sealed class CreateBuildingCommandHandler(IBuildingStore store, IAuthSt
             return AuthResult<BuildingResponse>.Fail("VALIDATION_ERROR", "Building validation failed.", 400, errors);
         if (!organizationId.HasValue || !await BuildingAuthorization.CanMutateAsync(accounts, command.ActorId, organizationId.Value, ct))
             return AuthResult<BuildingResponse>.Fail("FORBIDDEN", "An active organization scope is required.", 403);
-        var now = clock.GetUtcNow().UtcDateTime;
+        var now = BuildingEtag.Next(clock.GetUtcNow().UtcDateTime, null);
         var buildingId = Guid.NewGuid();
         
         var building = new Building
@@ -75,8 +78,20 @@ internal sealed class CreateBuildingCommandHandler(IBuildingStore store, IAuthSt
             };
         }
 
-        if (!await store.CreateBuildingWithAuditAsync(building, location, contact, command.ActorId, now, ct))
+        var (outcome, storedId) = await store.CreateBuildingOnceAsync(building, location, contact, command.ActorId, now,
+            command.IdempotencyKey!, BuildingCommandKey.Hash(organizationId.Value, request), ct);
+        if (outcome == BuildingWriteOutcome.KeyConflict)
+            return AuthResult<BuildingResponse>.Fail("IDEMPOTENCY_KEY_CONFLICT", "This Idempotency-Key was already used to create a different Building.", 409);
+        if (outcome == BuildingWriteOutcome.Rejected)
             return AuthResult<BuildingResponse>.Fail("BUILDING_MUTATION_FAILED", "Building could not be created.", 409);
+        if (outcome == BuildingWriteOutcome.Replayed)
+        {
+            // Same actor, key and input: answer with the Building the first request created, in its current state.
+            var stored = await store.FindBuildingAsync(storedId, organizationId.Value, ct);
+            return stored is null
+                ? AuthResult<BuildingResponse>.Fail("NOT_FOUND", "Building not found.", 404)
+                : AuthResult<BuildingResponse>.Ok(BuildingMapping.ToResponse(stored));
+        }
 
         BuildingLocationResponse? locationResponse = location != null ? new BuildingLocationResponse(location.Id, location.Address, location.City, location.District, location.Latitude, location.Longitude, location.Geojson) : null;
         BuildingContactResponse? contactResponse = contact != null ? new BuildingContactResponse(contact.Id, contact.ContactName, contact.ContactRole, contact.Phone, contact.Email, contact.IsPrimary) : null;

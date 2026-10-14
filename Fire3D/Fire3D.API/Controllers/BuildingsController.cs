@@ -24,18 +24,26 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     /// <summary>Creates a Building in a live organization with atomic audit.</summary>
     /// <remarks>OrganizationUser uses their database tenant. PlatformAdmin must select organizationId in the body.
     /// The organizationId query parameter is a deprecated alias; conflicting body/query values return 400.
-    /// Validation returns code VALIDATION_ERROR with errors keyed by field.</remarks>
+    /// Validation returns code VALIDATION_ERROR with errors keyed by field.
+    /// Idempotency-Key (1–128 printable characters, no spaces) is required: missing or invalid returns 400 IDEMPOTENCY_KEY_REQUIRED.
+    /// Retrying with the same actor, key and input returns 201 with the Building the first request created (current state, same id),
+    /// without another Building or audit. The same key with different input returns 409 IDEMPOTENCY_KEY_CONFLICT.
+    /// The response carries the Building ETag for a later PUT/DELETE.</remarks>
     [HttpPost]
     [ProducesResponseType<BuildingResponse>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(409)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     [Authorize(Roles = "PlatformAdmin,OrganizationUser")]
-    public async Task<ActionResult<BuildingResponse>> CreateBuilding(CreateBuildingRequest request, [FromQuery, Fire3D.API.OpenApi.DeprecatedParameter("Deprecated alias; send organizationId in the body. A different value in query and body returns 400.")] Guid? organizationId, CancellationToken ct)
+    public async Task<ActionResult<BuildingResponse>> CreateBuilding(CreateBuildingRequest request, [FromQuery, Fire3D.API.OpenApi.DeprecatedParameter("Deprecated alias; send organizationId in the body. A different value in query and body returns 400.")] Guid? organizationId,
+        [FromHeader(Name = "Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? idempotencyKey, CancellationToken ct)
     {
-        var result = await sender.Send(new CreateBuildingCommand(ActorId, organizationId, request), ct);
-        return result.IsSuccess ? Created($"/api/buildings/{result.Value!.Id}", result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
+        var result = await sender.Send(new CreateBuildingCommand(ActorId, organizationId, request, idempotencyKey), ct);
+        if (!result.IsSuccess) return Failure(result.Error!);
+        Response.Headers.ETag = BuildingEtag.Format(result.Value!.UpdatedAt);
+        return Created($"/api/buildings/{result.Value.Id}", result.Value);
     }
 
     [HttpGet]
@@ -46,28 +54,85 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
 
+    /// <summary>Reads one Building and its ETag.</summary>
+    /// <remarks>The ETag is the quoted Building version; send it in If-Match on PUT/DELETE. Archived Buildings stay readable.</remarks>
     [HttpGet("{id:guid}")]
     [Authorize(Roles = "PlatformAdmin,OrganizationUser")]
+    [ProducesResponseType<BuildingResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
     public async Task<ActionResult<BuildingResponse>> GetBuilding(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetBuildingQuery(ActorId, null, id), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
+        if (!result.IsSuccess) return Failure(result.Error!);
+        Response.Headers.ETag = BuildingEtag.Format(result.Value!.UpdatedAt);
+        return Ok(result.Value);
     }
 
+    /// <summary>Replaces name, type, floors and optional location/contact of an active Building with If-Match.</summary>
+    /// <remarks>Missing If-Match returns 428 PRECONDITION_REQUIRED; malformed 400 VALIDATION_ERROR. When the Building changed
+    /// since the ETag was read (another user, PlatformAdmin, archive), 412 PRECONDITION_FAILED carries the current Building in
+    /// current and its ETag header, and nothing is written. Location/contact null keep stored data. Archived: 404.</remarks>
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "PlatformAdmin,OrganizationUser")]
-    public async Task<ActionResult<BuildingResponse>> UpdateBuilding(Guid id, UpdateBuildingRequest request, [FromQuery] Guid? organizationId, CancellationToken ct)
+    [ProducesResponseType<BuildingResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(412)]
+    [ProducesResponseType<ProblemDetails>(428)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+    public async Task<ActionResult<BuildingResponse>> UpdateBuilding(Guid id, UpdateBuildingRequest request, [FromQuery] Guid? organizationId,
+        [FromHeader(Name = "If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
     {
-        var result = await sender.Send(new UpdateBuildingCommand(ActorId, organizationId, id, request), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
+        var result = await sender.Send(new UpdateBuildingCommand(ActorId, organizationId, id, request, ifMatch), ct);
+        if (!result.IsSuccess) return await FailureWithCurrent(id, result.Error!, ct);
+        Response.Headers.ETag = BuildingEtag.Format(result.Value!.UpdatedAt);
+        return Ok(result.Value);
     }
 
+    /// <summary>Archives a Building (isActive=false) with If-Match; history is kept.</summary>
+    /// <remarks>Missing If-Match returns 428; malformed 400; stale 412 with the current Building in current. A Building that is
+    /// already archived returns 200 without a write or audit, so a retried DELETE succeeds.</remarks>
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "PlatformAdmin,OrganizationUser")]
-    public async Task<ActionResult<BuildingSummaryResponse>> DeleteBuilding(Guid id, [FromQuery] Guid? organizationId, CancellationToken ct)
+    [ProducesResponseType<BuildingSummaryResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(412)]
+    [ProducesResponseType<ProblemDetails>(428)]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+    public async Task<ActionResult<BuildingSummaryResponse>> DeleteBuilding(Guid id, [FromQuery] Guid? organizationId,
+        [FromHeader(Name = "If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
     {
-        var result = await sender.Send(new SetBuildingActiveCommand(ActorId, organizationId, id, false), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
+        var result = await sender.Send(new SetBuildingActiveCommand(ActorId, organizationId, id, false, ifMatch), ct);
+        if (!result.IsSuccess) return await FailureWithCurrent(id, result.Error!, ct);
+        Response.Headers.ETag = BuildingEtag.Format(result.Value!.UpdatedAt);
+        return Ok(result.Value);
+    }
+
+    private ObjectResult Failure(Fire3D.Application.Authentication.AuthError error, object? current = null)
+    {
+        var extensions = new Dictionary<string, object?> { ["code"] = error.Code, ["errors"] = error.Errors };
+        if (current is not null) extensions["current"] = current;
+        return Problem(statusCode: error.Status, title: error.Message, extensions: extensions);
+    }
+
+    // 412 lets the client compare with the stored Building before retrying with the fresh ETag.
+    private async Task<ObjectResult> FailureWithCurrent(Guid id, Fire3D.Application.Authentication.AuthError error, CancellationToken ct)
+    {
+        if (error.Status != 412) return Failure(error);
+        var current = await sender.Send(new GetBuildingQuery(ActorId, null, id), ct);
+        if (!current.IsSuccess) return Failure(error);
+        Response.Headers.ETag = BuildingEtag.Format(current.Value!.UpdatedAt);
+        return Failure(error, current.Value);
     }
 
     [Authorize(Roles="OrganizationUser,PlatformAdmin")]

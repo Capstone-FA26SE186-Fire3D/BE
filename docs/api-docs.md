@@ -383,11 +383,11 @@ OrganizationResponse: id, name, slug, isActive, createdAt, updatedAt. List nhậ
 
 | Method | Path | Quyền | Thành công |
 | --- | --- | --- | --- |
-| POST | `/api/buildings` | Building CRUD | 201 BuildingResponse |
+| POST | `/api/buildings` | Building CRUD, `Idempotency-Key` | 201 BuildingResponse + ETag |
 | GET | `/api/buildings` | Building CRUD | 200 Page<BuildingSummaryResponse> |
-| GET | `/api/buildings/{id}` | Building CRUD | 200 BuildingResponse |
-| PUT | `/api/buildings/{id}` | Building CRUD | 200 BuildingResponse |
-| DELETE | `/api/buildings/{id}` | Building CRUD | 200 BuildingSummaryResponse |
+| GET | `/api/buildings/{id}` | Building CRUD | 200 BuildingResponse + ETag |
+| PUT | `/api/buildings/{id}` | Building CRUD, `If-Match` | 200 BuildingResponse + ETag |
+| DELETE | `/api/buildings/{id}` | Building CRUD, `If-Match` | 200 BuildingSummaryResponse + ETag |
 | POST | `/api/buildings/{id}/revisions/upload-url` | Editor | 201 InitiateIfcUploadResponse |
 | GET | `/api/buildings/{id}/revisions` | Editor | 200 Page<RevisionResponse> |
 | GET | `/api/buildings/{id}/trainings` | Trainee/OrganizationUser/PlatformAdmin | 200 TrainingDto[] |
@@ -415,9 +415,15 @@ Name bắt buộc tối đa 200 sau trim, totalFloors >= 1. buildingType/locatio
 
 PUT với location/contact null giữ nested data hiện có, không xóa. Query `organizationId` của POST là alias deprecated; body/query khác nhau trả 400. PUT/DELETE admin lấy tenant từ Building, không cần gửi lại query. GET list admin có scope toàn nền tảng rõ ràng khi bỏ organizationId hoặc lọc query; OrganizationUser chỉ xem tenant của mình. Mutation khóa lifecycle trước Building, kiểm lại actor/organization dưới khóa, ghi Building/location/contact/audit trong cùng transaction. DELETE là archive; replay không ghi audit mới.
 
-BuildingResponse: id, name, buildingType, totalFloors, isActive, organizationId, createdAt, updatedAt, location, contact. Nested response thêm id vào các trường request tương ứng. BuildingSummaryResponse: id, name, buildingType, totalFloors, isActive, createdAt.
+BuildingResponse: id, name, buildingType, totalFloors, isActive, organizationId, createdAt, updatedAt, location, contact. Nested response thêm id vào các trường request tương ứng. BuildingSummaryResponse: id, name, buildingType, totalFloors, isActive, createdAt, updatedAt.
 
 List nhận page/pageSize/search/isActive. DELETE chỉ đặt isActive=false, **200 DTO, không 204**, không xóa vật lý. Chưa có route bật lại building. Building đã archive vẫn đọc được qua GET detail/list (`isActive=false`), nhưng PUT trả `404 NOT_FOUND` như các route revision/IFC. Building ngoài tenant trả 404 cho GET/PUT/DELETE và không xuất hiện trong list.
+
+**Idempotency và ETag (issue #94).**
+- `POST /api/buildings` bắt buộc header `Idempotency-Key` (1–128 ký tự in được, không khoảng trắng). Thiếu hoặc sai: `400 IDEMPOTENCY_KEY_REQUIRED`. Cùng actor + key + input (đã trim, kèm tổ chức đích) trả lại `201` với đúng Building lần đầu đã tạo (trạng thái hiện tại), không tạo thêm Building hay audit. Cùng key nhưng input khác: `409 IDEMPOTENCY_KEY_CONFLICT`. Key tính theo từng actor; receipt lưu ở `application_command_receipts` (bảng v7, operation `Building.Create`).
+- `GET/POST/PUT/DELETE /api/buildings/{id}` trả header `ETag` dạng `"<số>"` (phiên bản Building, lấy từ `updated_at` theo micro giây; CORS đã expose `ETag`). Mỗi lần ghi Building, ETag đổi.
+- `PUT` và `DELETE` bắt buộc `If-Match` bằng ETag đã đọc. Thiếu: `428 PRECONDITION_REQUIRED`; sai định dạng: `400 VALIDATION_ERROR`; Building đã đổi từ lúc đọc (người khác sửa, admin sửa, archive): `412 PRECONDITION_FAILED`, không ghi gì, body có `current` (BuildingResponse hiện tại) và header `ETag` mới để FE so sánh rồi thử lại.
+- `DELETE` lên Building đã archive vẫn trả `200` (kèm ETag hiện tại), không ghi audit — retry DELETE sau khi mất response không bị 412.
 
 Revision list nhận page/pageSize; detail nhận ID. Editor scope, Trainee 403, tài nguyên không thấy/ngoài phạm vi hoặc building archive có thể 404. RevisionResponse: id, buildingId, versionLabel, status, createdAt, sourceDocument nullable. SourceDocumentResponse: id, originalFilename, fileSizeBytes, quarantineStatus, createdAt; không object key/download URL.
 
