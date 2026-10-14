@@ -16,6 +16,19 @@ The range is UTC `[from,to)` with timezone-qualified ISO timestamps. It defaults
 SECURITY DEFINER `analytics_gate` re-checks the actor, the live session family and the organization inside that snapshot.
 Responses are `no-store`. Tenant filters are applied in the source rows before aggregation, never after.
 
+## Filters, cohorts and export (#80)
+
+The three training routes accept `buildingId`, `scenarioId` (filters inside the report's tenant; another tenant's id is `404`)
+and `groupBy=day|week|month|building|scenario`. They are served by `analytics_training_gate` (migration
+`20261014134000_AddTrainingAnalyticsV2`) and typed in OpenAPI as `TrainingAnalyticsReport`.
+
+`GET {route}/export` returns `text/csv` for the same filters and definitions (groupBy defaults to `day`): UTF-8 with BOM,
+header `groupBy,key,label,plays,uniqueTrainees,completed,abandoned,awaitingSync,assessed,passed,passRate,averageDurationSeconds`,
+aggregate rows only (no Trainee name, email or ID), cells starting with `= + - @`, tab or CR prefixed with `'`. Limits:
+more than 10000 rows → `422 EXPORT_ROW_LIMIT_EXCEEDED` (never truncated); more than 10 successful exports per account per
+UTC day → `429 EXPORT_DAILY_LIMIT_EXCEEDED` with `Retry-After`. Each export is recorded in `analytics_exports` and audited
+(`Download`, target `AnalyticsExport`). Small groups are not suppressed, as decided in #80.
+
 ## Metric definitions
 
 | Metric | Source and rule |
@@ -23,10 +36,13 @@ Responses are `no-store`. Tenant filters are applied in the source rows before a
 | `plays` | Contract-7 learner sessions with `started_at` in range. Prepare (`training_session_preparations`) and playtests (own tables) are never counted. |
 | `uniqueTrainees` | Distinct `trainee_user_id` of those sessions. |
 | `activeSessions` | `Running` sessions whose last heartbeat was received by the server within `activeWindowSeconds` (default 120, `Analytics:ActiveSessionSeconds`, 10–3600) before `asOf`. Not range-bound. |
-| `completed`, `completionRate` | Cohort sessions with a server-accepted result at `asOf`, divided by plays. A late offline result counts for the cohort of the session start. |
+| `completed`, `completionRate` | Cohort sessions with a server-accepted result at `asOf` **excluding Abandoned**, divided by plays. A late offline result counts for the cohort of the session start. |
+| `abandoned`, `awaitingSync` | Cohort sessions ended as Abandoned; sessions whose completion was requested but whose result is not stored yet (#80). |
 | `outcomes` | Server result outcomes `Passed`/`NotPassed`/`Incomplete`/`NotAssessed`, all keys always present. `assessment.passRate` = Passed / (Passed + NotPassed). |
-| `duration` | `ended_at − launched_at` (server timestamps) of completed cohort sessions: count, average, median seconds. |
-| `byMode`, `byTraining` | Same cohort split by Learn/Guided/Assessment and by Training (top 100 by plays). |
+| `duration` | Runtime `completion_time_seconds` (play time from session events) of completed sessions: count, average, median. Offline sync delay is never counted (#80; previously `ended_at − launched_at`). |
+| `byMode`, `byTraining`, `byBuilding`, `byScenario` | Same cohort split by mode, Training, Building and scenario (top 100 by plays, with names). `byOrganization` only on the platform-wide report. |
+| `cohorts` (with `groupBy`) | Groups by UTC start `day`, `week` (Monday start, key = Monday date), `month` (key `YYYY-MM`), `building` or `scenario` (key = id, label = name): plays, uniqueTrainees (inside the group, never summed), completed, abandoned, awaitingSync, assessed, passed, passRate, averageDurationSeconds. |
+| `debrief` | Assessment criterion results stored by the server, per criterion and metric: evaluated, passed, passRate. No individual answers. |
 | `aiUsage` | `settledUnits` per unit with `settled_at` in range; `openReservations` (Reserved now) and `needsReconcile` (requests and reserved units now) reported separately; `requests` by status created in range. |
 | Revenue | `Applied` payment transactions by `received_at`, summed per currency, also by quotation `billing_purpose` and UTC day; `payingOrganizations`. Quotation totals are never revenue. |
 

@@ -41,6 +41,7 @@
         <EmbeddedResource Include="Persistence/Sql/PlaytestReads.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PlaytestReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/ContentContractGaps.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ContentContractGaps.sql" />
         <EmbeddedResource Include="Persistence/Sql/LibraryContractGaps.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.LibraryContractGaps.sql" />
+        <EmbeddedResource Include="Persistence/Sql/TrainingAnalyticsV2.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.TrainingAnalyticsV2.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />
