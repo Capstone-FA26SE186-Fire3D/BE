@@ -21,7 +21,7 @@ namespace Fire3D.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "audit_action_enum", new[] { "Upload", "ConfirmForTraining", "Reject", "Publish", "Revoke", "Sync", "Login", "Logout", "Download", "Delete", "Create", "Update", "Rollback", "Grant", "Resume", "Payment", "Support" });
@@ -1233,19 +1233,11 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("phone");
 
-                    b.Property<string>("Plan")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("plan")
-                        .HasDefaultValueSql("'free'::character varying");
-
                     b.Property<long>("ProfileRevision")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasDefaultValue(1L)
-                        .HasColumnName("profile_revision");
+                        .HasColumnName("profile_revision_no");
 
                     b.Property<Guid?>("RegistrationOwnerUserId")
                         .HasColumnType("uuid")
@@ -4257,11 +4249,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("avatar_storage_key");
 
-                    b.Property<string>("AvatarUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .HasColumnName("avatar_url");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -4325,7 +4312,7 @@ namespace Fire3D.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasDefaultValue(1L)
-                        .HasColumnName("profile_revision");
+                        .HasColumnName("profile_revision_no");
 
                     b.Property<DateTime?>("RegistrationExpiresAt")
                         .HasColumnType("timestamp with time zone")
@@ -4385,13 +4372,16 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnName("device_uuid");
 
                     b.Property<string>("FcmToken")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)")
+                        .HasColumnType("text")
                         .HasColumnName("fcm_token");
 
                     b.Property<int>("FcmTokenGeneration")
                         .HasColumnType("integer")
                         .HasColumnName("fcm_token_generation");
+
+                    b.Property<DateTime?>("FcmTokenUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fcm_token_updated_at");
 
                     b.Property<Guid?>("InstallationId")
                         .HasColumnType("uuid")
@@ -5420,6 +5410,7 @@ namespace Fire3D.Infrastructure.Migrations
                     b.HasOne("Fire3D.Domain.Entities.User", "User")
                         .WithMany("UserDevices")
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("user_devices_user_id_fkey");
 

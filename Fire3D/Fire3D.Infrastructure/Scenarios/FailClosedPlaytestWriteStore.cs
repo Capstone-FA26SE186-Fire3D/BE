@@ -33,7 +33,7 @@ public sealed class FailClosedPlaytestWriteStore(Fire3DDbContext db) : IPlaytest
         var ownsSession = await db.PlaytestSessions.AsNoTracking().AnyAsync(
             session => session.Id == playtestId
                 && session.CreatedBy == actorId
-                && (organizationId == Guid.Empty || session.OrganizationId == organizationId),
+                && organizationId != Guid.Empty && session.OrganizationId == organizationId,
             ct);
         if (!ownsSession)
             return AuthResult<bool>.Fail("NOT_FOUND", "Playtest session not found or access denied.", 404);

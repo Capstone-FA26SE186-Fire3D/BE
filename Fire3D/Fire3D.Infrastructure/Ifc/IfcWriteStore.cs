@@ -65,57 +65,6 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         return AuthResult<RetryProcessingJobResponse>.Ok(new(jobId,outcome));
     }
 
-    public async Task<AuthResult<bool>> InitiateUploadAsync(Guid actorId, Guid buildingId, Guid revisionId, string versionLabel, Guid? actorTenantId, CancellationToken ct)
-    {
-        var building = await db.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId && b.IsActive && b.DeletedAt == null, ct);
-        if (building == null || (actorTenantId.HasValue && building.OrganizationId != actorTenantId.Value))
-            return AuthResult<bool>.Fail("NOT_FOUND", "Building not found or access denied.", 404);
-
-        var revision = new Fire3D.Domain.Entities.Revision
-        {
-            Id = revisionId,
-            BuildingId = buildingId,
-            OrganizationId = building.OrganizationId,
-            UploadedBy = actorId,
-            VersionLabel = versionLabel,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-        db.Revisions.Add(revision);
-        await db.SaveChangesAsync(ct);
-        return AuthResult<bool>.Ok(true);
-    }
-
-    public async Task<AuthResult<bool>> FinalizeUploadAsync(Guid actorId, Guid revisionId, Fire3D.Application.Ifc.Commands.FinalizeUpload.FinalizeIfcUploadRequest request, Guid? actorTenantId, CancellationToken ct)
-    {
-        var revision = await db.Revisions.FirstOrDefaultAsync(r => r.Id == revisionId, ct);
-        if (revision == null || (actorTenantId.HasValue && revision.OrganizationId != actorTenantId.Value))
-            return AuthResult<bool>.Fail("NOT_FOUND", "Revision not found or access denied.", 404);
-
-        // Check if SourceDocument already exists
-        var existingSource = await db.SourceDocuments.FirstOrDefaultAsync(s => s.RevisionId == revisionId, ct);
-        if (existingSource != null)
-            return AuthResult<bool>.Fail("CONFLICT", "Upload already finalized for this revision.", 409);
-
-        var sourceDoc = new Fire3D.Domain.Entities.SourceDocument
-        {
-            Id = Guid.NewGuid(),
-            RevisionId = revisionId,
-            UploadedBy = actorId,
-            OriginalFilename = request.OriginalFilename,
-            FileSizeBytes = request.FileSizeBytes,
-            StorageUrl = request.ObjectKey,
-            MimeType = request.MimeType,
-            Sha256Hash = request.Sha256Hash,
-            UsageRights = "Private", // Standard default
-            CreatedAt = DateTime.UtcNow
-        };
-        db.SourceDocuments.Add(sourceDoc);
-        
-        await db.SaveChangesAsync(ct);
-        return AuthResult<bool>.Ok(true);
-    }
-
     public async Task<AuthResult<Guid>> ProcessRevisionAsync(Guid actorId, Guid revisionId, Guid? actorTenantId, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
@@ -125,7 +74,9 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
             .Include(r => r.SourceDocument)
             .FirstOrDefaultAsync(r => r.Id == revisionId, ct);
             
-        if (revision == null || (actorTenantId.HasValue && revision.OrganizationId != actorTenantId.Value))
+        // A missing tenant must never widen the scope; archived Buildings cannot start new processing.
+        if (revision == null || actorTenantId is not Guid tenant || revision.OrganizationId != tenant
+            || !revision.Building.IsActive || revision.Building.DeletedAt != null)
             return AuthResult<Guid>.Fail("NOT_FOUND", "Revision not found or access denied.", 404);
 
         if (revision.SourceDocument == null)
@@ -178,42 +129,6 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
 
         await transaction.CommitAsync(ct);
         return AuthResult<Guid>.Ok(jobId);
-    }
-
-    public async Task<AuthResult<bool>> ConfirmForTrainingAsync(Guid actorId, Guid revisionId, Guid? actorTenantId, CancellationToken ct)
-    {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-
-        var revision = await db.Revisions.Include(r => r.Building).FirstOrDefaultAsync(r => r.Id == revisionId, ct);
-        if (revision == null || (actorTenantId.HasValue && revision.OrganizationId != actorTenantId.Value))
-            return AuthResult<bool>.Fail("NOT_FOUND", "Revision not found or access denied.", 404);
-
-        if (revision.Status != Fire3D.Domain.Enums.RevisionStatus.ReadyForScenario)
-            return AuthResult<bool>.Fail("INVALID_STATE", "Revision must be ReadyForScenario to be confirmed.", 400);
-
-        revision.Status = Fire3D.Domain.Enums.RevisionStatus.ConfirmedForTraining;
-        revision.UpdatedAt = DateTime.UtcNow;
-
-        var audit = new Fire3D.Domain.Entities.AuditLog
-        {
-            Id = Guid.NewGuid(),
-            UserId = actorId,
-            OrganizationId = revision.OrganizationId,
-            ActorType = "User",
-            Action = Fire3D.Domain.Enums.AuditAction.ConfirmForTraining,
-            TargetEntity = "Revision",
-            TargetId = revisionId,
-            CorrelationId = Guid.NewGuid(),
-            NewValues = $$"""{"status": "ConfirmedForTraining"}""",
-            OldValues = $$"""{"status": "ReadyForScenario"}""",
-            CreatedAt = DateTime.UtcNow
-        };
-        db.AuditLogs.Add(audit);
-
-        await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        
-        return AuthResult<bool>.Ok(true);
     }
 
     private static bool IsSha256(string? value) => value is { Length: 64 }

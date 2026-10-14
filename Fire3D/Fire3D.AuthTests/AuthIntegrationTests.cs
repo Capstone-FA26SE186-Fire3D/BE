@@ -92,9 +92,7 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
         {
             await db.Database.MigrateAsync();
         }
-        // Raw SQL auth recovery tables are not part of the EF model.
-        await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "002_password_reset_recovery.sql")));
-        await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "003_local_password.sql")));
+        // Password recovery tables come from migrations alone (AddPasswordRecoveryTables), like a fresh deployment.
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "005_email_verification.sql")));
         var appConnection = testConnection;
         if (runtimeLogin is not null)

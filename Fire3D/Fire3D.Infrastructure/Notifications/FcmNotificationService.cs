@@ -67,6 +67,7 @@ public sealed class FcmNotificationService(Fire3DDbContext db, ILogger<FcmNotifi
                 await db.UserDevices.Where(x => x.Id == device.Id && x.FcmToken == device.Token && x.FcmTokenGeneration == device.FcmTokenGeneration)
                     .ExecuteUpdateAsync(update => update
                         .SetProperty(x => x.FcmToken, (string?)null)
+                        .SetProperty(x => x.FcmTokenUpdatedAt, DateTime.UtcNow)
                         .SetProperty(x => x.NotificationsEnabled, false)
                         .SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
             }

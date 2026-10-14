@@ -13,8 +13,8 @@ public sealed class PendingCleanupPermissionsTests
         await db.Sql($$"""
             INSERT INTO organizations(id,name,slug,registration_owner_user_id) VALUES
              ('{{organization}}','Audit history','audit-{{organization:N}}','{{user}}');
-            INSERT INTO users(id,email,role,organization_id,registration_expires_at) VALUES
-             ('{{user}}','org-audit@example.test','OrganizationUser','{{organization}}',now()-interval '1 minute');
+            INSERT INTO users(password_hash,id,email,role,organization_id,registration_expires_at) VALUES
+             ('fixture-hash','{{user}}','org-audit@example.test','OrganizationUser','{{organization}}',now()-interval '1 minute');
             INSERT INTO audit_logs(id,actor_type,action,target_entity,target_id,created_at) VALUES
              (gen_random_uuid(),'System','Create','Organization','{{organization}}',now());
             """);
@@ -32,10 +32,10 @@ public sealed class PendingCleanupPermissionsTests
         await using var db = await BillingDatabase.Create(migrationHistory: true);
         var expired = Guid.NewGuid(); var historical = Guid.NewGuid(); var verified = Guid.NewGuid();
         await db.Sql($$"""
-            INSERT INTO users(id,email,username,role,registration_expires_at,email_verified_at) VALUES
-             ('{{expired}}','expired@example.test','expired_cleanup','Trainee',now()-interval '1 minute',NULL),
-             ('{{historical}}','history@example.test','history_cleanup','Trainee',now()-interval '1 minute',NULL),
-             ('{{verified}}','verified@example.test','verified_cleanup','Trainee',now()-interval '1 minute',now());
+            INSERT INTO users(password_hash,id,email,username,role,registration_expires_at,email_verified_at) VALUES
+             ('fixture-hash','{{expired}}','expired@example.test','expired_cleanup','Trainee',now()-interval '1 minute',NULL),
+             ('fixture-hash','{{historical}}','history@example.test','history_cleanup','Trainee',now()-interval '1 minute',NULL),
+             ('fixture-hash','{{verified}}','verified@example.test','verified_cleanup','Trainee',now()-interval '1 minute',now());
             INSERT INTO audit_logs(id,user_id,actor_type,action,target_entity,created_at)
              VALUES(gen_random_uuid(),'{{historical}}','User','Create','users',now());
             """);
@@ -54,7 +54,7 @@ public sealed class PendingCleanupPermissionsTests
     {
         await using var db = await BillingDatabase.Create(migrationHistory: true);
         var id = Guid.NewGuid();
-        await db.Sql($"INSERT INTO users(id,email,username,role,registration_expires_at) VALUES('{id}','lock@example.test','locked_cleanup','Trainee',now()-interval '1 minute')");
+        await db.Sql($"INSERT INTO users(password_hash,id,email,username,role,registration_expires_at) VALUES('fixture-hash','{id}','lock@example.test','locked_cleanup','Trainee',now()-interval '1 minute')");
         await using var held = new Npgsql.NpgsqlConnection(db.Connection);
         await held.OpenAsync(); await using var tx = await held.BeginTransactionAsync();
         await new Npgsql.NpgsqlCommand($"SELECT pg_advisory_xact_lock(hashtextextended('fire3d:verification-account:{id}',0))", held, tx).ExecuteNonQueryAsync();
@@ -71,7 +71,7 @@ public sealed class PendingCleanupPermissionsTests
         await using var db = await BillingDatabase.Create(migrationHistory: true);
         var id = Guid.NewGuid();
         await db.Sql($$"""
-            INSERT INTO users(id,email,username,role,registration_expires_at) VALUES('{{id}}','rollback@example.test','rollback_cleanup','Trainee',now()-interval '1 minute');
+            INSERT INTO users(password_hash,id,email,username,role,registration_expires_at) VALUES('fixture-hash','{{id}}','rollback@example.test','rollback_cleanup','Trainee',now()-interval '1 minute');
             INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at)
             VALUES(gen_random_uuid(),'{{id}}','{{id}}','cleanup-test',now(),now()+interval '1 day');
             CREATE FUNCTION fail_pending_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'delete unavailable'; END $$;

@@ -31,11 +31,11 @@ public sealed class OrganizationPhoneMigrationTests
     public async Task Additive_migration_preserves_legacy_format_revision_and_multiple_nulls()
     {
         await using var db = await BillingDatabase.Create(false);
-        await db.Sql($"UPDATE organizations SET phone=' (070) 636-4866 ',profile_revision=7,is_active=false,deleted_at=now() WHERE id='{BillingDatabase.Org}'");
+        await db.Sql($"UPDATE organizations SET phone=' (070) 636-4866 ',profile_revision_no=7,is_active=false,deleted_at=now() WHERE id='{BillingDatabase.Org}'");
         var before = await db.Scalar("SELECT jsonb_agg(to_jsonb(o) ORDER BY id)::text FROM organizations o");
         await Apply(db);
         Assert.Equal(before, await db.Scalar("SELECT jsonb_agg(to_jsonb(o) ORDER BY id)::text FROM organizations o"));
-        await db.Sql("INSERT INTO organizations(id,name,slug,phone,plan,is_active,metadata,created_at,updated_at) VALUES(gen_random_uuid(),'Null phone','null-phone',NULL,'free',true,'{}',now(),now())");
+        await db.Sql("INSERT INTO organizations(id,name,slug,phone,is_active,metadata,created_at,updated_at) VALUES(gen_random_uuid(),'Null phone','null-phone',NULL,true,'{}',now(),now())");
         Assert.Equal(2L, await db.Scalar("SELECT count(*) FROM organizations WHERE phone IS NULL"));
         var error = await Assert.ThrowsAsync<PostgresException>(() => db.Sql($"UPDATE organizations SET phone='0706364866' WHERE id='{BillingDatabase.OtherOrg}'"));
         Assert.Equal(PostgresErrorCodes.UniqueViolation, error.SqlState);
@@ -116,7 +116,7 @@ public sealed class OrganizationPhoneMigrationTests
         await using var first = new NpgsqlConnection(runtime); await first.OpenAsync();
         await using var second = new NpgsqlConnection(runtime); await second.OpenAsync();
         await using var tx = await first.BeginTransactionAsync();
-        const string insert = "INSERT INTO organizations(id,name,slug,phone,plan,is_active,metadata,created_at,updated_at) VALUES(gen_random_uuid(),'Concurrent',@slug,@phone,'free',true,'{}',now(),now())";
+        const string insert = "INSERT INTO organizations(id,name,slug,phone,is_active,metadata,created_at,updated_at) VALUES(gen_random_uuid(),'Concurrent',@slug,@phone,true,'{}',now(),now())";
         using var winner = new NpgsqlCommand(insert, first, tx); winner.Parameters.AddWithValue("slug", "winner"); winner.Parameters.AddWithValue("phone", "0706364866"); await winner.ExecuteNonQueryAsync();
         using var loser = new NpgsqlCommand(insert, second); loser.Parameters.AddWithValue("slug", "loser"); loser.Parameters.AddWithValue("phone", "(070) 636-4866");
         var waiting = loser.ExecuteNonQueryAsync();

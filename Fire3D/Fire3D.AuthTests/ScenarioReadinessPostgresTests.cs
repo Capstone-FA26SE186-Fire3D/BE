@@ -19,7 +19,7 @@ public sealed partial class AuthIntegrationTests
     }    private async Task<(Guid Owner,Guid Revision,Guid Version,Guid Run,Guid Artifact)> SeedReadyPackage(string kind="ReleasePackage",bool blocker=false,string minRuntimeVersion="1.0.0",string[]? requiredCapabilities=null,string manifestProtocolVersion="1",System.Text.Json.Nodes.JsonObject? rubric=null)
     {
         var revision=await SeedVerifiedIfcRevision();var building=(Guid)(await ScalarAsync($"SELECT building_id FROM revisions WHERE id='{revision}'"))!;var org=(Guid)(await ScalarAsync($"SELECT organization_id FROM revisions WHERE id='{revision}'"))!;var owner=Guid.NewGuid();
-        await ExecuteAsync($"INSERT INTO users(id,organization_id,email,full_name,role,is_active,email_verified_at,created_at,updated_at) VALUES('{owner}','{org}','owner-{owner:N}@example.test','Owner','OrganizationUser',true,now(),now(),now())");
+        await ExecuteAsync($"INSERT INTO users(password_hash,id,organization_id,email,full_name,role,is_active,email_verified_at,created_at,updated_at) VALUES('fixture-hash','{owner}','{org}','owner-{owner:N}@example.test','Owner','OrganizationUser',true,now(),now(),now())");
         await using var authoringDb=BuildingContext(testConnection);var authoring=new ScenarioWriteStore(authoringDb);
         var scenario=(await authoring.CreateScenarioAsync(owner,building,org,new(building,"Ready package"),default,"ready-scenario")).Value;
         var draft=(await authoring.CreateScenarioDraftAsync(owner,scenario,org,new(revision),default,"ready-draft")).Value;

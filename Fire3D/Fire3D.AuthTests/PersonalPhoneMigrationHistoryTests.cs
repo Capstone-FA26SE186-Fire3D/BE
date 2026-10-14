@@ -35,10 +35,17 @@ public sealed partial class AuthIntegrationTests
                 var before = await new NpgsqlCommand(snapshot, connection).ExecuteScalarAsync();
                 if (duplicate)
                 { var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.MigrateAsync()); Assert.Contains("Personal phone preflight failed", error.MessageText); }
-                else await db.Database.MigrateAsync();
+                // Stop at the phone migration: later migrations rename columns, which a row snapshot would report as a change.
+                else await migrator.MigrateAsync("20261007160000_AddPersonalPhoneUniqueness");
                 Assert.Equal(before, await new NpgsqlCommand(snapshot, connection).ExecuteScalarAsync());
                 Assert.Equal(!duplicate, await new NpgsqlCommand("SELECT to_regclass('public.users_phone_normalized_key') IS NOT NULL", connection).ExecuteScalarAsync());
                 Assert.Equal(duplicate ? 0L : 1L, await new NpgsqlCommand("SELECT count(*) FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\"='20261007160000_AddPersonalPhoneUniqueness'", connection).ExecuteScalarAsync());
+                if (!duplicate)
+                {
+                    // The v7 rename keeps every revision value.
+                    await db.Database.MigrateAsync();
+                    Assert.Equal(7L, await new NpgsqlCommand("SELECT profile_revision_no FROM users WHERE email='personal-a@example.test'", connection).ExecuteScalarAsync());
+                }
             }
             finally { NpgsqlConnection.ClearAllPools(); await new NpgsqlCommand($"DROP DATABASE \"{name}\" WITH (FORCE)", admin).ExecuteNonQueryAsync(); }
         }

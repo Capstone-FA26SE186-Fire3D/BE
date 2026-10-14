@@ -417,7 +417,7 @@ PUT với location/contact null giữ nested data hiện có, không xóa. Query
 
 BuildingResponse: id, name, buildingType, totalFloors, isActive, organizationId, createdAt, updatedAt, location, contact. Nested response thêm id vào các trường request tương ứng. BuildingSummaryResponse: id, name, buildingType, totalFloors, isActive, createdAt.
 
-List nhận page/pageSize/search/isActive. DELETE chỉ đặt isActive=false, **200 DTO, không 204**, không xóa vật lý. Chưa có route bật lại building.
+List nhận page/pageSize/search/isActive. DELETE chỉ đặt isActive=false, **200 DTO, không 204**, không xóa vật lý. Chưa có route bật lại building. Building đã archive vẫn đọc được qua GET detail/list (`isActive=false`), nhưng PUT trả `404 NOT_FOUND` như các route revision/IFC. Building ngoài tenant trả 404 cho GET/PUT/DELETE và không xuất hiện trong list.
 
 Revision list nhận page/pageSize; detail nhận ID. Editor scope, Trainee 403, tài nguyên không thấy/ngoài phạm vi hoặc building archive có thể 404. RevisionResponse: id, buildingId, versionLabel, status, createdAt, sourceDocument nullable. SourceDocumentResponse: id, originalFilename, fileSizeBytes, quarantineStatus, createdAt; không object key/download URL.
 

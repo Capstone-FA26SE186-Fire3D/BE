@@ -18,7 +18,7 @@ public sealed partial class AuthIntegrationTests
     private async Task<Guid> SeedBuildingOrganization()
     {
         var organization = Guid.NewGuid();
-        await ExecuteAsync($"INSERT INTO organizations(id,name,slug,plan,is_active,metadata,created_at,updated_at) VALUES('{organization}','Building Test','{organization:N}','Standard',true,'{{}}',now(),now())");
+        await ExecuteAsync($"INSERT INTO organizations(id,name,slug,is_active,metadata,created_at,updated_at) VALUES('{organization}','Building Test','{organization:N}',true,'{{}}',now(),now())");
         return organization;
     }
 

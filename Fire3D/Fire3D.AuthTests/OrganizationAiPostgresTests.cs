@@ -48,7 +48,7 @@ public sealed partial class AuthIntegrationTests
         var org = Guid.NewGuid(); var user = Guid.NewGuid(); var building = Guid.NewGuid(); var family = Guid.NewGuid();
         await ExecuteAsync($"""
             INSERT INTO organizations(id,name,slug) VALUES('{org}','AI organization','ai-{org:N}');
-            INSERT INTO users(id,organization_id,email,full_name,role,is_active,email_verified_at,created_at,updated_at) VALUES('{user}','{org}','ai-{user:N}@example.test','AI user','OrganizationUser',true,now(),now(),now());
+            INSERT INTO users(password_hash,id,organization_id,email,full_name,role,is_active,email_verified_at,created_at,updated_at) VALUES('fixture-hash','{user}','{org}','ai-{user:N}@example.test','AI user','OrganizationUser',true,now(),now(),now());
             INSERT INTO buildings(id,organization_id,name,is_active,created_by,created_at,updated_at) VALUES('{building}','{org}','AI building',true,'{user}',now(),now());
             INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at) VALUES(gen_random_uuid(),'{user}','{family}','{Guid.NewGuid():N}{Guid.NewGuid():N}',now(),now()+interval '1 hour');
             """);
@@ -161,7 +161,7 @@ public sealed partial class AuthIntegrationTests
     {
         var admin = await AdminFamily(); var tenant = await SeedAiTenant();
         var second = Guid.NewGuid(); var secondFamily = Guid.NewGuid();
-        await ExecuteAsync($"INSERT INTO users(id,organization_id,email,full_name,role,is_active,email_verified_at,created_at,updated_at) VALUES('{second}','{tenant.Org}','ai2-{second:N}@example.test','AI user 2','OrganizationUser',true,now(),now(),now()); INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at) VALUES(gen_random_uuid(),'{second}','{secondFamily}','{Guid.NewGuid():N}{Guid.NewGuid():N}',now(),now()+interval '1 hour')");
+        await ExecuteAsync($"INSERT INTO users(password_hash,id,organization_id,email,full_name,role,is_active,email_verified_at,created_at,updated_at) VALUES('fixture-hash','{second}','{tenant.Org}','ai2-{second:N}@example.test','AI user 2','OrganizationUser',true,now(),now(),now()); INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at) VALUES(gen_random_uuid(),'{second}','{secondFamily}','{Guid.NewGuid():N}{Guid.NewGuid():N}',now(),now()+interval '1 hour')");
         await SeedAiGrant(tenant.Org, 100);
         await WithAiRuntime(async runtime =>
         {

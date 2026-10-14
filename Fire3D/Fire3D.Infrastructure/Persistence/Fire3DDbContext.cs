@@ -540,11 +540,7 @@ public partial class Fire3DDbContext : DbContext
             entity.Property(e => e.PhoneNumber)
                 .HasMaxLength(50)
                 .HasColumnName("phone");
-            entity.Property(e => e.ProfileRevision).HasDefaultValue(1L).HasColumnName("profile_revision");
-            entity.Property(e => e.Plan)
-                .HasMaxLength(50)
-                .HasDefaultValueSql("'free'::character varying")
-                .HasColumnName("plan");
+            entity.Property(e => e.ProfileRevision).HasDefaultValue(1L).HasColumnName("profile_revision_no");
             entity.Property(e => e.Slug).HasColumnName("slug");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
@@ -1780,9 +1776,8 @@ public partial class Fire3DDbContext : DbContext
                 .HasColumnName("created_at");
             entity.Property(e => e.DeviceModel).HasColumnName("device_model");
             entity.Property(e => e.DeviceUuid).HasColumnName("device_uuid");
-            entity.Property(e => e.FcmToken)
-                .HasMaxLength(4096)
-                .HasColumnName("fcm_token");
+            entity.Property(e => e.FcmToken).HasColumnName("fcm_token");
+            entity.Property(e => e.FcmTokenUpdatedAt).HasColumnName("fcm_token_updated_at");
             entity.Property(e => e.InstallationId).HasColumnName("installation_id");
             entity.Property(e => e.NotificationsEnabled).HasColumnName("notifications_enabled");
             entity.Property(e => e.FcmTokenGeneration).HasColumnName("fcm_token_generation");
@@ -1795,7 +1790,7 @@ public partial class Fire3DDbContext : DbContext
 
             entity.HasOne(d => d.User).WithMany(p => p.UserDevices)
                 .HasForeignKey(d => d.UserId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+                .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("user_devices_user_id_fkey");
 
             entity.HasOne(d => d.Installation).WithMany(p => p.UserDevices)

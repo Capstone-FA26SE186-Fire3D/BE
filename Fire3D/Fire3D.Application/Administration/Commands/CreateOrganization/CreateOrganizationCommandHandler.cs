@@ -23,7 +23,7 @@ internal sealed class CreateOrganizationCommandHandler(IAdministrationStore stor
         var now = AuthSupport.UtcNow(clock);
         var organization = new Organization
         {
-            Id = Guid.NewGuid(), Name = name, Slug = slug, Plan = "free", Metadata = "{}",
+            Id = Guid.NewGuid(), Name = name, Slug = slug, Metadata = "{}",
             IsActive = true, CreatedAt = now, UpdatedAt = now
         };
         if (!await store.TryCreateOrganizationAsync(organization, ct))

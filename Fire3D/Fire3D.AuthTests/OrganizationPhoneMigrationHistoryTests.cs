@@ -39,10 +39,17 @@ public sealed partial class AuthIntegrationTests
                     var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.MigrateAsync());
                     Assert.Contains("Organization phone preflight failed", error.MessageText);
                 }
-                else await db.Database.MigrateAsync();
+                // Stop at the phone migration: later migrations rename columns, which a row snapshot would report as a change.
+                else await db.GetService<IMigrator>().MigrateAsync("20261006110000_AddOrganizationPhoneUniqueness");
                 Assert.Equal(before, await new NpgsqlCommand(snapshot, connection).ExecuteScalarAsync());
                 Assert.Equal(duplicate ? 0L : 1L, await new NpgsqlCommand("SELECT count(*) FROM public.\"__EFMigrationsHistory\" WHERE \"MigrationId\"='20261006110000_AddOrganizationPhoneUniqueness'", connection).ExecuteScalarAsync());
                 Assert.Equal(!duplicate, await new NpgsqlCommand("SELECT to_regclass('public.organizations_phone_normalized_key') IS NOT NULL", connection).ExecuteScalarAsync());
+                if (!duplicate)
+                {
+                    // The v7 rename keeps every revision value.
+                    await db.Database.MigrateAsync();
+                    Assert.Equal(7L, await new NpgsqlCommand("SELECT profile_revision_no FROM organizations WHERE slug='phone-a'", connection).ExecuteScalarAsync());
+                }
             }
             finally
             {

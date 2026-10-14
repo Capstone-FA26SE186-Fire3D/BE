@@ -156,11 +156,11 @@ public sealed class GoogleLinkPostgresTests
     public async Task Audit_failure_rolls_back_uid_revision_reset_proofs_and_sessions()
     {
         await using var db = await BillingDatabase.Create(false); await Prepare(db);
-        var before = await db.Scalar($"SELECT profile_revision FROM users WHERE id='{BillingDatabase.Owner}'");
+        var before = await db.Scalar($"SELECT profile_revision_no FROM users WHERE id='{BillingDatabase.Owner}'");
         await db.Sql("ALTER TABLE audit_logs ADD CONSTRAINT reject_google_link_audit CHECK(false) NOT VALID");
         await using (var context = db.Context()) await Assert.ThrowsAsync<DbUpdateException>(() => Link(context));
         Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM users WHERE firebase_uid IS NOT NULL"));
-        Assert.Equal(before, await db.Scalar($"SELECT profile_revision FROM users WHERE id='{BillingDatabase.Owner}'"));
+        Assert.Equal(before, await db.Scalar($"SELECT profile_revision_no FROM users WHERE id='{BillingDatabase.Owner}'"));
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM local_password_reset_tokens WHERE used_at IS NULL"));
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM password_reset_tokens WHERE used_at IS NULL"));
         Assert.Equal(1L, await db.Scalar($"SELECT count(*) FROM auth_refresh_tokens WHERE user_id='{BillingDatabase.Owner}' AND revoked_at IS NULL"));

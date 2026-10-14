@@ -25,7 +25,7 @@ public sealed class GoogleOnboardingSessionHttpTests
         var proof = exchange.RootElement.GetProperty("onboarding").GetProperty("token").GetString();
         await using var connection = new Npgsql.NpgsqlConnection(db.Connection); await connection.OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
-        await new Npgsql.NpgsqlCommand("INSERT INTO users(id,email,role,username,is_active,created_at,updated_at) VALUES(gen_random_uuid(),'competing@example.test','Trainee','blocked_user',true,now(),now())", connection, transaction).ExecuteNonQueryAsync();
+        await new Npgsql.NpgsqlCommand("INSERT INTO users(password_hash,id,email,role,username,is_active,created_at,updated_at) VALUES('fixture-hash',gen_random_uuid(),'competing@example.test','Trainee','blocked_user',true,now(),now())", connection, transaction).ExecuteNonQueryAsync();
         var body = new { onboardingToken = proof, accountType = "trainee", username = "blocked_user" };
         var busy = await client.PostAsJsonAsync("/api/auth/google/onboarding/complete", body);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, busy.StatusCode);

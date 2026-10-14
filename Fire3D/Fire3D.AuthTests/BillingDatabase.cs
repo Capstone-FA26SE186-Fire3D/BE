@@ -86,13 +86,13 @@ internal sealed class BillingDatabase : IAsyncDisposable
                 }
             }
             await result.Sql($$"""
-                INSERT INTO organizations(id,name,slug,plan,is_active,metadata,created_at,updated_at)
-                VALUES ('{{Org}}','One','one','Standard',true,'{}',now(),now()),
-                       ('{{OtherOrg}}','Two','two','Standard',true,'{}',now(),now());
-                INSERT INTO users(id,email,role,organization_id,is_active,created_at,updated_at)
-                VALUES ('{{Admin}}','admin@example.test','PlatformAdmin',null,true,now(),now()),
-                       ('{{Owner}}','owner@example.test','OrganizationUser','{{Org}}',true,now(),now()),
-                       ('{{Other}}','other@example.test','OrganizationUser','{{OtherOrg}}',true,now(),now());
+                INSERT INTO organizations(id,name,slug,is_active,metadata,created_at,updated_at)
+                VALUES ('{{Org}}','One','one',true,'{}',now(),now()),
+                       ('{{OtherOrg}}','Two','two',true,'{}',now(),now());
+                INSERT INTO users(password_hash,id,email,role,organization_id,is_active,created_at,updated_at)
+                VALUES ('fixture-hash','{{Admin}}','admin@example.test','PlatformAdmin',null,true,now(),now()),
+                       ('fixture-hash','{{Owner}}','owner@example.test','OrganizationUser','{{Org}}',true,now(),now()),
+                       ('fixture-hash','{{Other}}','other@example.test','OrganizationUser','{{OtherOrg}}',true,now(),now());
                 INSERT INTO buildings(id,organization_id,name,is_active,created_by,created_at,updated_at)
                 VALUES ('{{Building}}','{{Org}}','Building One',true,'{{Owner}}',now(),now());
                 INSERT INTO building_locations(building_id,address,created_at,updated_at)

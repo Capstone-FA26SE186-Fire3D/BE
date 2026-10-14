@@ -39,7 +39,7 @@ public class ScenarioStoreTests : IAsyncLifetime
         var userId = Guid.NewGuid();
 
         db.Organizations.Add(new Organization { Id = orgId, IsActive = true, Name = "Org", Slug = "scenario-store-org" });
-        db.Users.Add(new User { Id = userId, OrganizationId = orgId, Email = "scenario@example.test", FullName = "Test editor", Role = Fire3D.Domain.Enums.UserRole.OrganizationUser, IsActive = true });
+        db.Users.Add(new User { Id = userId, OrganizationId = orgId, Email = "scenario@example.test", PasswordHash = "fixture-hash", FullName = "Test editor", Role = Fire3D.Domain.Enums.UserRole.OrganizationUser, IsActive = true });
         db.Buildings.Add(new Building { Id = buildingId, OrganizationId = orgId, Name = "Building", IsActive = true, CreatedBy = userId });
         db.Revisions.Add(new Revision { Id = revisionId, BuildingId = buildingId, OrganizationId = orgId, UploadedBy = userId, VersionLabel = "v1" });
         db.SaveChanges();

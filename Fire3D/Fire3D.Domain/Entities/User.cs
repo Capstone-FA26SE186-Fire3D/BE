@@ -31,7 +31,6 @@ public partial class User
 
     public string? PhoneNumber { get; set; }
 
-    public string? AvatarUrl { get; set; }
 
     public DateTime? EmailVerifiedAt { get; set; }
 

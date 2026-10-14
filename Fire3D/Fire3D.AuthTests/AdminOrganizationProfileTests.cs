@@ -86,8 +86,8 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/accounts?sort=password")).StatusCode);
 
         var tenant = await SeedAiTenant();
-        // The legacy avatar_url column is never served; avatars come from the storage key as signed URLs.
-        await ExecuteAsync($"UPDATE users SET username='lan.nguyen',phone_number='0912345678',avatar_url='https://legacy.example.test/a.png' WHERE id='{tenant.User}'");
+        // Avatars come only from the storage key as signed URLs; without one the account has no avatar.
+        await ExecuteAsync($"UPDATE users SET username='lan.nguyen',phone_number='0912345678' WHERE id='{tenant.User}'");
         var accounts = await client.GetFromJsonAsync<JsonElement>($"/api/accounts?organizationId={tenant.Org}&sort=email");
         var account = accounts.GetProperty("items").EnumerateArray().Single();
         Assert.Equal("lan.nguyen", account.GetProperty("username").GetString());
