@@ -49,4 +49,14 @@ BEGIN
    END IF;
   END LOOP;
  END LOOP;
+ -- cleanup_pending_registrations reads every table that references users; it was granted those tables when it was
+ -- created, so tables created afterwards must grant its owner the same read access (no DELETE: rows block cleanup).
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='fet3d_pending_cleanup_owner') THEN
+  FOREACH t IN ARRAY ARRAY['local_password_reset_tokens','password_reset_operations'] LOOP
+   EXECUTE format('GRANT SELECT ON public.%I TO fet3d_pending_cleanup_owner',t);
+   IF NOT EXISTS(SELECT 1 FROM pg_policies p WHERE p.schemaname='public' AND p.tablename=t AND p.policyname='pending_cleanup_owner') THEN
+    EXECUTE format('CREATE POLICY pending_cleanup_owner ON public.%I TO fet3d_pending_cleanup_owner USING(true) WITH CHECK(true)',t);
+   END IF;
+  END LOOP;
+ END IF;
 END $$;
