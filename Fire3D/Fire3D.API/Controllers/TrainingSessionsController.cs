@@ -168,6 +168,8 @@ public sealed class BuildingQrController(IBuildingQrCodes qr, ISender sender) : 
     [HttpPost("api/buildings/{buildingId:guid}/qr-codes")]
     [ProducesResponseType<BuildingQrCreated>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> Create(Guid buildingId, CreateBuildingQrRequest request, CancellationToken ct)
@@ -179,32 +181,43 @@ public sealed class BuildingQrController(IBuildingQrCodes qr, ISender sender) : 
     [HttpGet("api/buildings/{buildingId:guid}/qr-codes")]
     [ProducesResponseType<BuildingQrPage>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> List(Guid buildingId, CancellationToken ct, [FromQuery] int page = 1, [FromQuery] int pageSize = 20) =>
         Reply(await qr.ListAsync(User.GetActorId(), User.GetSessionFamilyId(), buildingId, page, pageSize, ct));
     [Authorize(Roles = "OrganizationUser,PlatformAdmin")]
     [HttpPost("api/buildings/{buildingId:guid}/qr-codes/{qrId:guid}/rotate")]
     [ProducesResponseType<BuildingQrCreated>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> Rotate(Guid buildingId, Guid qrId, CreateBuildingQrRequest request, CancellationToken ct) => Reply(await qr.RotateAsync(User.GetActorId(), User.GetSessionFamilyId(), buildingId, qrId, request, ct));
     [Authorize(Roles = "OrganizationUser,PlatformAdmin")]
     [HttpPost("api/buildings/{buildingId:guid}/qr-codes/{qrId:guid}/revoke")]
     [ProducesResponseType<BuildingQrView>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> Revoke(Guid buildingId, Guid qrId, CancellationToken ct) => Reply(await qr.RevokeAsync(User.GetActorId(), User.GetSessionFamilyId(), buildingId, qrId, ct));
     [Authorize(Roles = "Trainee,OrganizationUser,PlatformAdmin")]
     [HttpGet("api/qr/{qrToken}")]
     [ProducesResponseType<BuildingQrResolution>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(410)]
     public async Task<IActionResult> Resolve(string qrToken, CancellationToken ct) => Reply(await qr.ResolveAsync(User.GetActorId(), User.GetSessionFamilyId(), qrToken, ct));
     /// <summary>Published Trainings of the QR Building; Private Buildings still require the Trainee's participation grant.</summary>
     [Authorize(Roles = "Trainee,OrganizationUser,PlatformAdmin")]
     [HttpGet("api/qr/{qrToken}/trainings")]
     [ProducesResponseType<List<Fire3D.Application.Buildings.Queries.GetTrainings.TrainingDto>>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(410)]
     public async Task<IActionResult> Trainings(string qrToken, CancellationToken ct)
     {
         var resolved = await qr.ResolveAsync(User.GetActorId(), User.GetSessionFamilyId(), qrToken, ct);

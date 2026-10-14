@@ -304,28 +304,44 @@ public sealed partial class AuthIntegrationTests
             Assert.Empty((await store.ReconcileAsync(new(other.Id, other.Family, null), new([prepared.Value.Id], ["granted"]), default)).Value!);
             Assert.Equal("NOT_FOUND", (await store.GetAsync(new(other.Id, other.Family, null), prepared.Value.Id, default)).Error?.Code);
 
-            var qr = new BuildingQrCodes(db);
+            var qr = new BuildingQrCodes(db, Options.Create(new Fire3D.Application.Authentication.AuthEmailOptions { FrontendUrl = "https://fet3d.io.vn" }));
             var created = await qr.CreateAsync(f.Owner, f.OwnerFamily, f.Building, new("Lobby"), default);
             Assert.True(created.IsSuccess, created.Error?.Code);
             Assert.Equal(64, (await ScalarAsync($"SELECT length(token_hash) FROM building_qr_codes WHERE id='{created.Value!.Code.Id}'")));
             Assert.Equal(0L, await ScalarAsync($"SELECT count(*) FROM building_qr_codes WHERE token_hash='{created.Value.Token}'"));
             var resolved = await qr.ResolveAsync(trainee.Id, trainee.Family, created.Value.Token, default);
             Assert.Equal(f.Building, resolved.Value!.BuildingId); Assert.True(resolved.Value.HasAccess);
+            Assert.Equal("https://fet3d.io.vn/qr/" + created.Value.Token, created.Value.Content);
+            Assert.Equal(("Active", true), (resolved.Value.ServiceStatus, resolved.Value.CanStartNewSessions));
+            Assert.NotNull(resolved.Value.ServiceEndsAt);
             Assert.Equal("FORBIDDEN", (await qr.CreateAsync(trainee.Id, trainee.Family, f.Building, new(null), default)).Error?.Code);
             // One canonical Active code: a retried or second create never adds another one.
             Assert.Equal("QR_ALREADY_EXISTS", (await qr.CreateAsync(f.Owner, f.OwnerFamily, f.Building, new("Lobby"), default)).Error?.Code);
             var rotated = await qr.RotateAsync(f.Owner, f.OwnerFamily, f.Building, created.Value.Code.Id, new(null), default);
             Assert.Equal("Lobby", rotated.Value!.Code.Label);
-            Assert.Equal("QR_NOT_FOUND", (await qr.ResolveAsync(trainee.Id, trainee.Family, created.Value.Token, default)).Error?.Code);
+            // A replaced or revoked code is told apart from an unknown one, without revealing the replacement.
+            var replaced = await qr.ResolveAsync(trainee.Id, trainee.Family, created.Value.Token, default);
+            Assert.Equal(("QR_REVOKED", 410), (replaced.Error?.Code, replaced.Error?.Status));
+            Assert.Equal("QR_NOT_FOUND", (await qr.ResolveAsync(trainee.Id, trainee.Family, new string('A', 43), default)).Error?.Code);
             Assert.True((await qr.ResolveAsync(trainee.Id, trainee.Family, rotated.Value.Token, default)).IsSuccess);
+            Assert.Equal(created.Value.Code.Id, rotated.Value.Code.ReplacedId);
             Assert.True((await qr.RevokeAsync(f.Owner, f.OwnerFamily, f.Building, rotated.Value.Code.Id, default)).IsSuccess);
-            Assert.Equal("QR_NOT_FOUND", (await qr.ResolveAsync(trainee.Id, trainee.Family, rotated.Value.Token, default)).Error?.Code);
+            Assert.Equal("QR_REVOKED", (await qr.ResolveAsync(trainee.Id, trainee.Family, rotated.Value.Token, default)).Error?.Code);
+            var listed = (await qr.ListAsync(f.Owner, f.OwnerFamily, f.Building, 1, 10, default)).Value!.Items;
+            Assert.Equal(created.Value.Code.Id, listed.Single(x => x.Id == rotated.Value.Code.Id).ReplacedId);
+            Assert.Null(listed.Single(x => x.Id == created.Value.Code.Id).ReplacedId);
             var history = (await qr.ListAsync(f.Owner, f.OwnerFamily, f.Building, 1, 1, default)).Value!;
             Assert.Equal(2, history.Total); Assert.Single(history.Items);
             Assert.Equal(created.Value.Code.Id, (await qr.ListAsync(f.Owner, f.OwnerFamily, f.Building, 2, 1, default)).Value!.Items.Single().Id);
             Assert.Equal("VALIDATION_ERROR", (await qr.ListAsync(f.Owner, f.OwnerFamily, f.Building, 1, 101, default)).Error?.Code);
             // After revoking the last code a new one can be created.
-            Assert.True((await qr.CreateAsync(f.Owner, f.OwnerFamily, f.Building, new("Lobby 2"), default)).IsSuccess);
+            var current = await qr.CreateAsync(f.Owner, f.OwnerFamily, f.Building, new("Lobby 2"), default);
+            Assert.True(current.IsSuccess);
+            // Expired service still resolves for the landing but allows no new session.
+            await ExecuteAsync($"ALTER TABLE service_entitlements DISABLE TRIGGER USER; UPDATE service_entitlements SET ends_at=now()-interval '1 second' WHERE building_id='{f.Building}'; ALTER TABLE service_entitlements ENABLE TRIGGER USER");
+            var expired = (await qr.ResolveAsync(trainee.Id, trainee.Family, current.Value!.Token, default)).Value!;
+            Assert.Equal(("Expired", false), (expired.ServiceStatus, expired.CanStartNewSessions));
+            Assert.True(expired.HasAccess);
         });
     }
 

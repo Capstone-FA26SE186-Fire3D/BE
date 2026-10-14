@@ -63,14 +63,14 @@ Criteria compare a metric with `gte`/`lte`/`eq`; a missing metric fails the crit
 
 | Method | Route | Notes |
 |---|---|---|
-| POST | `/api/buildings/{id}/qr-codes` | Organization (own tenant) or Admin; `{label?}`; returns the token once (32 random bytes, base64url). Only its SHA-256 is stored. A Building has one canonical Active code: a second create, including a retry, returns `409 QR_ALREADY_EXISTS` (rotate instead). |
-| GET | `/api/buildings/{id}/qr-codes?page=&pageSize=` | Code history without tokens, newest first: `{items,total,page,pageSize}`, default 20, max 100. |
+| POST | `/api/buildings/{id}/qr-codes` | Organization (own tenant) or Admin; `{label?}`; returns the token once (32 random bytes, base64url). Only its SHA-256 is stored. The response also carries `content`, the exact text to print in the QR: `{AuthEmail:FrontendUrl}/qr/{token}` (web landing for users without the app). A Building has one canonical Active code: a second create, including a retry, returns `409 QR_ALREADY_EXISTS` (rotate instead). |
+| GET | `/api/buildings/{id}/qr-codes?page=&pageSize=` | Code history without tokens, newest first: `{items,total,page,pageSize}`, default 20, max 100. Each item has `replacedBy` (its successor) and `replacedId` (the code it replaced). |
 | POST | `/api/buildings/{id}/qr-codes/{qrId}/rotate` | Revokes the code and issues a new token. |
 | POST | `/api/buildings/{id}/qr-codes/{qrId}/revoke` | |
-| GET | `/api/qr/{qrToken}` | Signed-in user: Building ID, name, visibility and whether the caller has access. |
-| GET | `/api/qr/{qrToken}/trainings` | Published Trainings with the normal access checks. |
+| GET | `/api/qr/{qrToken}` | Signed-in user: Building ID, name, visibility, `hasAccess`, `serviceStatus` (`Active` paid period running, `Expired` paid before but none now, `NotPurchased`), `serviceEndsAt` and `canStartNewSessions` (Active service and access). Expired service still resolves so the landing can explain it. A revoked or replaced code returns `410 QR_REVOKED` (never the new token); an unknown token, another tenant's code (OrganizationUser) or an archived Building returns `404 QR_NOT_FOUND`. |
+| GET | `/api/qr/{qrToken}/trainings` | Published Trainings with the normal access checks; same 404/410 rules. |
 
-A QR identifies a Building only: it does not authenticate, grant participation or entitlement, and legacy release QR rows are not reused.
+QR content format: scanners (Web and Mobile) read the printed URL and use its last path segment as `qrToken`; a bare 43-character base64url token is accepted the same way. A QR identifies a Building only: it does not authenticate, grant participation or entitlement, and legacy release QR rows are not reused.
 
 ## Evidence
 

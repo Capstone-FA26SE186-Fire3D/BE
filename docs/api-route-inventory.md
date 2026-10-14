@@ -121,10 +121,10 @@
 | POST | /api/buildings | Bearer | None | 201, 400, 401, 403, 409 |
 | GET | /api/buildings/{buildingId}/editor-preview | Bearer | None | 200, 400, 401, 403, 404, 503 |
 | POST | /api/buildings/{buildingId}/ifc | Bearer | Idempotency-Key | 201, 400, 404, 429 |
-| GET | /api/buildings/{buildingId}/qr-codes | Bearer | None | 200, 400, 404 |
-| POST | /api/buildings/{buildingId}/qr-codes | Bearer | None | 201, 400, 404, 409 |
-| POST | /api/buildings/{buildingId}/qr-codes/{qrId}/revoke | Bearer | None | 200, 404, 409 |
-| POST | /api/buildings/{buildingId}/qr-codes/{qrId}/rotate | Bearer | None | 200, 404, 409 |
+| GET | /api/buildings/{buildingId}/qr-codes | Bearer | None | 200, 400, 401, 403, 404 |
+| POST | /api/buildings/{buildingId}/qr-codes | Bearer | None | 201, 400, 401, 403, 404, 409 |
+| POST | /api/buildings/{buildingId}/qr-codes/{qrId}/revoke | Bearer | None | 200, 401, 403, 404, 409 |
+| POST | /api/buildings/{buildingId}/qr-codes/{qrId}/rotate | Bearer | None | 200, 401, 403, 404, 409 |
 | GET | /api/buildings/{buildingId}/scenarios | Bearer | None | 200, 400, 403, 404 |
 | DELETE | /api/buildings/{id} | Bearer | None | 200 |
 | GET | /api/buildings/{id} | Bearer | None | 200 |
@@ -188,8 +188,8 @@
 | GET | /api/processing-jobs/{jobId} | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/processing-jobs/{jobId}/qa | Bearer | None | 200, 400, 401, 403, 404 |
 | POST | /api/processing-jobs/{jobId}/retry | Bearer | None | 202, 400, 401, 403, 404, 409, 429 |
-| GET | /api/qr/{qrToken} | Bearer | None | 200, 404 |
-| GET | /api/qr/{qrToken}/trainings | Bearer | None | 200, 403, 404 |
+| GET | /api/qr/{qrToken} | Bearer | None | 200, 401, 403, 404, 410 |
+| GET | /api/qr/{qrToken}/trainings | Bearer | None | 200, 401, 403, 404, 410 |
 | GET | /api/releases | Bearer | None | 200, 400, 401, 403 |
 | POST | /api/releases | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
 | GET | /api/releases/{releaseId} | Bearer | None | 200, 401, 403, 404 |

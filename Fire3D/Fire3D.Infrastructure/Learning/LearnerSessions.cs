@@ -229,7 +229,7 @@ public sealed partial class LearnerSessions(Fire3DDbContext db, IOptions<Learner
     }
 }
 
-public sealed class BuildingQrCodes(Fire3DDbContext db) : IBuildingQrCodes
+public sealed class BuildingQrCodes(Fire3DDbContext db, IOptions<AuthEmailOptions>? email = null) : IBuildingQrCodes
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public Task<AuthResult<BuildingQrCreated>> CreateAsync(Guid actor, Guid family, Guid building, CreateBuildingQrRequest request, CancellationToken ct) => Issue("Create", actor, family, building, null, request, ct);
@@ -243,7 +243,8 @@ public sealed class BuildingQrCodes(Fire3DDbContext db) : IBuildingQrCodes
         return AuthResult<BuildingQrPage>.Ok(new(body.GetProperty("items").EnumerateArray()
             .Select(x => new BuildingQrView(x.GetProperty("id").GetGuid(), building, x.GetProperty("label").GetString(), x.GetProperty("status").GetString()!,
                 x.GetProperty("createdAt").GetDateTimeOffset().UtcDateTime, x.GetProperty("revokedAt").ValueKind == JsonValueKind.Null ? null : x.GetProperty("revokedAt").GetDateTimeOffset().UtcDateTime,
-                x.GetProperty("replacedBy").ValueKind == JsonValueKind.Null ? null : x.GetProperty("replacedBy").GetGuid())).ToArray(),
+                x.GetProperty("replacedBy").ValueKind == JsonValueKind.Null ? null : x.GetProperty("replacedBy").GetGuid(),
+                x.TryGetProperty("replacedId", out var replacedId) && replacedId.ValueKind != JsonValueKind.Null ? replacedId.GetGuid() : null)).ToArray(),
             body.GetProperty("total").GetInt32(), page, pageSize));
     }
     public async Task<AuthResult<BuildingQrView>> RevokeAsync(Guid actor, Guid family, Guid building, Guid qr, CancellationToken ct)
@@ -262,7 +263,8 @@ public sealed class BuildingQrCodes(Fire3DDbContext db) : IBuildingQrCodes
         if (request.Label is { Length: > 255 }) return AuthResult<BuildingQrCreated>.Fail("VALIDATION_ERROR", "Label is at most 255 characters.", 400);
         var token = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
         var result = await Gate(action, actor, family, building, new { tokenHash = Hash(token), label = request.Label, qrId = qr }, ct);
-        return result.IsSuccess ? AuthResult<BuildingQrCreated>.Ok(new(result.Value.GetProperty("result").Deserialize<BuildingQrView>(Json)!, token)) : new(default, result.Error);
+        var content = string.IsNullOrWhiteSpace(email?.Value.FrontendUrl) ? null : email.Value.GetFrontendPageBaseUrl() + "/qr/" + token;
+        return result.IsSuccess ? AuthResult<BuildingQrCreated>.Ok(new(result.Value.GetProperty("result").Deserialize<BuildingQrView>(Json)!, token, content)) : new(default, result.Error);
     }
     private static string Hash(string token) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     private async Task<AuthResult<JsonElement>> Gate(string action, Guid actor, Guid family, Guid building, object input, CancellationToken ct)
@@ -274,7 +276,13 @@ public sealed class BuildingQrCodes(Fire3DDbContext db) : IBuildingQrCodes
         using var document = JsonDocument.Parse((string)(await command.ExecuteScalarAsync(ct))!);
         var value = document.RootElement;
         return value.GetProperty("code").GetString() == "OK" ? AuthResult<JsonElement>.Ok(value.Clone())
-            : AuthResult<JsonElement>.Fail(value.GetProperty("code").GetString()!, value.GetProperty("code").GetString() == "QR_ALREADY_EXISTS"
-                ? "This Building already has an active QR code; rotate it to replace it." : "QR request was rejected.", value.GetProperty("status").GetInt32());
+            : AuthResult<JsonElement>.Fail(value.GetProperty("code").GetString()!, value.GetProperty("code").GetString() switch
+            {
+                "QR_ALREADY_EXISTS" => "This Building already has an active QR code; rotate it to replace it.",
+                "QR_REVOKED" => "This QR code was revoked; ask the Organization for the current code.",
+                "QR_NOT_FOUND" => "QR code not found.",
+                "QR_ALREADY_REVOKED" => "The QR code is already revoked.",
+                _ => "QR request was rejected."
+            }, value.GetProperty("status").GetInt32());
     }
 }

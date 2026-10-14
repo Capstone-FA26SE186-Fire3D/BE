@@ -85,12 +85,23 @@ public interface ILearnerSessions
 }
 
 public sealed record BuildingQrView(Guid Id, Guid BuildingId, string? Label, string Status, DateTime? CreatedAt = null, DateTime? RevokedAt = null, Guid? ReplacedBy = null, Guid? ReplacedId = null);
-/// <summary>Token is returned only on create/rotate; the QR encodes it. It identifies a Building, nothing else.</summary>
-public sealed record BuildingQrCreated(BuildingQrView Code, string Token);
+/// <summary>
+/// Token is returned only on create/rotate. Content is what the printed QR encodes: the web landing URL
+/// {FrontendUrl}/qr/{token}, which opens the Building page without the app. Scanners (Web and Mobile) take the last path
+/// segment as the token and call GET /api/qr/{token}; a bare 43-character token is accepted the same way. It identifies a
+/// Building, nothing else.
+/// </summary>
+public sealed record BuildingQrCreated(BuildingQrView Code, string Token, string? Content = null);
 public sealed record CreateBuildingQrRequest(string? Label);
 /// <summary>QR history of one Building, newest first; at most one code is Active (rotate to replace it).</summary>
 public sealed record BuildingQrPage(IReadOnlyList<BuildingQrView> Items, int Total, int Page, int PageSize);
-public sealed record BuildingQrResolution(Guid BuildingId, string BuildingName, string Visibility, bool HasAccess);
+/// <summary>
+/// ServiceStatus: Active (a paid service period is running), Expired (paid before, none now) or NotPurchased. Expired
+/// service still resolves so the landing can explain it; CanStartNewSessions is true only with Active service and access.
+/// A revoked code returns 410 QR_REVOKED; unknown codes, other tenants and archived Buildings return 404 QR_NOT_FOUND.
+/// </summary>
+public sealed record BuildingQrResolution(Guid BuildingId, string BuildingName, string Visibility, bool HasAccess,
+    string ServiceStatus = "NotPurchased", DateTime? ServiceEndsAt = null, bool CanStartNewSessions = false);
 
 public interface IBuildingQrCodes
 {
