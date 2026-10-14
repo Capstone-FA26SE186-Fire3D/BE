@@ -49,6 +49,17 @@ list as `{postId, available:false, bookmarkedAt}` without title or summary; new 
 `learn_rag_eligible(post, version)` is true only for the current published version of a Published or Hidden post; #58 RAG uses it.
 Every state change enqueues a `PlatformCacheInvalidation` outbox event with `{scope:"learn", id, revision}`.
 
+### Cache invalidation consumer
+
+`PlatformCacheInvalidationWorker` (API host, `PlatformCache:WorkerEnabled`, default `true`; `PollSeconds` 5, `MaxEventsPerRun` 100)
+consumes the `learn`, `library` and `knowledge` events through `platform_cache_invalidation_gate`. It claims one due event with a
+60-second lease (`FOR UPDATE SKIP LOCKED`). Then it increments the Redis key `fet3d:{environment}:cache:{scope}:version`, so cache-aside
+readers that put this version in their keys stop using older entries. Last, in one transaction, it writes the receipt
+(`integration_event_consumptions`, consumer `platform-cache-invalidation`) and marks the event `Published`. With `Redis:Enabled=false`
+there is no shared cache, and the receipt says `no-cache`. When Redis fails, or the scope is unknown, the event goes back to `Pending` with
+`last_error` and backoff (30 s doubling, maximum 30 min). It becomes `Failed` after 10 attempts. An old lease token cannot complete an event
+that another claim has taken over. Source state never depends on the cache: every read still checks the current status in PostgreSQL.
+
 ## Learn endpoints
 
 | Method | Route | Auth | Notes |

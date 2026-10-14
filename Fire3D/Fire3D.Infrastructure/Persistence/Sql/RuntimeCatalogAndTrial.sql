@@ -1,6 +1,6 @@
 -- PlatformAdmin management found missing in the 14/10 Docs review (FR-COMPAT-01, FR-SCENARIO-05, FR-BILLING-01):
 -- * runtime catalog versions are created immutable (packages pin runtime_version) and can only be activated/deactivated;
--- * Trial entitlements of one Building are granted, adjusted (units never below used, end date) or cancelled.
+-- * Trial entitlements of one Building are granted, adjusted (units never below used) or cancelled.
 -- Every change is audited. The gate owner only receives the columns these gates write.
 CREATE TEMP TABLE runtime_trial_permissions(original_set boolean,original_inherit boolean,changed boolean,had_create boolean) ON COMMIT DROP;
 DO $$ DECLARE os boolean;oi boolean;c boolean;BEGIN
