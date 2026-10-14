@@ -18,12 +18,17 @@ public sealed class ScenarioContentReviewsController(IScenarioReadinessStore sto
     [ProducesResponseType<ProblemDetails>(409)]
     public Task<IActionResult> Submit(Guid id,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Run("Submit",id,new{},key,ct);
     /// <summary>Approves only the exact submitted contentHash and rubricHash.</summary>
+    /// <remarks>400 VALIDATION_ERROR (hash format). 409 CONTENT_REVIEW_NOT_PENDING (already decided), CONTENT_HASH_MISMATCH
+    /// (hashes differ from the submission), SCENARIO_SNAPSHOT_REQUIRED (version has no frozen snapshot), IDEMPOTENCY_KEY_CONFLICT.</remarks>
     [Authorize(Roles="PlatformAdmin")]
     [HttpPost("/api/admin/scenario-versions/{id:guid}/approve")]
     [ProducesResponseType<ContentReviewResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]
     public Task<IActionResult> Approve(Guid id,ContentReviewDecisionRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Decision("Approve",id,request,key,ct);
     /// <summary>Rejects submitted content with a reason. Further changes require a new version and submission.</summary>
+    /// <remarks>400 VALIDATION_ERROR (hash format or missing reason). 409 CONTENT_REVIEW_NOT_PENDING, CONTENT_HASH_MISMATCH,
+    /// SCENARIO_SNAPSHOT_REQUIRED, IDEMPOTENCY_KEY_CONFLICT.</remarks>
     [Authorize(Roles="PlatformAdmin")]
     [HttpPost("/api/admin/scenario-versions/{id:guid}/reject")]
     [ProducesResponseType<ContentReviewResponse>(200)]

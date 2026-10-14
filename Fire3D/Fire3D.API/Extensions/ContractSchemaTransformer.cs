@@ -18,6 +18,13 @@ public sealed class ContractSchemaTransformer : IOpenApiSchemaTransformer
 
     public Task TransformAsync(OpenApiSchema schema, OpenApiSchemaTransformerContext context, CancellationToken ct)
     {
+        // Web JSON defaults also accept quoted numbers on input, which makes every numeric schema "integer|string" with a
+        // pattern. Responses always write JSON numbers, so the contract publishes plain integer/number types (#83).
+        if (schema.Type is { } kind && kind.HasFlag(JsonSchemaType.String) && (kind.HasFlag(JsonSchemaType.Integer) || kind.HasFlag(JsonSchemaType.Number)))
+        {
+            schema.Type = kind & ~JsonSchemaType.String;
+            schema.Pattern = null;
+        }
         var type = context.JsonTypeInfo.Type;
         if (type == typeof(Microsoft.AspNetCore.Mvc.ProblemDetails))
         {

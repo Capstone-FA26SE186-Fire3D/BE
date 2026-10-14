@@ -20,7 +20,9 @@ public sealed record PlaytestRecoveryView(bool CanStart,bool CanReissueGrant,boo
 public sealed record PlaytestStatusResponse(Guid Id,Guid BuildingId,Guid RevisionId,Guid ScenarioVersionId,string Status,DateTime CreatedAt,
  DateTime? StartedAt,DateTime? EndedAt,string? RuntimeVersion,PlaytestPackageView Package,PlaytestGrantView? Grant,DateTime? LaunchedAt,
  DateTime? LastHeartbeatAt,long AcknowledgedSequence,bool BoundToMobile,bool LaunchSession,DateTime? OpenHandoffExpiresAt,
- PlaytestRecoveryView Recovery,JsonElement? Completion,Guid? OpenHandoffId=null);
+ PlaytestRecoveryView Recovery,PlaytestCompletionView? Completion,Guid? OpenHandoffId=null);
+/// <summary>Stored once at completion. Summary is the object the runtime sent (opaque to the backend, never scored here).</summary>
+public sealed record PlaytestCompletionView(long LastEventSequence,JsonElement Summary,DateTime CompletedAt,string CompletionHash);
 /// <summary>One of the caller's playtests; open it with GET /api/playtests/{id}.</summary>
 public sealed record PlaytestSummary(Guid Id,Guid ScenarioVersionId,int VersionNumber,Guid RevisionId,string Status,DateTime CreatedAt,
  DateTime? StartedAt,DateTime? EndedAt,bool BoundToMobile);

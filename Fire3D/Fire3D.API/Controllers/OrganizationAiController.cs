@@ -123,7 +123,7 @@ public sealed partial class AdminAiController(IOrganizationAiGates gates, Fire3D
 
     /// <summary>Knowledge source registry and editor catalog. Without visibility every source is listed (admin review); the Learn editor passes visibility=Common so tenant sources never enter its catalog. status Draft/Approved/Retired; search on title, version label and jurisdiction. canUseInDraft: a Learn draft may cite it; canPublishReference: publish/Hidden/RAG accept it now.</summary>
     [HttpGet("api/admin/knowledge-sources")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<Fire3D.Application.Content.KnowledgeSourcePage>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     public async Task<IActionResult> KnowledgeSources([FromQuery] string? visibility, [FromQuery] string? status, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
@@ -134,7 +134,7 @@ public sealed partial class AdminAiController(IOrganizationAiGates gates, Fire3D
     }
 
     [HttpGet("api/admin/knowledge-sources/{id:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<Fire3D.Application.Content.KnowledgeSourceView>(200)]
     [ProducesResponseType<ProblemDetails>(404)]
     [OpenApi.ResponseHeader("ETag")]
     public async Task<IActionResult> KnowledgeSource(Guid id, CancellationToken ct)

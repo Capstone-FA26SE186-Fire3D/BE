@@ -141,8 +141,8 @@ Luồng và bằng chứng source chi tiết tại [authentication.md](authentic
 | GET | `/api/admin/support/tickets/{id}` | PlatformAdmin | 200 |
 | POST | `/api/admin/support/tickets/{id}/messages` | PlatformAdmin | 201 |
 | PATCH | `/api/admin/support/tickets/{id}` | PlatformAdmin | 200 |
-| GET | `/api/admin/audit-logs` | PlatformAdmin | 200 paged metadata |
-| GET | `/api/admin/audit-logs/{id}` | PlatformAdmin | 200 metadata |
+| GET | `/api/admin/audit-logs` | PlatformAdmin | 200 paged metadata: id, userId, organizationId, action, targetEntity, targetId, correlationId, createdAt, actorDisplayName, organizationName, actorType (User/System) |
+| GET | `/api/admin/audit-logs/{id}` | PlatformAdmin | 200 metadata như list, thêm `changes` (giá trị trước/sau đã lọc bí mật) và `reason` khi thao tác có lý do |
 | GET | `/api/admin/analytics/operations` | PlatformAdmin | 200 aggregate snapshot |
 | GET | `/api/organizations/me/analytics/operations` | OrganizationUser | 200 tenant aggregate snapshot |
 | POST | `/api/auth/forgot-password` | Public | 202 với message chung |

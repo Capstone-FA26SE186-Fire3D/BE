@@ -256,11 +256,18 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
     /// <summary>
     /// Pins an accepted immutable PlaytestPackage without consuming Trial or issuing a grant. Idempotency-Key required.
     /// </summary>
+    /// <remarks>OrganizationUser of the Building's tenant only; PlatformAdmin is not a playtest actor (403). 409 DRAFT_SNAPSHOT_REQUIRED,
+    /// PLAYTEST_PACKAGE_REQUIRED, PACKAGE_METADATA_MISMATCH, RUNTIME_INCOMPATIBLE, IDEMPOTENCY_KEY_CONFLICT; 503 when playtest is not
+    /// configured. Check GET /api/scenarios/{id}/playtest-availability first.</remarks>
     [Authorize(Roles="OrganizationUser")]
     [HttpPost("{scenarioId:guid}/playtests")]
     [ProducesResponseType<Fire3D.Application.Scenarios.PlaytestPreparation>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(503)]
     public async Task<IActionResult> PreparePlaytestSession(Guid scenarioId, [FromQuery] Guid? buildingId, [FromBody] Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestRequest request, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();

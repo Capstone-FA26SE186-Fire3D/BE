@@ -18,7 +18,7 @@ namespace Fire3D.API.Controllers;
 public sealed class LearnController(IContentGates gates) : ContentControllerBase
 {
     [AllowAnonymous, HttpGet("api/learn/situations")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<List<LearnSituationView>>(200)]
     public async Task<IActionResult> Situations(CancellationToken ct) => Reply(await gates.LearnPublicAsync("Situations", null, null, new { }, ct));
 
     /// <summary>Published Learn posts, newest first (publishedAt desc, then id); filters apply before paging and to total.</summary>
@@ -30,7 +30,7 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     /// Invalid values return 400 VALIDATION_ERROR with field errors. page >= 1, pageSize 1-100 (default 20).
     /// </remarks>
     [AllowAnonymous, HttpGet("api/learn/posts")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnPostPage>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     public async Task<IActionResult> Posts([FromQuery] string? search, [FromQuery] string[]? situation, [FromQuery] string[]? kind,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
@@ -53,50 +53,50 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     private static readonly string[] LearnKinds = ["Article", "Tip", "Video"];
 
     [AllowAnonymous, HttpGet("api/learn/posts/{slug}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnPostView>(200)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(410)]
     public async Task<IActionResult> Post(string slug, CancellationToken ct) => Reply(await gates.LearnPublicAsync("Post", null, null, new { slug }, ct));
 
     /// <summary>Bookmarks of posts that are no longer public are listed as available=false without content.</summary>
     [Authorize(Roles = "Trainee"), HttpGet("api/learn/bookmarks")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnBookmarkPage>(200)]
     public async Task<IActionResult> Bookmarks([FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
         Reply(await gates.LearnPublicAsync("Bookmarks", User.GetActorId(), User.GetSessionFamilyId(), new { page, pageSize }, ct));
 
     [Authorize(Roles = "Trainee"), HttpPut("api/learn/bookmarks/{postId:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnBookmarkState>(200)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> Bookmark(Guid postId, CancellationToken ct) =>
         Reply(await gates.LearnPublicAsync("Bookmark", User.GetActorId(), User.GetSessionFamilyId(), new { postId }, ct));
 
     /// <summary>Whether the signed-in Trainee bookmarked this post, without loading every bookmark.</summary>
     [Authorize(Roles = "Trainee"), HttpGet("api/learn/bookmarks/{postId:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnBookmarkState>(200)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]
     public async Task<IActionResult> BookmarkState(Guid postId, CancellationToken ct) =>
         Reply(await gates.LearnPublicAsync("BookmarkState", User.GetActorId(), User.GetSessionFamilyId(), new { postId }, ct));
 
     [Authorize(Roles = "Trainee"), HttpDelete("api/learn/bookmarks/{postId:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnBookmarkState>(200)]
     public async Task<IActionResult> Unbookmark(Guid postId, CancellationToken ct) =>
         Reply(await gates.LearnPublicAsync("Unbookmark", User.GetActorId(), User.GetSessionFamilyId(), new { postId }, ct));
 
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpGet("api/admin/learn/posts")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnPostAdminPage>(200)]
     public async Task<IActionResult> AdminPosts([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
         Paging(page, pageSize) ?? Reply(await gates.LearnAdminAsync("List", Actor, Family, Guid.Empty, new { status, page, pageSize }, null, null, ct));
 
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpGet("api/admin/learn/posts/{id:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnPostView>(200)]
     [ProducesResponseType<ProblemDetails>(404)]
     [OpenApi.ResponseHeader("ETag")]
     public async Task<IActionResult> AdminPost(Guid id, CancellationToken ct) => WithETag(await gates.LearnAdminAsync("Get", Actor, Family, id, new { }, null, null, ct));
 
     /// <summary>Creates a post with its first Draft version; publish=true publishes it atomically. Idempotency-Key required.</summary>
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPost("api/admin/learn/posts")]
-    [ProducesResponseType<JsonElement>(201)]
+    [ProducesResponseType<LearnPostView>(201)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(422)]
     public async Task<IActionResult> CreatePost(CreateLearnPostRequest request, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
@@ -108,7 +108,7 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPost("api/admin/learn/posts/{id:guid}/versions")]
-    [ProducesResponseType<JsonElement>(201)]
+    [ProducesResponseType<LearnVersionView>(201)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(422)]
     public async Task<IActionResult> CreateVersion(Guid id, LearnVersionInput request, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
@@ -120,13 +120,13 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpGet("api/admin/learn/versions/{versionId:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnVersionView>(200)]
     [ProducesResponseType<ProblemDetails>(404)]
     [OpenApi.ResponseHeader("ETag")]
     public async Task<IActionResult> Version(Guid versionId, CancellationToken ct) => WithETag(await gates.LearnAdminAsync("GetVersion", Actor, Family, versionId, new { }, null, null, ct));
 
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPut("api/admin/learn/versions/{versionId:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnVersionView>(200)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(422)]
@@ -143,7 +143,7 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     /// <summary>Publishes a Draft version (If-Match = version ETag). Cited sources must be approved Common sources.</summary>
     /// <remarks>Optional Idempotency-Key: the first success is replayed for the same key and input, even after the ETag moved; other input under the key is 409.</remarks>
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPost("api/admin/learn/versions/{versionId:guid}/publish")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnPostView>(200)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
@@ -154,7 +154,7 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     /// <summary>Post lifecycle with If-Match = post ETag: hide (Published→Hidden), show (Hidden→Published), delete, restore (to Hidden when it was ever published, otherwise Unpublished).</summary>
     /// <remarks>Optional Idempotency-Key: the first success is replayed for the same key and input, even after the ETag moved; other input under the key is 409.</remarks>
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPost("api/admin/learn/posts/{id:guid}/{operation:regex(^(hide|show|delete|restore)$)}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnPostView>(200)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
@@ -164,14 +164,14 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
 
     /// <summary>PlatformAdmin situation catalog for the editor: search on slug/name, isActive filter, ordered by name; default 20, max 100. The public GET stays unchanged.</summary>
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpGet("api/admin/learn/situations")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnSituationPage>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     public async Task<IActionResult> AdminSituations([FromQuery] string? search, [FromQuery] bool? isActive, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
         Paging(page, pageSize) ?? (search is { Length: > 200 } ? Problem(statusCode: 400, title: "search is at most 200 characters.", extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR" })
             : Reply(await gates.CatalogAsync("Situations", Actor, Family, new { search, isActive, page, pageSize }, ct)));
 
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPost("api/admin/learn/situations")]
-    [ProducesResponseType<JsonElement>(201)]
+    [ProducesResponseType<LearnSituationView>(201)]
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> CreateSituation(CreateLearnSituationRequest request, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
@@ -183,7 +183,7 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     /// <remarks>Send at least one of name, description, isActive. Inactive situations stop matching public filters and block
     /// publishing or showing a version that uses them; already published links stay. Audited and cache-invalidated.</remarks>
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPatch("api/admin/learn/situations/{id:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LearnSituationAdminView>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> UpdateSituation(Guid id, UpdateLearnSituationRequest request, CancellationToken ct)

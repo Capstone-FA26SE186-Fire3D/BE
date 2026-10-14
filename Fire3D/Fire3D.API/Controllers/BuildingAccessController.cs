@@ -20,7 +20,10 @@ public sealed class BuildingAccessController(IBuildingAccessService service):Con
  [ProducesResponseType(typeof(BuildingAccessResponse),200)][HttpDelete("api/buildings/{id:guid}/participation-code")][Authorize(Roles="OrganizationUser,PlatformAdmin")]
  [Fire3D.API.OpenApi.ResponseHeader("ETag")]
  public Task<IActionResult> Revoke(Guid id,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? match,CancellationToken ct)=>Run("RevokeCode",id,new{},match,ct);
- [ProducesResponseType(typeof(BuildingAccessResponse),200)][HttpPost("api/buildings/{id:guid}/participation/verify")][Authorize(Roles="Trainee")]
+ /// <summary>Trainee verifies the Building's current participation code; success grants access bound to this account and the access revision.</summary>
+ /// <remarks>400 PARTICIPATION_CODE_INVALID (wrong, rotated or revoked code), 401 session, 403 not a Trainee, 404 Building not visible.</remarks>
+ [ProducesResponseType(typeof(BuildingAccessResponse),200)][ProducesResponseType<ProblemDetails>(400)][ProducesResponseType<ProblemDetails>(401)][ProducesResponseType<ProblemDetails>(403)][ProducesResponseType<ProblemDetails>(404)]
+ [HttpPost("api/buildings/{id:guid}/participation/verify")][Authorize(Roles="Trainee")]
  public Task<IActionResult> Verify(Guid id,ParticipationCodeRequest request,CancellationToken ct)=>Run("Verify",id,request,null,ct);
  private async Task<IActionResult> Run(string action,Guid id,object input,string? match,CancellationToken ct)
  {
