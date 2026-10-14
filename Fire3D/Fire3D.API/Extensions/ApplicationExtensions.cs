@@ -18,6 +18,7 @@ public static class ApplicationExtensions
         Fire3D.API.Authorization.LearnerContinuationAuthentication.AddLearnerContinuation(services,configuration);
         services.AddScoped<Fire3D.Application.Learning.ILearnerSessions,Fire3D.Infrastructure.Learning.LearnerSessions>();
         services.AddScoped<Fire3D.Application.Learning.IBuildingQrCodes,Fire3D.Infrastructure.Learning.BuildingQrCodes>();
+        services.AddScoped<Fire3D.Application.Administration.IPlatformServiceAdmin,Fire3D.Infrastructure.Administration.PlatformServiceAdmin>();
         services.AddScoped<Fire3D.Application.Content.IContentGates,Fire3D.Infrastructure.Content.ContentGates>();
         services.AddOptions<Fire3D.Application.Ai.OrganizationAiOptions>().Bind(configuration.GetSection(Fire3D.Application.Ai.OrganizationAiOptions.Section))
             .Validate(o => !o.Enabled || o.Configured, "OrganizationAi:BaseUrl must be an absolute HTTPS (or loopback) URL when enabled.")

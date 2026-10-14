@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-253 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+259 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -22,6 +22,9 @@
 | GET | /api/admin/billing/quota-policies | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/admin/billing/quota-policies | Bearer | None | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/billing/quota-policies/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/admin/buildings/{buildingId}/trials | Bearer | None | 200, 401, 403, 404 |
+| POST | /api/admin/buildings/{buildingId}/trials | Bearer | None | 201, 400, 401, 403, 404, 409 |
+| PATCH | /api/admin/buildings/{buildingId}/trials/{entitlementId} | Bearer | None | 200, 400, 401, 403, 404, 409 |
 | GET | /api/admin/discount-rules | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/admin/discount-rules | Bearer | None | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/discount-rules/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
@@ -71,6 +74,9 @@
 | GET | /api/admin/payments/payos/requests | Bearer | None | 200, 400, 401, 403, 404, 409, 503 |
 | POST | /api/admin/quotations/{id}/cancel | Bearer | If-Match, Idempotency-Key | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/admin/quotations/{id}/issue | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/admin/runtime-catalog | Bearer | None | 200, 401, 403 |
+| POST | /api/admin/runtime-catalog | Bearer | None | 201, 400, 401, 403, 409 |
+| PATCH | /api/admin/runtime-catalog/{id} | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/admin/scenario-reviews | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/admin/scenario-reviews/{reviewId} | Bearer | None | 200, 401, 403, 404 |
 | POST | /api/admin/scenario-versions/{id}/approve | Bearer | Idempotency-Key | 200, 401, 403, 404, 409 |
