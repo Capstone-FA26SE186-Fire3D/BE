@@ -10,6 +10,8 @@ Tài liệu này là backlog đối chiếu code BE với chuẩn nghiệp vụ 
 - Supabase đã áp toàn bộ migration tới `20261012200000_AddTrainingReleaseList` (85 migration) ngày 12/10/2026.
 - Nhãn P0/P1/GAP/VERIFY/LATER bên dưới là baseline 04/10; dòng "Trạng thái 12/10/2026" ở từng mục là trạng thái hiện hành.
 
+- **14/10/2026 (`fix/p0-authz-auth-gaps`):** DB-01/AUTHZ-01/AUTH-01/04/05 được rà lại trên `main` `1eaf988`; lỗi và test bổ sung ghi ở dòng "Trạng thái 14/10/2026" từng mục. Migration `20261013100000`/`20261014090000` chưa áp Supabase.
+
 ## Kiểm chứng deployment bổ sung ngày 03/10/2026
 
 Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi baseline ghi kèm; bằng chứng mới về PayOS/deployment nằm tại [payos-deployment.md](payos-deployment.md).
@@ -67,6 +69,8 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 
 - **Trạng thái 12/10/2026:** không còn API thiếu ở mục này. Test chạy trên lịch sử migration thật (không `EnsureCreated`) với restricted runtime role; Supabase đồng bộ tới `20261012200000`. Mapping v7 đầy đủ (bảng legacy `password_reset_tokens`) vẫn là việc dọn dẹp riêng, không chặn API. Nội dung dưới đây là baseline.
 
+- **Trạng thái 14/10/2026:** `local_password_reset_tokens`, `password_reset_email_jobs`, `password_reset_operations` trước đây chỉ do script tay `database/002`/`003` tạo; database dựng từ migration bị lỗi forgot/reset/change/Google link. Migration `20261014090000_AddPasswordRecoveryTables` tạo idempotent, bật RLS và grant runtime; fixture HTTP không còn chạy script tay, có test forgot → reset → change trên DB chỉ từ migration (cả restricted runtime login). `20261013100000_NarrowRuntimeWriteGrants` thu UPDATE toàn bảng cấp tay trên `users`/`organizations`/`auth_refresh_tokens`. Còn lệch v7 chưa xử lý vì phá vỡ dữ liệu: `profile_revision` (v7 `profile_revision_no`), `users.avatar_url`, `organizations.plan`, `user_devices.device_uuid` unique theo user, CHECK v7 trên `users`.
+
 - **Contract/current:** SQL v7 là đích; EF/migration/runtime chưa đồng bộ toàn bộ. `LocalPasswordReset` dùng `local_password_reset_tokens`, đã được v7 biểu diễn; EF vẫn giữ `password_reset_tokens` legacy. Chưa được suy môi trường hiện tại trống từ nhận định tháng 09; xem bằng chứng Supabase/PayOS phía trên.
 - **Sửa code:** Lập mapping entity/enum/query/grant sang v7, kiểm tra schema/dữ liệu từng môi trường và đường gọi reset trước khi xử lý bảng legacy. Dựng database test mới theo schema đích; không dùng `EnsureCreated` thay SQL/gates. Schema v7 đã syntax-load trên PostgreSQL disposable với stand-in pgvector theo contract Docs; cần kiểm actual extension/quyền/runtime riêng.
 - **Nghiệm thu:** Database test mới dựng được từ schema mục tiêu; enum/FK/constraint/grant và truy vấn task chạy đúng. Migration/backfill của môi trường khác phải dựa trên dữ liệu đã kiểm tra; không chạy destructive SQL lên DB dùng chung để kiểm chứng tài liệu.
@@ -74,6 +78,8 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 ### AUTHZ-01 — RÀ SOÁT CHUNG · Actor và tenant
 
 - **Trạng thái 12/10/2026:** các gate SECURITY DEFINER kiểm actor/role/live session/tenant/lifecycle trong DB và có test tenant khác/role sai qua #46–#69. `Guid.Empty` còn lại trong controller chỉ là resource placeholder cho list/create, không tắt tenant check. Nội dung dưới đây là baseline.
+
+- **Trạng thái 14/10/2026:** rà lại không thấy đọc/ghi chéo tenant trên route đang dùng (JWT được đối chiếu role/tenant/family với DB mỗi request). Đã sửa: `PUT /api/buildings/{id}` từ chối Building archive (404, kiểm lại dưới khóa); xóa initiate/finalize/confirm không còn được gọi trong `IfcWriteStore` (bỏ qua tenant khi null); `ProcessRevisionAsync` và `FailClosedPlaytestWriteStore` không còn coi tenant null/rỗng là mọi tenant. Có HTTP test GET/PUT/DELETE/list Building tenant khác và luật archive. Release đọc của Building archive vẫn hiển thị trong tenant (lịch sử), chờ quyết định sản phẩm.
 
 - **Contract/current:** Mọi thao tác phải kiểm actor, role, tenant và trạng thái resource ở BE. Một số luồng dùng `Guid.Empty` làm scope rộng hoặc dựa vào tenant claim mà chưa xác minh quan hệ resource.
 - **Sửa code:** Rà controller, handler và store; lấy actor từ phiên đã xác thực, xác minh tenant qua quan hệ trong DB và áp dụng permission matrix của Docs. Bỏ fallback ID rỗng có thể tắt tenant check.
@@ -84,6 +90,8 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 ### AUTH-01 — CODE/TEST · Đăng ký local
 
 - **Trạng thái 12/10/2026:** OrganizationUser nhận `username` tùy chọn khi đăng ký (cùng luật Trainee, trùng 409 USERNAME_EXISTS, lỗi không consume proof). Còn nghiệm thu FE/inbox OTP trên bản deploy. Dòng "Còn thiếu" bên dưới là baseline.
+
+- **Trạng thái 14/10/2026:** có HTTP/PostgreSQL test hai email đăng ký đồng thời cùng username qua route Trainee và Organization: một 201, một 409 USERNAME_EXISTS, không tạo dở account/organization, proof bên thua vẫn dùng được.
 
 - **Contract/current:** FE nhập form trước → OTP → một nút gọi verify-otp rồi register với toàn bộ form + proof. `POST /api/auth/registration/request-otp` tạo challenge/job gửi mã nhưng không tạo identity; `POST /api/auth/resend-verification` gửi OTP mới sau cooldown và vô hiệu mã/proof cũ. Email đã có account trả 409 EMAIL_EXISTS + errors.email, không enqueue. Ba route register consume proof trong transaction tạo role/tenant server-owned và audit; form sai không consume proof. `/check-email/` là demo OTP, FE thật cần tích hợp riêng. `/verify-email` chỉ dành link pending legacy. Migration `20261003030000_AddNormalizedRegistrationEmail` bổ sung unique email trim/lowercase và guard legacy duplicates, không xóa/gộp dữ liệu; migration OTP/username cũ giữ nguyên. `/api/auth/register` là alias Trainee. [Test tay](registration-payos-manual-test.md); mức nghiệm thu DB/provider/FE phải ghi riêng.
 - **Còn thiếu:** username cá nhân tùy chọn cho đăng ký OrganizationUser. PATCH profile tổ chức đã có ở `OrganizationProfileController`; email verification, profile ETag, đổi username và avatar cần nghiệm thu provider/deployment riêng.
@@ -107,6 +115,8 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 
 ### AUTH-04 — P1 · CODE/TEST · Reset và change password
 
+- **Trạng thái 14/10/2026:** bảng token/job/operation đã thuộc migration (xem DB-01). Có test change-password rollback hash và revoke session khi audit lỗi, hai change đồng thời chỉ một thắng. Chưa nghiệm thu Mailgun thật.
+
 - **Contract/current:** Forgot/reset gửi qua worker Mailgun; change xác minh mật khẩu cũ và live family lấy từ JWT dưới lifecycle/user lock. Reset/change consume/invalidate token local và legacy, đổi hash, revoke session và audit atomic. Migration `AddPasswordRecoveryGate` cấp EXECUTE gate legacy cho backend, giữ lịch sử và không cần direct DELETE. Forgot/link/reset kiểm lifecycle; Google-only không được thêm password qua reset. Lookup email dùng trim/lowercase tương thích index/dữ liệu legacy.
 - **Sửa code:** Giữ reset và change là hai luồng riêng. Hoàn tất mapping sang schema đích; kiểm tra rollback, race login/reset và mọi refresh-token family. Không coi có worker là bằng chứng Mailgun production đã gửi thành công.
 - **Nghiệm thu:** Có PostgreSQL disposable regression cho restricted runtime role, reset replay/race/audit rollback, organization bị khóa, email legacy và change chờ khóa/family revoked. Migration database dùng chung và Mailgun/deployment thật cần nghiệm thu riêng; không đóng provider từ DB test.
@@ -114,6 +124,8 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 ### AUTH-05 — CODE/TEST · FCM device token
 
 - **Trạng thái 12/10/2026:** `PUT/DELETE /api/auth/devices` có installation proof, family binding, rotate/revoke và test. Chỉ còn nghiệm thu FCM thật và lưu installation secret trên client.
+
+- **Trạng thái 14/10/2026:** sửa unique violation FCM bị bọc trong `DbUpdateException` trả 500 thay vì 409 `FCM_TOKEN_ALREADY_BOUND`. Có HTTP/PostgreSQL test rotate (tăng generation), một token chỉ active trên một installation, sai installation key 403, user khác DELETE không ảnh hưởng, installation chuyển account vô hiệu binding cũ, logout-all tắt push. `INotificationService.SendPushToUserAsync` chưa có nơi gọi.
 
 - **Contract/current:** AuthController có đăng ký/xóa device token và adapter FCM; v7 biểu diễn `device_installations` và binding user/session riêng. Code proof/family binding đã có, cần đối chiếu persistence/grants.
 - **Sửa code:** Rà ownership theo user/installation, rotate/revoke, validate token và che token khỏi log. FCM chỉ dùng push, không dùng để đăng nhập.
