@@ -97,7 +97,7 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
     }
 
     private sealed record DraftRow(Guid Id, Guid ScenarioId, Guid RevisionId, int DraftNumber, string Source, string? SchemaVersion,
-        long Version, Guid CreatedBy, DateTime CreatedAt, DateTime UpdatedAt, Guid? LastEditedById, string? LastEditedByName);
+        long Version, Guid CreatedBy, DateTime CreatedAt, DateTime UpdatedAt, Guid? LastEditedById, string? LastEditedByName, string StateKind);
 
     public async Task<PageResponse<ScenarioDraftSummaryResponse>?> ListScenarioDraftsAsync(Guid scenarioId, Guid? organizationId, int page, int pageSize, CancellationToken ct)
     {
@@ -111,7 +111,8 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
         var rows = await db.Database.SqlQuery<DraftRow>($"""
             SELECT d.id AS "Id",d.scenario_id AS "ScenarioId",d.revision_id AS "RevisionId",d.draft_number AS "DraftNumber",d.source AS "Source",
              d.state->>'schemaVersion' AS "SchemaVersion",d.xmin::text::bigint AS "Version",d.created_by AS "CreatedBy",d.created_at AS "CreatedAt",d.updated_at AS "UpdatedAt",
-             COALESCE(e.user_id,d.created_by) AS "LastEditedById",COALESCE(NULLIF(btrim(u.full_name),''),u.username) AS "LastEditedByName"
+             COALESCE(e.user_id,d.created_by) AS "LastEditedById",COALESCE(NULLIF(btrim(u.full_name),''),u.username) AS "LastEditedByName",
+             CASE WHEN d.state->>'schemaVersion' IS NOT NULL THEN 'Versioned' WHEN d.state=jsonb_build_object() THEN 'Uninitialized' ELSE 'Legacy' END AS "StateKind"
             FROM scenario_drafts d
             LEFT JOIN LATERAL(SELECT a.user_id FROM audit_logs a WHERE a.target_entity='ScenarioDraft' AND a.target_id=d.id ORDER BY a.created_at DESC,a.id DESC LIMIT 1) e ON true
             LEFT JOIN users u ON u.id=COALESCE(e.user_id,d.created_by) AND u.deleted_at IS NULL
@@ -119,7 +120,7 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
             ORDER BY d.updated_at DESC,d.draft_number DESC,d.id OFFSET {(long)(page - 1) * pageSize} LIMIT {pageSize}
             """).ToListAsync(ct);
         return new(rows.Select(r => new ScenarioDraftSummaryResponse(r.Id, r.ScenarioId, r.RevisionId, r.DraftNumber, r.Source, r.SchemaVersion,
-            (uint)r.Version, r.CreatedBy, r.CreatedAt, r.UpdatedAt, r.LastEditedById, r.LastEditedByName)).ToList(), total, page, pageSize);
+            (uint)r.Version, r.CreatedBy, r.CreatedAt, r.UpdatedAt, r.LastEditedById, r.LastEditedByName, r.StateKind)).ToList(), total, page, pageSize);
     }
 
     public async Task<PageResponse<ScenarioSummaryResponse>?> ListBuildingScenariosAsync(

@@ -21,6 +21,14 @@ public sealed class ResponseHeaderAttribute(string name) : Attribute
     public string Name { get; } = name;
 }
 
+/// <summary>Buffers the request body before model binding so the action can hash the exact bytes it received.</summary>
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class BufferedBodyAttribute : Attribute, Microsoft.AspNetCore.Mvc.Filters.IResourceFilter
+{
+    public void OnResourceExecuting(Microsoft.AspNetCore.Mvc.Filters.ResourceExecutingContext context) => context.HttpContext.Request.EnableBuffering();
+    public void OnResourceExecuted(Microsoft.AspNetCore.Mvc.Filters.ResourceExecutedContext context) { }
+}
+
 /// <summary>
 /// Reports an unparseable JSON body as 400 EDITOR_JSON_MALFORMED before the generic model-state response,
 /// so editor clients can distinguish malformed JSON from schema violations (422 EDITOR_SCHEMA_INVALID).

@@ -141,8 +141,8 @@ Luồng và bằng chứng source chi tiết tại [authentication.md](authentic
 | GET | `/api/admin/support/tickets/{id}` | PlatformAdmin | 200 |
 | POST | `/api/admin/support/tickets/{id}/messages` | PlatformAdmin | 201 |
 | PATCH | `/api/admin/support/tickets/{id}` | PlatformAdmin | 200 |
-| GET | `/api/admin/audit-logs` | PlatformAdmin | 200 paged metadata |
-| GET | `/api/admin/audit-logs/{id}` | PlatformAdmin | 200 metadata |
+| GET | `/api/admin/audit-logs` | PlatformAdmin | 200 paged metadata: id, userId, organizationId, action, targetEntity, targetId, correlationId, createdAt, actorDisplayName, organizationName, actorType (User/System) |
+| GET | `/api/admin/audit-logs/{id}` | PlatformAdmin | 200 metadata như list, thêm `changes` (giá trị trước/sau đã lọc bí mật) và `reason` khi thao tác có lý do |
 | GET | `/api/admin/analytics/operations` | PlatformAdmin | 200 aggregate snapshot |
 | GET | `/api/organizations/me/analytics/operations` | OrganizationUser | 200 tenant aggregate snapshot |
 | POST | `/api/auth/forgot-password` | Public | 202 với message chung |
@@ -536,7 +536,9 @@ Tất cả cần Editor. Đây là luồng tác giả thiết kế/thử kịch 
 | GET | `/api/scenario-interactions/catalog` | Không body | 200 RuntimeCatalogDto[] kèm `capabilityContracts` hợp lệ |
 | POST | `/api/scenarios/{scenarioId}/playtests` | Optional buildingId; exact draft/version + Idempotency-Key; OrganizationUser | 201 PlaytestPreparation |
 | POST | `/api/playtests/{playtestId}/start` | runtimeVersion + Idempotency-Key; OrganizationUser launching session | 200 PlaytestLaunch with 5-minute grant, status Launching |
-| GET | `/api/playtests/{playtestId}` | Owner | 200 PlaytestStatusResponse |
+| GET | `/api/scenarios/{scenarioId}/playtests` | scenarioVersionId?, status? (Created/Launching/Running/Completed/Cancelled), page, pageSize; OrganizationUser | 200 PlaytestPage: chỉ playtest do chính người gọi tạo, mới nhất trước (#85) |
+| GET | `/api/scenarios/{scenarioId}/playtest-availability` | scenarioVersionId?; OrganizationUser | 200 PlaytestAvailability: `entitlement {kind Paid/Trial/None, endsAt, trialUnitsRemaining}`, `packageReady`, `blockers` (`PLAYTEST_LAUNCH_UNAVAILABLE`, `PLAYTEST_HANDOFF_UNAVAILABLE`, `PLAYTEST_ENTITLEMENT_REQUIRED`, `PLAYTEST_PACKAGE_REQUIRED`), `canCreate`. Chỉ tham khảo; start vẫn kiểm lại (#85) |
+| GET | `/api/playtests/{playtestId}` | Owner | 200 PlaytestStatusResponse; `recovery.canIssueHandoff` (status Created) và `openHandoffId` (mã handoff đang mở mới nhất: tab khác rotate thì khác handoffId của tab này) |
 | POST | `/api/playtests/{playtestId}/handoffs` | Idempotency-Key; owner, Created | 201 PlaytestHandoffResponse (5-minute single-use code) |
 | POST | `/api/playtests/handoffs/redeem` | code; another session of the same owner | 200 PlaytestStatusResponse |
 | POST | `/api/playtests/{playtestId}/launch-grants` | Idempotency-Key; launching session, Launching | 200 PlaytestLaunch (next generation) |
@@ -778,3 +780,14 @@ See [current contract and migrations](billing-v7-rollout.md), [safe reporting DT
 # Selected worker/API contract update
 
 Selected mutations recheck the JWT session family under lifecycle/actor/resource locks, including readiness, content approval and catalog/discount/quota-policy changes. The client never supplies the family in JSON. Revoked/expired family returns401 before receipt replay. Annotations PUT requires quoted If-Match (428/400/412), appends a version atomically and validates anchors against accepted current Geometry provenance; GET/PUT declare ETag. Preview HEAD checks size before URL signing; missing/size mismatch is NotReady, provider failure503 PREVIEW_STORAGE_UNAVAILABLE. New readiness/approval audits expose only safe allowlisted changes. See [manual checks](api-worker-contract-manual-test.md) and [worker SQL permissions](worker-permissions.md) for schema-first rollout and deployment evidence boundaries.
+
+## Bổ sung contract FE — 14/10/2026 (#84, #85, #86)
+
+- **QR (#84):** xem [learner-sessions.md](learner-sessions.md#building-qr): `serviceStatus`/`serviceEndsAt`/`canStartNewSessions`, `410 QR_REVOKED`, `replacedId`, `content` để in QR.
+- **Playtest (#85):** `GET /api/scenarios/{id}/playtests`, `GET /api/scenarios/{id}/playtest-availability`, `recovery.canIssueHandoff`, `openHandoffId` (bảng mục 7).
+- **Learn (#86):** danh sách admin có title/kind/draft, `GET /api/learn/bookmarks/{postId}`, `PATCH /api/admin/learn/situations/{id}`, quy tắc `show`/RAG và cách nhúng video: [learn-library.md](learn-library.md).
+- **Review (#86):** `ScenarioReviewSummary` có thêm `submittedByName`, `decidedByName` (họ tên, nếu trống thì username/email).
+- **Analytics (#86):** `GET /api/admin/analytics/training`: `byTraining[].trainingName`, `byOrganization[].organizationName`.
+- **Người phụ trách enterprise (#86):** danh sách PlatformAdmin để chọn dùng route có sẵn `GET /api/accounts?role=PlatformAdmin&isActive=true`.
+- **Audit (#86):** list/detail có thêm `actorType` (`User`/`System`); `actorDisplayName` vẫn là nhãn hiển thị.
+- Ngoài phạm vi đợt này: quota AI bị trừ sau reconcile (#86 mục 8) thuộc phần AI đang tạm dừng.

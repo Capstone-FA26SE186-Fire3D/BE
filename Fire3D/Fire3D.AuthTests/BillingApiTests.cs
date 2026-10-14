@@ -33,7 +33,7 @@ public sealed class BillingApiTests
                 ["Jwt:Key"]=new string('k',64), ["Jwt:Issuer"]="billing-tests", ["Jwt:Audience"]="billing-tests",
                 ["AuthEmail:WorkerEnabled"]="false", ["AuthEmail:FrontendUrl"]="https://fet3d.io.vn",
                 ["AuthEmail:VerificationUrl"]="https://fet3d.io.vn", ["PayOS:Enabled"]=(payos is not null).ToString(),
-                ["PayOS:WorkerEnabled"]="false",["PayOS:ClientId"]="test-client",["PayOS:ApiKey"]="test-api",
+                ["PayOS:WorkerEnabled"]="false",["PlatformCache:WorkerEnabled"]="false",["PayOS:ClientId"]="test-client",["PayOS:ApiKey"]="test-api",
                 ["PayOS:ChecksumKey"]="test-checksum",["PayOS:ReturnUrl"]="https://api.example.test/billing/payment-return/",
                 ["PayOS:CancelUrl"]="https://api.example.test/billing/payment-cancel/",
                 ["ConnectionStrings:PayosRequestExecutor"]=database.RequestConnection,

@@ -23,6 +23,8 @@ public sealed class ScenarioReviewQueriesController(IScenarioReviewQueries queri
         =>Respond(await queries.ListAsync(User.GetActorId(),User.GetSessionFamilyId(),status,organizationId,page,pageSize,ct));
 
     /// <summary>PlatformAdmin reads frozen scenario content, rubric, decision and current technical readiness.</summary>
+    /// <remarks>content is the frozen fet3d.editor/1 state (contracts/editor/v1/scenario-state.schema.json) or a legacy state;
+    /// rubric follows the rubric contract (schema_version "1", see GET /api/scenario-rubrics/catalog); learningObjectives is a string array.</remarks>
     [Authorize(Roles="PlatformAdmin")]
     [HttpGet("/api/admin/scenario-reviews/{reviewId:guid}")]
     [ProducesResponseType<ScenarioReviewDetail>(200)]

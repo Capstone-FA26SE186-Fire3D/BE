@@ -12,11 +12,54 @@ public sealed record LearnVersionInput(string Kind, string Title, string Summary
 public sealed record LearnSourceInput(Guid SourceId, string Role = "Reference", JsonObject? Locator = null);
 public sealed record CreateLearnPostRequest(string Slug, LearnVersionInput Version, bool Publish = false);
 public sealed record CreateLearnSituationRequest(string Slug, string Name, string? Description = null);
+// Response shapes of the Learn gates (fet3d.learn/1), declared so OpenAPI describes what the SQL representations return (#83).
+public sealed record LearnSituationView(Guid Id, string Slug, string Name, string? Description);
+/// <summary>Admin catalog row and the PATCH result; IsActive=false keeps stored links but leaves public filters.</summary>
+public sealed record LearnSituationAdminView(Guid Id, string Slug, string Name, string? Description, bool IsActive, DateTime? CreatedAt = null, DateTime? UpdatedAt = null);
+public sealed record LearnSituationPage(IReadOnlyList<LearnSituationAdminView> Items, int Total, int Page, int PageSize);
+public sealed record LearnSituationRef(Guid Id, string Slug, string Name);
+public sealed record LearnSourceRef(Guid SourceId, string Title, string VersionLabel, string Role, JsonElement Locator);
+/// <summary>Blocks are the normalized content: paragraph/heading/list/quote/image/video; video carries provider, videoId and canonical url.</summary>
+public sealed record LearnVersionView(Guid Id, Guid PostId, int VersionNumber, string ContentSchemaVersion, string Kind, string Title, string Summary,
+    string? CoverImageUrl, JsonElement Blocks, string ContentHash, string Status, DateTime? PublishedAt, long Revision, DateTime CreatedAt, DateTime UpdatedAt,
+    IReadOnlyList<LearnSituationRef> Situations, IReadOnlyList<LearnSourceRef> Sources);
+public sealed record LearnVersionSummary(Guid Id, int VersionNumber, string Status, string Title, long Revision, DateTime UpdatedAt);
+/// <summary>PublicationStatus: Unpublished, Published, Hidden or Deleted. Public reads omit Versions; admin reads list every version.</summary>
+public sealed record LearnPostView(Guid Id, string Slug, string PublicationStatus, Guid? PublishedVersionId, long Revision, DateTime CreatedAt, DateTime UpdatedAt,
+    LearnVersionView? PublishedVersion, IReadOnlyList<LearnVersionSummary>? Versions = null);
+public sealed record LearnPostAdminRow(Guid Id, string Slug, string PublicationStatus, Guid? PublishedVersionId, long Revision, DateTime CreatedAt, DateTime UpdatedAt,
+    LearnVersionView? PublishedVersion, string? Title, string? Kind, int? LatestVersionNumber, string? LatestVersionStatus, Guid? DraftVersionId,
+    int? DraftVersionNumber, int VersionCount);
+public sealed record LearnPostAdminPage(IReadOnlyList<LearnPostAdminRow> Items, int Total, int Page, int PageSize);
+public sealed record LearnPostSummary(Guid Id, string Slug, string Kind, string Title, string Summary, string? CoverImageUrl, DateTime PublishedAt);
+public sealed record LearnPostPage(IReadOnlyList<LearnPostSummary> Items, int Total, int Page, int PageSize);
+/// <summary>Available=false when the post is no longer public: only PostId, Available and BookmarkedAt are returned then.</summary>
+public sealed record LearnBookmarkView(Guid PostId, bool Available, DateTime BookmarkedAt, string? Slug = null, string? Title = null, string? Summary = null, string? Kind = null);
+public sealed record LearnBookmarkPage(IReadOnlyList<LearnBookmarkView> Items, int Total, int Page, int PageSize);
+public sealed record LearnBookmarkState(Guid PostId, bool Bookmarked);
+/// <summary>Knowledge source registry row. CanUseInDraft: a Learn draft may cite it; CanPublishReference: publish, Hidden and RAG accept it now.</summary>
+public sealed record KnowledgeSourceView(Guid Id, string Visibility, Guid? OrganizationId, string Title, string? SourceUri, string VersionLabel, string SourceHash,
+    string? Jurisdiction, DateTime? EffectiveFrom, DateTime? EffectiveUntil, string ApprovalStatus, DateTime? ApprovedAt, DateTime CreatedAt, long Revision,
+    bool CanUseInDraft, bool CanPublishReference);
+public sealed record KnowledgeSourcePage(IReadOnlyList<KnowledgeSourceView> Items, int Total, int Page, int PageSize);
+/// <summary>Send at least one field. Name 1-255 characters; an empty Description clears it; IsActive=false hides the situation from public filters and new publishes. The slug never changes.</summary>
+public sealed record UpdateLearnSituationRequest(string? Name = null, string? Description = null, bool? IsActive = null);
 public sealed record MediaValidationRequest(string Url);
 public sealed record MediaDescriptor(string Provider, string VideoId, string CanonicalUrl);
 public sealed record CreateLibraryItemRequest(string Kind, string Code);
+/// <summary>Only isActive changes: code is the stable business key and kind fixes the payload schema, so both are immutable.</summary>
 public sealed record UpdateLibraryItemRequest(bool IsActive);
+/// <summary>Payload fields by kind: ScenarioTemplate {state (fet3d.editor/1), description?}, RubricSample {rubric, description?},
+/// Equipment {description?, properties?}. description is optional for every kind (1-2000 characters when present).
+/// RequiredCapabilities must be offered by an active runtime catalog row when the version is published.</summary>
 public sealed record LibraryVersionInput(string Name, JsonObject Payload, IReadOnlyList<string>? RequiredCapabilities = null);
+public sealed record LibraryVersionResponse(Guid Id, Guid ItemId, string Kind, string Code, int VersionNumber, string Name, JsonElement Payload,
+    IReadOnlyList<string> RequiredCapabilities, string PayloadHash, string Status, DateTime? PublishedAt, long Revision, DateTime CreatedAt, DateTime UpdatedAt);
+public sealed record LibraryVersionSummary(Guid Id, int VersionNumber, string Name, string Status, long Revision, DateTime? PublishedAt);
+/// <summary>Versions lists every version for admin reads and only Published ones for Organization reads, newest first.</summary>
+public sealed record LibraryItemResponse(Guid Id, string Kind, string Code, bool IsActive, long Revision, DateTime CreatedAt, DateTime UpdatedAt,
+    LibraryVersionResponse? LatestPublished, IReadOnlyList<LibraryVersionSummary> Versions);
+public sealed record LibraryItemPage(IReadOnlyList<LibraryItemResponse> Items, int Total, int Page, int PageSize);
 
 /// <summary>Gate result passthrough: JSON representations are returned as documented in docs/learn-library.md.</summary>
 public interface IContentGates

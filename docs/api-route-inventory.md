@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-246 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+259 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -16,11 +16,15 @@
 | GET | /api/admin/analytics/operations | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/admin/analytics/revenue | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/admin/analytics/training | Bearer | None | 200, 400, 401, 403 |
+| GET | /api/admin/analytics/training/export | Bearer | None | 200, 400, 403, 404, 422, 429 |
 | GET | /api/admin/audit-logs | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/admin/audit-logs/{id} | Bearer | None | 200, 401, 403, 404 |
 | GET | /api/admin/billing/quota-policies | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/admin/billing/quota-policies | Bearer | None | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/billing/quota-policies/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/admin/buildings/{buildingId}/trials | Bearer | None | 200, 401, 403, 404 |
+| POST | /api/admin/buildings/{buildingId}/trials | Bearer | None | 201, 400, 401, 403, 404, 409 |
+| PATCH | /api/admin/buildings/{buildingId}/trials/{entitlementId} | Bearer | None | 200, 400, 401, 403, 404, 409 |
 | GET | /api/admin/discount-rules | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/admin/discount-rules | Bearer | None | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/discount-rules/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
@@ -47,6 +51,7 @@
 | POST | /api/admin/learn/posts/{id}/{operation} | Bearer | If-Match | 200, 409, 412, 428 |
 | GET | /api/admin/learn/situations | Bearer | None | 200, 400 |
 | POST | /api/admin/learn/situations | Bearer | Idempotency-Key | 201, 409 |
+| PATCH | /api/admin/learn/situations/{id} | Bearer | None | 200, 400, 404 |
 | GET | /api/admin/learn/versions/{versionId} | Bearer | None | 200, 404 |
 | PUT | /api/admin/learn/versions/{versionId} | Bearer | If-Match | 200, 409, 412, 422, 428 |
 | POST | /api/admin/learn/versions/{versionId}/publish | Bearer | If-Match | 200, 409, 412, 428 |
@@ -63,11 +68,15 @@
 | GET | /api/admin/organizations/{organizationId}/ai-usage | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/organizations/{organizationId}/analytics/operations | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/admin/organizations/{organizationId}/analytics/training | Bearer | None | 200, 400, 401, 403, 404 |
+| GET | /api/admin/organizations/{organizationId}/analytics/training/export | Bearer | None | 200, 400, 403, 404, 422, 429 |
 | GET | /api/admin/payments/payos/checkouts | Bearer | None | 200, 400, 401, 403, 404, 409, 503 |
 | POST | /api/admin/payments/payos/checkouts/{id}/reconcile | Bearer | None | 202, 400, 401, 403, 404, 409, 503 |
 | GET | /api/admin/payments/payos/requests | Bearer | None | 200, 400, 401, 403, 404, 409, 503 |
 | POST | /api/admin/quotations/{id}/cancel | Bearer | If-Match, Idempotency-Key | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/admin/quotations/{id}/issue | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/admin/runtime-catalog | Bearer | None | 200, 401, 403 |
+| POST | /api/admin/runtime-catalog | Bearer | None | 201, 400, 401, 403, 409 |
+| PATCH | /api/admin/runtime-catalog/{id} | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/admin/scenario-reviews | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/admin/scenario-reviews/{reviewId} | Bearer | None | 200, 401, 403, 404 |
 | POST | /api/admin/scenario-versions/{id}/approve | Bearer | Idempotency-Key | 200, 401, 403, 404, 409 |
@@ -121,10 +130,10 @@
 | POST | /api/buildings | Bearer | None | 201, 400, 401, 403, 409 |
 | GET | /api/buildings/{buildingId}/editor-preview | Bearer | None | 200, 400, 401, 403, 404, 503 |
 | POST | /api/buildings/{buildingId}/ifc | Bearer | Idempotency-Key | 201, 400, 404, 429 |
-| GET | /api/buildings/{buildingId}/qr-codes | Bearer | None | 200, 400, 404 |
-| POST | /api/buildings/{buildingId}/qr-codes | Bearer | None | 201, 400, 404, 409 |
-| POST | /api/buildings/{buildingId}/qr-codes/{qrId}/revoke | Bearer | None | 200, 404, 409 |
-| POST | /api/buildings/{buildingId}/qr-codes/{qrId}/rotate | Bearer | None | 200, 404, 409 |
+| GET | /api/buildings/{buildingId}/qr-codes | Bearer | None | 200, 400, 401, 403, 404 |
+| POST | /api/buildings/{buildingId}/qr-codes | Bearer | None | 201, 400, 401, 403, 404, 409 |
+| POST | /api/buildings/{buildingId}/qr-codes/{qrId}/revoke | Bearer | None | 200, 401, 403, 404, 409 |
+| POST | /api/buildings/{buildingId}/qr-codes/{qrId}/rotate | Bearer | None | 200, 401, 403, 404, 409 |
 | GET | /api/buildings/{buildingId}/scenarios | Bearer | None | 200, 400, 403, 404 |
 | DELETE | /api/buildings/{id} | Bearer | None | 200 |
 | GET | /api/buildings/{id} | Bearer | None | 200 |
@@ -142,6 +151,7 @@
 | POST | /api/feedback | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/learn/bookmarks | Bearer | None | 200 |
 | DELETE | /api/learn/bookmarks/{postId} | Bearer | None | 200 |
+| GET | /api/learn/bookmarks/{postId} | Bearer | None | 200, 401, 403 |
 | PUT | /api/learn/bookmarks/{postId} | Bearer | None | 200, 404 |
 | GET | /api/learn/posts | Anonymous | None | 200, 400 |
 | GET | /api/learn/posts/{slug} | Anonymous | None | 200, 404, 410 |
@@ -165,6 +175,7 @@
 | GET | /api/organizations/me/ai-usage | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/organizations/me/analytics/operations | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/organizations/me/analytics/training | Bearer | None | 200, 400, 401, 403 |
+| GET | /api/organizations/me/analytics/training/export | Bearer | None | 200, 400, 403, 404, 422, 429 |
 | GET | /api/organizations/me/notifications | Bearer | None | 200, 400, 401, 403, 404 |
 | PATCH | /api/organizations/me/notifications/{id}/read | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/organizations/{id} | Bearer | None | 200, 429 |
@@ -188,8 +199,8 @@
 | GET | /api/processing-jobs/{jobId} | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/processing-jobs/{jobId}/qa | Bearer | None | 200, 400, 401, 403, 404 |
 | POST | /api/processing-jobs/{jobId}/retry | Bearer | None | 202, 400, 401, 403, 404, 409, 429 |
-| GET | /api/qr/{qrToken} | Bearer | None | 200, 404 |
-| GET | /api/qr/{qrToken}/trainings | Bearer | None | 200, 403, 404 |
+| GET | /api/qr/{qrToken} | Bearer | None | 200, 401, 403, 404, 410 |
+| GET | /api/qr/{qrToken}/trainings | Bearer | None | 200, 401, 403, 404, 410 |
 | GET | /api/releases | Bearer | None | 200, 400, 401, 403 |
 | POST | /api/releases | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
 | GET | /api/releases/{releaseId} | Bearer | None | 200, 401, 403, 404 |
@@ -226,6 +237,8 @@
 | GET | /api/scenarios/{scenarioId} | Bearer | None | 200, 400, 403, 404 |
 | POST | /api/scenarios/{scenarioId}/draft | Bearer | Idempotency-Key | 201, 400, 404 |
 | GET | /api/scenarios/{scenarioId}/drafts | Bearer | None | 200, 400, 403, 404 |
+| GET | /api/scenarios/{scenarioId}/playtest-availability | Bearer | None | 200, 401, 403, 404 |
+| GET | /api/scenarios/{scenarioId}/playtests | Bearer | None | 200, 400, 401, 403, 404 |
 | POST | /api/scenarios/{scenarioId}/playtests | Bearer | Idempotency-Key | 201, 400, 404 |
 | GET | /api/scenarios/{scenarioId}/versions | Bearer | None | 200, 400, 403, 404 |
 | GET | /api/support/tickets | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |

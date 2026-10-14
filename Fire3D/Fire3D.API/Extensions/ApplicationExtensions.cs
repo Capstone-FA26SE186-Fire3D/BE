@@ -18,7 +18,12 @@ public static class ApplicationExtensions
         Fire3D.API.Authorization.LearnerContinuationAuthentication.AddLearnerContinuation(services,configuration);
         services.AddScoped<Fire3D.Application.Learning.ILearnerSessions,Fire3D.Infrastructure.Learning.LearnerSessions>();
         services.AddScoped<Fire3D.Application.Learning.IBuildingQrCodes,Fire3D.Infrastructure.Learning.BuildingQrCodes>();
+        services.AddScoped<Fire3D.Application.Administration.IPlatformServiceAdmin,Fire3D.Infrastructure.Administration.PlatformServiceAdmin>();
         services.AddScoped<Fire3D.Application.Content.IContentGates,Fire3D.Infrastructure.Content.ContentGates>();
+        services.AddOptions<Fire3D.Application.Content.PlatformCacheOptions>().Bind(configuration.GetSection(Fire3D.Application.Content.PlatformCacheOptions.Section))
+            .Validate(o => o.PollSeconds is >= 1 and <= 300 && o.MaxEventsPerRun is >= 1 and <= 1000, "PlatformCache PollSeconds must be 1-300 and MaxEventsPerRun 1-1000.").ValidateOnStart();
+        services.AddSingleton<Fire3D.Application.Content.IPlatformCacheVersions,Fire3D.Infrastructure.Content.RedisPlatformCacheVersions>();
+        services.AddHostedService<Fire3D.Infrastructure.Content.PlatformCacheInvalidationWorker>();
         services.AddOptions<Fire3D.Application.Ai.OrganizationAiOptions>().Bind(configuration.GetSection(Fire3D.Application.Ai.OrganizationAiOptions.Section))
             .Validate(o => !o.Enabled || o.Configured, "OrganizationAi:BaseUrl must be an absolute HTTPS (or loopback) URL when enabled.")
             .Validate(o => o.TimeoutSeconds is >= 5 and <= 600 && o.LeaseSeconds > o.TimeoutSeconds && o.LeaseSeconds <= 3600 && o.MaxAttempts is >= 1 and <= 10

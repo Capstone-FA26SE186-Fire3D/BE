@@ -11,7 +11,8 @@ public sealed record PlaytestLaunch(Guid PlaytestId,Guid ActorId,Guid FamilyId,G
 public sealed record PlaytestPackageView(Guid ArtifactId,Guid ManifestArtifactId,Guid ValidationRunId,string PackageHash,string ManifestHash,
  string BuildTarget,string ProtocolVersion,string ManifestSchemaVersion);
 public sealed record PlaytestGrantView(int Generation,DateTime IssuedAt,DateTime ExpiresAt);
-public sealed record PlaytestRecoveryView(bool CanStart,bool CanReissueGrant,bool CanSync,bool CanCancel);
+/// <summary>CanIssueHandoff: a new Mobile handoff code may be created (status Created); redeeming it moves the binding to that device.</summary>
+public sealed record PlaytestRecoveryView(bool CanStart,bool CanReissueGrant,bool CanSync,bool CanCancel,bool CanIssueHandoff=false);
 /// <summary>
 /// Status: Created → Launching (start, Trial consumed once) → Running (runtime confirmed) → Completed | Cancelled.
 /// LaunchSession tells whether the calling session is the one allowed to start/launch/sync. Family IDs are never returned.
@@ -19,7 +20,23 @@ public sealed record PlaytestRecoveryView(bool CanStart,bool CanReissueGrant,boo
 public sealed record PlaytestStatusResponse(Guid Id,Guid BuildingId,Guid RevisionId,Guid ScenarioVersionId,string Status,DateTime CreatedAt,
  DateTime? StartedAt,DateTime? EndedAt,string? RuntimeVersion,PlaytestPackageView Package,PlaytestGrantView? Grant,DateTime? LaunchedAt,
  DateTime? LastHeartbeatAt,long AcknowledgedSequence,bool BoundToMobile,bool LaunchSession,DateTime? OpenHandoffExpiresAt,
- PlaytestRecoveryView Recovery,JsonElement? Completion);
+ PlaytestRecoveryView Recovery,PlaytestCompletionView? Completion,Guid? OpenHandoffId=null);
+/// <summary>Stored once at completion. Summary is the object the runtime sent (opaque to the backend, never scored here).</summary>
+public sealed record PlaytestCompletionView(long LastEventSequence,JsonElement Summary,DateTime CompletedAt,string CompletionHash);
+/// <summary>One of the caller's playtests; open it with GET /api/playtests/{id}.</summary>
+public sealed record PlaytestSummary(Guid Id,Guid ScenarioVersionId,int VersionNumber,Guid RevisionId,string Status,DateTime CreatedAt,
+ DateTime? StartedAt,DateTime? EndedAt,bool BoundToMobile);
+public sealed record PlaytestPage(IReadOnlyList<PlaytestSummary> Items,int Total,int Page,int PageSize);
+/// <summary>Kind: Paid (current paid Building service), Trial (Trial entitlement in its window) or None; TrialUnitsRemaining only for Trial.</summary>
+public sealed record PlaytestEntitlementView(string Kind,DateTime? EndsAt,int? TrialUnitsRemaining);
+/// <summary>
+/// Advisory pre-check before preparing a playtest; start still rechecks everything. Blockers (stable codes):
+/// PLAYTEST_LAUNCH_UNAVAILABLE (launch signing not configured), PLAYTEST_HANDOFF_UNAVAILABLE (Mobile handoff not configured),
+/// PLAYTEST_ENTITLEMENT_REQUIRED (no paid service and no Trial unit left), PLAYTEST_PACKAGE_REQUIRED (the version has no
+/// accepted playtest package; only when scenarioVersionId is given). CanCreate is true when there is no blocker.
+/// </summary>
+public sealed record PlaytestAvailability(bool LaunchEnabled,bool HandoffEnabled,PlaytestEntitlementView Entitlement,Guid? ScenarioVersionId,
+ bool? PackageReady,IReadOnlyList<string> Blockers,bool CanCreate);
 /// <summary>QR content is DeepLink (configured base URL + code). Code is shown once per key and never logged.</summary>
 public sealed record PlaytestHandoffResponse(Guid HandoffId,Guid PlaytestId,string Code,string DeepLink,DateTime ExpiresAt);
 public sealed record RedeemPlaytestHandoffRequest(string Code);
@@ -59,4 +76,6 @@ public interface IPlaytestLifecycle
  Task<AuthResult<PlaytestEventsResponse>> RecordEventsAsync(Guid actor,Guid family,Guid playtest,PlaytestEventsRequest request,CancellationToken ct)=>throw new NotSupportedException();
  Task<AuthResult<PlaytestStatusResponse>> CompleteAsync(Guid actor,Guid family,Guid playtest,CompletePlaytestRequest request,string? key,CancellationToken ct)=>throw new NotSupportedException();
  Task<AuthResult<PlaytestStatusResponse>> CancelAsync(Guid actor,Guid family,Guid playtest,string? key,CancellationToken ct)=>throw new NotSupportedException();
+ Task<AuthResult<PlaytestPage>> ListAsync(Guid actor,Guid family,Guid scenario,Guid? scenarioVersionId,string? status,int page,int pageSize,CancellationToken ct)=>throw new NotSupportedException();
+ Task<AuthResult<PlaytestAvailability>> AvailabilityAsync(Guid actor,Guid family,Guid scenario,Guid? scenarioVersionId,CancellationToken ct)=>throw new NotSupportedException();
 }

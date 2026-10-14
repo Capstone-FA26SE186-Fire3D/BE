@@ -19,7 +19,7 @@ public sealed class AuditQueries(Fire3DDbContext db) : IAuditQueries
         join o in db.Organizations.AsNoTracking().Where(o=>o.DeletedAt==null) on x.OrganizationId equals o.Id into orgs
         from o in orgs.DefaultIfEmpty()
         select new Labeled(x,new AuditMetadata(x.Id,x.UserId,x.OrganizationId,x.Action.ToString(),x.TargetEntity,x.TargetId,x.CorrelationId,x.CreatedAt,
-            x.ActorType=="System"?"System":u==null?null:(u.FullName!=null && u.FullName.Trim()!=""?u.FullName:u.Username),o==null?null:o.Name));
+            x.ActorType=="System"?"System":u==null?null:(u.FullName!=null && u.FullName.Trim()!=""?u.FullName:u.Username),o==null?null:o.Name,x.ActorType));
     public async Task<AuthResult<AuditPage>> List(Guid actor,Guid family,AuditFilters f,CancellationToken ct)
     {
         if(!await Authorized(actor,family,ct))return AuthResult<AuditPage>.Fail("FORBIDDEN","Only an active PlatformAdmin session can read audit.",403);

@@ -112,7 +112,8 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
                 ["Mailgun:ApiKey"] = "test-key", ["Mailgun:Domain"] = "example.test",
                 ["Mailgun:From"] = "noreply@example.test",
                 ["Redis:Enabled"] = "false",
-                ["AuthEmail:WorkerEnabled"] = "false"
+                ["AuthEmail:WorkerEnabled"] = "false",
+                ["PlatformCache:WorkerEnabled"] = "false"
             };
             web.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(settings));
             web.ConfigureServices(services =>

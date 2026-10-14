@@ -18,7 +18,35 @@ public sealed class ContractSchemaTransformer : IOpenApiSchemaTransformer
 
     public Task TransformAsync(OpenApiSchema schema, OpenApiSchemaTransformerContext context, CancellationToken ct)
     {
+        // Web JSON defaults also accept quoted numbers on input, which makes every numeric schema "integer|string" with a
+        // pattern. Responses always write JSON numbers, so the contract publishes plain integer/number types (#83).
+        if (schema.Type is { } kind && kind.HasFlag(JsonSchemaType.String) && (kind.HasFlag(JsonSchemaType.Integer) || kind.HasFlag(JsonSchemaType.Number)))
+        {
+            schema.Type = kind & ~JsonSchemaType.String;
+            schema.Pattern = null;
+        }
         var type = context.JsonTypeInfo.Type;
+        if (type == typeof(Microsoft.AspNetCore.Mvc.ProblemDetails))
+        {
+            // Every error response is ProblemDetails plus a stable code; validation adds field errors or JSONPath issues.
+            schema.Properties ??= new Dictionary<string, IOpenApiSchema>();
+            schema.Properties["code"] = new OpenApiSchema { Type = JsonSchemaType.String,
+                Description = "Stable machine-readable error code, e.g. VALIDATION_ERROR, NOT_FOUND, EDITOR_SCHEMA_INVALID. Clients branch on this, never on title." };
+            schema.Properties["errors"] = new OpenApiSchema { Type = JsonSchemaType.Object | JsonSchemaType.Null,
+                AdditionalProperties = new OpenApiSchema { Type = JsonSchemaType.Array, Items = new OpenApiSchema { Type = JsonSchemaType.String } },
+                Description = "Field errors for 400 VALIDATION_ERROR: field name → messages." };
+            schema.Properties["issues"] = new OpenApiSchema { Type = JsonSchemaType.Array | JsonSchemaType.Null,
+                Items = new OpenApiSchema { Type = JsonSchemaType.Object, Required = new HashSet<string> { "code", "path", "message" },
+                    Properties = new Dictionary<string, IOpenApiSchema>
+                    {
+                        ["code"] = new OpenApiSchema { Type = JsonSchemaType.String },
+                        ["path"] = new OpenApiSchema { Type = JsonSchemaType.String, Description = "JSONPath of the offending value, e.g. $.objects[0].placement." },
+                        ["message"] = new OpenApiSchema { Type = JsonSchemaType.String }
+                    } },
+                Description = "Content issues for 422 EDITOR_SCHEMA_INVALID / CONTENT_INVALID." };
+            schema.Properties["traceId"] = new OpenApiSchema { Type = JsonSchemaType.String };
+            return Task.CompletedTask;
+        }
         if (type == typeof(InitiateIfcUploadRequest) && schema.Properties is not null)
         {
             // The property stays nullable in C# so a missing hash reaches the handler's VALIDATION_ERROR (errors.sha256Hash).

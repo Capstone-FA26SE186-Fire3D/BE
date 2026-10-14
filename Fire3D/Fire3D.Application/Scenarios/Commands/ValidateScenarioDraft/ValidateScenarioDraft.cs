@@ -11,11 +11,12 @@ public sealed record ScenarioDraftValidationResponse(Guid DraftId, uint Version,
     IReadOnlyList<ScenarioDraftValidationIssue> Issues);
 public sealed record ValidateScenarioDraftCommand(Guid ActorId, Guid DraftId)
     : IRequest<AuthResult<ScenarioDraftValidationResponse>>;
-/// <summary>Dry-run result. StateHash is the SHA-256 of the checked state as received, so a client can tell which edit the issues belong to;
+/// <summary>Dry-run result. StateHash is the lowercase hex SHA-256 of the exact UTF-8 request body bytes, so a client hashing the
+/// string it sent (for example JSON.stringify(state)) gets the same value, Vietnamese text included; it tells which edit the issues belong to.
 /// StoredVersion is the draft's current revision, which the dry run never changes.</summary>
 public sealed record ScenarioDraftDryRunResponse(Guid DraftId, uint StoredVersion, string StateHash, bool IsValid,
     IReadOnlyList<ScenarioDraftValidationIssue> Issues);
-public sealed record ValidateScenarioDraftStateCommand(Guid ActorId, Guid DraftId, System.Text.Json.Nodes.JsonNode? State)
+public sealed record ValidateScenarioDraftStateCommand(Guid ActorId, Guid DraftId, System.Text.Json.Nodes.JsonNode? State, string? ReceivedBodyHash = null)
     : IRequest<AuthResult<ScenarioDraftDryRunResponse>>;
 
 public sealed class ValidateScenarioDraftStateCommandHandler(IAuthStore accounts, IScenarioReadStore store, Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog.IRuntimeCatalogReadStore catalog)
@@ -33,7 +34,7 @@ public sealed class ValidateScenarioDraftStateCommandHandler(IAuthStore accounts
         if (draft is null)
             return AuthResult<ScenarioDraftDryRunResponse>.Fail("NOT_FOUND", "Scenario draft not found or access denied.", 404);
 
-        var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(state.ToJsonString())));
+        var hash = request.ReceivedBodyHash ?? Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(state.ToJsonString())));
         // Same checks as PUT followed by validate, without storing anything: shape problems are reported as issues instead of 422.
         var normalized = UpdateScenarioDraft.DraftStateInput.Normalize(state);
         IReadOnlyList<ScenarioDraftValidationIssue> issues;

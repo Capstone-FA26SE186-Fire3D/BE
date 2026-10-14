@@ -124,6 +124,30 @@ public sealed class PlaytestsController(IPlaytestLifecycle playtests) : Controll
     public async Task<IActionResult> Cancel(Guid playtestId, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct) =>
         Reply(await playtests.CancelAsync(User.GetActorId(), User.GetSessionFamilyId(), playtestId, key, ct));
 
+    /// <summary>The caller's own playtests of a scenario, newest first, to reopen one after a reload or on another device.</summary>
+    /// <remarks>Filters: scenarioVersionId (must belong to the scenario), status (Created, Launching, Running, Completed, Cancelled).
+    /// Other users' playtests never appear. page >= 1, pageSize 1-100 (default 20).</remarks>
+    [HttpGet("/api/scenarios/{scenarioId:guid}/playtests")]
+    [ProducesResponseType<PlaytestPage>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> List(Guid scenarioId, [FromQuery] Guid? scenarioVersionId, [FromQuery] string? status,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
+        Reply(await playtests.ListAsync(User.GetActorId(), User.GetSessionFamilyId(), scenarioId, scenarioVersionId, status, page, pageSize, ct));
+
+    /// <summary>Read-only pre-check before preparing a playtest: rollout, Building service or Trial units, and package readiness.</summary>
+    /// <remarks>Advisory only: start rechecks everything. Blockers use the same codes the write routes return. Pass scenarioVersionId to
+    /// also check that the version has an accepted playtest package.</remarks>
+    [HttpGet("/api/scenarios/{scenarioId:guid}/playtest-availability")]
+    [ProducesResponseType<PlaytestAvailability>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> Availability(Guid scenarioId, [FromQuery] Guid? scenarioVersionId, CancellationToken ct) =>
+        Reply(await playtests.AvailabilityAsync(User.GetActorId(), User.GetSessionFamilyId(), scenarioId, scenarioVersionId, ct));
+
     private IActionResult Reply<T>(AuthResult<T> result) => result.IsSuccess ? Ok(result.Value) : Problem(result.Error!);
     private ObjectResult Problem(AuthError error) => Problem(statusCode: error.Status, title: error.Message,
         extensions: new Dictionary<string, object?> { ["code"] = error.Code, ["errors"] = error.Errors });

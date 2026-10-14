@@ -35,17 +35,22 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
 
     /// <summary>Dry run: validates an unsaved state against the draft's revision without storing it or changing the ETag.</summary>
     /// <remarks>Body is the same state a PUT would send. Runs the PUT shape check and the full validation; shape problems come back as
-    /// issues (200, isValid=false) instead of 422. Response: draftId, storedVersion (unchanged), stateHash of the checked state, isValid, issues.
+    /// issues (200, isValid=false) instead of 422. Response: draftId, storedVersion (unchanged), stateHash = lowercase hex SHA-256 of the exact UTF-8
+    /// request body bytes (hash the string you send, e.g. JSON.stringify(state)), isValid, issues.
     /// Malformed JSON 400 EDITOR_JSON_MALFORMED; non-object body 400; draft outside scope 404.</remarks>
     [HttpPost("/api/scenario-drafts/{draftId:guid}/validate-state")]
     [Fire3D.API.OpenApi.EditorJsonBody]
+    [Fire3D.API.OpenApi.BufferedBody]
     [ProducesResponseType<Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ScenarioDraftDryRunResponse>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> ValidateScenarioDraftState(Guid draftId, [FromBody] System.Text.Json.Nodes.JsonNode? state, CancellationToken ct)
     {
-        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ValidateScenarioDraftStateCommand(User.GetActorId(), draftId, state), ct);
+        // stateHash covers the exact bytes received, so clients can reproduce it without matching the server's JSON encoder.
+        Request.Body.Position = 0;
+        var received = Convert.ToHexStringLower(await System.Security.Cryptography.SHA256.HashDataAsync(Request.Body, ct));
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ValidateScenarioDraftStateCommand(User.GetActorId(), draftId, state, received), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }
@@ -251,11 +256,18 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
     /// <summary>
     /// Pins an accepted immutable PlaytestPackage without consuming Trial or issuing a grant. Idempotency-Key required.
     /// </summary>
+    /// <remarks>OrganizationUser of the Building's tenant only; PlatformAdmin is not a playtest actor (403). 409 DRAFT_SNAPSHOT_REQUIRED,
+    /// PLAYTEST_PACKAGE_REQUIRED, PACKAGE_METADATA_MISMATCH, RUNTIME_INCOMPATIBLE, IDEMPOTENCY_KEY_CONFLICT; 503 when playtest is not
+    /// configured. Check GET /api/scenarios/{id}/playtest-availability first.</remarks>
     [Authorize(Roles="OrganizationUser")]
     [HttpPost("{scenarioId:guid}/playtests")]
     [ProducesResponseType<Fire3D.Application.Scenarios.PlaytestPreparation>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(503)]
     public async Task<IActionResult> PreparePlaytestSession(Guid scenarioId, [FromQuery] Guid? buildingId, [FromBody] Fire3D.Application.Scenarios.Commands.PreparePlaytestSession.PreparePlaytestRequest request, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();

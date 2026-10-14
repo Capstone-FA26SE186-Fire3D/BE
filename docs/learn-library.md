@@ -49,6 +49,17 @@ list as `{postId, available:false, bookmarkedAt}` without title or summary; new 
 `learn_rag_eligible(post, version)` is true only for the current published version of a Published or Hidden post; #58 RAG uses it.
 Every state change enqueues a `PlatformCacheInvalidation` outbox event with `{scope:"learn", id, revision}`.
 
+### Cache invalidation consumer
+
+`PlatformCacheInvalidationWorker` (API host, `PlatformCache:WorkerEnabled`, default `true`; `PollSeconds` 5, `MaxEventsPerRun` 100)
+consumes the `learn`, `library` and `knowledge` events through `platform_cache_invalidation_gate`. It claims one due event with a
+60-second lease (`FOR UPDATE SKIP LOCKED`). Then it increments the Redis key `fet3d:{environment}:cache:{scope}:version`, so cache-aside
+readers that put this version in their keys stop using older entries. Last, in one transaction, it writes the receipt
+(`integration_event_consumptions`, consumer `platform-cache-invalidation`) and marks the event `Published`. With `Redis:Enabled=false`
+there is no shared cache, and the receipt says `no-cache`. When Redis fails, or the scope is unknown, the event goes back to `Pending` with
+`last_error` and backoff (30 s doubling, maximum 30 min). It becomes `Failed` after 10 attempts. An old lease token cannot complete an event
+that another claim has taken over. Source state never depends on the cache: every read still checks the current status in PostgreSQL.
+
 ## Learn endpoints
 
 | Method | Route | Auth | Notes |
@@ -57,16 +68,24 @@ Every state change enqueues a `PlatformCacheInvalidation` outbox event with `{sc
 | GET | `/api/learn/posts?search=&situation=&kind=&page=&pageSize=` | anonymous | Published post with a Published version only, newest first (publishedAt, id). `search` 2–100 chars on title+summary, case- and Vietnamese-diacritic-insensitive (`chay` finds `Cháy`, `duong` finds `Đường`; folded in SQL, no `unaccent` extension). Repeat `situation` (≤10 active slugs) and `kind` (Article/Tip/Video): values of one filter are OR, filters are AND. Filters run before paging; `total` is exact. Invalid values → 400 `VALIDATION_ERROR` with `errors`. (#79) |
 | GET | `/api/learn/posts/{slug}` | anonymous | Published version only, no draft history. |
 | GET | `/api/learn/bookmarks` | Trainee | Paged. |
+| GET | `/api/learn/bookmarks/{postId}` | Trainee | `{postId, bookmarked}` for one post, without loading every bookmark (#86). |
 | PUT/DELETE | `/api/learn/bookmarks/{postId}` | Trainee | Idempotent. |
-| GET | `/api/admin/learn/posts?status=` | PlatformAdmin | All states with version list. |
+| GET | `/api/admin/learn/posts?status=` | PlatformAdmin | All states. Each row adds `title`, `kind`, `latestVersionNumber`, `latestVersionStatus` (latest version, also for never-published posts), `draftVersionId`/`draftVersionNumber` (newest open Draft or null) and `versionCount` (#86). |
 | GET | `/api/admin/learn/posts/{id}` | PlatformAdmin | `ETag` = post revision. |
 | POST | `/api/admin/learn/posts` | PlatformAdmin | `{slug, publish, version}` + Idempotency-Key → `201`. |
 | POST | `/api/admin/learn/posts/{id}/versions` | PlatformAdmin | New Draft + Idempotency-Key. |
 | GET/PUT | `/api/admin/learn/versions/{versionId}` | PlatformAdmin | PUT only on Draft, If-Match version revision. |
 | POST | `/api/admin/learn/versions/{versionId}/publish` | PlatformAdmin | If-Match version revision. |
-| POST | `/api/admin/learn/posts/{id}/hide\|show\|delete\|restore` | PlatformAdmin | If-Match post revision. |
+| POST | `/api/admin/learn/posts/{id}/hide\|show\|delete\|restore` | PlatformAdmin | If-Match post revision. `show` re-applies the publish rules to the published version: every cited source still Approved Common (`409 LEARN_SOURCE_NOT_APPROVED`) and every situation active (`409 LEARN_SITUATION_INVALID`). |
 | POST | `/api/admin/learn/situations` | PlatformAdmin | Idempotency-Key. |
+| PATCH | `/api/admin/learn/situations/{id}` | PlatformAdmin | `{name?, description?, isActive?}` (at least one; empty description clears it). Slug never changes and situations are never deleted. Inactive situations leave public filters and block publish/show of versions using them; audited and cache-invalidated. |
 | POST | `/api/admin/learn/media/validate` | PlatformAdmin | Preview of URL canonicalisation. |
+
+## Policies clarified for #86
+
+- Several Draft versions of one post may exist at once; publish names the exact version, and the others stay Draft.
+- RAG eligibility (`learn_rag_eligible`) requires the current published version of a Published or Hidden post **and** every cited source still Approved Common. Retiring a source removes the post from retrieval immediately; Deleted is never eligible.
+- Video blocks are stored as `{type:"video", provider, videoId, url}` from the allowlist only; content never holds HTML or iframes. A client that embeds builds the player URL itself from `provider` + `videoId` and allows only these hosts in its CSP `frame-src`: YouTube `https://www.youtube-nocookie.com/embed/{videoId}`, TikTok `https://www.tiktok.com/embed/v2/{videoId}`, Facebook `https://www.facebook.com/plugins/video.php?href={url-encoded url}`. Otherwise link out to `url`.
 
 ## Editor catalogs (#69)
 
@@ -93,11 +112,11 @@ item into a scenario is done by the editor client and stays a copy; later librar
 | GET | `/api/library/items?kind=` | OrganizationUser, PlatformAdmin | Active and published only. |
 | GET | `/api/library/items/{id}` | OrganizationUser, PlatformAdmin | Includes `latestPublished`. |
 | GET | `/api/library/versions/{id}` | OrganizationUser, PlatformAdmin | Published only for organizations. |
-| GET/POST | `/api/admin/library/items` | PlatformAdmin | POST `{kind, code}` + Idempotency-Key. |
-| GET/PATCH | `/api/admin/library/items/{id}` | PlatformAdmin | PATCH `{isActive}`, If-Match item revision. |
+| GET/POST | `/api/admin/library/items` | PlatformAdmin | GET `kind`, `isActive`, `search` (part of the code, wildcards literal, max 80) before paging, ordered by code (#88). POST `{kind, code}` + Idempotency-Key. |
+| GET/PATCH | `/api/admin/library/items/{id}` | PlatformAdmin | PATCH `{isActive}`, If-Match item revision. `code` (business key) and `kind` (fixes the payload schema) are immutable: create a new item instead. |
 | POST | `/api/admin/library/items/{id}/versions` | PlatformAdmin | Draft + Idempotency-Key. |
 | GET/PUT | `/api/admin/library/versions/{id}` | PlatformAdmin | PUT only on Draft, If-Match. |
-| POST | `/api/admin/library/versions/{id}/publish` | PlatformAdmin | If-Match. |
+| POST | `/api/admin/library/versions/{id}/publish` | PlatformAdmin | If-Match. Every `requiredCapabilities` entry must be offered by an active `runtime_compatibility_catalog` row, else `409 LIBRARY_CAPABILITY_UNSUPPORTED` (#88). |
 
 Errors are ProblemDetails with `code` and `traceId`. Missing If-Match is `428`, malformed `400`, stale `412`. Lists default to 20
 items, maximum 100. Library changes enqueue `PlatformCacheInvalidation` with `scope:"library"`.
@@ -111,5 +130,7 @@ items, maximum 100. Library changes enqueue `PlatformCacheInvalidation` with `sc
 ## Idempotency on If-Match mutations (#57)
 
 `PUT /api/admin/learn/versions/{id}`, `POST /api/admin/learn/versions/{id}/publish`, `POST /api/admin/learn/posts/{id}/{hide|show|delete|restore}`, `PATCH /api/admin/library/items/{id}`, `PUT /api/admin/library/versions/{id}` and `POST /api/admin/library/versions/{id}/publish` accept an optional `Idempotency-Key` next to the required `If-Match`. With a key, the first successful response is stored and replayed for the same key and input (resource, body, If-Match), even after the ETag moved, so a retried request after a lost response does not fail with 412. Another input under the same key is `409 IDEMPOTENCY_KEY_CONFLICT`; a malformed key is `400 IDEMPOTENCY_KEY_REQUIRED`. Without a key the behaviour is unchanged. Create routes keep their required key. The create body field is `publish` (boolean), not `publishImmediately`. Migration: `20261012170000_AddContentLifecycleKeys` (`content_lifecycle_gate`, wrapping the existing gates).
+
+Library contract (#88): responses are typed in OpenAPI (`LibraryItemResponse`, `LibraryVersionResponse`, `LibraryItemPage` with `{items,total,page,pageSize}`). Invalid version content returns `422 CONTENT_INVALID` with `issues[]` (`code`, `path`, `message`), e.g. `RUBRIC_SCHEMA_VERSION_UNSUPPORTED` at `$.payload.rubric.schema_version`, `FIELD_UNKNOWN`, `STRING_INVALID`, `CAPABILITIES_INVALID`, `PROPERTIES_INVALID`. `payload.description` is optional for every kind (1–2000 characters when sent); clients must not require it. A draft records what it copied through the optional editor field `libraryRefs[]` (`versionId`, `kind`, `code?`), provenance only.
 
 Roles: `/api/admin/learn/*` and `/api/admin/library/*` are PlatformAdmin only (OrganizationUser and Trainee get 403); `/api/library/*` is OrganizationUser and PlatformAdmin (Trainee 403); public Learn reads are anonymous.

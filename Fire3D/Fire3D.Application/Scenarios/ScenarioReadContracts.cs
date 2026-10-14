@@ -7,9 +7,10 @@ public sealed record ScenarioSummaryResponse(Guid Id, Guid BuildingId, string Na
 /// <summary>CurrentDraft* is the most recently saved draft (send CurrentDraftVersion as If-Match); LatestVersion* is the newest snapshot.</summary>
 public sealed record ScenarioDetailResponse(Guid Id, Guid BuildingId, Guid OrganizationId, string Name, DateTime CreatedAt,
     Guid? CurrentDraftId = null, uint? CurrentDraftVersion = null, int DraftCount = 0, Guid? LatestVersionId = null, int? LatestVersionNumber = null);
-/// <summary>Draft without its state. Version is the ETag revision; LastEditedBy comes from the draft audit (creator when never saved).</summary>
+/// <summary>Draft without its state. Version is the ETag revision; LastEditedBy comes from the draft audit (creator when never saved).
+/// StateKind: Uninitialized (state is still {}), Versioned (schemaVersion set, see SchemaVersion) or Legacy (typed pre-editor shape).</summary>
 public sealed record ScenarioDraftSummaryResponse(Guid Id, Guid ScenarioId, Guid RevisionId, int DraftNumber, string Source, string? SchemaVersion,
-    uint Version, Guid CreatedBy, DateTime CreatedAt, DateTime UpdatedAt, Guid? LastEditedById, string? LastEditedByName);
+    uint Version, Guid CreatedBy, DateTime CreatedAt, DateTime UpdatedAt, Guid? LastEditedById, string? LastEditedByName, string StateKind = "Legacy");
 public sealed record ScenarioDraftResponse(Guid Id, Guid ScenarioId, Guid RevisionId, Guid BuildingId,
     Guid OrganizationId, int DraftNumber, JsonNode State, string Source, Guid? LastAiRequestId,
     DateTime CreatedAt, DateTime UpdatedAt, uint Version);

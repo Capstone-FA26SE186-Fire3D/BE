@@ -37,7 +37,7 @@ public sealed partial class AuthIntegrationTests
     private async Task WithPlaytestRuntimeGates(Func<string, Task> action)
     {
         var login = "playtest_runtime_" + Guid.NewGuid().ToString("N");
-        await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}';GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION playtest_lifecycle_gate(text,uuid,uuid,uuid,uuid,jsonb,text),playtest_runtime_gate(text,uuid,uuid,uuid,jsonb,text) TO {login}");
+        await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}';GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION playtest_lifecycle_gate(text,uuid,uuid,uuid,uuid,jsonb,text),playtest_read_gate(text,uuid,uuid,uuid,jsonb),playtest_runtime_gate(text,uuid,uuid,uuid,jsonb,text) TO {login}");
         try { await action(new NpgsqlConnectionStringBuilder(testConnection) { Username = login, Pooling = false }.ConnectionString); }
         finally { await ExecuteAsync($"DROP OWNED BY {login};DROP ROLE {login}"); }
     }
