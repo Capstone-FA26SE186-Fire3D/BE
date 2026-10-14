@@ -27,6 +27,18 @@
     },
     "learningObjectives": { "type": "array", "maxItems": 50, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 1000 }, "description": "Required and nonempty for snapshot." },
     "learnerInstructions": { "type": "string", "minLength": 1, "maxLength": 10000, "description": "Required for snapshot." },
+    "libraryRefs": {
+      "description": "Optional provenance: Library versions the author copied from. Never changes runtime behaviour.",
+      "type": "array", "maxItems": 50,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["versionId", "kind"],
+        "properties": {
+          "versionId": { "type": "string", "format": "uuid" },
+          "kind": { "enum": ["ScenarioTemplate", "RubricSample", "Equipment"] },
+          "code": { "type": "string", "minLength": 1, "maxLength": 80 }
+        }
+      }
+    },
     "rubric": {
       "description": "Required for snapshot.",
       "type": "object", "additionalProperties": false, "required": ["schema_version", "pass_threshold", "criteria"],

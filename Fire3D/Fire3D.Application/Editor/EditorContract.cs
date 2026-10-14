@@ -326,8 +326,10 @@ public static class ParameterSchema
 public static class ScenarioStateV1Validator
 {
     private static readonly string[] Root = ["schemaVersion", "name", "geometry", "runtimeVersion", "objects", "timeLimitSeconds", "rubric",
-        "learningObjectives", "learnerInstructions", "modePolicy", "randomSeed", "replanIntervalSeconds"];
+        "learningObjectives", "learnerInstructions", "modePolicy", "randomSeed", "replanIntervalSeconds", "libraryRefs"];
     private static readonly string[] Geometry = ["artifactId", "sha256Hash"];
+    private static readonly string[] LibraryRef = ["versionId", "kind", "code"];
+    private static readonly string[] LibraryKinds = ["ScenarioTemplate", "RubricSample", "Equipment"];
     private static readonly string[] Object = ["id", "kind", "placement", "anchorId", "capability", "parameters", "label"];
     private static readonly string[] Placement = ["floorId", "position", "rotation"];
     private static readonly string[] Vector = ["x", "y", "z"];
@@ -367,6 +369,17 @@ public static class ScenarioStateV1Validator
         if (root["learningObjectives"] is not null || complete)
             UniqueValues(r, root["learningObjectives"], "$.learningObjectives", 50, x => r.Text(x.node, x.path, 1000), requireOne: complete);
         if (root["learnerInstructions"] is not null || complete) r.Text(root["learnerInstructions"], "$.learnerInstructions", 10_000);
+        // Provenance only: which Library versions the author copied from. It never changes runtime behaviour.
+        if (r.Array(root["libraryRefs"], "$.libraryRefs", 50, required: false) is { } refs)
+            for (var i = 0; i < refs.Count; i++)
+            {
+                var path = $"$.libraryRefs[{i}]";
+                if (r.Object(refs[i], path, LibraryRef) is not { } libraryRef) continue;
+                if (r.Text(libraryRef["versionId"], path + ".versionId", 36) is { } versionId && !Guid.TryParse(versionId, out _))
+                    r.Add("STRING_FORMAT_INVALID", path + ".versionId", "Use the Library version UUID.");
+                r.OneOf(libraryRef["kind"], path + ".kind", LibraryKinds);
+                if (libraryRef["code"] is not null) r.Text(libraryRef["code"], path + ".code", 80);
+            }
         ValidateRubric(r, root["rubric"], complete);
 
         var kinds = new Dictionary<string, int>(StringComparer.Ordinal);

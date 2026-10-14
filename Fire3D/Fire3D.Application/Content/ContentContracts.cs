@@ -17,8 +17,19 @@ public sealed record UpdateLearnSituationRequest(string? Name = null, string? De
 public sealed record MediaValidationRequest(string Url);
 public sealed record MediaDescriptor(string Provider, string VideoId, string CanonicalUrl);
 public sealed record CreateLibraryItemRequest(string Kind, string Code);
+/// <summary>Only isActive changes: code is the stable business key and kind fixes the payload schema, so both are immutable.</summary>
 public sealed record UpdateLibraryItemRequest(bool IsActive);
+/// <summary>Payload fields by kind: ScenarioTemplate {state (fet3d.editor/1), description?}, RubricSample {rubric, description?},
+/// Equipment {description?, properties?}. description is optional for every kind (1-2000 characters when present).
+/// RequiredCapabilities must be offered by an active runtime catalog row when the version is published.</summary>
 public sealed record LibraryVersionInput(string Name, JsonObject Payload, IReadOnlyList<string>? RequiredCapabilities = null);
+public sealed record LibraryVersionResponse(Guid Id, Guid ItemId, string Kind, string Code, int VersionNumber, string Name, JsonElement Payload,
+    IReadOnlyList<string> RequiredCapabilities, string PayloadHash, string Status, DateTime? PublishedAt, long Revision, DateTime CreatedAt, DateTime UpdatedAt);
+public sealed record LibraryVersionSummary(Guid Id, int VersionNumber, string Name, string Status, long Revision, DateTime? PublishedAt);
+/// <summary>Versions lists every version for admin reads and only Published ones for Organization reads, newest first.</summary>
+public sealed record LibraryItemResponse(Guid Id, string Kind, string Code, bool IsActive, long Revision, DateTime CreatedAt, DateTime UpdatedAt,
+    LibraryVersionResponse? LatestPublished, IReadOnlyList<LibraryVersionSummary> Versions);
+public sealed record LibraryItemPage(IReadOnlyList<LibraryItemResponse> Items, int Total, int Page, int PageSize);
 
 /// <summary>Gate result passthrough: JSON representations are returned as documented in docs/learn-library.md.</summary>
 public interface IContentGates

@@ -52,6 +52,7 @@ public sealed class ContentGates(Fire3DDbContext db) : IContentGates
             "LEARN_POST_DELETED" => "Restore the post first.",
             "SLUG_EXISTS" => "The slug is already used.",
             "LIBRARY_CODE_EXISTS" => "The library code is already used.",
+            "LIBRARY_CAPABILITY_UNSUPPORTED" => "Every required capability must be offered by an active runtime catalog version.",
             _ => "Content request was rejected."
         };
         return AuthResult<JsonElement>.Fail(code, message, value.GetProperty("status").GetInt32());

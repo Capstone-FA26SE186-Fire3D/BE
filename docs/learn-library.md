@@ -101,11 +101,11 @@ item into a scenario is done by the editor client and stays a copy; later librar
 | GET | `/api/library/items?kind=` | OrganizationUser, PlatformAdmin | Active and published only. |
 | GET | `/api/library/items/{id}` | OrganizationUser, PlatformAdmin | Includes `latestPublished`. |
 | GET | `/api/library/versions/{id}` | OrganizationUser, PlatformAdmin | Published only for organizations. |
-| GET/POST | `/api/admin/library/items` | PlatformAdmin | POST `{kind, code}` + Idempotency-Key. |
-| GET/PATCH | `/api/admin/library/items/{id}` | PlatformAdmin | PATCH `{isActive}`, If-Match item revision. |
+| GET/POST | `/api/admin/library/items` | PlatformAdmin | GET `kind`, `isActive`, `search` (part of the code, wildcards literal, max 80) before paging, ordered by code (#88). POST `{kind, code}` + Idempotency-Key. |
+| GET/PATCH | `/api/admin/library/items/{id}` | PlatformAdmin | PATCH `{isActive}`, If-Match item revision. `code` (business key) and `kind` (fixes the payload schema) are immutable: create a new item instead. |
 | POST | `/api/admin/library/items/{id}/versions` | PlatformAdmin | Draft + Idempotency-Key. |
 | GET/PUT | `/api/admin/library/versions/{id}` | PlatformAdmin | PUT only on Draft, If-Match. |
-| POST | `/api/admin/library/versions/{id}/publish` | PlatformAdmin | If-Match. |
+| POST | `/api/admin/library/versions/{id}/publish` | PlatformAdmin | If-Match. Every `requiredCapabilities` entry must be offered by an active `runtime_compatibility_catalog` row, else `409 LIBRARY_CAPABILITY_UNSUPPORTED` (#88). |
 
 Errors are ProblemDetails with `code` and `traceId`. Missing If-Match is `428`, malformed `400`, stale `412`. Lists default to 20
 items, maximum 100. Library changes enqueue `PlatformCacheInvalidation` with `scope:"library"`.
@@ -119,5 +119,7 @@ items, maximum 100. Library changes enqueue `PlatformCacheInvalidation` with `sc
 ## Idempotency on If-Match mutations (#57)
 
 `PUT /api/admin/learn/versions/{id}`, `POST /api/admin/learn/versions/{id}/publish`, `POST /api/admin/learn/posts/{id}/{hide|show|delete|restore}`, `PATCH /api/admin/library/items/{id}`, `PUT /api/admin/library/versions/{id}` and `POST /api/admin/library/versions/{id}/publish` accept an optional `Idempotency-Key` next to the required `If-Match`. With a key, the first successful response is stored and replayed for the same key and input (resource, body, If-Match), even after the ETag moved, so a retried request after a lost response does not fail with 412. Another input under the same key is `409 IDEMPOTENCY_KEY_CONFLICT`; a malformed key is `400 IDEMPOTENCY_KEY_REQUIRED`. Without a key the behaviour is unchanged. Create routes keep their required key. The create body field is `publish` (boolean), not `publishImmediately`. Migration: `20261012170000_AddContentLifecycleKeys` (`content_lifecycle_gate`, wrapping the existing gates).
+
+Library contract (#88): responses are typed in OpenAPI (`LibraryItemResponse`, `LibraryVersionResponse`, `LibraryItemPage` with `{items,total,page,pageSize}`). Invalid version content returns `422 CONTENT_INVALID` with `issues[]` (`code`, `path`, `message`), e.g. `RUBRIC_SCHEMA_VERSION_UNSUPPORTED` at `$.payload.rubric.schema_version`, `FIELD_UNKNOWN`, `STRING_INVALID`, `CAPABILITIES_INVALID`, `PROPERTIES_INVALID`. `payload.description` is optional for every kind (1–2000 characters when sent); clients must not require it. A draft records what it copied through the optional editor field `libraryRefs[]` (`versionId`, `kind`, `code?`), provenance only.
 
 Roles: `/api/admin/learn/*` and `/api/admin/library/*` are PlatformAdmin only (OrganizationUser and Trainee get 403); `/api/library/*` is OrganizationUser and PlatformAdmin (Trainee 403); public Learn reads are anonymous.

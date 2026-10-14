@@ -211,24 +211,39 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
 public sealed class LibraryController(IContentGates gates) : ContentControllerBase
 {
     [Authorize(Roles = "OrganizationUser,PlatformAdmin"), HttpGet("api/library/items")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LibraryItemPage>(200)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(400)]
     public async Task<IActionResult> Items([FromQuery] string? kind, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
         Reply(await gates.LibraryAsync("List", Actor, Family, Guid.Empty, new { kind, page, pageSize }, null, null, ct));
     [Authorize(Roles = "OrganizationUser,PlatformAdmin"), HttpGet("api/library/items/{id:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LibraryItemResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> Item(Guid id, CancellationToken ct) => Reply(await gates.LibraryAsync("Get", Actor, Family, id, new { }, null, null, ct));
     [Authorize(Roles = "OrganizationUser,PlatformAdmin"), HttpGet("api/library/versions/{id:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LibraryVersionResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> LibraryVersion(Guid id, CancellationToken ct) => Reply(await gates.LibraryAsync("GetVersion", Actor, Family, id, new { }, null, null, ct));
 
+    /// <summary>All items for PlatformAdmin, ordered by code: kind, isActive and search (part of the code, wildcards literal) filter before paging.</summary>
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpGet("api/admin/library/items")]
-    [ProducesResponseType<JsonElement>(200)]
-    public async Task<IActionResult> AdminItems([FromQuery] string? kind, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
-        Reply(await gates.LibraryAsync("List", Actor, Family, Guid.Empty, new { kind, page, pageSize, admin = true }, null, null, ct));
+    [ProducesResponseType<LibraryItemPage>(200)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> AdminItems([FromQuery] string? kind, [FromQuery] bool? isActive, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
+        search is { Length: > 80 } ? Problem(statusCode: 400, title: "search is at most 80 characters.", extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR" })
+            : Reply(await gates.LibraryAsync("List", Actor, Family, Guid.Empty, new { kind, isActive, search = string.IsNullOrWhiteSpace(search) ? null : search.Trim(), page, pageSize, admin = true }, null, null, ct));
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPost("api/admin/library/items")]
-    [ProducesResponseType<JsonElement>(201)]
+    [ProducesResponseType<LibraryItemResponse>(201)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> CreateItem(CreateLibraryItemRequest request, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
@@ -236,19 +251,29 @@ public sealed class LibraryController(IContentGates gates) : ContentControllerBa
         return result.IsSuccess ? Created($"/api/admin/library/items/{result.Value.GetProperty("id").GetGuid()}", result.Value) : Problem(result.Error!);
     }
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpGet("api/admin/library/items/{id:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LibraryItemResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(401)]
     [OpenApi.ResponseHeader("ETag")]
     public async Task<IActionResult> AdminItem(Guid id, CancellationToken ct) => WithETag(await gates.LibraryAsync("Get", Actor, Family, id, new { admin = true }, null, null, ct));
     /// <summary>Deactivating an item prevents new selections; published versions referenced by snapshots stay readable.</summary>
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPatch("api/admin/library/items/{id:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LibraryItemResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
     [OpenApi.ResponseHeader("ETag")]
     public async Task<IActionResult> UpdateItem(Guid id, UpdateLibraryItemRequest request, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key"), OpenApi.OptionalRequestHeader] string? key = null) =>
         Precondition(ifMatch, out var expected) ?? WithETag(await gates.LifecycleAsync("library", "UpdateItem", Actor, Family, id, request, key, expected, ct));
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPost("api/admin/library/items/{id:guid}/versions")]
-    [ProducesResponseType<JsonElement>(201)]
+    [ProducesResponseType<LibraryVersionResponse>(201)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(422)]
     public async Task<IActionResult> CreateLibraryVersion(Guid id, LibraryVersionInput request, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
@@ -260,11 +285,17 @@ public sealed class LibraryController(IContentGates gates) : ContentControllerBa
         return result.IsSuccess ? Created($"/api/admin/library/versions/{result.Value.GetProperty("id").GetGuid()}", result.Value) : Problem(result.Error!);
     }
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpGet("api/admin/library/versions/{id:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LibraryVersionResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(401)]
     [OpenApi.ResponseHeader("ETag")]
     public async Task<IActionResult> AdminVersion(Guid id, CancellationToken ct) => WithETag(await gates.LibraryAsync("GetVersion", Actor, Family, id, new { admin = true }, null, null, ct));
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPut("api/admin/library/versions/{id:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LibraryVersionResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(422)]
@@ -279,8 +310,13 @@ public sealed class LibraryController(IContentGates gates) : ContentControllerBa
         if (issues.Count > 0) return Invalid(issues);
         return WithETag(await gates.LifecycleAsync("library", "UpdateVersion", Actor, Family, id, new { name = request.Name.Trim(), payload = request.Payload, requiredCapabilities = request.RequiredCapabilities ?? [] }, key, expected, ct));
     }
+    /// <summary>Publishes a Draft version. 409 LIBRARY_CAPABILITY_UNSUPPORTED when a required capability is not offered by any active runtime catalog row.</summary>
+    /// <remarks>Create/update reject invalid content with 422 CONTENT_INVALID and issues[] (code, path, message), for example RUBRIC_SCHEMA_VERSION_UNSUPPORTED at $.payload.rubric.schema_version, FIELD_UNKNOWN, STRING_INVALID, CAPABILITIES_INVALID.</remarks>
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpPost("api/admin/library/versions/{id:guid}/publish")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<LibraryVersionResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
