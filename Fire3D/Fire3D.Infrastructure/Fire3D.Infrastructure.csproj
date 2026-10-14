@@ -33,6 +33,7 @@
         <EmbeddedResource Include="Persistence/Sql/RuntimeAvatarPayosGrants.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.RuntimeAvatarPayosGrants.sql" />
         <EmbeddedResource Include="Persistence/Sql/RuntimeCoreGrants.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.RuntimeCoreGrants.sql" />
         <EmbeddedResource Include="Persistence/Sql/NarrowRuntimeWriteGrants.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.NarrowRuntimeWriteGrants.sql" />
+        <EmbeddedResource Include="Persistence/Sql/PasswordRecoveryTables.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PasswordRecoveryTables.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />
