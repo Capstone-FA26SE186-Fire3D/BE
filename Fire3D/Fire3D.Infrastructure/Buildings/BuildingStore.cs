@@ -119,7 +119,7 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
         await TakeMutationLocksAsync(building.Id, ct);
         if (!await CanMutateAsync(actorId, building.OrganizationId, ct)) return false;
         var existing = await db.Buildings.Include(x => x.BuildingLocation).Include(x => x.BuildingContact)
-            .SingleOrDefaultAsync(x => x.Id == building.Id && x.OrganizationId == building.OrganizationId && x.DeletedAt == null, ct);
+            .SingleOrDefaultAsync(x => x.Id == building.Id && x.OrganizationId == building.OrganizationId && x.DeletedAt == null && x.IsActive, ct);
         if (existing is null) return false;
         existing.Name = building.Name; existing.BuildingType = building.BuildingType; existing.TotalFloors = building.TotalFloors; existing.UpdatedAt = now;
         if (location is not null)
