@@ -67,7 +67,7 @@ public sealed partial class AuthIntegrationTests
     private async Task WithLearnerRuntime(Func<string, Task> action)
     {
         var login = "learner_runtime_" + Guid.NewGuid().ToString("N");
-        await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}';GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION learner_session_gate(text,uuid,uuid,uuid,uuid,jsonb,text),building_qr_gate(text,uuid,uuid,uuid,jsonb) TO {login}");
+        await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}';GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION learner_session_gate(text,uuid,uuid,uuid,uuid,jsonb,text),learner_session_list_gate(uuid,uuid,jsonb),building_qr_gate(text,uuid,uuid,uuid,jsonb) TO {login}");
         try { await action(new NpgsqlConnectionStringBuilder(testConnection) { Username = login, Pooling = false }.ConnectionString); }
         finally { await ExecuteAsync($"DROP OWNED BY {login};DROP ROLE {login}"); }
     }

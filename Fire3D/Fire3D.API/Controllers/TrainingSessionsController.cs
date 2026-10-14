@@ -43,6 +43,25 @@ public sealed class TrainingSessionsController(ILearnerSessions sessions) : Cont
         return result.IsSuccess ? Created($"/api/training/sessions/{result.Value!.Id}", result.Value) : Problem(result.Error!);
     }
 
+    /// <summary>The signed-in Trainee's own training history, newest first (startedAt desc, then id desc).</summary>
+    /// <remarks>
+    /// Lists started sessions only: preparations and Organization playtests never appear, and other users' sessions are never
+    /// visible. Losing Building access later does not hide past sessions. Filters: status (Launching, Running, AwaitingSync,
+    /// Completed, CompletedWithSupersededRelease, ScenarioUnsurvivable, Aborted, Abandoned, Crashed), mode (Learn, Guided,
+    /// Assessment), buildingId, from/to on startedAt (from inclusive, to exclusive). Session status is not a pass: resultStatus is
+    /// Passed, NotPassed, Incomplete or NotAssessed once the server stored a result, otherwise null. Open the result with
+    /// GET /api/training/sessions/{id}/result. page >= 1, pageSize 1-100 (default 20); invalid filters return 400 VALIDATION_ERROR.
+    /// </remarks>
+    [Authorize(Roles = "Trainee")]
+    [HttpGet("sessions")]
+    [ProducesResponseType<TrainingHistoryPage>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    public async Task<IActionResult> List([FromQuery] string? status, [FromQuery] string? mode, [FromQuery] Guid? buildingId,
+        [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
+        Reply(await sessions.ListAsync(Live(), new(status, mode, buildingId, from, to, page, pageSize), ct));
+
     [Authorize(AuthenticationSchemes = SyncSchemes, Roles = "Trainee")]
     [HttpGet("sessions/{id:guid}")]
     [ProducesResponseType<TrainingSessionView>(200)]

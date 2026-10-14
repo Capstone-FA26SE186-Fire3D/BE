@@ -54,7 +54,7 @@ Every state change enqueues a `PlatformCacheInvalidation` outbox event with `{sc
 | Method | Route | Auth | Notes |
 |---|---|---|---|
 | GET | `/api/learn/situations` | anonymous | Active situations. |
-| GET | `/api/learn/posts?situation=&page=&pageSize=` | anonymous | Published only, newest first. |
+| GET | `/api/learn/posts?search=&situation=&kind=&page=&pageSize=` | anonymous | Published post with a Published version only, newest first (publishedAt, id). `search` 2–100 chars on title+summary, case- and Vietnamese-diacritic-insensitive (`chay` finds `Cháy`, `duong` finds `Đường`; folded in SQL, no `unaccent` extension). Repeat `situation` (≤10 active slugs) and `kind` (Article/Tip/Video): values of one filter are OR, filters are AND. Filters run before paging; `total` is exact. Invalid values → 400 `VALIDATION_ERROR` with `errors`. (#79) |
 | GET | `/api/learn/posts/{slug}` | anonymous | Published version only, no draft history. |
 | GET | `/api/learn/bookmarks` | Trainee | Paged. |
 | PUT/DELETE | `/api/learn/bookmarks/{postId}` | Trainee | Idempotent. |

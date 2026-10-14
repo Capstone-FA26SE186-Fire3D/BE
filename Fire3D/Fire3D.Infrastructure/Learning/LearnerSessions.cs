@@ -153,6 +153,44 @@ public sealed partial class LearnerSessions(Fire3DDbContext db, IOptions<Learner
         return new(session, expires, token);
     }
 
+    private static readonly string[] HistoryStatuses = ["Launching", "Running", "AwaitingSync", "Completed", "CompletedWithSupersededRelease",
+        "ScenarioUnsurvivable", "Aborted", "Abandoned", "Crashed"];
+    private static readonly string[] HistoryModes = ["Learn", "Guided", "Assessment"];
+
+    public async Task<AuthResult<TrainingHistoryPage>> ListAsync(LearnerCaller caller, TrainingHistoryFilter filter, CancellationToken ct)
+    {
+        var errors = new Dictionary<string, string[]>();
+        string? Known(string? value, string[] allowed) => value is null ? null : allowed.FirstOrDefault(x => x.Equals(value.Trim(), StringComparison.OrdinalIgnoreCase));
+        var status = Known(filter.Status, HistoryStatuses); var mode = Known(filter.Mode, HistoryModes);
+        if (filter.Status is not null && status is null) errors["status"] = ["status must be one of " + string.Join(", ", HistoryStatuses) + "."];
+        if (filter.Mode is not null && mode is null) errors["mode"] = ["mode must be Learn, Guided or Assessment."];
+        if (filter.From > filter.To) errors["from"] = ["from must not be later than to."];
+        if (filter.Page < 1) errors["page"] = ["page must be at least 1."];
+        if (filter.PageSize is < 1 or > 100) errors["pageSize"] = ["pageSize must be 1-100."];
+        if (errors.Count > 0) return AuthResult<TrainingHistoryPage>.Fail("VALIDATION_ERROR", "Training history filters are invalid.", 400, errors);
+
+        await db.Database.OpenConnectionAsync(ct);
+        await using var command = new NpgsqlCommand("SELECT learner_session_list_gate(@actor,@family,@input)::text", (NpgsqlConnection)db.Database.GetDbConnection());
+        command.Parameters.AddWithValue("actor", caller.ActorId);
+        command.Parameters.AddWithValue("family", NpgsqlDbType.Uuid, (object?)caller.FamilyId ?? DBNull.Value);
+        command.Parameters.AddWithValue("input", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(new
+        {
+            status, mode, buildingId = filter.BuildingId, from = filter.From?.ToUniversalTime(), to = filter.To?.ToUniversalTime(),
+            page = filter.Page, pageSize = filter.PageSize
+        }, Json));
+        using var document = JsonDocument.Parse((string)(await command.ExecuteScalarAsync(ct))!);
+        var value = document.RootElement;
+        if (value.GetProperty("code").GetString() == "OK")
+            return AuthResult<TrainingHistoryPage>.Ok(value.GetProperty("result").Deserialize<TrainingHistoryPage>(Json)!);
+        var code = value.GetProperty("code").GetString()!;
+        return AuthResult<TrainingHistoryPage>.Fail(code, code switch
+        {
+            "UNAUTHORIZED" => "Sign in again.",
+            "FORBIDDEN" => "Only Trainee accounts have a training history.",
+            _ => "Training history filters are invalid."
+        }, value.GetProperty("status").GetInt32());
+    }
+
     private static AuthResult<TrainingSessionView> View(AuthResult<JsonElement> result) =>
         result.IsSuccess ? AuthResult<TrainingSessionView>.Ok(result.Value.GetProperty("result").Deserialize<TrainingSessionView>(Json)!) : new(default, result.Error);
 
