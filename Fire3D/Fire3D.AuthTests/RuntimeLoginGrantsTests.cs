@@ -1,5 +1,6 @@
 using Fire3D.Domain.Entities;
 using Fire3D.Infrastructure.Authentication;
+using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Xunit;
@@ -49,5 +50,29 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, denied.SqlState);
         }
         finally { await ExecuteAsync($"DROP OWNED BY {login};DROP ROLE {login}"); }
+    }
+
+    // Supabase's hand-made baseline granted table-wide UPDATE; narrowing must keep the reviewed columns writable.
+    [PostgresFact]
+    public async Task Narrowing_replaces_table_wide_runtime_updates_with_reviewed_columns()
+    {
+        var local = "payos_local_" + Guid.NewGuid().ToString("N")[..20];
+        await ExecuteAsync($"GRANT UPDATE ON users,organizations,auth_refresh_tokens TO fire3d_api;CREATE ROLE {local} NOLOGIN;GRANT SELECT,DELETE,TRUNCATE ON buildings TO {local}");
+        try
+        {
+            await using (var stream = typeof(Fire3DDbContext).Assembly.GetManifestResourceStream("Fire3D.Infrastructure.Persistence.Sql.NarrowRuntimeWriteGrants.sql")!)
+                await ExecuteAsync(await new StreamReader(stream).ReadToEndAsync());
+            async Task<bool> Has(string check) => (bool)(await ScalarAsync("SELECT " + check))!;
+            foreach (var (table, column) in new[] { ("users", "role"), ("users", "email"), ("users", "organization_id"), ("organizations", "slug"),
+                ("organizations", "registration_owner_user_id"), ("auth_refresh_tokens", "token_hash"), ("auth_refresh_tokens", "user_id") })
+                Assert.False(await Has($"has_column_privilege('fire3d_api','{table}','{column}','UPDATE')"), $"{table}.{column}");
+            foreach (var (table, column) in new[] { ("users", "last_login_at"), ("users", "password_hash"), ("users", "avatar_storage_key"),
+                ("organizations", "phone"), ("auth_refresh_tokens", "revoked_at"), ("auth_refresh_tokens", "consumed_at") })
+                Assert.True(await Has($"has_column_privilege('fire3d_api','{table}','{column}','UPDATE')"), $"{table}.{column}");
+            Assert.False(await Has($"has_table_privilege('{local}','buildings','DELETE')"));
+            Assert.False(await Has($"has_table_privilege('{local}','buildings','TRUNCATE')"));
+            Assert.True(await Has($"has_table_privilege('{local}','buildings','SELECT')"));
+        }
+        finally { await ExecuteAsync($"DROP OWNED BY {local};DROP ROLE {local}"); }
     }
 }
