@@ -48,6 +48,8 @@ public sealed partial class AuthIntegrationTests
             confirmPassword = "StrongPassword12!", registrationToken = proof
         };
         Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/auth/register/trainee", registration)).StatusCode);
+        // A database that already held such legacy rows keeps them: AlignAuthSchemaWithV7 skips the v7 CHECK there.
+        await ExecuteAsync("ALTER TABLE users DROP CONSTRAINT check_trainee_username_required;");
         await ExecuteAsync("ALTER TABLE users DISABLE TRIGGER users_require_username_for_new_trainee;");
         try
         {
