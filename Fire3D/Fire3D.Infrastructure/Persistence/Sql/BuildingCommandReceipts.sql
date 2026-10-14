@@ -31,6 +31,13 @@ BEGIN
    CREATE POLICY command_receipts_executor ON application_command_receipts TO fet3d_backend_executor USING(true) WITH CHECK(true);
   END IF;
  END IF;
+ -- Pending-registration cleanup deletes users; the RESTRICT foreign key check must be able to see receipts.
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='fet3d_pending_cleanup_owner') THEN
+  GRANT SELECT ON application_command_receipts TO fet3d_pending_cleanup_owner;
+  IF NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='application_command_receipts' AND policyname='pending_cleanup_owner') THEN
+   CREATE POLICY pending_cleanup_owner ON application_command_receipts FOR SELECT TO fet3d_pending_cleanup_owner USING(true);
+  END IF;
+ END IF;
  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='fire3d_api') THEN
   GRANT SELECT,INSERT ON application_command_receipts TO fire3d_api;
   IF NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='application_command_receipts' AND policyname='fire3d_api_runtime') THEN
