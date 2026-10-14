@@ -35,17 +35,22 @@ public class ScenariosController(ISender sender, Fire3D.Application.Scenarios.IS
 
     /// <summary>Dry run: validates an unsaved state against the draft's revision without storing it or changing the ETag.</summary>
     /// <remarks>Body is the same state a PUT would send. Runs the PUT shape check and the full validation; shape problems come back as
-    /// issues (200, isValid=false) instead of 422. Response: draftId, storedVersion (unchanged), stateHash of the checked state, isValid, issues.
+    /// issues (200, isValid=false) instead of 422. Response: draftId, storedVersion (unchanged), stateHash = lowercase hex SHA-256 of the exact UTF-8
+    /// request body bytes (hash the string you send, e.g. JSON.stringify(state)), isValid, issues.
     /// Malformed JSON 400 EDITOR_JSON_MALFORMED; non-object body 400; draft outside scope 404.</remarks>
     [HttpPost("/api/scenario-drafts/{draftId:guid}/validate-state")]
     [Fire3D.API.OpenApi.EditorJsonBody]
+    [Fire3D.API.OpenApi.BufferedBody]
     [ProducesResponseType<Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ScenarioDraftDryRunResponse>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> ValidateScenarioDraftState(Guid draftId, [FromBody] System.Text.Json.Nodes.JsonNode? state, CancellationToken ct)
     {
-        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ValidateScenarioDraftStateCommand(User.GetActorId(), draftId, state), ct);
+        // stateHash covers the exact bytes received, so clients can reproduce it without matching the server's JSON encoder.
+        Request.Body.Position = 0;
+        var received = Convert.ToHexStringLower(await System.Security.Cryptography.SHA256.HashDataAsync(Request.Body, ct));
+        var result = await sender.Send(new Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ValidateScenarioDraftStateCommand(User.GetActorId(), draftId, state, received), ct);
         return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
             extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });
     }

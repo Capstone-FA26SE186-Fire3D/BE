@@ -39,6 +39,18 @@ Migration `20261011090000_AddEditorContractV1` is additive: catalog column `capa
 
 ## Initial draft, dry-run validation and QA history (#66)
 
+**What "partial" means on PUT (#90).** Only `schemaVersion` is required at the root; every other root field may be omitted. A value that *is* sent must be complete at its own level, so the stored draft never holds half an element:
+- each `objects[]` element needs `id`, `kind` and `placement` with `floorId`, `position {x,y,z}` and `rotation {x,y,z,w}` (`anchorId`, `capability`, `parameters`, `label` optional);
+- `rubric`, when sent, needs `pass_threshold` and `criteria`; each criterion needs `id`, `metric`, `mandatory`, `weight`, `threshold`, `operator` (`description` optional); `schema_version` may wait until validate;
+- `libraryRefs[]` elements need `versionId` and `kind`.
+Completeness (Spawn/Goal present, `timeLimitSeconds`, `runtimeVersion`, objectives, instructions, rubric, capability contracts, anchors for blocked elements) is checked only by validate, validate-state and snapshot.
+
+**Dry-run hash (#90).** `POST /api/scenario-drafts/{id}/validate-state` returns `stateHash` = lowercase hex SHA-256 of the exact UTF-8 request body bytes. Hash the string you send (`body = JSON.stringify(state)`; `sha256(utf8(body))`); Vietnamese text and any key order match because nothing is re-serialised.
+
+**Floors and anchors (#90).** `GET /api/revisions/{id}/floors` returns `floors` and `semanticMapping` (anchor/node → `ifcGlobalId`, `floorId`, `semanticType`) whenever the accepted Geometry metadata satisfies the editor contract, even while the GLB object is not yet verified, without signing a URL. `editor-preview` returns the same fields and additionally a signed GLB URL once `Ready`.
+
+**Draft list kinds (#90).** `GET /api/scenarios/{id}/drafts` items carry `stateKind`: `Uninitialized` (state still `{}`), `Versioned` (`schemaVersion` set) or `Legacy` (pre-editor typed shape); `schemaVersion` is null for the first and last.
+
 **Initial draft contract.** `POST /api/scenarios/{id}/draft` creates a draft whose state is `{}`. The smallest state a client can PUT back with the returned ETag is the versioned document `{"schemaVersion":"fet3d.editor/1"}`: versioned drafts accept partial content and keep every supported field. A legacy body (no `schemaVersion`) must match the legacy typed shape (`spawnPoints`, `hazards`, `scoringConfig`, `routingConfig`), so new clients should start versioned. An incomplete draft is never treated as valid: validate, dry-run and snapshot report what is missing (for example `$.objects`, `$.timeLimitSeconds`, `$.runtimeVersion`, `$.learningObjectives`, `$.rubric`). The server does not insert defaults such as zero scores or empty arrays.
 
 **Dry run.** `POST /api/scenario-drafts/{id}/validate-state` takes the same body as PUT and checks it against the draft's revision without storing it or changing the ETag. It runs the PUT shape check and the full validation; shape problems come back as issues (200, `isValid:false`) instead of 422. Response: `draftId`, `storedVersion` (unchanged), `stateHash` (SHA-256 of the checked JSON as received, so the client can tell which edit the issues belong to), `isValid`, `issues[{code,path,message}]`. Malformed JSON is `400 EDITOR_JSON_MALFORMED`; a non-object body is 400; a draft outside the caller's scope is 404. `POST /api/scenario-drafts/{id}/validate` keeps validating the stored draft.

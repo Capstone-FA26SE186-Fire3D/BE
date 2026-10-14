@@ -19,8 +19,13 @@ public sealed record EditorPreviewResponse(Guid BuildingId, Guid RevisionId, str
     string? DownloadUrl, DateTimeOffset? ExpiresAt,
     JsonElement? CoordinateTransform, JsonElement? Floors, JsonElement? SemanticMapping,
     string? SchemaVersion = null, string? Units = null, string? UpAxis = null, string? Handedness = null);
+/// <summary>
+/// Floors and anchors of the accepted Geometry artifact without signing a download. Floors and SemanticMapping
+/// (anchorId/nodeId → ifcGlobalId, floorId, semanticType) are returned whenever the metadata satisfies the editor contract,
+/// even before the GLB object is verified; editor-preview additionally signs the GLB when it is Ready.
+/// </summary>
 public sealed record RevisionFloorsResponse(Guid RevisionId, Guid BuildingId, string Status, Guid? ArtifactId,
-    string? Sha256Hash, string? SchemaVersion, JsonElement? Floors);
+    string? Sha256Hash, string? SchemaVersion, JsonElement? Floors, JsonElement? SemanticMapping = null);
 public interface IEditorPreviewStore
 {
     Task<EditorPreviewSource?> ReadAsync(Guid buildingId, Guid revisionId, Guid? tenant, CancellationToken ct);
@@ -97,6 +102,7 @@ public sealed class GetRevisionFloorsHandler(IAuthStore accounts, IEditorPreview
         var valid = classification == "Valid";
         return AuthResult<RevisionFloorsResponse>.Ok(new(source.RevisionId, source.BuildingId, valid ? "Ready" : classification,
             source.ArtifactId, source.Sha256Hash, valid ? EditorPreviewMetadata.Field(source, "schemaVersion")?.GetString() : null,
-            valid ? EditorPreviewMetadata.Field(source, "floors") : null));
+            valid ? EditorPreviewMetadata.Field(source, "floors") : null,
+            valid ? EditorPreviewMetadata.Field(source, "semanticMapping") : null));
     }
 }

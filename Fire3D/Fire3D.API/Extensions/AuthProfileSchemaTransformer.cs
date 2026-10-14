@@ -41,7 +41,7 @@ public sealed class AuthProfileSchemaTransformer : IOpenApiSchemaTransformer
                     Description = "Omit keeps; supplied phone cannot be null/empty. Registration phone normalization applies." }
             };
             schema.Required = new HashSet<string>();
-            schema.Description = "Partial organization profile. Send at least one field. Null is rejected for every supplied field; slug, plan and status cannot be changed here.";
+            schema.Description = "Partial organization profile. Send at least one field. Null is rejected for every supplied field; slug and status cannot be changed here.";
         }
         else if (context.JsonTypeInfo.Type == typeof(UserRole) || context.JsonTypeInfo.Type == typeof(UserGender))
         {
