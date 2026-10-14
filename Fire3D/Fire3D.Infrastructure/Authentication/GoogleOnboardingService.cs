@@ -106,7 +106,7 @@ public sealed class GoogleOnboardingService(Fire3DDbContext db, IAuthStore accou
         if (request.AccountType == UserRole.OrganizationUser)
         {
             var organization = new Organization { Id = Guid.NewGuid(), Name = input.OrganizationName!, Address = input.OrganizationAddress!, PhoneNumber = input.OrganizationPhoneNumber!,
-                Slug = "org-" + Guid.NewGuid().ToString("N"), Plan = "free", Metadata = "{}", IsActive = true,
+                Slug = "org-" + Guid.NewGuid().ToString("N"), Metadata = "{}", IsActive = true,
                 RegistrationOwnerUserId = user.Id, CreatedAt = now, UpdatedAt = now };
             user.OrganizationId = organization.Id;
             conflict = await accounts.TryCreateOrganizationWithUserAsync(organization, user, ct);

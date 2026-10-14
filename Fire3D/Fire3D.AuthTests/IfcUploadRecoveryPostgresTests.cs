@@ -138,7 +138,7 @@ public sealed partial class AuthIntegrationTests
             fake.Put(upload.ObjectKey,new byte[IfcBytes.Length+1]);
             Assert.Equal("IFC_SOURCE_MISMATCH",(await flow.CompleteAsync(adminId,upload.RevisionId,CompleteInput(upload),default)).Error?.Code);
             var other=Guid.NewGuid();
-            await ExecuteAsync($"INSERT INTO users(id,email,role,is_active,created_at,updated_at) VALUES('{other}','other-ifc@example.test','PlatformAdmin',true,now(),now())");
+            await ExecuteAsync($"INSERT INTO users(password_hash,id,email,role,is_active,created_at,updated_at) VALUES('fixture-hash','{other}','other-ifc@example.test','PlatformAdmin',true,now(),now())");
             var inspected=fake.Inspections;
             Assert.Equal("IFC_UPLOAD_INTENT_NOT_FOUND",(await flow.CompleteAsync(other,upload.RevisionId,CompleteInput(upload),default)).Error?.Code);
             Assert.Equal(inspected,fake.Inspections);

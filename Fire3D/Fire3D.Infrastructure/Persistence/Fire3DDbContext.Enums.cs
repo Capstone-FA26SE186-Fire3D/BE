@@ -15,7 +15,6 @@ public partial class Fire3DDbContext
         modelBuilder.Entity<User>().Property(x => x.Dob).HasColumnName("dob");
         modelBuilder.Entity<User>().Property(x => x.Gender).HasColumnName("gender").HasConversion<string>();
         modelBuilder.Entity<User>().Property(x => x.PhoneNumber).HasColumnName("phone_number").HasMaxLength(32);
-        modelBuilder.Entity<User>().Property(x => x.AvatarUrl).HasColumnName("avatar_url").HasMaxLength(2048);
         modelBuilder.Entity<User>().Property(x => x.EmailVerifiedAt).HasColumnName("email_verified_at");
         modelBuilder.Entity<User>().Property(x => x.RegistrationExpiresAt).HasColumnName("registration_expires_at");
         modelBuilder.Entity<Organization>().Property(x => x.RegistrationOwnerUserId)

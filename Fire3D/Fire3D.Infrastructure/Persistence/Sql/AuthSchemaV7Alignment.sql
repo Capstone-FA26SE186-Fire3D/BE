@@ -48,3 +48,21 @@ ALTER TABLE public.user_devices ADD COLUMN IF NOT EXISTS fcm_token_updated_at ti
 ALTER INDEX IF EXISTS public.ux_user_devices_active_fcm_token RENAME TO device_active_fcm;
 ALTER TABLE public.user_devices DROP CONSTRAINT IF EXISTS user_devices_user_id_fkey,
  ADD CONSTRAINT user_devices_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
+
+-- v7 has no users.avatar_url (avatars are signed URLs from avatar_storage_key) and no organizations.plan (the API only
+-- ever wrote 'free'). Drop them only when that leaves no information behind; otherwise stop for a data review.
+DO $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='avatar_url') THEN
+  IF EXISTS(SELECT 1 FROM public.users WHERE avatar_url IS NOT NULL) THEN
+   RAISE EXCEPTION 'users.avatar_url still holds values; review them before dropping the column';
+  END IF;
+  ALTER TABLE public.users DROP COLUMN avatar_url;
+ END IF;
+ IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='organizations' AND column_name='plan') THEN
+  IF EXISTS(SELECT 1 FROM public.organizations WHERE plan IS DISTINCT FROM 'free') THEN
+   RAISE EXCEPTION 'organizations.plan holds values other than free; review them before dropping the column';
+  END IF;
+  ALTER TABLE public.organizations DROP COLUMN plan;
+ END IF;
+END $$;

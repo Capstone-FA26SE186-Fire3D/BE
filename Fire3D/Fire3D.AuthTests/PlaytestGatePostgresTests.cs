@@ -81,7 +81,7 @@ public sealed partial class AuthIntegrationTests
  public async Task Playtest_two_sessions_race_for_last_trial_unit_and_foreign_owner_is_denied()
  {
   var f=await SeedReadyPackage("PlaytestPackage");var family=await SeedPlaytestFamily(f.Owner);var building=(Guid)(await ScalarAsync($"SELECT building_id FROM revisions WHERE id='{f.Revision}'"))!;var scenario=(Guid)(await ScalarAsync($"SELECT scenario_id FROM scenario_versions WHERE id='{f.Version}'"))!;var trial=await SeedTrial(f.Owner,building,1);
-  var stranger=Guid.NewGuid();await ExecuteAsync($"INSERT INTO users(id,email,role,organization_id,is_active,created_at,updated_at) SELECT '{stranger}','stranger-{stranger:N}@example.test','OrganizationUser',organization_id,true,now(),now() FROM users WHERE id='{f.Owner}'");var strangerFamily=await SeedPlaytestFamily(stranger);
+  var stranger=Guid.NewGuid();await ExecuteAsync($"INSERT INTO users(password_hash,id,email,role,organization_id,is_active,created_at,updated_at) SELECT 'fixture-hash','{stranger}','stranger-{stranger:N}@example.test','OrganizationUser',organization_id,true,now(),now() FROM users WHERE id='{f.Owner}'");var strangerFamily=await SeedPlaytestFamily(stranger);
   await WithPlaytestRuntime(async runtime=>
   {
    await using var db=BuildingContext(runtime);await using var otherDb=BuildingContext(runtime);var store=new PlaytestLifecycle(db,Options.Create(PlaytestFixtureOptions));var other=new PlaytestLifecycle(otherDb,Options.Create(PlaytestFixtureOptions));var input=new PreparePlaytestRequest(f.Revision,ScenarioVersionId:f.Version);

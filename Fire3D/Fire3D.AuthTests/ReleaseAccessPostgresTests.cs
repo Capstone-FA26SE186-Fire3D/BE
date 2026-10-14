@@ -65,7 +65,7 @@ public sealed partial class AuthIntegrationTests
  public async Task Building_participation_is_account_bound_and_revision_changes_revoke_old_access()
  {
   var f=await SeedReadyPackage();var request=await ApproveRelease(f);var family=await SeedPlaytestFamily(f.Owner);var building=(Guid)(await ScalarAsync($"SELECT building_id FROM revisions WHERE id='{f.Revision}'"))!;
-  var trainee=Guid.NewGuid();var other=Guid.NewGuid();await ExecuteAsync($"INSERT INTO users(id,email,username,role,is_active,created_at,updated_at) VALUES('{trainee}','t-{trainee:N}@example.test','t_'||left(md5(gen_random_uuid()::text),20),'Trainee',true,now(),now()),('{other}','t-{other:N}@example.test','t_'||left(md5(gen_random_uuid()::text),20),'Trainee',true,now(),now())");var tf=await SeedPlaytestFamily(trainee);var of=await SeedPlaytestFamily(other);
+  var trainee=Guid.NewGuid();var other=Guid.NewGuid();await ExecuteAsync($"INSERT INTO users(password_hash,id,email,username,role,is_active,created_at,updated_at) VALUES('fixture-hash','{trainee}','t-{trainee:N}@example.test','t_'||left(md5(gen_random_uuid()::text),20),'Trainee',true,now(),now()),('fixture-hash','{other}','t-{other:N}@example.test','t_'||left(md5(gen_random_uuid()::text),20),'Trainee',true,now(),now())");var tf=await SeedPlaytestFamily(trainee);var of=await SeedPlaytestFamily(other);
   await WithReleaseRuntime(async runtime=>
   {
    await using var db=BuildingContext(runtime);var service=new BuildingAccessService(db);var list=new TrainingReadStore(db);var release=new ReleaseWriteStore(db,TimeProvider.System);

@@ -16,6 +16,8 @@ public sealed partial class AuthIntegrationTests
             Assert.True(await Has($"has_column_privilege('fire3d_api','{table}','profile_revision_no','UPDATE')"), table);
         }
         Assert.False(await Has("has_column_privilege('fire3d_api','users','role','UPDATE')"));
+        Assert.False(await Has("EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='avatar_url')"));
+        Assert.False(await Has("EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='organizations' AND column_name='plan')"));
         foreach (var (table, constraint) in new[] { ("users", "check_user_profile_revision"), ("organizations", "check_organization_profile_revision"),
             ("users", "check_user_role_organization"), ("users", "check_user_auth_method"), ("users", "check_trainee_username_required") })
             Assert.True(await Has($"EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.{table}'::regclass AND conname='{constraint}' AND convalidated)"), constraint);
@@ -25,8 +27,10 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal("r", await ScalarAsync("SELECT confdeltype::text FROM pg_constraint WHERE conname='user_devices_user_id_fkey'"));
 
         // The admin account was created through the API; the database now rejects the v7 invariants directly.
+        var organization = Guid.NewGuid();
+        await ExecuteAsync($"INSERT INTO organizations(id,name,slug,is_active,metadata,created_at,updated_at) VALUES('{organization}','V7','v7-{organization:N}',true,'{{}}',now(),now())");
         var invalid = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
-            ExecuteAsync($"UPDATE users SET organization_id=(SELECT id FROM organizations LIMIT 1) WHERE id='{adminId}'"));
+            ExecuteAsync($"UPDATE users SET organization_id='{organization}' WHERE id='{adminId}'"));
         Assert.Equal(Npgsql.PostgresErrorCodes.CheckViolation, invalid.SqlState);
         invalid = await Assert.ThrowsAsync<Npgsql.PostgresException>(() => ExecuteAsync($"UPDATE users SET profile_revision_no=0 WHERE id='{adminId}'"));
         Assert.Equal(Npgsql.PostgresErrorCodes.CheckViolation, invalid.SqlState);

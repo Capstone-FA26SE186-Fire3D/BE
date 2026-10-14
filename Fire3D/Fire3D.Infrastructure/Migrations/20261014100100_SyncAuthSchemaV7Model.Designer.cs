@@ -1236,14 +1236,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("phone");
 
-                    b.Property<string>("Plan")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("plan")
-                        .HasDefaultValueSql("'free'::character varying");
-
                     b.Property<long>("ProfileRevision")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
@@ -4259,11 +4251,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Property<string>("AvatarStorageKey")
                         .HasColumnType("text")
                         .HasColumnName("avatar_storage_key");
-
-                    b.Property<string>("AvatarUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .HasColumnName("avatar_url");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()

@@ -541,10 +541,6 @@ public partial class Fire3DDbContext : DbContext
                 .HasMaxLength(50)
                 .HasColumnName("phone");
             entity.Property(e => e.ProfileRevision).HasDefaultValue(1L).HasColumnName("profile_revision_no");
-            entity.Property(e => e.Plan)
-                .HasMaxLength(50)
-                .HasDefaultValueSql("'free'::character varying")
-                .HasColumnName("plan");
             entity.Property(e => e.Slug).HasColumnName("slug");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")

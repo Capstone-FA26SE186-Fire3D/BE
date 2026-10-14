@@ -81,7 +81,7 @@ public sealed class RegisterOrganizationCommandHandler(IAuthStore store, IPasswo
         var organization = new Organization
         {
             Id = Guid.NewGuid(), Name = organizationName!, Slug = "org-" + Guid.NewGuid().ToString("N"),
-            Address = address!, PhoneNumber = organizationPhone!, Plan = "free", Metadata = "{}", IsActive = true,
+            Address = address!, PhoneNumber = organizationPhone!, Metadata = "{}", IsActive = true,
             CreatedAt = now, UpdatedAt = now
         };
         var user = new User

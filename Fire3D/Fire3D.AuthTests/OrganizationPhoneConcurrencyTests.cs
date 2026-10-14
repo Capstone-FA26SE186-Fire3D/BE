@@ -94,7 +94,7 @@ public sealed class OrganizationPhoneConcurrencyTests
             await context.Database.OpenConnectionAsync(); await context.Database.ExecuteSqlRawAsync("SET ROLE fire3d_api");
             var store = new AuthStore(context); var userId = Guid.NewGuid();
             await using var tx = await store.BeginUserTransactionAsync(userId, default);
-            var organization = new Organization { Id = Guid.NewGuid(), Name = "One", Slug = "different-slug", PhoneNumber = "0706364866", Plan = "free", Metadata = "{}", IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+            var organization = new Organization { Id = Guid.NewGuid(), Name = "One", Slug = "different-slug", PhoneNumber = "0706364866", Metadata = "{}", IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
             var user = new User { Id = userId, Email = "other-name@example.test", Role = UserRole.OrganizationUser, OrganizationId = organization.Id, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
             var error = await Assert.ThrowsAsync<DbUpdateException>(() => store.TryCreateOrganizationWithUserAsync(organization, user, default));
             Assert.Equal("organization_test_name_key", Assert.IsType<PostgresException>(error.InnerException).ConstraintName);

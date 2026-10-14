@@ -169,7 +169,7 @@ public sealed partial class AuthIntegrationTests
         var replay=await http.PostAsync($"/api/releases/{built.Value.Id}/publish",null);Assert.Equal(await response.Content.ReadAsStringAsync(),await replay.Content.ReadAsStringAsync());
         var get=await http.GetFromJsonAsync<Fire3D.Application.Releases.ReleaseResponse>($"/api/releases/{built.Value.Id}",Json);Assert.Equal("Published",get!.Status);
         var trainee=Guid.NewGuid();
-        await ExecuteAsync($"INSERT INTO users(id,email,username,role,is_active,created_at,updated_at) VALUES('{trainee}','learner-{trainee:N}@example.test','learner_'||left(md5(gen_random_uuid()::text),20),'Trainee',true,now(),now()); UPDATE buildings SET visibility='Public' WHERE id='{building}'");
+        await ExecuteAsync($"INSERT INTO users(password_hash,id,email,username,role,is_active,created_at,updated_at) VALUES('fixture-hash','{trainee}','learner-{trainee:N}@example.test','learner_'||left(md5(gen_random_uuid()::text),20),'Trainee',true,now(),now()); UPDATE buildings SET visibility='Public' WHERE id='{building}'");
         var tf=await SeedPlaytestFamily(trainee);
         var trainings=new Fire3D.Infrastructure.Buildings.TrainingReadStore(db);
         Assert.Single((await trainings.GetTrainingsByBuildingAsync(trainee,building,null,default,tf)).Value!);
