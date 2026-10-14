@@ -213,8 +213,9 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
             await db.SaveChangesAsync(ct);
             return DeviceRegistrationResult.Registered;
         }
-        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation
-            && ex.ConstraintName == "ux_user_devices_active_fcm_token")
+        // EF wraps provider errors in DbUpdateException; the caller rolls back the aborted transaction.
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "ux_user_devices_active_fcm_token" })
         {
             return DeviceRegistrationResult.TokenAlreadyBound;
         }
