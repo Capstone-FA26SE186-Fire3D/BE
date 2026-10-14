@@ -31,14 +31,17 @@ public sealed partial class AuthIntegrationTests
             return Respond(request, body);
         }
         public static HttpResponseMessage Json(object body) => new(HttpStatusCode.OK) { Content = JsonContent.Create(body) };
-        public static object Answer(string id, Guid source, int units, string kind = "KnowledgeSource") =>
-            new { requestId = id, outcome = "Succeeded", answer = "Use the nearest protected stair.", citations = new[] { new { kind, id = source, locator = "Article 3" } }, usage = new { quotaUnit = "tokens", units } };
+        // Adapter v2 response (Docs fire_evacuation_bim_rag_pccc.md section 6). A knowledge source version is the source id itself.
+        public static object Answer(string id, Guid source, int units, Guid? version = null) =>
+            new { request_id = id, response_type = "KnowledgeAnswer", status = "Answered", recommendation = "Use the nearest protected stair.",
+                citations = new[] { new { document_id = source, document_version = version ?? source, excerpt_locator = "Article 3", relevance = 0.8 } },
+                usage = new { provider_units = units, input_tokens = 120, output_tokens = 40, model_version = "fixture-1" } };
     }
 
     private async Task WithAiRuntime(Func<string, Task> action)
     {
         var login = "ai_runtime_" + Guid.NewGuid().ToString("N");
-        await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}';GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION ai_org_gate(text,uuid,uuid,uuid,jsonb,text),ai_worker_gate(text,text,uuid,uuid,jsonb),ai_admin_gate(text,uuid,uuid,uuid,jsonb,text,bigint) TO {login}");
+        await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}';GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION ai_org_gate(text,uuid,uuid,uuid,jsonb,text),ai_trainee_gate(text,uuid,uuid,uuid,jsonb,text),ai_worker_gate(text,text,uuid,uuid,jsonb),ai_admin_gate(text,uuid,uuid,uuid,jsonb,text,bigint) TO {login}");
         try { await action(new NpgsqlConnectionStringBuilder(testConnection) { Username = login, Pooling = false }.ConnectionString); }
         finally { await ExecuteAsync($"DROP OWNED BY {login};DROP ROLE {login}"); }
     }
@@ -118,7 +121,9 @@ public sealed partial class AuthIntegrationTests
             var submitted = await gates.OrganizationAsync("Submit", tenant.User, tenant.Family, Guid.Empty, AnswerInput(source), "first", default);
             Assert.True(submitted.IsSuccess, submitted.Error?.Code);
             var id = submitted.Value.GetProperty("requestId").GetGuid();
-            Assert.Equal("Queued", submitted.Value.GetProperty("status").GetString());
+            Assert.Equal("Accepted", submitted.Value.GetProperty("status").GetString());
+            Assert.Equal("Where is the safe exit?", submitted.Value.GetProperty("input").GetProperty("text").GetString());
+            Assert.Matches("^[0-9a-f]{64}$", submitted.Value.GetProperty("input").GetProperty("inputHash").GetString());
             Assert.Equal(100L, await AllocationUnits(id, "Reserved"));
             Assert.Equal(id, (await gates.OrganizationAsync("Submit", tenant.User, tenant.Family, Guid.Empty, AnswerInput(source), "first", default)).Value.GetProperty("requestId").GetGuid());
             Assert.Equal("IDEMPOTENCY_KEY_CONFLICT", (await gates.OrganizationAsync("Submit", tenant.User, tenant.Family, Guid.Empty, AnswerInput(source, "Other question?"), "first", default)).Error?.Code);
@@ -129,19 +134,27 @@ public sealed partial class AuthIntegrationTests
             var family = Guid.NewGuid();
             await ExecuteAsync($"INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at) VALUES(gen_random_uuid(),'{tenant.User}','{family}','{Guid.NewGuid():N}{Guid.NewGuid():N}',now(),now()+interval '1 hour')");
 
-            var fake = new FakeFastApi { Respond = (_, body) => FakeFastApi.Json(FakeFastApi.Answer(body!["requestId"]!.ToString(), source, 60)) };
+            var fake = new FakeFastApi { Respond = (_, body) => FakeFastApi.Json(FakeFastApi.Answer(body!["request_id"]!.ToString(), source, 60)) };
             var worker = AiWorker(runtime, fake);
             Assert.True(await worker.RunOnceAsync(default));
             Assert.False(await worker.RunOnceAsync(default));
             var call = Assert.Single(fake.Calls);
-            Assert.Equal("/v1/organization/answer", call.Path);
+            Assert.Equal("/v2/organization/answer", call.Path);
             Assert.Equal(id.ToString(), call.RequestId);
-            Assert.Equal(source.ToString(), call.Body!["sources"]![0]!["id"]!.ToString());
-            Assert.Equal(100, call.Body["limits"]!["maxUnits"]!.GetValue<int>());
+            Assert.Equal("organization", call.Body!["audience"]!.GetValue<string>());
+            Assert.Equal(source.ToString(), call.Body["sources"]![0]!["document_id"]!.ToString());
+            Assert.Equal(100, call.Body["limits"]!["max_units"]!.GetValue<int>());
             var done = (await gates.OrganizationAsync("Get", tenant.User, family, id, new { }, null, default)).Value;
             Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+            Assert.Equal("KnowledgeAnswer", done.GetProperty("resultType").GetString());
+            Assert.Equal("Answered", done.GetProperty("result").GetProperty("status").GetString());
             Assert.Equal(60, done.GetProperty("consumedUnits").GetInt32());
             Assert.Equal("Use the nearest protected stair.", done.GetProperty("result").GetProperty("answer").GetString());
+            // Citations are resolved against the pin: title and link come from the backend, not from the provider.
+            var cited = done.GetProperty("citations")[0];
+            Assert.Equal("KnowledgeSource", cited.GetProperty("kind").GetString());
+            Assert.StartsWith("QCVN 06", cited.GetProperty("title").GetString());
+            Assert.Equal("Article 3", cited.GetProperty("locator").GetString());
             Assert.False(done.TryGetProperty("providerResult", out _));
             Assert.Equal(60L, await AllocationUnits(id, "Settled", "consumed_units"));
             Assert.Equal(0L, await AllocationUnits(id, "Reserved"));
@@ -201,7 +214,7 @@ public sealed partial class AuthIntegrationTests
             fake.Respond = (request, body) =>
             {
                 // The provider commits the work, then the connection drops before the response arrives.
-                if (request.Method == HttpMethod.Post) { committed.Add(body!["requestId"]!.ToString()); throw new HttpRequestException(HttpRequestError.ResponseEnded, "dropped"); }
+                if (request.Method == HttpMethod.Post) { committed.Add(body!["request_id"]!.ToString()); throw new HttpRequestException(HttpRequestError.ResponseEnded, "dropped"); }
                 var requested = request.RequestUri!.Segments[^1];
                 return committed.Contains(requested) ? FakeFastApi.Json(FakeFastApi.Answer(requested, source, 40)) : new(HttpStatusCode.NotFound);
             };
@@ -223,7 +236,7 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal(100L, await AllocationUnits(id, "Reserved"));
             Assert.True(await worker.RunOnceAsync(default));
             Assert.Equal(1, fake.Calls.Count(x => x.Method == HttpMethod.Post));
-            Assert.Equal($"/v1/requests/{id}", fake.Calls.Last().Path);
+            Assert.Equal($"/v2/requests/{id}", fake.Calls.Last().Path);
             Assert.Equal("Succeeded", (await gates.OrganizationAsync("Get", tenant.User, tenant.Family, id, new { }, null, default)).Value.GetProperty("status").GetString());
             Assert.Equal(40L, await AllocationUnits(id, "Settled", "consumed_units"));
             Assert.Equal("AI_RECONCILE_NOT_ALLOWED", (await gates.AdminAsync("Reconcile", adminId, admin, id, new { }, "again", null, default)).Error?.Code);
@@ -257,32 +270,34 @@ public sealed partial class AuthIntegrationTests
             var foreign = await ApprovedSource(gates, admin, "Organization", other.Org);
             Assert.True((await gates.AdminAsync("CreatePolicy", adminId, admin, Guid.Empty, new CreateAiPolicyRequest("Answer", "tokens", 100, 1000, 5), "p", null, default)).IsSuccess);
             var citation = (await gates.OrganizationAsync("Submit", tenant.User, tenant.Family, Guid.Empty, AnswerInput(source, "Cite?"), "cite", default)).Value.GetProperty("requestId").GetGuid();
-            var fake = new FakeFastApi { Respond = (_, body) => FakeFastApi.Json(FakeFastApi.Answer(body!["requestId"]!.ToString(), foreign, 10)) };
+            var fake = new FakeFastApi { Respond = (_, body) => FakeFastApi.Json(FakeFastApi.Answer(body!["request_id"]!.ToString(), foreign, 10)) };
             Assert.True(await AiWorker(runtime, fake).RunOnceAsync(default));
             var org = (await gates.OrganizationAsync("Get", tenant.User, tenant.Family, citation, new { }, null, default)).Value;
             Assert.Equal("NeedsReconcile", org.GetProperty("status").GetString());
             Assert.Equal("AI_CITATION_INVALID", org.GetProperty("failureCode").GetString());
-            Assert.False(org.TryGetProperty("result", out _));
+            Assert.Equal(JsonValueKind.Null, org.GetProperty("result").ValueKind);
             Assert.False(org.TryGetProperty("providerResult", out _));
             Assert.True((await gates.AdminAsync("GetRequest", adminId, admin, citation, new { }, null, null, default)).Value.TryGetProperty("providerResult", out _));
             Assert.Equal(100L, await AllocationUnits(citation, "Reserved"));
 
             var over = (await gates.OrganizationAsync("Submit", tenant.User, tenant.Family, Guid.Empty, AnswerInput(source, "Over?"), "over", default)).Value.GetProperty("requestId").GetGuid();
-            fake.Respond = (_, body) => FakeFastApi.Json(FakeFastApi.Answer(body!["requestId"]!.ToString(), source, 101));
+            fake.Respond = (_, body) => FakeFastApi.Json(FakeFastApi.Answer(body!["request_id"]!.ToString(), source, 101));
             Assert.True(await AiWorker(runtime, fake).RunOnceAsync(default));
             Assert.Equal("AI_USAGE_EXCEEDS_RESERVATION", (string?)await ScalarAsync($"SELECT failure_code FROM ai_requests WHERE id='{over}'"));
             Assert.Equal(100L, await AllocationUnits(over, "Reserved"));
 
             var malformed = (await gates.OrganizationAsync("Submit", tenant.User, tenant.Family, Guid.Empty, AnswerInput(source, "Markup?"), "markup", default)).Value.GetProperty("requestId").GetGuid();
-            fake.Respond = (_, body) => FakeFastApi.Json(new { requestId = body!["requestId"]!.ToString(), outcome = "Succeeded", answer = "<script>x</script>", citations = new[] { new { kind = "KnowledgeSource", id = source } }, usage = new { quotaUnit = "tokens", units = 5 } });
+            fake.Respond = (_, body) => FakeFastApi.Json(new { request_id = body!["request_id"]!.ToString(), response_type = "KnowledgeAnswer", status = "Answered", recommendation = "<script>x</script>", citations = new[] { new { document_id = source, document_version = source } }, usage = new { provider_units = 5 } });
             Assert.True(await AiWorker(runtime, fake).RunOnceAsync(default));
             Assert.Equal("AI_RESULT_INVALID", (string?)await ScalarAsync($"SELECT failure_code FROM ai_requests WHERE id='{malformed}'"));
 
             var safety = (await gates.OrganizationAsync("Submit", tenant.User, tenant.Family, Guid.Empty, AnswerInput(source, "Unsafe?"), "safety", default)).Value.GetProperty("requestId").GetGuid();
-            fake.Respond = (_, body) => FakeFastApi.Json(new { requestId = body!["requestId"]!.ToString(), outcome = "SafetyRejected", message = "Request declined.", citations = Array.Empty<object>(), usage = new { quotaUnit = "tokens", units = 3 } });
+            fake.Respond = (_, body) => FakeFastApi.Json(new { request_id = body!["request_id"]!.ToString(), response_type = "KnowledgeAnswer", status = "RejectedBySafetyGate", recommendation = "Request declined.", citations = Array.Empty<object>(), usage = new { provider_units = 3 } });
             Assert.True(await AiWorker(runtime, fake).RunOnceAsync(default));
             var rejected = (await gates.OrganizationAsync("Get", tenant.User, tenant.Family, safety, new { }, null, default)).Value;
-            Assert.Equal("SafetyRejected", rejected.GetProperty("status").GetString());
+            Assert.Equal("Succeeded", rejected.GetProperty("status").GetString());
+            Assert.Equal("RejectedBySafetyGate", rejected.GetProperty("resultType").GetString());
+            Assert.Equal("Request declined.", rejected.GetProperty("result").GetProperty("message").GetString());
             Assert.Equal(3, rejected.GetProperty("consumedUnits").GetInt32());
             Assert.Equal(3L, await AllocationUnits(safety, "Settled", "consumed_units"));
             Assert.Equal(0L, await AllocationUnits(safety, "Reserved"));
@@ -290,7 +305,7 @@ public sealed partial class AuthIntegrationTests
             var refused = (await gates.OrganizationAsync("Submit", tenant.User, tenant.Family, Guid.Empty, AnswerInput(source, "Down?"), "down", default)).Value.GetProperty("requestId").GetGuid();
             fake.Respond = (_, _) => throw new HttpRequestException(HttpRequestError.ConnectionError, "refused");
             Assert.True(await AiWorker(runtime, fake, maxAttempts: 2).RunOnceAsync(default));
-            Assert.Equal("Queued", (string?)await ScalarAsync($"SELECT status FROM ai_requests WHERE id='{refused}'"));
+            Assert.Equal("Accepted", (string?)await ScalarAsync($"SELECT status FROM ai_requests WHERE id='{refused}'"));
             await ExecuteAsync($"UPDATE ai_requests SET next_attempt_at=now()-interval '1 second' WHERE id='{refused}'");
             Assert.True(await AiWorker(runtime, fake, maxAttempts: 2).RunOnceAsync(default));
             Assert.Equal("AI_PROVIDER_UNREACHABLE", (string?)await ScalarAsync($"SELECT failure_code FROM ai_requests WHERE id='{refused}' AND status='Failed'"));
@@ -299,16 +314,8 @@ public sealed partial class AuthIntegrationTests
             var draftPolicy = await gates.AdminAsync("CreatePolicy", adminId, admin, Guid.Empty, new CreateAiPolicyRequest("ScenarioDraft", "tokens", 200, 2000, 5), "draft-policy", null, default);
             Assert.True(draftPolicy.IsSuccess);
             Assert.Equal("NOT_FOUND", (await gates.OrganizationAsync("Submit", tenant.User, tenant.Family, Guid.Empty, new { operation = "ScenarioDraft", request = new { buildingId = other.Building, prompt = "Draft", sources = Array.Empty<object>() } }, "foreign-building", default)).Error?.Code);
-            var draft = await gates.OrganizationAsync("Submit", tenant.User, tenant.Family, Guid.Empty, new { operation = "ScenarioDraft", request = new { buildingId = tenant.Building, prompt = "Draft a kitchen fire", sources = Array.Empty<object>() } }, "draft", default);
-            Assert.True(draft.IsSuccess, draft.Error?.Code);
-            Assert.DoesNotContain(draft.Value.GetProperty("sources").EnumerateArray(), x => x.GetProperty("id").GetGuid() == foreign);
-            fake.Respond = (_, body) => FakeFastApi.Json(new { requestId = body!["requestId"]!.ToString(), outcome = "Succeeded", draft = new { state = Fire3D.Tests.Shared.EditorContractFixtures.State(), notes = "Starts in the kitchen." }, citations = new[] { new { kind = "KnowledgeSource", id = source } }, usage = new { quotaUnit = "tokens", units = 150 } });
-            Assert.True(await AiWorker(runtime, fake).RunOnceAsync(default));
-            Assert.Equal("/v1/organization/scenario-draft", fake.Calls.Last().Path);
-            Assert.Equal(tenant.Building.ToString(), fake.Calls.Last().Body!["building"]!["id"]!.ToString());
-            var drafted = (await gates.OrganizationAsync("Get", tenant.User, tenant.Family, draft.Value.GetProperty("requestId").GetGuid(), new { }, null, default)).Value;
-            Assert.Equal("Succeeded", drafted.GetProperty("status").GetString());
-            Assert.Equal("fet3d.editor/1", drafted.GetProperty("result").GetProperty("draft").GetProperty("state").GetProperty("schemaVersion").GetString());
+            // Without a revision whose geometry was accepted there are no BIM facts to pin.
+            Assert.Equal("AI_REVISION_NOT_READY", (await gates.OrganizationAsync("Submit", tenant.User, tenant.Family, Guid.Empty, new { operation = "ScenarioDraft", request = new { buildingId = tenant.Building, prompt = "Draft a kitchen fire", sources = Array.Empty<object>() } }, "draft", default)).Error?.Code);
         });
     }
 
@@ -365,6 +372,11 @@ public sealed partial class AuthIntegrationTests
         invalid.Headers.Add("Idempotency-Key", "draft-http");
         var invalidBody = await (await org.SendAsync(invalid)).Content.ReadAsStringAsync();
         Assert.Contains("MARKUP_NOT_ALLOWED", invalidBody); Assert.Contains("VALUE_UNSUPPORTED", invalidBody);
+        // 422 keeps issues and also carries the field map used by VALIDATION_ERROR elsewhere.
+        using (var problem = JsonDocument.Parse(invalidBody)) { Assert.True(problem.RootElement.GetProperty("errors").TryGetProperty("prompt", out _)); }
+        var limits = await org.GetFromJsonAsync<JsonObject>("/api/ai/organization/limits");
+        Assert.Equal(["Answer", "ScenarioDraft"], limits!["items"]!.AsArray().Select(x => x!["operation"]!.GetValue<string>()));
+        Assert.False(limits["items"]![0]!["policyActive"]!.GetValue<bool>());
         Assert.Equal(HttpStatusCode.OK, (await org.GetAsync("/api/ai/organization/sources")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await org.GetAsync($"/api/ai/requests/{Guid.NewGuid()}")).StatusCode);
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM ai_requests"));

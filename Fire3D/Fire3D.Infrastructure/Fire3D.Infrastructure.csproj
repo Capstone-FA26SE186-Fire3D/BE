@@ -45,6 +45,8 @@
         <EmbeddedResource Include="Persistence/Sql/RuntimeCatalogAndTrial.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.RuntimeCatalogAndTrial.sql" />
     <EmbeddedResource Include="Persistence/Sql/PlatformCacheInvalidation.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PlatformCacheInvalidation.sql" />
     <EmbeddedResource Include="Persistence/Sql/BuildingCommandReceipts.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.BuildingCommandReceipts.sql" />
+    <EmbeddedResource Include="Persistence/Sql/AiContractV2.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.AiContractV2.sql" />
+    <EmbeddedResource Include="Persistence/Sql/KnowledgeChunks.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.KnowledgeChunks.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />

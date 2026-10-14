@@ -23,6 +23,8 @@ public sealed class OrganizationAiGates(Fire3DDbContext db) : IOrganizationAiGat
         Result(Run("SELECT ai_org_gate(@action,@actor,@family,@resource,@input,@key)::text", ct, ("action", action), ("actor", actor), ("family", family), ("resource", resource), ("input", input), ("key", key)));
     public Task<AuthResult<JsonElement>> OrganizationRequestsAsync(Guid actor, Guid family, object input, CancellationToken ct) =>
         Result(Run("SELECT ai_org_request_list_gate(@actor,@family,@input)::text", ct, ("actor", actor), ("family", family), ("input", input)));
+    public Task<AuthResult<JsonElement>> TraineeAsync(string action, Guid actor, Guid family, Guid resource, object input, string? key, CancellationToken ct) =>
+        Result(Run("SELECT ai_trainee_gate(@action,@actor,@family,@resource,@input,@key)::text", ct, ("action", action), ("actor", actor), ("family", family), ("resource", resource), ("input", input), ("key", key)));
     public Task<AuthResult<JsonElement>> AdminAsync(string action, Guid actor, Guid family, Guid resource, object input, string? key, long? expected, CancellationToken ct) =>
         Result(Run("SELECT ai_admin_gate(@action,@actor,@family,@resource,@input,@key,@expected)::text", ct, ("action", action), ("actor", actor), ("family", family), ("resource", resource), ("input", input), ("key", key), ("expected", expected)));
     public Task<JsonElement> WorkerAsync(string action, string worker, Guid? request, Guid? lease, object input, CancellationToken ct) =>
@@ -64,6 +66,10 @@ public sealed class OrganizationAiGates(Fire3DDbContext db) : IOrganizationAiGat
             "AI_POLICY_OVERLAP" => "Another policy for this operation overlaps the period.",
             "KNOWLEDGE_SOURCE_EXISTS" => "This source version is already registered.",
             "KNOWLEDGE_SOURCE_STATE_CONFLICT" => "The source is not in a state that allows this action.",
+            "AI_REVISION_NOT_READY" => "The Building has no revision with accepted geometry for a scenario draft.",
+            "AI_BLOCKED_DURING_ASSESSMENT" => "AI is not available while an Assessment attempt is open.",
+            "AI_CONTEXT_NOT_FOUND" => "The Learn post, Training or result is not available to you.",
+            "AI_DAILY_QUOTA_EXHAUSTED" => "Today's AI allowance is used up; it resets at the start of the next day.",
             _ => "AI request was rejected."
         };
         return AuthResult<JsonElement>.Fail(code, message, value.GetProperty("status").GetInt32());
@@ -71,8 +77,9 @@ public sealed class OrganizationAiGates(Fire3DDbContext db) : IOrganizationAiGat
 }
 
 /// <summary>
-/// FastAPI adapter contract v1: POST /v1/organization/{scenario-draft|answer} and GET /v1/requests/{requestId}. The stable
-/// request id is sent as X-Request-Id and in the body so the service can deduplicate and answer lookups.
+/// FastAPI adapter contract v2: POST /v2/organization/{scenario-draft|answer}, POST /v2/trainee/answer and
+/// GET /v2/requests/{requestId}. The body is the payload the gate pins at claim time (docs/organization-ai.md); the stable
+/// request id is sent as X-Request-Id and request_id so the service can deduplicate and answer lookups.
 /// </summary>
 public sealed class FastApiAiClient(IHttpClientFactory clients, IOptions<OrganizationAiOptions> options) : IAiProviderClient
 {
@@ -81,21 +88,16 @@ public sealed class FastApiAiClient(IHttpClientFactory clients, IOptions<Organiz
     public async Task<AiCallResult> DispatchAsync(JsonElement claim, CancellationToken ct)
     {
         var id = claim.GetProperty("requestId").GetGuid();
-        var path = claim.GetProperty("operation").GetString() == "ScenarioDraft" ? "v1/organization/scenario-draft" : "v1/organization/answer";
-        var body = new JsonObject
+        var path = claim.GetProperty("operation").GetString() switch
         {
-            ["requestId"] = id.ToString(),
-            ["organizationId"] = claim.GetProperty("organizationId").GetGuid().ToString(),
-            ["operation"] = claim.GetProperty("operation").GetString(),
-            ["request"] = JsonNode.Parse(claim.GetProperty("request").GetRawText()),
-            ["sources"] = JsonNode.Parse(claim.GetProperty("sources").GetRawText()),
-            ["limits"] = JsonNode.Parse(claim.GetProperty("limits").GetRawText()),
-            ["building"] = claim.TryGetProperty("building", out var b) && b.ValueKind == JsonValueKind.Object ? JsonNode.Parse(b.GetRawText()) : null
+            "ScenarioDraft" => "v2/organization/scenario-draft",
+            "TraineeAnswer" => "v2/trainee/answer",
+            _ => "v2/organization/answer"
         };
-        return await Send(HttpMethod.Post, path, id, body, lookup: false, ct);
+        return await Send(HttpMethod.Post, path, id, JsonNode.Parse(claim.GetProperty("payload").GetRawText())!.AsObject(), lookup: false, ct);
     }
 
-    public Task<AiCallResult> LookupAsync(Guid requestId, CancellationToken ct) => Send(HttpMethod.Get, $"v1/requests/{requestId}", requestId, null, lookup: true, ct);
+    public Task<AiCallResult> LookupAsync(Guid requestId, CancellationToken ct) => Send(HttpMethod.Get, $"v2/requests/{requestId}", requestId, null, lookup: true, ct);
 
     private async Task<AiCallResult> Send(HttpMethod method, string path, Guid id, JsonObject? body, bool lookup, CancellationToken ct)
     {
@@ -123,9 +125,15 @@ public sealed class FastApiAiClient(IHttpClientFactory clients, IOptions<Organiz
                 return new(AiCallStatus.Completed, parsed ?? new JsonObject());
             }
             if (lookup) return response.StatusCode == HttpStatusCode.NotFound ? new(AiCallStatus.NotFound) : new(AiCallStatus.Unknown, Reason: ((int)response.StatusCode).ToString());
+            if ((int)response.StatusCode is 400 or 422)
+            {
+                // The refusal may name the pinned input it could not use (hash mismatch, source or revision unavailable).
+                JsonObject? refusal = null;
+                try { refusal = await response.Content.ReadFromJsonAsync<JsonObject>(timeout.Token); } catch (JsonException) { } catch (NotSupportedException) { }
+                return new(AiCallStatus.Rejected, refusal, ((int)response.StatusCode).ToString());
+            }
             return (int)response.StatusCode switch
             {
-                400 or 422 => new(AiCallStatus.Rejected, Reason: ((int)response.StatusCode).ToString()),
                 401 or 403 or 404 or 429 or 503 => new(AiCallStatus.NotDelivered, Reason: ((int)response.StatusCode).ToString()),
                 _ => new(AiCallStatus.Unknown, Reason: ((int)response.StatusCode).ToString())
             };
@@ -167,7 +175,7 @@ public sealed class OrganizationAiWorker(IServiceScopeFactory scopes, IOptions<O
         {
             AiCallStatus.Completed => ("Complete", (object)OrganizationAiInput.Completion(claim.GetProperty("operation").GetString()!, id, call.Body!).Completion),
             AiCallStatus.NotDelivered when dispatch => ("Retry", new { maxAttempts = o.MaxAttempts, backoffSeconds = o.BackoffSeconds, reason = "AI_PROVIDER_NOT_DELIVERED" }),
-            AiCallStatus.Rejected when dispatch => ("Reject", new { }),
+            AiCallStatus.Rejected when dispatch => ("Reject", new { code = call.Body?["code"] is JsonValue c && c.TryGetValue<string>(out var code) ? code : null }),
             AiCallStatus.NotFound when !dispatch => ("NotFound", new { }),
             _ => ("Unknown", (object)new { })
         };

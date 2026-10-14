@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-259 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+264 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -8,9 +8,9 @@
 | POST | /api/accounts | Bearer | None | 201, 429 |
 | GET | /api/accounts/{id} | Bearer | None | 200, 429 |
 | PATCH | /api/accounts/{id}/status | Bearer | None | 200, 429 |
-| GET | /api/admin/ai/policies | Bearer | None | 200 |
+| GET | /api/admin/ai/policies | Bearer | None | 200, 400 |
 | POST | /api/admin/ai/policies | Bearer | Idempotency-Key | 201, 409, 422 |
-| GET | /api/admin/ai/requests | Bearer | None | 200 |
+| GET | /api/admin/ai/requests | Bearer | None | 200, 400 |
 | GET | /api/admin/ai/requests/{requestId} | Bearer | None | 200, 404 |
 | POST | /api/admin/ai/requests/{requestId}/reconcile | Bearer | Idempotency-Key | 202, 409 |
 | GET | /api/admin/analytics/operations | Bearer | None | 200, 400, 401, 403 |
@@ -88,10 +88,15 @@
 | PATCH | /api/admin/support/tickets/{id} | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/admin/support/tickets/{id}/messages | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/ai/organization/answer | Bearer | Idempotency-Key | 202, 409, 422, 503 |
-| POST | /api/ai/organization/scenario-draft | Bearer | Idempotency-Key | 202, 409, 422, 503 |
+| GET | /api/ai/organization/limits | Bearer | None | 200 |
+| POST | /api/ai/organization/scenario-draft | Bearer | Idempotency-Key | 202, 404, 409, 422, 503 |
 | GET | /api/ai/organization/sources | Bearer | None | 200 |
 | GET | /api/ai/requests | Bearer | None | 200, 400 |
 | GET | /api/ai/requests/{requestId} | Bearer | None | 200, 404 |
+| POST | /api/ai/trainee/answer | Bearer | Idempotency-Key | 202, 404, 409, 422, 503 |
+| GET | /api/ai/trainee/quota | Bearer | None | 200 |
+| GET | /api/ai/trainee/requests | Bearer | None | 200, 400 |
+| GET | /api/ai/trainee/requests/{requestId} | Bearer | None | 200, 404 |
 | POST | /api/auth/change-password | Bearer | None | 204, 400, 401 |
 | PUT | /api/auth/devices | Bearer | X-Installation-Key | 200, 400, 403, 409 |
 | DELETE | /api/auth/devices/{deviceUuid} | Bearer | X-Installation-Key | 204, 400 |

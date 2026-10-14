@@ -27,9 +27,12 @@ public sealed partial class AuthIntegrationTests
             var list = (await gates.OrganizationRequestsAsync(tenant.User, tenant.Family, new { page = 1, pageSize = 20 }, default)).Value;
             Assert.Equal(1, list.GetProperty("total").GetInt32());
             Assert.Equal(mine.Value.GetProperty("requestId").GetGuid(), list.GetProperty("items")[0].GetProperty("requestId").GetGuid());
-            Assert.Equal(1, (await gates.OrganizationRequestsAsync(tenant.User, tenant.Family, new { status = "Queued", operation = "Answer", mine = true }, default)).Value.GetProperty("total").GetInt32());
+            Assert.Equal(1, (await gates.OrganizationRequestsAsync(tenant.User, tenant.Family, new { status = "Accepted", operation = "Answer", mine = true }, default)).Value.GetProperty("total").GetInt32());
             Assert.Equal(0, (await gates.OrganizationRequestsAsync(tenant.User, tenant.Family, new { operation = "ScenarioDraft" }, default)).Value.GetProperty("total").GetInt32());
             Assert.Equal("VALIDATION_ERROR", (await gates.OrganizationRequestsAsync(tenant.User, tenant.Family, new { status = "Done" }, default)).Error?.Code);
+            // The pre-v7 names are no longer accepted.
+            Assert.Equal("VALIDATION_ERROR", (await gates.OrganizationRequestsAsync(tenant.User, tenant.Family, new { status = "Queued" }, default)).Error?.Code);
+            Assert.Equal(0, (await gates.OrganizationRequestsAsync(tenant.User, tenant.Family, new { resultType = "KnowledgeAnswer" }, default)).Value.GetProperty("total").GetInt32());
             Assert.Equal("FORBIDDEN", (await gates.OrganizationRequestsAsync(adminId, admin, new { }, default)).Error?.Code);
             await ExecuteAsync($"UPDATE auth_refresh_tokens SET revoked_at=now() WHERE family_id='{tenant.Family}'");
             Assert.Equal("UNAUTHORIZED", (await gates.OrganizationRequestsAsync(tenant.User, tenant.Family, new { }, default)).Error?.Code);
