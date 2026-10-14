@@ -127,7 +127,7 @@ public sealed class AvatarRecoveryPostgresTests
             return (await new AvatarStore(context).DeleteAvatarAsync(intent.UserId, 1, DateTime.UtcNow, default)).Deleted;
         }
         Assert.Single(await Task.WhenAll(Complete(), Delete()), x => x);
-        Assert.Equal(2L, await db.Scalar($"SELECT profile_revision FROM users WHERE id='{intent.UserId}'"));
+        Assert.Equal(2L, await db.Scalar($"SELECT profile_revision_no FROM users WHERE id='{intent.UserId}'"));
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM audit_logs"));
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM avatar_object_cleanups WHERE object_key='avatars/users/old'"));
     }

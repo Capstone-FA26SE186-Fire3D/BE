@@ -11,7 +11,7 @@ public partial class Fire3DDbContext
         modelBuilder.ApplyConfiguration(new Configurations.RefreshTokenConfiguration());
         modelBuilder.Entity<User>().Property(x => x.PasswordHash).HasColumnName("password_hash");
         modelBuilder.Entity<User>().Property(x => x.AvatarStorageKey).HasColumnName("avatar_storage_key");
-        modelBuilder.Entity<User>().Property(x => x.ProfileRevision).HasColumnName("profile_revision").HasDefaultValue(1L);
+        modelBuilder.Entity<User>().Property(x => x.ProfileRevision).HasColumnName("profile_revision_no").HasDefaultValue(1L);
         modelBuilder.Entity<User>().Property(x => x.Dob).HasColumnName("dob");
         modelBuilder.Entity<User>().Property(x => x.Gender).HasColumnName("gender").HasConversion<string>();
         modelBuilder.Entity<User>().Property(x => x.PhoneNumber).HasColumnName("phone_number").HasMaxLength(32);

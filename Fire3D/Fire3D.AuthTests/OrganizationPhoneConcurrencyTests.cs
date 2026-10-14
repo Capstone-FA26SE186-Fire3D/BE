@@ -54,7 +54,7 @@ public sealed class OrganizationPhoneConcurrencyTests
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM organizations WHERE phone='0706364866'"));
         Assert.Equal(registerWon ? 3L : 2L, await db.Scalar("SELECT count(*) FROM organizations"));
         Assert.Equal(registerWon ? 4L : 3L, await db.Scalar("SELECT count(*) FROM users"));
-        Assert.Equal(registerWon ? 1L : 2L, await db.Scalar($"SELECT profile_revision FROM organizations WHERE id='{BillingDatabase.Org}'"));
+        Assert.Equal(registerWon ? 1L : 2L, await db.Scalar($"SELECT profile_revision_no FROM organizations WHERE id='{BillingDatabase.Org}'"));
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM audit_logs"));
     }
 
@@ -68,7 +68,7 @@ public sealed class OrganizationPhoneConcurrencyTests
         var get = await client.GetAsync("/api/organizations/me");
         Assert.Equal(HttpStatusCode.InternalServerError, (await OrganizationPhoneHttpTests.Patch(client, get.Headers.ETag!.ToString(), new { phoneNumber = "0706364866" })).StatusCode);
         Assert.Equal(get.Headers.ETag!.ToString(), (await client.GetAsync("/api/organizations/me")).Headers.ETag!.ToString());
-        Assert.Equal(1L, await db.Scalar($"SELECT profile_revision FROM organizations WHERE id='{BillingDatabase.Org}'"));
+        Assert.Equal(1L, await db.Scalar($"SELECT profile_revision_no FROM organizations WHERE id='{BillingDatabase.Org}'"));
         Assert.Equal(true, await db.Scalar($"SELECT phone IS NULL FROM organizations WHERE id='{BillingDatabase.Org}'"));
         foreach (var google in new[] { false, true })
         {

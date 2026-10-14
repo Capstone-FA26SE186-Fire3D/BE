@@ -31,7 +31,7 @@ public sealed class OrganizationPhoneMigrationTests
     public async Task Additive_migration_preserves_legacy_format_revision_and_multiple_nulls()
     {
         await using var db = await BillingDatabase.Create(false);
-        await db.Sql($"UPDATE organizations SET phone=' (070) 636-4866 ',profile_revision=7,is_active=false,deleted_at=now() WHERE id='{BillingDatabase.Org}'");
+        await db.Sql($"UPDATE organizations SET phone=' (070) 636-4866 ',profile_revision_no=7,is_active=false,deleted_at=now() WHERE id='{BillingDatabase.Org}'");
         var before = await db.Scalar("SELECT jsonb_agg(to_jsonb(o) ORDER BY id)::text FROM organizations o");
         await Apply(db);
         Assert.Equal(before, await db.Scalar("SELECT jsonb_agg(to_jsonb(o) ORDER BY id)::text FROM organizations o"));

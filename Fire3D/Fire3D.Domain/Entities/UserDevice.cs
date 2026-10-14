@@ -19,6 +19,8 @@ public partial class UserDevice
 
     public string? FcmToken { get; set; }
 
+    public DateTime? FcmTokenUpdatedAt { get; set; }
+
     public Guid? InstallationId { get; set; }
 
     public bool NotificationsEnabled { get; set; }

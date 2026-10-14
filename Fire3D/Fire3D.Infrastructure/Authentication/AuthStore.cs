@@ -180,6 +180,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
                 UserId = userId,
                 DeviceUuid = deviceUuid,
                 FcmToken = fcmToken,
+                FcmTokenUpdatedAt = fcmToken is null ? null : now,
                 DeviceModel = deviceModel,
                 OsVersion = osVersion,
                 AppVersion = appVersion,
@@ -194,6 +195,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         else
         {
             device.InstallationId = installation.Id;
+            if (device.FcmToken != fcmToken) device.FcmTokenUpdatedAt = now;
             device.FcmToken = fcmToken;
             device.NotificationsEnabled = fcmToken is not null;
             device.RevokedAt = null;
@@ -207,7 +209,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         // A device may move accounts, but its previous push binding must be disabled first.
         await db.UserDevices.Where(x => x.InstallationId == installation.Id && x.UserId != userId && x.NotificationsEnabled)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.NotificationsEnabled, false)
-                .SetProperty(x => x.FcmToken, (string?)null).SetProperty(x => x.RevokedAt, now).SetProperty(x => x.LastSeenAt, now), ct);
+                .SetProperty(x => x.FcmToken, (string?)null).SetProperty(x => x.FcmTokenUpdatedAt, now).SetProperty(x => x.RevokedAt, now).SetProperty(x => x.LastSeenAt, now), ct);
         try
         {
             await db.SaveChangesAsync(ct);
@@ -215,7 +217,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         }
         // EF wraps provider errors in DbUpdateException; the caller rolls back the aborted transaction.
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation,
-            ConstraintName: "ux_user_devices_active_fcm_token" })
+            ConstraintName: "device_active_fcm" })
         {
             return DeviceRegistrationResult.TokenAlreadyBound;
         }
@@ -238,6 +240,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         await db.UserDevices.Where(x => x.UserId == userId && x.DeviceUuid == deviceUuid && x.InstallationId == installation.Id)
             .ExecuteUpdateAsync(update => update
                 .SetProperty(x => x.FcmToken, (string?)null)
+                .SetProperty(x => x.FcmTokenUpdatedAt, now)
                 .SetProperty(x => x.NotificationsEnabled, false)
                 .SetProperty(x => x.RevokedAt, now)
                 .SetProperty(x => x.LastSeenAt, now), ct);
@@ -246,7 +249,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
 
     public Task DisableUserPushDevicesAsync(Guid userId, DateTime now, CancellationToken ct) =>
         db.UserDevices.Where(x => x.UserId == userId && x.NotificationsEnabled)
-            .ExecuteUpdateAsync(update => update.SetProperty(x => x.FcmToken, (string?)null)
+            .ExecuteUpdateAsync(update => update.SetProperty(x => x.FcmToken, (string?)null).SetProperty(x => x.FcmTokenUpdatedAt, now)
                 .SetProperty(x => x.NotificationsEnabled, false).SetProperty(x => x.RevokedAt, now).SetProperty(x => x.LastSeenAt, now), ct);
 
     public Task<RefreshToken?> FindRefreshTokenAsync(string hash, CancellationToken ct) =>
