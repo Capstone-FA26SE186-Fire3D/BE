@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-246 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+248 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -226,6 +226,8 @@
 | GET | /api/scenarios/{scenarioId} | Bearer | None | 200, 400, 403, 404 |
 | POST | /api/scenarios/{scenarioId}/draft | Bearer | Idempotency-Key | 201, 400, 404 |
 | GET | /api/scenarios/{scenarioId}/drafts | Bearer | None | 200, 400, 403, 404 |
+| GET | /api/scenarios/{scenarioId}/playtest-availability | Bearer | None | 200, 401, 403, 404 |
+| GET | /api/scenarios/{scenarioId}/playtests | Bearer | None | 200, 400, 401, 403, 404 |
 | POST | /api/scenarios/{scenarioId}/playtests | Bearer | Idempotency-Key | 201, 400, 404 |
 | GET | /api/scenarios/{scenarioId}/versions | Bearer | None | 200, 400, 403, 404 |
 | GET | /api/support/tickets | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |

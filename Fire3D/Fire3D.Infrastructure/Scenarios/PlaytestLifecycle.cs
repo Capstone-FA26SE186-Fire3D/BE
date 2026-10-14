@@ -137,6 +137,34 @@ public sealed class PlaytestLifecycle(Fire3DDbContext db,IOptions<PlaytestOption
   aes.Decrypt(value.AsSpan(0,12),value.AsSpan(28),value.AsSpan(12,16),plain,playtest.ToByteArray());
   return Encoding.UTF8.GetString(plain);
  }
+ private static readonly string[] PlaytestStatuses=["Created","Launching","Running","Completed","Cancelled"];
+ public async Task<AuthResult<PlaytestPage>> ListAsync(Guid actor,Guid family,Guid scenario,Guid? scenarioVersionId,string? status,int page,int pageSize,CancellationToken ct)
+ {
+  var errors=new Dictionary<string,string[]>();
+  var known=status is null?null:PlaytestStatuses.FirstOrDefault(x=>x.Equals(status.Trim(),StringComparison.OrdinalIgnoreCase));
+  if(status is not null && known is null)errors["status"]=["status must be Created, Launching, Running, Completed or Cancelled."];
+  if(page<1)errors["page"]=["page must be at least 1."];
+  if(pageSize is <1 or >100)errors["pageSize"]=["pageSize must be 1-100."];
+  if(errors.Count>0)return AuthResult<PlaytestPage>.Fail("VALIDATION_ERROR","Playtest list filters are invalid.",400,errors);
+  var result=await Read("List",actor,family,scenario,new{scenarioVersionId,status=known,page,pageSize},ct);
+  return result.IsSuccess?AuthResult<PlaytestPage>.Ok(result.Value.GetProperty("result").Deserialize<PlaytestPage>(Json)!):new(default,result.Error);
+ }
+ public async Task<AuthResult<PlaytestAvailability>> AvailabilityAsync(Guid actor,Guid family,Guid scenario,Guid? scenarioVersionId,CancellationToken ct)
+ {
+  var result=await Read("Availability",actor,family,scenario,new{scenarioVersionId},ct);
+  if(!result.IsSuccess)return new(default,result.Error);
+  var body=result.Value.GetProperty("result");
+  var launch=Signing() is not null;var handoff=options.Value.HandoffEnabled;
+  var blockers=new List<string>();
+  if(!launch)blockers.Add("PLAYTEST_LAUNCH_UNAVAILABLE");
+  if(!handoff)blockers.Add("PLAYTEST_HANDOFF_UNAVAILABLE");
+  blockers.AddRange(body.GetProperty("blockers").EnumerateArray().Select(x=>x.GetString()!));
+  return AuthResult<PlaytestAvailability>.Ok(new(launch,handoff,body.GetProperty("entitlement").Deserialize<PlaytestEntitlementView>(Json)!,
+   body.GetProperty("scenarioVersionId").ValueKind==JsonValueKind.Null?null:body.GetProperty("scenarioVersionId").GetGuid(),
+   body.GetProperty("packageReady").ValueKind==JsonValueKind.Null?null:body.GetProperty("packageReady").GetBoolean(),blockers,blockers.Count==0));
+ }
+ private Task<AuthResult<JsonElement>> Read(string action,Guid actor,Guid family,Guid scenario,object input,CancellationToken ct)=>
+  Gate("SELECT playtest_read_gate(@action,@actor,@family,@resource,@input)::text",action,actor,family,scenario,null,input,null,ct);
  private Task<AuthResult<JsonElement>> Runtime(string action,Guid actor,Guid family,Guid playtest,object input,string? key,CancellationToken ct)=>
   Gate("SELECT playtest_runtime_gate(@action,@actor,@family,@resource,@input,@key)::text",action,actor,family,playtest,null,input,key,ct);
  private Task<AuthResult<JsonElement>> Execute(string action,Guid actor,Guid family,Guid resource,Guid? building,object input,string? key,CancellationToken ct)=>
@@ -147,7 +175,8 @@ public sealed class PlaytestLifecycle(Fire3DDbContext db,IOptions<PlaytestOption
   await using var command=new NpgsqlCommand(sql,(NpgsqlConnection)db.Database.GetDbConnection());
   command.Parameters.AddWithValue("action",action);command.Parameters.AddWithValue("actor",actor);command.Parameters.AddWithValue("family",family);command.Parameters.AddWithValue("resource",resource);
   if(sql.Contains("@building"))command.Parameters.AddWithValue("building",NpgsqlDbType.Uuid,(object?)building??DBNull.Value);
-  command.Parameters.AddWithValue("input",NpgsqlDbType.Jsonb,JsonSerializer.Serialize(input,Json));command.Parameters.AddWithValue("key",NpgsqlDbType.Text,(object?)key??DBNull.Value);
+  command.Parameters.AddWithValue("input",NpgsqlDbType.Jsonb,JsonSerializer.Serialize(input,Json));
+  if(sql.Contains("@key"))command.Parameters.AddWithValue("key",NpgsqlDbType.Text,(object?)key??DBNull.Value);
   using var document=JsonDocument.Parse((string)(await command.ExecuteScalarAsync(ct))!);var value=document.RootElement;
   if(value.GetProperty("code").GetString()=="OK")return AuthResult<JsonElement>.Ok(value.Clone());
   var errors=value.TryGetProperty("errors",out var fields)?fields.Deserialize<Dictionary<string,string[]>>():null;

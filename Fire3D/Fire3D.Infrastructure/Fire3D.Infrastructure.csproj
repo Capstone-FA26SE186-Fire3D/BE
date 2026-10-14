@@ -38,6 +38,7 @@
         <EmbeddedResource Include="Persistence/Sql/LearnPublicSearch.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.LearnPublicSearch.sql" />
         <EmbeddedResource Include="Persistence/Sql/LearnerSessionList.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.LearnerSessionList.sql" />
         <EmbeddedResource Include="Persistence/Sql/QrStatusContract.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.QrStatusContract.sql" />
+        <EmbeddedResource Include="Persistence/Sql/PlaytestReads.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PlaytestReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />

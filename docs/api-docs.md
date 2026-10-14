@@ -536,7 +536,9 @@ Tất cả cần Editor. Đây là luồng tác giả thiết kế/thử kịch 
 | GET | `/api/scenario-interactions/catalog` | Không body | 200 RuntimeCatalogDto[] kèm `capabilityContracts` hợp lệ |
 | POST | `/api/scenarios/{scenarioId}/playtests` | Optional buildingId; exact draft/version + Idempotency-Key; OrganizationUser | 201 PlaytestPreparation |
 | POST | `/api/playtests/{playtestId}/start` | runtimeVersion + Idempotency-Key; OrganizationUser launching session | 200 PlaytestLaunch with 5-minute grant, status Launching |
-| GET | `/api/playtests/{playtestId}` | Owner | 200 PlaytestStatusResponse |
+| GET | `/api/scenarios/{scenarioId}/playtests` | scenarioVersionId?, status? (Created/Launching/Running/Completed/Cancelled), page, pageSize; OrganizationUser | 200 PlaytestPage: chỉ playtest do chính người gọi tạo, mới nhất trước (#85) |
+| GET | `/api/scenarios/{scenarioId}/playtest-availability` | scenarioVersionId?; OrganizationUser | 200 PlaytestAvailability: `entitlement {kind Paid/Trial/None, endsAt, trialUnitsRemaining}`, `packageReady`, `blockers` (`PLAYTEST_LAUNCH_UNAVAILABLE`, `PLAYTEST_HANDOFF_UNAVAILABLE`, `PLAYTEST_ENTITLEMENT_REQUIRED`, `PLAYTEST_PACKAGE_REQUIRED`), `canCreate`. Chỉ tham khảo; start vẫn kiểm lại (#85) |
+| GET | `/api/playtests/{playtestId}` | Owner | 200 PlaytestStatusResponse; `recovery.canIssueHandoff` (status Created) và `openHandoffId` (mã handoff đang mở mới nhất: tab khác rotate thì khác handoffId của tab này) |
 | POST | `/api/playtests/{playtestId}/handoffs` | Idempotency-Key; owner, Created | 201 PlaytestHandoffResponse (5-minute single-use code) |
 | POST | `/api/playtests/handoffs/redeem` | code; another session of the same owner | 200 PlaytestStatusResponse |
 | POST | `/api/playtests/{playtestId}/launch-grants` | Idempotency-Key; launching session, Launching | 200 PlaytestLaunch (next generation) |
