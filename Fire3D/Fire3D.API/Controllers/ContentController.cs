@@ -21,11 +21,36 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     [ProducesResponseType<JsonElement>(200)]
     public async Task<IActionResult> Situations(CancellationToken ct) => Reply(await gates.LearnPublicAsync("Situations", null, null, new { }, ct));
 
+    /// <summary>Published Learn posts, newest first (publishedAt desc, then id); filters apply before paging and to total.</summary>
+    /// <remarks>
+    /// search: 2-100 characters after trimming, matched anywhere in title or summary, ignoring case and Vietnamese diacritics
+    /// ("chay" finds "Cháy", "duong" finds "đường"). situation: repeat the parameter for up to 10 active situation slugs; a post
+    /// matches if it has any of them (OR). kind: repeat for Article, Tip or Video (OR, case-insensitive). search, situation and
+    /// kind combine with AND. Hidden, Draft, Unpublished and Deleted posts never appear and are never counted.
+    /// Invalid values return 400 VALIDATION_ERROR with field errors. page >= 1, pageSize 1-100 (default 20).
+    /// </remarks>
     [AllowAnonymous, HttpGet("api/learn/posts")]
     [ProducesResponseType<JsonElement>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
-    public async Task<IActionResult> Posts([FromQuery] string? situation, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
-        Reply(await gates.LearnPublicAsync("Posts", null, null, new { situation, page, pageSize }, ct));
+    public async Task<IActionResult> Posts([FromQuery] string? search, [FromQuery] string[]? situation, [FromQuery] string[]? kind,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        var errors = new Dictionary<string, string[]>();
+        search = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+        if (search is { Length: < 2 or > 100 }) errors["search"] = ["search must be 2-100 characters after trimming."];
+        var situations = (situation ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct(StringComparer.Ordinal).ToArray();
+        if (situations.Length > 10 || situations.Any(x => x.Length > 120)) errors["situation"] = ["Use at most 10 situation slugs of up to 120 characters."];
+        var kinds = new List<string>();
+        foreach (var value in (kind ?? []).Where(x => !string.IsNullOrWhiteSpace(x)))
+            if (LearnKinds.FirstOrDefault(x => x.Equals(value.Trim(), StringComparison.OrdinalIgnoreCase)) is { } known) { if (!kinds.Contains(known)) kinds.Add(known); }
+            else errors["kind"] = ["kind must be Article, Tip or Video."];
+        if (errors.Count > 0)
+            return Problem(statusCode: 400, title: "Learn filters are invalid.", detail: "Kiểm tra các trường được liệt kê.",
+                extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR", ["errors"] = errors });
+        return Paging(page, pageSize) ?? Reply(await gates.LearnPublicAsync("Posts", null, null, new { search, situations, kinds, page, pageSize }, ct));
+    }
+
+    private static readonly string[] LearnKinds = ["Article", "Tip", "Video"];
 
     [AllowAnonymous, HttpGet("api/learn/posts/{slug}")]
     [ProducesResponseType<JsonElement>(200)]

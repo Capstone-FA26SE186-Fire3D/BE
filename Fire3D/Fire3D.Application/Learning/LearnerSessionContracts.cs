@@ -55,6 +55,20 @@ public sealed record TrainingResultView(Guid SessionId, string Mode, string Outc
     IReadOnlyList<CriterionResult>? Criteria, JsonElement Metrics, long LastEventSequence, DateTime CreatedAt);
 public sealed record HeartbeatResponse(DateTime ServerTime, string Status);
 
+/// <summary>Filters for the caller's training history; from/to bound startedAt (from inclusive, to exclusive).</summary>
+public sealed record TrainingHistoryFilter(string? Status, string? Mode, Guid? BuildingId, DateTimeOffset? From, DateTimeOffset? To, int Page = 1, int PageSize = 20);
+public sealed record TrainingHistoryReference(Guid Id, string Name);
+public sealed record TrainingHistoryScenario(Guid Id, Guid VersionId, string Name, int VersionNumber);
+/// <summary>
+/// One started session of the caller. Status is the session state (completion is not passing); ResultStatus is the stored
+/// outcome Passed/NotPassed/Incomplete/NotAssessed, or null while no result exists (running, awaiting sync, aborted, crashed).
+/// Open details with GET /api/training/sessions/{id}/result.
+/// </summary>
+public sealed record TrainingHistoryItem(Guid SessionId, string Status, string Mode, string? ResultStatus, string? EndReason,
+    DateTime StartedAt, DateTime? EndedAt, DateTime? ResultCreatedAt, TrainingHistoryReference Training, Guid ReleaseId,
+    TrainingHistoryReference Building, TrainingHistoryScenario Scenario);
+public sealed record TrainingHistoryPage(IReadOnlyList<TrainingHistoryItem> Items, int TotalCount, int Page, int PageSize);
+
 public interface ILearnerSessions
 {
     Task<AuthResult<TrainingSessionView>> PrepareAsync(LearnerCaller caller, PrepareTrainingSessionRequest request, string? key, CancellationToken ct);
@@ -67,6 +81,7 @@ public interface ILearnerSessions
     Task<AuthResult<TrainingResultView>> ResultAsync(LearnerCaller caller, Guid id, CancellationToken ct);
     Task<AuthResult<TrainingContinuation>> ContinuationAsync(LearnerCaller caller, Guid id, CancellationToken ct);
     Task<AuthResult<IReadOnlyList<TrainingSessionView>>> ReconcileAsync(LearnerCaller caller, ReconcileTrainingRequest request, CancellationToken ct);
+    Task<AuthResult<TrainingHistoryPage>> ListAsync(LearnerCaller caller, TrainingHistoryFilter filter, CancellationToken ct);
 }
 
 public sealed record BuildingQrView(Guid Id, Guid BuildingId, string? Label, string Status, DateTime? CreatedAt = null, DateTime? RevokedAt = null, Guid? ReplacedBy = null, Guid? ReplacedId = null);

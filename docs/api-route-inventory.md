@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-245 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+246 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -233,6 +233,7 @@
 | GET | /api/support/tickets/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/support/tickets/{id}/messages | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/training/reconcile | Bearer | None | 200, 400, 401 |
+| GET | /api/training/sessions | Bearer | None | 200, 400, 401, 403 |
 | POST | /api/training/sessions | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
 | GET | /api/training/sessions/{id} | Bearer | None | 200, 401, 403, 404 |
 | POST | /api/training/sessions/{id}/complete | Bearer | Idempotency-Key | 200, 202, 400, 401, 404, 409, 422 |
