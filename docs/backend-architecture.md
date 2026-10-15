@@ -73,6 +73,8 @@ sequenceDiagram
 
 The API creates a durable job/audit/outbox record in one transaction through the canonical enqueue gate delivered by `AddIfcIntegrationOutbox`. This does not establish that a dispatcher or production IFC consumer is running. Processing/QA output remains unavailable until worker lease/result/provenance gates and delivery are connected and verified; see [IFC outbox](ifc-outbox.md).
 
+Worker processing rules proposed after the 2026-10-15 IFC spike (explicit `Body` selection, empty-geometry rebuild, IFC2X3 type objects, multilingual space names, QA issue codes, equipment candidates confirmed by OrganizationUser) are in [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md) and tracked as IFC-03/IFC-04 in the checklist. They are design targets, not current behaviour.
+
 ## Event-driven target
 
 ### PayOS payment boundary (implemented 2026-10-02)
