@@ -187,3 +187,19 @@ Pending registration cleanup uses a bounded SECURITY DEFINER gate with a restric
 Readiness confirmation/technical rejection/content decisions and catalog/discount/quota-policy/enterprise mutations recheck an owned live session family after lifecycle/actor/resource locks. JWT family is internal and excluded from receipt input hashes; the old family-less readiness entrypoint fails closed. New readiness/approval audit snapshots project safe field changes; legacy unrecognized snapshots remain metadata-only.
 
 Editor preview checks S3 HEAD and recorded size before signing; missing/mismatched objects are NotReady and storage failures return503 PREVIEW_STORAGE_UNAVAILABLE. Annotation anchors use the accepted current Geometry reference gate, avoiding a dependency on a bim_facts table absent from migration history. OpenAPI headers derive from endpoint parameter/response metadata, not controller allowlists. See docs/api-worker-contract-manual-test.md and docs/worker-permissions.md. Learner lifecycle/training analytics and real providers/toolchains remain separate pending work.
+
+## IFC ingestion, hiển thị và tương tác — 2026-10-15
+
+Nguồn: [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md) (Docs PR #15/#16). Đây là **đề xuất thiết kế** có bằng chứng spike cục bộ trên 32 file IFC công khai; chưa có worker, API, migration hay code Unity tương ứng. Mục 4 (nhiều IFC cho một revision), ngân sách tam giác và preset vật liệu còn chờ team chốt.
+
+Quy tắc chung đã chốt với nhóm: chỉ nhận IFC (RVT tự xuất IFC ở ngoài); **IFC có thiết bị PCCC/nguồn nước thì pipeline tự tạo, không có thì OrganizationUser đặt trong editor**; mô hình 3D thiết bị luôn lấy từ thư viện dùng chung (có thể tạo bằng công cụ AI như Tripo rồi dọn lưới), không lấy từ IFC; IFC hầu như không mang màu/texture dùng được nên vật liệu lấy từ thư viện PBR CC0 theo preset.
+
+Phụ trách: Nguyễn Hoàng Nam (BE, IFC). Việc liên quan repo này:
+
+- Upload: từ chối định dạng không phải IFC với `IFC_UNSUPPORTED_FORMAT` kèm hướng dẫn xuất (mục 3); lưu provenance nguồn (schema, ứng dụng xuất, hash). Mô hình nhiều file bộ môn (mục 4) chỉ triển khai sau khi chốt.
+- IFC worker (`tools/ifc-spike` là điểm khởi đầu): chọn representation `Body` theo `RepresentationIdentifier`, không theo thứ tự hay tên context; dựng lại phần tử có mesh rỗng; đọc type object qua `IfcRelDefinesByType` cho IFC2X3; đọc cả `Name` và `LongName` của `IfcSpace` với từ điển đa ngôn ngữ; không tự coi `IfcAlarm`/`IfcSensor` là báo cháy (mục 2.2, 5.1–5.3).
+- QA issue codes ở mục 5.9 (`IFC_NO_BODY_GEOMETRY`, `IFC_NO_SPACES`, `IFC_NOT_ARCHITECTURAL`, `IFC_NO_FLOOR_UNDER_SPACE`, `IFC_EXIT_UNKNOWN`, `IFC_NO_FIRE_EQUIPMENT`…), có mức chặn/cảnh báo và hành động cho người dùng.
+- API danh sách thiết bị phát hiện (`catalogKey`, `confidence`, `source=ifc|editor`, `ifcGlobalId`) và lưu xác nhận/bỏ của OrganizationUser.
+- `ScenarioVersion.interactions`: validate `catalogKey` theo catalog Organization Library và runtime capability; tham số tác dụng (khăn ướt, sprinkler…) chỉ từ nội dung đã duyệt; sprinkler có trạng thái `Active|Disabled|Faulty` (mục 6.3, 7).
+- Lưu preset phong cách và override vật liệu theo nhóm cho revision (mục 5.5); worker Blender/Unity áp dụng tự động.
+- Fixture kiểm thử: danh sách ở mục 2.1 và tiêu chí ở mục 10; giữ file IFC bên thứ ba ngoài repo vì license chưa rõ.
