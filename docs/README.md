@@ -8,6 +8,7 @@ Tài liệu sản phẩm chuẩn nằm trong repo `Docs`. Khi tài liệu BE và
 1. [Docs gốc: requirements](../../Docs/fire_evacuation_requirements.md) — hành vi và tiêu chí sản phẩm.
 2. [Docs gốc: workflows](../../Docs/fire-evacuation-training-workflows.md) — luồng actor và nghiệp vụ.
 3. [Docs gốc: technology](../../Docs/fire-evacuation-training-technology.md) — service boundary, API contract và invariant kỹ thuật.
+   - [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md) — đề xuất cho worker IFC, mã issue QA, thiết bị phát hiện, catalog tương tác và preset vật liệu (checklist IFC-03, IFC-04, SCENARIO-02, STYLE-01).
 4. [Docs gốc: schema SQL](../../Docs/fire_evacuation_schema.sql) và [ERD](../../Docs/fire_evacuation_erd.md) — mô hình dữ liệu mục tiêu.
 5. [BE API guide](api-docs.md) — route/DTO/status của code hiện tại; mỗi điểm khác contract đích phải được ghi rõ.
 6. [BE implementation checklist](api-implementation-checklist.md) — phần đã có, phần còn thiếu và tiêu chí hoàn tất.
