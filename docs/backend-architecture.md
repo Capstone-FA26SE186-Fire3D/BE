@@ -73,6 +73,8 @@ sequenceDiagram
 
 The API creates a durable job/outbox record, but this does not establish that an outbox dispatcher or production IFC consumer is running. The current BE store still writes a placeholder payload hash. Treat processing/QA output as unavailable until the event contract is valid and a worker is connected and verified.
 
+Worker processing rules proposed after the 2026-10-15 IFC spike (explicit `Body` selection, empty-geometry rebuild, IFC2X3 type objects, multilingual space names, QA issue codes, equipment candidates confirmed by OrganizationUser) are in [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md) and tracked as IFC-03/IFC-04 in the checklist. They are design targets, not current behaviour.
+
 ## Event-driven target
 
 ### PayOS payment boundary (implemented 2026-10-02)

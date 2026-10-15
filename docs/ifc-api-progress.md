@@ -24,6 +24,10 @@ No migration or production data changes were made. Existing Firebase onboarding/
 - GET /api/revisions/{revisionId}/artifacts: metadata-only with job/attempt provenance; 46 tests passed, 7 PostgreSQL tests; Release build passed.
 - GET /api/revisions/{revisionId}/bim-facts: paged typed facts with source hash and quality flags; 51 tests passed, 8 PostgreSQL tests; Release build passed.
 
+## Thiết kế tiếp theo — 2026-10-15
+
+Spike trên 32 file IFC công khai đã được ghi thành đề xuất tại [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md). Các việc BE tương ứng nằm ở checklist [IFC-03, IFC-04, SCENARIO-02, STYLE-01](api-implementation-checklist.md). Lưu ý cho endpoint hiện có: `bim-facts` nên mang cả `IfcSpace.LongName` (Revit để tên phòng ở đây, `Name` thường là số phòng). Mục này là thiết kế, không phải tiến độ code.
+
 ## Editor APIs — 2026-09-23
 
 - [x] D05 GET /api/buildings/{buildingId}/editor-preview: revisionId required; tenant scoped; successful current Geometry attempt and input-hash provenance; same-artifact transform/floors/semantic mapping; five-minute signed S3 GET; Ready/NotReady.

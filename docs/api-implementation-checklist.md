@@ -100,6 +100,30 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 - **Sửa code:** Đổi command/API/persistence/review để ghi và kiểm tra đúng cặp; release phải tham chiếu confirmation tương ứng.
 - **Nghiệm thu:** Confirm một cặp không làm sẵn sàng scenario khác; version không thuộc revision hoặc tenant sai bị từ chối; audit/replay giữ đúng cặp.
 
+### IFC-03 — P1 · GAP · Worker IFC: hình học, phân loại và QA
+
+- **Contract/current:** Đề xuất trong [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md) mục 5.1–5.3, 5.9 (Docs PR #15/#16, spike 32 file IFC). Source BE chưa có các bước này; `tools/ifc-spike` mới parse hình học cơ bản.
+- **Sửa code:** Chọn representation `Body` theo `RepresentationIdentifier` (20/25 file có `Axis` đứng trước; KIT đặt Body trong context `Design`); dựng lại phần tử có mesh rỗng; đọc type object qua `IfcRelDefinesByType` cho IFC2X3; đọc `IfcSpace.Name` + `LongName` với từ điển đa ngôn ngữ; không tự coi `IfcAlarm`/`IfcSensor` là báo cháy; ghi issue theo mã mục 5.9 (`IFC_NO_BODY_GEOMETRY`, `IFC_NO_SPACES`, `IFC_NOT_ARCHITECTURAL`, `IFC_NO_FLOOR_UNDER_SPACE`, `IFC_EXIT_UNKNOWN`, `IFC_UNSUPPORTED_FORMAT`…). Upload chỉ nhận `.ifc`; mô hình nhiều file bộ môn (mục 4) chờ chốt.
+- **Nghiệm thu:** Theo fixture/tiêu chí mục 2.1 và 10: KIT dựng đủ 119 tường; trường học Revit tìm 6 sprinkler và 11 thiết bị vệ sinh; file không có phòng phát `IFC_NO_SPACES`; file chỉ kết cấu bị chặn. File IFC bên thứ ba giữ ngoài repo.
+
+### IFC-04 — P1 · GAP · Thiết bị phát hiện và xác nhận
+
+- **Contract/current:** Quy tắc đã chốt: IFC có thiết bị PCCC/nguồn nước thì pipeline tạo ứng viên; không có thì OrganizationUser đặt trong editor. Chưa có API/persistence.
+- **Sửa code:** API đọc ứng viên (`catalogKey`, `confidence`, `source=ifc|editor`, `ifcGlobalId`, vị trí/bbox) theo revision; OrganizationUser xác nhận, đổi loại hoặc bỏ, có audit/ETag. Mô hình 3D luôn lấy từ thư viện asset, không từ IFC.
+- **Nghiệm thu:** Tenant sai bị từ chối; xác nhận không sửa artifact revision; revision mới không kế thừa xác nhận cũ nếu `ifcGlobalId` không còn.
+
+### SCENARIO-02 — P1 · GAP · Cấu hình tương tác và sprinkler trong ScenarioVersion
+
+- **Contract/current:** Mục 6–7 của tài liệu trên: catalog đợt 1 (có sprinkler), luật tương tác theo ngữ cảnh, tham số tác dụng từ nội dung đã duyệt.
+- **Sửa code:** Không thêm trường mới: dùng object `Equipment`/`Hazard` của contract `fet3d.editor/1` (`contracts/editor/v1`), coi `catalogKey` trong Docs là capability `{id,version}` của `GET /api/scenario-interactions/catalog`; bổ sung capability đợt 1 (mục 6.1, sprinkler mục 6.3) vào catalog và validate theo Organization Library/runtime; tham số tác dụng (khăn ướt, sprinkler…) không có giá trị mặc định ngầm; sprinkler có trạng thái `Active|Disabled|Faulty`; event mới (`alarm_raised`, `used_elevator`, `sprinkler_activated`…) được chấp nhận ở session event gate theo schema version.
+- **Nghiệm thu:** `catalogKey` không có trong catalog hoặc vượt capability bị từ chối; snapshot version bất biến; event lạ bị từ chối rõ ràng, không làm hỏng sync.
+
+### STYLE-01 — P2 · LATER · Preset vật liệu theo revision
+
+- **Contract/current:** Mục 5.5: IFC hầu như không mang màu/texture dùng được; vật liệu lấy từ thư viện PBR CC0 theo preset công trình và loại phòng.
+- **Sửa code:** Lưu preset phong cách và override vật liệu theo nhóm cho revision; worker Blender/Unity đọc và áp dụng tự động.
+- **Nghiệm thu:** Đổi preset tạo build mới, không sửa package đã pin; build lại cùng input cho kết quả giống hệt.
+
 ### SCENARIO-01 — P1 · VERIFY · Draft ETag và snapshot
 
 - **Contract/current:** Draft GET/PUT, ETag dựa trên xmin và snapshot/version đã có. Không cần tạo API GET draft mới.
@@ -185,7 +209,7 @@ Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi
 ## E. Thứ tự phụ thuộc và cách hoàn tất task
 
 1. **DB-01, AUTHZ-01, AUTH-01–04:** schema test, tenant boundary, đăng ký/onboarding/profile/session/recovery.
-2. **IFC-01, IFC-02, SCENARIO-01, LIBRARY-01, APPROVAL-01:** worker/QA, draft/version, thư viện và approval; readiness và approval là hai dependency riêng.
+2. **IFC-01, IFC-02, IFC-03, IFC-04, SCENARIO-01, SCENARIO-02, LIBRARY-01, APPROVAL-01:** worker/QA, thiết bị phát hiện, draft/version, cấu hình tương tác, thư viện và approval; readiness và approval là hai dependency riêng. STYLE-01 làm sau khi worker Blender/Unity chạy được.
 3. **BILLING-01–02, ACCESS-01, CAPACITY-01, NOTIFY-01, PLAYTEST-01, RELEASE-01:** payment/provisioning, access/capacity và publish gates.
 4. **SESSION-01, ASSESSMENT-01:** start/launch grant, pin rubric, offline sync và kết quả theo mode.
 5. **AI-01, LEARN-01, RAG-01, REPORT-01:** request/quota và retrieval đã cấp quyền; indexing cần approved/published version, analytics cần session/result chuẩn.
