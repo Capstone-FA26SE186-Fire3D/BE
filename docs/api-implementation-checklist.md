@@ -176,7 +176,7 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 ### SCENARIO-02 — P1 · GAP · Cấu hình tương tác và sprinkler trong ScenarioVersion
 
 - **Contract/current:** Mục 6–7 của tài liệu trên: catalog đợt 1 (có sprinkler), luật tương tác theo ngữ cảnh, tham số tác dụng từ nội dung đã duyệt.
-- **Sửa code:** Validate `interactions[].catalogKey`/action theo catalog Organization Library và runtime capability; tham số tác dụng (khăn ướt, sprinkler…) không có giá trị mặc định ngầm; sprinkler có trạng thái `Active|Disabled|Faulty`; event mới (`alarm_raised`, `used_elevator`, `sprinkler_activated`…) được chấp nhận ở session event gate theo schema version.
+- **Sửa code:** Không thêm trường mới: dùng object `Equipment`/`Hazard` của contract `fet3d.editor/1` (`contracts/editor/v1`), coi `catalogKey` trong Docs là capability `{id,version}` của `GET /api/scenario-interactions/catalog`; bổ sung capability đợt 1 (mục 6.1, sprinkler mục 6.3) vào catalog và validate theo Organization Library/runtime; tham số tác dụng (khăn ướt, sprinkler…) không có giá trị mặc định ngầm; sprinkler có trạng thái `Active|Disabled|Faulty`; event mới (`alarm_raised`, `used_elevator`, `sprinkler_activated`…) được chấp nhận ở session event gate theo schema version.
 - **Nghiệm thu:** `catalogKey` không có trong catalog hoặc vượt capability bị từ chối; snapshot version bất biến; event lạ bị từ chối rõ ràng, không làm hỏng sync.
 
 ### STYLE-01 — P2 · LATER · Preset vật liệu theo revision
