@@ -79,6 +79,16 @@ public sealed class ProcessingWorkerController(IProcessingWorkerGate gate,IOptio
     /// </summary>
     private ObjectResult? EditorMetadataProblem(JsonElement output)
     {
+        if(output.GetProperty("artifactType").GetString()=="building_metadata")
+        {
+            // IFC-04: detected equipment and spaces; the backend serves the interactables, so the shape is checked before acceptance.
+            var building=System.Text.Json.Nodes.JsonNode.Parse(output.GetProperty("metadata").GetRawText());
+            if(BuildingMetadataValidator.DeclaredVersion(building) is { } declared && declared!=BuildingMetadataValidator.SchemaVersion)
+                return Problem(statusCode:422,title:"Building metadata schemaVersion is not supported.",extensions:new Dictionary<string,object?> { ["code"]="BUILDING_METADATA_VERSION_UNSUPPORTED" });
+            var found=BuildingMetadataValidator.Validate(building);
+            return found.Count==0?null:Problem(statusCode:422,title:"Building metadata does not satisfy fet3d.building/1.",
+                extensions:new Dictionary<string,object?> { ["code"]="BUILDING_METADATA_INVALID",["issues"]=found });
+        }
         if(output.GetProperty("artifactType").GetString()!="preview_glb")return null;
         var metadata=System.Text.Json.Nodes.JsonNode.Parse(output.GetProperty("metadata").GetRawText());
         var version=Fire3D.Application.Editor.EditorContract.DeclaredVersion(metadata);
