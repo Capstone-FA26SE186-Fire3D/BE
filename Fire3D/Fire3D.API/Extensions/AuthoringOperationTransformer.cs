@@ -34,6 +34,10 @@ public sealed class AuthoringOperationTransformer:IOpenApiOperationTransformer
    if(info.GetCustomAttribute<DeprecatedParameterAttribute>() is {} deprecated)
     foreach(var parameter in (operation.Parameters ?? []).OfType<OpenApiParameter>().Where(p=>string.Equals(p.Name,info.GetCustomAttribute<FromQueryAttribute>()?.Name ?? info.Name,StringComparison.OrdinalIgnoreCase)))
      {parameter.Deprecated=true;parameter.Description=deprecated.Description;}
+  foreach(var info in action.MethodInfo.GetParameters())
+   if(info.GetCustomAttribute<EnumParameterAttribute>() is {} allowed)
+    foreach(var parameter in (operation.Parameters ?? []).OfType<OpenApiParameter>().Where(p=>p.In==ParameterLocation.Query&&string.Equals(p.Name,info.GetCustomAttribute<FromQueryAttribute>()?.Name ?? info.Name,StringComparison.OrdinalIgnoreCase)))
+     parameter.Schema=new OpenApiSchema{Type=JsonSchemaType.String,Enum=allowed.Values.Select(v=>(System.Text.Json.Nodes.JsonNode)System.Text.Json.Nodes.JsonValue.Create(v)!).ToList()};
   foreach(var metadata in action.MethodInfo.GetCustomAttributes<ResponseHeaderAttribute>())
    foreach(var response in (operation.Responses ?? new OpenApiResponses()).Where(r=>int.TryParse(r.Key,out var status)&&status is >=200 and <300).Select(r=>r.Value).OfType<OpenApiResponse>()){
     response.Headers??=new Dictionary<string,IOpenApiHeader>();

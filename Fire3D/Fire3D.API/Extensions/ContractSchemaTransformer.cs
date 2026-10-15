@@ -15,6 +15,14 @@ public sealed class ContractSchemaTransformer : IOpenApiSchemaTransformer
     public static readonly string[] ValidationOutcomes = ["Passed", "Failed"];
     public static readonly string[] IssueSeverities = ["Info", "Warning", "Error", "Critical"];
     public static readonly string[] IssueStatuses = ["Open"];
+    public static readonly string[] HistoryStatuses = ["Launching", "Running", "AwaitingSync", "Completed"];
+    public static readonly string[] SessionStatuses = ["Prepared", "Expired", "Launching", "Running", "AwaitingSync", "Completed"];
+    public static readonly string[] LearnerModes = ["Learn", "Guided", "Assessment"];
+    public static readonly string[] ResultOutcomes = ["Passed", "NotPassed", "Incomplete", "NotAssessed"];
+    public static readonly string[] EndReasons = ["Finished", "TimedOut", "Abandoned"];
+    public static readonly string[] ResultReasons = ["MODE_NOT_ASSESSED", "ENDED_BEFORE_COMPLETION", "RUBRIC_NOT_SCORABLE", "MANDATORY_CRITERION_FAILED", "BELOW_PASS_THRESHOLD", "ALL_REQUIREMENTS_MET"];
+    public static readonly string[] CriterionOperators = ["gte", "lte", "eq"];
+    public static readonly string[] CriterionReasons = ["METRIC_UNAVAILABLE"];
 
     public Task TransformAsync(OpenApiSchema schema, OpenApiSchemaTransformerContext context, CancellationToken ct)
     {
@@ -72,6 +80,33 @@ public sealed class ContractSchemaTransformer : IOpenApiSchemaTransformer
         {
             Enum(schema, "severity", IssueSeverities, "IssueSeverity. Error and Critical block confirm-for-training and publish.");
             Enum(schema, "status", IssueStatuses, "IssueStatus.");
+        }
+        // Learner sessions (#96): values written or derived by the v7 learner gates.
+        else if (type == typeof(Fire3D.Application.Learning.TrainingHistoryItem))
+        {
+            Enum(schema, "status", HistoryStatuses, "Session state; completion is not passing. AwaitingSync = completion requested, events still missing.");
+            Enum(schema, "mode", LearnerModes, "TrainingMode.");
+            Enum(schema, "resultStatus", ResultOutcomes, "Stored outcome; null until the server stored a result.");
+            Enum(schema, "endReason", EndReasons, "Completion end reason; null until completion is requested.");
+        }
+        else if (type == typeof(Fire3D.Application.Learning.TrainingSessionView))
+        {
+            Enum(schema, "status", SessionStatuses, "Prepared and Expired are preparations (no seat, not a play); the rest are started sessions.");
+            Enum(schema, "mode", LearnerModes, "TrainingMode.");
+        }
+        else if (type == typeof(Fire3D.Application.Learning.SessionCompletionView))
+            Enum(schema, "endReason", EndReasons, "Completion end reason.");
+        else if (type == typeof(Fire3D.Application.Learning.TrainingResultView))
+        {
+            Enum(schema, "mode", LearnerModes, "TrainingMode. Only Assessment is scored.");
+            Enum(schema, "outcome", ResultOutcomes, "Passed/NotPassed/Incomplete for Assessment, NotAssessed for Learn and Guided.");
+            Enum(schema, "reason", ResultReasons, "MODE_NOT_ASSESSED: Learn/Guided · ENDED_BEFORE_COMPLETION: abandoned · RUBRIC_NOT_SCORABLE: no rubric or total weight 0 · "
+                + "MANDATORY_CRITERION_FAILED · BELOW_PASS_THRESHOLD · ALL_REQUIREMENTS_MET.");
+        }
+        else if (type == typeof(Fire3D.Application.Learning.CriterionResult))
+        {
+            Enum(schema, "operator", CriterionOperators, "Comparison of value against threshold.");
+            Enum(schema, "reason", CriterionReasons, "METRIC_UNAVAILABLE when the metric was not computed (the criterion fails); otherwise null.");
         }
         else if (type == typeof(RetryProcessingJobRequest) && schema.Properties is not null)
         {

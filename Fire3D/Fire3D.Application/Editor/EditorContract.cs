@@ -337,7 +337,7 @@ public static class ScenarioStateV1Validator
     private static readonly string[] Capability = ["id", "version"];
     private static readonly string[] Mode = ["allowedModes"];
     private static readonly string[] Rubric = RubricContract.RubricFields;
-    private static readonly string[] Criterion = ["id", "metric", "mandatory", "weight", "threshold", "operator", "description"];
+    private static readonly string[] Criterion = ["id", "metric", "mandatory", "weight", "threshold", "operator", "label", "description"];
 
     /// <summary>
     /// Shape checks used by PUT: types, unknown fields, finite numbers, duplicate IDs and enum values.
@@ -480,6 +480,7 @@ public static class ScenarioStateV1Validator
             r.Number(c["weight"], $"{path}.weight", min: 0);
             r.Number(c["threshold"], $"{path}.threshold");
             r.OneOf(c["operator"], $"{path}.operator", RubricContract.Operators);
+            if (c["label"] is not null) r.Text(c["label"], $"{path}.label", RubricContract.LabelMaxLength);
             if (c["description"] is not null) r.Text(c["description"], $"{path}.description", RubricContract.DescriptionMaxLength);
         }
     }
