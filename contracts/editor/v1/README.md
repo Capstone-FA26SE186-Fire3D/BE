@@ -41,6 +41,13 @@ Training modes use the database vocabulary `Learn`, `Guided`, `Assessment`. Rubr
 Structural validation is not geometry QA and not Unity acceptance. Object kinds are placement categories; behaviour
 comes only from capabilities published in the runtime catalog. No Unity behaviour is inferred or seeded here.
 
+A capability contract may declare `events` (`[{type, description?, payload?}]`, PascalCase types, payload in the parameter-schema
+subset) and `actions` (`[{id, event?, ...}]`, Unity interaction metadata passed through unchanged). Learner and playtest events are
+accepted only for core types or types declared here by the session's runtime; see
+[learner sessions](../../../docs/learner-sessions.md#allowed-event-types-scenario-02). `fixtures/runtime-catalog.batch1.json` is the
+batch 1 proposal (Docs IFC 6.1/6.3, 16 capabilities including `suppression.sprinkler`), registered with `POST /api/admin/runtime-catalog`
+under a new runtime version; it is data, not a seed.
+
 ## Rubric schema version (#69)
 
 `GET /api/scenario-rubrics/catalog` (OrganizationUser, PlatformAdmin) publishes the rubric contract: `supportedSchemaVersions`, `defaultSchemaVersion`, server-computed `metrics` with descriptions, `operators`, the criterion fields, ID pattern and limits, and `maxCriteria`. It suggests no pass threshold, weight or criterion.

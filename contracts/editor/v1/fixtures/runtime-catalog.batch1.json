@@ -1,0 +1,168 @@
+{
+  "_comment": "Batch 1 interaction catalog (Docs ifc_ingestion_visual_interaction.md 6.1/6.3) as a POST /api/admin/runtime-catalog body. Data, not a seed: event names, payloads and parameter ranges are a proposal until Unity confirms them; register it under a new runtimeVersion. Safety values (towel multiplier, sprinkler thresholds) have no defaults and come from approved content per scenario.",
+  "runtimeVersion": "2.0.0",
+  "protocolVersion": "1",
+  "manifestSchemaVersion": "1",
+  "capabilities": [
+    "alarm.call_point", "alarm.detector", "extinguisher.portable", "water.sink", "water.bath", "water.shower", "item.towel",
+    "door.standard", "door.fire", "door.exit", "transport.elevator", "exit.stair", "exit.final", "bait.belongings", "npc.guide",
+    "suppression.sprinkler"
+  ],
+  "capabilityContracts": {
+    "alarm.call_point": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "Manual call point; pressing it raises the alarm.",
+      "events": [
+        { "type": "AlarmRaised", "description": "Docs alarm_raised.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
+      ],
+      "actions": [ { "id": "press", "event": "AlarmRaised" } ]
+    },
+    "alarm.detector": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "Smoke detector; triggers on its own when smoke reaches the threshold.",
+      "parameters": { "type": "object", "additionalProperties": false, "required": ["smokeThreshold"], "properties": { "smokeThreshold": { "type": "number", "minimum": 0, "maximum": 1 } } },
+      "events": [
+        { "type": "DetectorTriggered", "description": "Docs detector_triggered.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
+      ]
+    },
+    "extinguisher.portable": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "Portable extinguisher: pick up, pull the pin, hold to spray.",
+      "parameters": { "type": "object", "additionalProperties": false, "required": ["agent", "dischargeSeconds"], "properties": { "agent": { "type": "string", "enum": ["CO2", "Powder", "Foam"] }, "dischargeSeconds": { "type": "number", "minimum": 1, "maximum": 120 } } },
+      "events": [
+        { "type": "ExtinguisherUsed", "description": "Docs extinguisher_used.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId", "durationSeconds"], "properties": { "objectId": { "type": "string", "maxLength": 128 }, "durationSeconds": { "type": "number", "minimum": 0, "maximum": 600 } } } },
+        { "type": "ExtinguishAttemptLargeFire", "description": "Docs extinguish_attempt_large_fire.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
+      ],
+      "actions": [ { "id": "pick_up" }, { "id": "pull_pin" }, { "id": "spray", "hold": true, "event": "ExtinguisherUsed" } ]
+    },
+    "water.sink": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "Water source: hold to wet a towel or blanket.",
+      "events": [
+        { "type": "ItemWetted", "description": "Docs item_wetted.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId", "itemId"], "properties": { "objectId": { "type": "string", "maxLength": 128 }, "itemId": { "type": "string", "maxLength": 128 } } } }
+      ],
+      "actions": [ { "id": "wet_item", "requiresHeld": ["item.towel:dry", "item.towel:wet"], "holdSeconds": 2.0, "effect": { "setState": "wet" }, "event": "ItemWetted" } ]
+    },
+    "water.bath": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "Water source: hold to wet a towel or blanket.",
+      "events": [
+        { "type": "ItemWetted", "description": "Docs item_wetted.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId", "itemId"], "properties": { "objectId": { "type": "string", "maxLength": 128 }, "itemId": { "type": "string", "maxLength": 128 } } } }
+      ],
+      "actions": [ { "id": "wet_item", "requiresHeld": ["item.towel:dry", "item.towel:wet"], "holdSeconds": 2.0, "effect": { "setState": "wet" }, "event": "ItemWetted" } ]
+    },
+    "water.shower": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "Water source: hold to wet a towel or blanket.",
+      "events": [
+        { "type": "ItemWetted", "description": "Docs item_wetted.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId", "itemId"], "properties": { "objectId": { "type": "string", "maxLength": 128 }, "itemId": { "type": "string", "maxLength": 128 } } } }
+      ],
+      "actions": [ { "id": "wet_item", "requiresHeld": ["item.towel:dry", "item.towel:wet"], "holdSeconds": 2.0, "effect": { "setState": "wet" }, "event": "ItemWetted" } ]
+    },
+    "item.towel": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "Towel: pick up, wet at a water source, cover the nose. Has no effect until used correctly.",
+      "parameters": { "type": "object", "additionalProperties": false, "required": ["smokeIntakeMultiplierWhenCovered", "dryAfterSeconds"], "properties": { "smokeIntakeMultiplierWhenCovered": { "type": "number", "minimum": 0, "maximum": 1 }, "dryAfterSeconds": { "type": "number", "minimum": 0, "maximum": 3600 } } },
+      "events": [
+        { "type": "NoseCoveredInSmoke", "description": "Docs nose_covered_in_smoke.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
+      ],
+      "actions": [ { "id": "pick_up" }, { "id": "cover_nose", "requiresState": "wet", "event": "NoseCoveredInSmoke" } ]
+    },
+    "door.standard": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "IfcDoor: touch to check heat, open, close.",
+      "events": [
+        { "type": "CheckedDoorHeat", "description": "Docs checked_door_heat.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId", "hot"], "properties": { "objectId": { "type": "string", "maxLength": 128 }, "hot": { "type": "boolean" } } } },
+        { "type": "ClosedDoor", "description": "Docs closed_door.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
+      ],
+      "actions": [ { "id": "touch", "event": "CheckedDoorHeat" }, { "id": "open" }, { "id": "close", "event": "ClosedDoor" } ]
+    },
+    "door.fire": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "Fire door: touch to check heat, open, close.",
+      "events": [
+        { "type": "CheckedDoorHeat", "description": "Docs checked_door_heat.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId", "hot"], "properties": { "objectId": { "type": "string", "maxLength": 128 }, "hot": { "type": "boolean" } } } },
+        { "type": "ClosedDoor", "description": "Docs closed_door.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
+      ],
+      "actions": [ { "id": "touch", "event": "CheckedDoorHeat" }, { "id": "open" }, { "id": "close", "event": "ClosedDoor" } ]
+    },
+    "door.exit": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "Exit door: touch to check heat, open, close.",
+      "events": [
+        { "type": "CheckedDoorHeat", "description": "Docs checked_door_heat.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId", "hot"], "properties": { "objectId": { "type": "string", "maxLength": 128 }, "hot": { "type": "boolean" } } } },
+        { "type": "ClosedDoor", "description": "Docs closed_door.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
+      ],
+      "actions": [ { "id": "touch", "event": "CheckedDoorHeat" }, { "id": "open" }, { "id": "close", "event": "ClosedDoor" } ]
+    },
+    "transport.elevator": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "Elevator: calling it is a trap; the button is shown as usual.",
+      "events": [
+        { "type": "UsedElevator", "description": "Docs used_elevator.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
+      ],
+      "actions": [ { "id": "call", "event": "UsedElevator" } ]
+    },
+    "exit.stair": {
+      "version": "1.0.0",
+      "objectKinds": ["Goal"],
+      "description": "Escape stair; entering it sends the core ExitReached event.",
+      "actions": [ { "id": "enter", "event": "ExitReached" } ]
+    },
+    "exit.final": {
+      "version": "1.0.0",
+      "objectKinds": ["Goal"],
+      "description": "Final exit to the outside; entering it sends the core ExitReached event.",
+      "actions": [ { "id": "enter", "event": "ExitReached" } ]
+    },
+    "bait.belongings": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "Belongings bait: picking them up is a trap.",
+      "events": [
+        { "type": "WentBackForBelongings", "description": "Docs went_back_for_belongings.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
+      ],
+      "actions": [ { "id": "pick_up", "event": "WentBackForBelongings" } ]
+    },
+    "npc.guide": {
+      "version": "1.0.0",
+      "objectKinds": ["Npc"],
+      "description": "NPC the player can call and lead to an exit.",
+      "events": [
+        { "type": "NpcGuided", "description": "Docs npc_guided.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
+      ],
+      "actions": [ { "id": "call" }, { "id": "lead", "event": "NpcGuided" } ]
+    },
+    "suppression.sprinkler": {
+      "version": "1.0.0",
+      "objectKinds": ["Equipment"],
+      "description": "Automatic sprinkler head (Docs 6.3); no player interaction. Activates when the heat at its hazard cell passes the threshold.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["state", "activationTemperatureC", "coverageRadiusMeters", "fireIntensityReduction", "activationDelaySeconds"],
+        "properties": {
+          "state": { "type": "string", "enum": ["Active", "Disabled", "Faulty"] },
+          "activationTemperatureC": { "type": "number", "minimum": 40, "maximum": 300 },
+          "coverageRadiusMeters": { "type": "number", "minimum": 0.5, "maximum": 20 },
+          "fireIntensityReduction": { "type": "number", "minimum": 0, "maximum": 1 },
+          "activationDelaySeconds": { "type": "number", "minimum": 0, "maximum": 600 }
+        }
+      },
+      "events": [
+        { "type": "SprinklerActivated", "description": "Docs sprinkler_activated; not a player action, debrief and analytics only.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
+      ]
+    }
+  }
+}

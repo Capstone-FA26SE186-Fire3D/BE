@@ -25,6 +25,12 @@ public static partial class EditorContract
     /// A criterion on any other metric is rejected before release; scores are never taken from the client.
     /// </summary>
     public static readonly string[] LearnerMetrics = ["reached_exit", "completion_time_seconds", "wrong_exits", "hazard_exposure", "distance_meters"];
+    /// <summary>
+    /// Learner/playtest events every runtime may send; the metrics above are computed from them. Any other event type must be
+    /// declared in <c>events</c> of a capability of the session's pinned runtime, otherwise it is rejected (EVENT_TYPE_UNSUPPORTED).
+    /// </summary>
+    public static readonly string[] CoreEvents = ["ExitReached", "WrongExit", "HazardExposure", "Moved"];
+    public const int MaxCapabilityEvents = 50, MaxCapabilityActions = 50;
 
     /// <summary>Returns the declared schemaVersion, or null for a legacy document.</summary>
     public static string? DeclaredVersion(JsonNode? document) =>
@@ -41,6 +47,7 @@ public static partial class EditorContract
     [GeneratedRegex("^[A-Za-z][A-Za-z0-9_.-]{0,99}$")] internal static partial Regex SemanticTypePattern();
     [GeneratedRegex("^[0-9]+\\.[0-9]+\\.[0-9]+$")] internal static partial Regex SemverPattern();
     [GeneratedRegex("^[0-9a-f]{64}$")] internal static partial Regex HashPattern();
+    [GeneratedRegex("^[A-Z][A-Za-z0-9]{0,99}$")] internal static partial Regex EventTypePattern();
 }
 
 /// <summary>Strict JSON reader that records every deviation as a JSONPath issue instead of throwing.</summary>
@@ -201,11 +208,16 @@ public static class GeometryMetadataValidator
 }
 
 /// <summary>Capability contract published in the runtime catalog for one capability ID.</summary>
-public sealed record CapabilityContract(string Id, string Version, IReadOnlyList<string> ObjectKinds, JsonObject? Parameters);
+public sealed record CapabilityContract(string Id, string Version, IReadOnlyList<string> ObjectKinds, JsonObject? Parameters,
+    IReadOnlyList<CapabilityEvent>? Events = null);
+
+/// <summary>An event the runtime may send for a capability; Payload is the closed parameter-schema subset (null: empty payload only).</summary>
+public sealed record CapabilityEvent(string Type, JsonObject? Payload);
 
 public static class CapabilityContracts
 {
-    private static readonly string[] Contract = ["version", "objectKinds", "parameters", "description"];
+    private static readonly string[] Contract = ["version", "objectKinds", "parameters", "description", "events", "actions"];
+    private static readonly string[] Event = ["type", "description", "payload"];
 
     /// <summary>
     /// Reads the catalog contract map. A capability without a valid contract is omitted so editor objects cannot use it;
@@ -241,9 +253,64 @@ public static class CapabilityContracts
             if (o["description"] is not null) r.Text(o["description"], $"{path}.description", 1000);
             JsonObject? parameters = null;
             if (o["parameters"] is not null && ParameterSchema.ValidateSchema(o["parameters"], $"{path}.parameters", r)) parameters = (JsonObject)o["parameters"]!;
-            if (r.Issues.Count == before && version is not null) result[id] = new(id, version, kinds, parameters);
+            var events = Events(o["events"], path, r);
+            Actions(o["actions"], path, events, r);
+            if (r.Issues.Count == before && version is not null) result[id] = new(id, version, kinds, parameters, events);
         }
+        // One event type means one payload: capabilities of a runtime may share a type (doors, water sources) only with the same schema.
+        var seen = new Dictionary<string, (string Id, string Schema)>(StringComparer.Ordinal);
+        foreach (var contract in result.Values.OrderBy(x => x.Id, StringComparer.Ordinal).ToList())
+            foreach (var ev in contract.Events ?? [])
+            {
+                var schema = ev.Payload?.ToJsonString() ?? "";
+                if (!seen.TryGetValue(ev.Type, out var first)) { seen[ev.Type] = (contract.Id, schema); continue; }
+                if (first.Schema == schema) continue;
+                (issues ?? []).Add(new("EVENT_SCHEMA_CONFLICT", $"$.capabilityContracts.{contract.Id}.events",
+                    $"Event {ev.Type} is declared by {first.Id} with a different payload schema."));
+                result.Remove(contract.Id);
+            }
         return result;
+    }
+
+    /// <summary>events: [{type, description?, payload?}]. Types are PascalCase; core events belong to the backend.</summary>
+    private static List<CapabilityEvent> Events(JsonNode? node, string path, StrictReader r)
+    {
+        var events = new List<CapabilityEvent>();
+        if (node is null || r.Array(node, $"{path}.events", EditorContract.MaxCapabilityEvents) is not { } list) return events;
+        for (var i = 0; i < list.Count; i++)
+        {
+            var ep = $"{path}.events[{i}]";
+            if (r.Object(list[i], ep, Event) is not { } ev) continue;
+            var type = r.Text(ev["type"], $"{ep}.type", 100, pattern: EditorContract.EventTypePattern());
+            if (ev["description"] is not null) r.Text(ev["description"], $"{ep}.description", 1000);
+            JsonObject? payload = null;
+            if (ev["payload"] is not null && ParameterSchema.ValidateSchema(ev["payload"], $"{ep}.payload", r)) payload = (JsonObject)ev["payload"]!;
+            if (type is null) continue;
+            if (EditorContract.CoreEvents.Contains(type)) r.Add("EVENT_TYPE_RESERVED", $"{ep}.type", "Core learner events are defined by the backend.");
+            else if (events.Any(x => x.Type == type)) r.Add("ID_DUPLICATE", $"{ep}.type", "Event types must be unique within a capability.");
+            else events.Add(new(type, payload));
+        }
+        return events;
+    }
+
+    /// <summary>
+    /// actions: Unity interaction metadata ([{id, event?, ...}]). The backend checks the id and that a named event is declared;
+    /// every other field is passed through to Unity unchanged.
+    /// </summary>
+    private static void Actions(JsonNode? node, string path, List<CapabilityEvent> events, StrictReader r)
+    {
+        if (node is null || r.Array(node, $"{path}.actions", EditorContract.MaxCapabilityActions) is not { } list) return;
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < list.Count; i++)
+        {
+            var ap = $"{path}.actions[{i}]";
+            if (list[i] is not JsonObject action) { r.Add("TYPE_INVALID", ap, "Must be an object."); continue; }
+            if (r.Text(action["id"], $"{ap}.id", 128, pattern: EditorContract.IdPattern()) is { } id && !ids.Add(id))
+                r.Add("ID_DUPLICATE", $"{ap}.id", "Action IDs must be unique within a capability.");
+            if (action["event"] is not null && r.Text(action["event"], $"{ap}.event", 100, pattern: EditorContract.EventTypePattern()) is { } type
+                && !EditorContract.CoreEvents.Contains(type) && events.All(x => x.Type != type))
+                r.Add("EVENT_NOT_DECLARED", $"{ap}.event", "An action event must be a core event or declared in events.");
+        }
     }
 }
 
@@ -462,7 +529,8 @@ public static class ScenarioStateV1Validator
         // Only the registered schema versions are accepted; legacy values remain readable in stored snapshots but are never accepted again.
         if (rubric["schema_version"] is null) { if (complete) r.Add("FIELD_REQUIRED", "$.rubric.schema_version", "Required."); }
         else if (!RubricContract.IsSupportedVersion(rubric["schema_version"])) r.Add(RubricContract.UnsupportedCode, "$.rubric.schema_version", RubricContract.UnsupportedMessage);
-        r.Number(rubric["pass_threshold"], "$.rubric.pass_threshold");
+        // A ratio of the total weight (0.7 = 70 %); 70 would make the rubric impossible to pass.
+        r.Number(rubric["pass_threshold"], "$.rubric.pass_threshold", min: 0, max: 1);
         var criteria = r.Array(rubric["criteria"], "$.rubric.criteria", RubricContract.MaxCriteria);
         if (criteria is null) return;
         if (complete && criteria.Count == 0) r.Add("FIELD_REQUIRED", "$.rubric.criteria", "At least one criterion is required.");
@@ -483,5 +551,8 @@ public static class ScenarioStateV1Validator
             if (c["label"] is not null) r.Text(c["label"], $"{path}.label", RubricContract.LabelMaxLength);
             if (c["description"] is not null) r.Text(c["description"], $"{path}.description", RubricContract.DescriptionMaxLength);
         }
+        // An Assessment is scored by weight; with no positive weight the result could only be NotAssessed.
+        if (complete && criteria.Count > 0 && criteria.Sum(x => x is JsonObject c && c["weight"] is JsonValue w && w.GetValueKind() == JsonValueKind.Number && double.TryParse(w.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d) && double.IsFinite(d) && d > 0 ? d : 0) <= 0)
+            r.Add("RUBRIC_WEIGHT_REQUIRED", "$.rubric.criteria", "At least one criterion needs a weight above 0.");
     }
 }
