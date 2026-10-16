@@ -16,11 +16,14 @@ public sealed class IfcUploadService(IIfcUploadStore store, IStorageService stor
         if (!Sha(input.Sha256Hash)) errors["sha256Hash"] = ["Expected SHA-256 must contain exactly 64 hexadecimal characters."];
         if (input.FileSizeBytes <= 0 || (options.Value.MaxBytes.HasValue && input.FileSizeBytes > options.Value.MaxBytes))
             errors["fileSizeBytes"] = ["fileSizeBytes must be positive and no larger than the configured IFC limit."];
-        if (string.IsNullOrWhiteSpace(input.OriginalFilename) || input.OriginalFilename.Length > 255 || !input.OriginalFilename.EndsWith(".ifc", StringComparison.OrdinalIgnoreCase) || input.OriginalFilename.Any(char.IsControl))
-            errors["originalFilename"] = ["A filename ending in .ifc with at most 255 characters is required."];
+        // Only IFC is accepted (Docs ifc_ingestion_visual_interaction.md 3): .rvt/.pln/.skp/.ifczip are refused with IFC_UNSUPPORTED_FORMAT.
+        var notIfc = !string.IsNullOrWhiteSpace(input.OriginalFilename) && !input.OriginalFilename.Trim().EndsWith(".ifc", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(input.OriginalFilename) || input.OriginalFilename.Length > 255 || notIfc || input.OriginalFilename.Any(char.IsControl))
+            errors["originalFilename"] = [notIfc ? "Only .ifc files are accepted. Export IFC (IFC2X3, IFC4 or IFC4X3) from Revit or ArchiCAD." : "A filename ending in .ifc with at most 255 characters is required."];
         if (string.IsNullOrWhiteSpace(input.VersionLabel) || input.VersionLabel.Trim().Length > 100)
             errors["versionLabel"] = ["versionLabel must contain 1–100 characters."];
-        if (errors.Count > 0) return AuthResult<InitiateIfcUploadResponse>.Fail("VALIDATION_ERROR", "IFC upload validation failed.", 400, errors);
+        if (errors.Count > 0) return AuthResult<InitiateIfcUploadResponse>.Fail(notIfc ? "IFC_UNSUPPORTED_FORMAT" : "VALIDATION_ERROR",
+            notIfc ? "Only IFC files are accepted." : "IFC upload validation failed.", 400, errors);
         if (!options.Value.Enabled || options.Value.MaxBytes is not > 0)
             return AuthResult<InitiateIfcUploadResponse>.Fail("IFC_UPLOAD_DISABLED", "IFC upload is not configured.", 503);
         if (!Key(key)) return AuthResult<InitiateIfcUploadResponse>.Fail("IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key must contain 1–128 printable non-whitespace characters.", 400);
@@ -66,6 +69,9 @@ public sealed class IfcUploadService(IIfcUploadStore store, IStorageService stor
             var digest = await inspector.InspectAsync(intent.StagingKey, metadata.ETag, intent.Size, timeout.Token);
             if (digest is null || !Sha(digest.Hash) || digest.Size != intent.Size || digest.ETag != metadata.ETag || !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(digest.Hash), Convert.FromHexString(intent.Hash)))
                 return AuthResult<bool>.Fail("IFC_SOURCE_MISMATCH", "Stored object changed or its SHA-256 does not match the upload intent.", 422);
+            // A renamed .rvt or zip passes the filename check; the content must start with the STEP header.
+            if (!digest.StepHeader)
+                return AuthResult<bool>.Fail("IFC_UNSUPPORTED_FORMAT", "The file is not an IFC (ISO-10303-21) model. Export IFC from Revit or ArchiCAD and upload again.", 422);
             var claim = await store.ClaimAsync(actor, revision, input, digest.ETag, ct);
             if (!claim.IsSuccess) return new(default, claim.Error);
             // Candidate key is durable before copy. Every attempt owns a different final key.

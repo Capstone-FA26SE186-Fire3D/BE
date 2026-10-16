@@ -20,7 +20,18 @@ public sealed class IfcUploadOptions
 public sealed record IfcUploadIntent(Guid RevisionId, Guid BuildingId, Guid OrganizationId, Guid ActorId,
     string StagingKey, long Size, string Hash, string Filename, DateTime ExpiresAt, bool Completed);
 public sealed record IfcUploadAttempt(Guid Id, string FinalKey);
-public sealed record IfcObjectDigest(long Size, string Hash, string ETag);
+/// <summary>StepHeader: the bytes start with the ISO-10303-21 (STEP/IFC) header, after an optional UTF-8 BOM and whitespace.</summary>
+public sealed record IfcObjectDigest(long Size, string Hash, string ETag, bool StepHeader = true)
+{
+    public static readonly byte[] Header = "ISO-10303-21;"u8.ToArray();
+    /// <summary>True when the first bytes of the file are the STEP header; prefix holds at least the first 64 bytes or the whole file.</summary>
+    public static bool IsStep(ReadOnlySpan<byte> prefix)
+    {
+        if (prefix.StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF])) prefix = prefix[3..];
+        while (!prefix.IsEmpty && prefix[0] is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n') prefix = prefix[1..];
+        return prefix.StartsWith(Header);
+    }
+}
 public interface IIfcSourceInspector
 {
     Task<Fire3D.Application.Storage.StorageObjectMetadata?> MetadataAsync(string key, CancellationToken ct);

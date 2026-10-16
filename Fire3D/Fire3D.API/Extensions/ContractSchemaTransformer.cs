@@ -15,6 +15,9 @@ public sealed class ContractSchemaTransformer : IOpenApiSchemaTransformer
     public static readonly string[] ValidationOutcomes = ["Passed", "Failed"];
     public static readonly string[] IssueSeverities = ["Info", "Warning", "Error", "Critical"];
     public static readonly string[] IssueStatuses = ["Open"];
+    public static readonly string[] IfcQaCodes = ["IFC_NO_BODY_GEOMETRY", "IFC_BODY_NONSTANDARD_CONTEXT", "IFC_NO_SPACES", "IFC_SPACE_UNNAMED", "IFC_EXIT_UNKNOWN",
+        "IFC_NO_FIRE_EQUIPMENT", "IFC_NO_WATER_SOURCE", "IFC_LOW_CONFIDENCE_DEVICE", "IFC_UNMAPPED_MATERIAL", "IFC_EXCESSIVE_VOIDS", "IFC_NOT_ARCHITECTURAL",
+        "IFC_NO_FLOOR_UNDER_SPACE", "IFC_TRIANGLE_BUDGET_EXCEEDED", "IFC_DEFAULT_MASS_PRESENT", "IFC_UNSUPPORTED_FORMAT"];
     public static readonly string[] HistoryStatuses = ["Launching", "Running", "AwaitingSync", "Completed"];
     public static readonly string[] SessionStatuses = ["Prepared", "Expired", "Launching", "Running", "AwaitingSync", "Completed"];
     public static readonly string[] LearnerModes = ["Learn", "Guided", "Assessment"];
@@ -79,6 +82,9 @@ public sealed class ContractSchemaTransformer : IOpenApiSchemaTransformer
         else if (type == typeof(RevisionIssueResponse))
         {
             Enum(schema, "severity", IssueSeverities, "IssueSeverity. Error and Critical block confirm-for-training and publish.");
+            if (schema.Properties?.TryGetValue("issueCode", out var code) == true && code is OpenApiSchema issueCode)
+                issueCode.Description = "Worker QA code; FE maps it to the user guidance (docs/ifc-qa-codes.md). IFC worker codes (Docs ifc_ingestion_visual_interaction.md 5.9): "
+                    + string.Join(", ", IfcQaCodes) + ". Other codes may appear; show them generically.";
             Enum(schema, "status", IssueStatuses, "IssueStatus.");
         }
         // Learner sessions (#96): values written or derived by the v7 learner gates.

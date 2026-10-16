@@ -3,7 +3,9 @@ using Fire3D.Application.Authentication;
 using Fire3D.Application.Administration;
 using MediatR;
 namespace Fire3D.Application.Ifc;
-public sealed record RevisionIssueResponse(Guid Id, Guid RevisionId, Guid ValidationRunId, Guid ProcessingAttemptId, Guid? ArtifactId, string IssueCode, string Severity, string Status, string Message, JsonElement Evidence, bool IsCurrentAttempt, DateTime CreatedAt);
+/// <summary>IfcGlobalIds: the IFC elements the worker reported for the issue (also in evidence.ifcGlobalIds); empty when none.</summary>
+public sealed record RevisionIssueResponse(Guid Id, Guid RevisionId, Guid ValidationRunId, Guid ProcessingAttemptId, Guid? ArtifactId, string IssueCode, string Severity, string Status, string Message, JsonElement Evidence, bool IsCurrentAttempt, DateTime CreatedAt,
+    IReadOnlyList<string>? IfcGlobalIds = null);
 public sealed record ListRevisionIssuesQuery(Guid ActorId, Guid RevisionId, int Page = 1, int PageSize = 20)
     : IRequest<AuthResult<PageResponse<RevisionIssueResponse>>>;
 public sealed class ListRevisionIssuesHandler(IAuthStore accounts, IIfcReadStore store)

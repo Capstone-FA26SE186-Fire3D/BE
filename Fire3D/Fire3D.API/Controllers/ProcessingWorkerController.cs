@@ -63,6 +63,9 @@ public sealed class ProcessingWorkerController(IProcessingWorkerGate gate,IOptio
                             if(!Text(issue,"code",100))errors[path+".code"]=["A code of 1-100 characters is required."];
                             if(!Text(issue,"message",10000))errors[path+".message"]=["A message of 1-10000 characters is required."];
                             if(issue.TryGetProperty("details",out var details)&&details.ValueKind!=JsonValueKind.Object)errors[path+".details"]=["Details must be an object."];
+                            // IFC-03: the elements an issue is about; the first is stored as the issue's ifc_guid.
+                            if(issue.TryGetProperty("ifcGlobalIds",out var guids)&&(guids.ValueKind!=JsonValueKind.Array||guids.GetArrayLength()>100||guids.EnumerateArray().Any(g=>g.ValueKind!=JsonValueKind.String||!System.Text.RegularExpressions.Regex.IsMatch(g.GetString()!,"^[0-9A-Za-z_$]{22}$"))))
+                                errors[path+".ifcGlobalIds"]=["Use up to 100 IFC GlobalIds (22 characters)."];
                         }
                     }
                 }

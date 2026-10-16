@@ -9,7 +9,7 @@ public sealed partial class IfcReadStore
                 'validationRunId',i.validation_run_id,'processingAttemptId',v.processing_attempt_id,
                 'artifactId',i.artifact_id,'issueCode',i.issue_code,'severity',i.severity,'status',i.status,
                 'message',i.message,'evidence',i.evidence,'isCurrentAttempt',v.processing_attempt_id=j.current_attempt_id,
-                'createdAt',i.created_at) AS item
+                'createdAt',i.created_at,'ifcGlobalIds',CASE WHEN jsonb_typeof(i.evidence->'ifcGlobalIds')='array' THEN i.evidence->'ifcGlobalIds' ELSE '[]'::jsonb END) AS item
             FROM public.validation_issues i JOIN scoped_revision r ON r.id=i.revision_id
             JOIN public.validation_runs v ON v.id=i.validation_run_id AND v.revision_id=i.revision_id
             JOIN public.processing_jobs j ON j.id=v.processing_job_id AND j.revision_id=v.revision_id
