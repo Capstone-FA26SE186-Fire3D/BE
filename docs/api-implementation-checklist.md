@@ -189,7 +189,9 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 - **Sửa code:** Không thêm trường mới: dùng object `Equipment`/`Hazard` của contract `fet3d.editor/1` (`contracts/editor/v1`), coi `catalogKey` trong Docs là capability `{id,version}` của `GET /api/scenario-interactions/catalog`; bổ sung capability đợt 1 (mục 6.1, sprinkler mục 6.3) vào catalog và validate theo Organization Library/runtime; tham số tác dụng (khăn ướt, sprinkler…) không có giá trị mặc định ngầm; sprinkler có trạng thái `Active|Disabled|Faulty`; event mới (Docs: `alarm_raised`, `used_elevator`, `sprinkler_activated`…; API dùng PascalCase `AlarmRaised`…) được chấp nhận ở session event gate theo catalog của runtime đã pin.
 - **Nghiệm thu:** `catalogKey` không có trong catalog hoặc vượt capability bị từ chối; snapshot version bất biến; event lạ bị từ chối rõ ràng, không làm hỏng sync.
 
-### STYLE-01 — P2 · LATER · Preset vật liệu theo revision
+### STYLE-01 — P2 · CODE/TEST phần BE · Preset vật liệu theo revision
+
+- **Trạng thái 17/10/2026 (`feature/revision-style-presets`, migration `20261017090000`):** Library có thêm loại `StylePreset` (vật liệu sàn/tường/trần mặc định và theo loại phòng, `buildingTypes`, `keywords`, `defaultScheme`) và `ColorScheme` (4 màu); `GET/PUT /api/revisions/{id}/style` chọn preset, scheme và override vật liệu theo phòng/bề mặt, ETag, audit, lưu append-only, gợi ý từ revision trước. Mẫu dữ liệu `contracts/style/v1/fixtures/style-presets.sample.json`; chi tiết [revision-style.md](revision-style.md). Còn chờ: worker Blender/Unity đọc lựa chọn và pin vào build.
 
 - **Contract/current:** Mục 5.5: IFC hầu như không mang màu/texture dùng được; vật liệu lấy từ thư viện PBR CC0 theo preset công trình và loại phòng.
 - **Sửa code:** Lưu preset phong cách và override vật liệu theo nhóm cho revision; worker Blender/Unity đọc và áp dụng tự động.

@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-267 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+269 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -224,6 +224,8 @@
 | POST | /api/revisions/{revisionId}/process | Bearer | Idempotency-Key | 202, 400, 404, 409, 429 |
 | GET | /api/revisions/{revisionId}/processing-jobs | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/revisions/{revisionId}/processing-logs | Bearer | None | 200, 400, 401, 403, 404 |
+| GET | /api/revisions/{revisionId}/style | Bearer | None | 200, 401, 403, 404 |
+| PUT | /api/revisions/{revisionId}/style | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 422, 428 |
 | GET | /api/revisions/{revisionId}/readiness | Bearer | None | 200, 401, 403, 404 |
 | POST | /api/revisions/{revisionId}/reviews | Bearer | None | 201, 400, 401, 403, 404, 409, 429 |
 | POST | /api/revisions/{revisionId}/upload-complete | Bearer | None | 204, 400, 404, 409, 410, 422, 429, 503 |

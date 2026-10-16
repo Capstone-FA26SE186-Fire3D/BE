@@ -54,6 +54,7 @@
     <EmbeddedResource Include="Persistence/Sql/TrainingEventAllowList.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.TrainingEventAllowList.sql" />
     <EmbeddedResource Include="Persistence/Sql/ExitDoorConfirmation.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ExitDoorConfirmation.sql" />
     <EmbeddedResource Include="Persistence/Sql/RevokeClientRoleGrants.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.RevokeClientRoleGrants.sql" />
+    <EmbeddedResource Include="Persistence/Sql/RevisionStyle.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.RevisionStyle.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />
