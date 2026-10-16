@@ -26,7 +26,7 @@ public sealed partial class AuthIntegrationTests
     }
 
     // Fake worker: one Geometry attempt with preview_glb (editor metadata) and building_metadata (detected equipment).
-    private async Task<Guid> SeedEquipmentGeometry(Guid revision, JsonObject building)
+    private async Task<Guid> SeedEquipmentGeometry(Guid revision, JsonObject building, object[]? previewIssues = null)
     {
         Guid run = default;
         await WithProcessingRuntime(async (api, worker) =>
@@ -40,7 +40,7 @@ public sealed partial class AuthIntegrationTests
             string? hash = null;
             foreach (var (type, metadata) in new[] { ("preview_glb", (JsonNode)EditorContractFixtures.Geometry()), ("building_metadata", building) })
             {
-                var output = new { artifactType = type, objectKey = prefix + type + ".json", sha256Hash = IfcHash, sizeBytes = 100L, schemaVersion = "1", metadata, validatorVersion = "fake", outcome = "Passed", issues = Array.Empty<object>() };
+                var output = new { artifactType = type, objectKey = prefix + type + ".json", sha256Hash = IfcHash, sizeBytes = 100L, schemaVersion = "1", metadata, validatorVersion = "fake", outcome = "Passed", issues = type == "preview_glb" ? previewIssues ?? [] : Array.Empty<object>() };
                 var registered = await store.ExecuteAsync("Output", job, WorkerInput(new { attemptId, leaseToken, output }), default);
                 Assert.True(registered.IsSuccess, registered.Error?.Code); hash = registered.Value.GetProperty("outputHash").GetString();
             }
