@@ -16,10 +16,31 @@ namespace Fire3D.API.Controllers;
 [Route("api/buildings")]
 [Authorize] // Ph?i dang nh?p
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class BuildingsController(ISender sender) : ControllerBase
+public sealed class BuildingsController(ISender sender, BuildingHeaderCompatibility compatibility, ILogger<BuildingsController> logger) : ControllerBase
 {
     private Guid ActorId => User.GetActorId();
     private Guid? OrganizationId => User.GetOrganizationId();
+
+    // Transition for clients that do not send the BE#94 headers yet (FE#48). Off by default; while
+    // Compatibility:BuildingHeadersOptional=true a POST without Idempotency-Key gets a server key (no replay protection) and a
+    // PUT/DELETE without If-Match uses the current version (last write wins). Each such request is logged and answered with a
+    // Warning header. Turn it off once every client sends the headers.
+    private bool HeadersOptional => compatibility.HeadersOptional;
+
+    private void AcceptWithout(string header)
+    {
+        logger.LogWarning("Building {Method} accepted without {Header} (Compatibility:BuildingHeadersOptional)", Request.Method, header);
+        Response.Headers.Append("Warning", $"299 - \"{header} is missing; it is required (BE#94) and accepted only during the client transition\"");
+    }
+
+    private async Task<(string? Tag, ObjectResult? Problem)> CurrentTagWhenMissing(Guid id, string? ifMatch, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(ifMatch) || !HeadersOptional) return (ifMatch, null);
+        var current = await sender.Send(new GetBuildingQuery(ActorId, null, id), ct);
+        if (!current.IsSuccess) return (null, Failure(current.Error!));
+        AcceptWithout("If-Match");
+        return (BuildingEtag.Format(current.Value!.UpdatedAt), null);
+    }
 
     /// <summary>Creates a Building in a live organization with atomic audit.</summary>
     /// <remarks>OrganizationUser uses their database tenant. PlatformAdmin must select organizationId in the body.
@@ -40,6 +61,11 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     public async Task<ActionResult<BuildingResponse>> CreateBuilding(CreateBuildingRequest request, [FromQuery, Fire3D.API.OpenApi.DeprecatedParameter("Deprecated alias; send organizationId in the body. A different value in query and body returns 400.")] Guid? organizationId,
         [FromHeader(Name = "Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? idempotencyKey, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(idempotencyKey) && HeadersOptional)
+        {
+            idempotencyKey = "compat-" + Guid.NewGuid().ToString("N");
+            AcceptWithout("Idempotency-Key");
+        }
         var result = await sender.Send(new CreateBuildingCommand(ActorId, organizationId, request, idempotencyKey), ct);
         if (!result.IsSuccess) return Failure(result.Error!);
         Response.Headers.ETag = BuildingEtag.Format(result.Value!.UpdatedAt);
@@ -89,7 +115,9 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     public async Task<ActionResult<BuildingResponse>> UpdateBuilding(Guid id, UpdateBuildingRequest request, [FromQuery] Guid? organizationId,
         [FromHeader(Name = "If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
     {
-        var result = await sender.Send(new UpdateBuildingCommand(ActorId, organizationId, id, request, ifMatch), ct);
+        var (tag, missing) = await CurrentTagWhenMissing(id, ifMatch, ct);
+        if (missing is not null) return missing;
+        var result = await sender.Send(new UpdateBuildingCommand(ActorId, organizationId, id, request, tag), ct);
         if (!result.IsSuccess) return await FailureWithCurrent(id, result.Error!, ct);
         Response.Headers.ETag = BuildingEtag.Format(result.Value!.UpdatedAt);
         return Ok(result.Value);
@@ -112,7 +140,9 @@ public sealed class BuildingsController(ISender sender) : ControllerBase
     public async Task<ActionResult<BuildingSummaryResponse>> DeleteBuilding(Guid id, [FromQuery] Guid? organizationId,
         [FromHeader(Name = "If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
     {
-        var result = await sender.Send(new SetBuildingActiveCommand(ActorId, organizationId, id, false, ifMatch), ct);
+        var (tag, missing) = await CurrentTagWhenMissing(id, ifMatch, ct);
+        if (missing is not null) return missing;
+        var result = await sender.Send(new SetBuildingActiveCommand(ActorId, organizationId, id, false, tag), ct);
         if (!result.IsSuccess) return await FailureWithCurrent(id, result.Error!, ct);
         Response.Headers.ETag = BuildingEtag.Format(result.Value!.UpdatedAt);
         return Ok(result.Value);

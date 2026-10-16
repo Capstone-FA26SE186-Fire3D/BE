@@ -28,6 +28,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 
+builder.Services.AddSingleton(new Fire3D.API.Controllers.BuildingHeaderCompatibility
+    { HeadersOptional = builder.Configuration.GetValue<bool>("Compatibility:BuildingHeadersOptional") });
 builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
 builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>()
