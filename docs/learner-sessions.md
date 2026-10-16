@@ -32,7 +32,7 @@ Disabled by default: prepare works, start and continuation return `503 LEARNER_L
 | POST | `/api/training/sessions/{id}/continuation` | Live login only; reissues continuation for the same owner and started session. The previous token stops working. |
 | POST | `/api/training/reconcile` | `{sessionIds?, idempotencyKeys?}` (1–100). Returns only the caller's own sessions/preparations; foreign IDs are absent. |
 
-Errors: 401 invalid session or continuation, 403 role (`FORBIDDEN`), Building access (`BUILDING_ACCESS_REQUIRED`) or a continuation token used for another session id (`CONTINUATION_SESSION_MISMATCH`), 404 outside owner scope, 409 state/precondition (`TRAINING_UNAVAILABLE`, `MODE_NOT_ALLOWED`, `CONTENT_APPROVAL_REQUIRED`, `RUNTIME_INCOMPATIBLE`, `RUBRIC_NOT_SUPPORTED`, `BUILDING_ENTITLEMENT_REQUIRED`, `LEARNER_LIMIT_REACHED`, `LAUNCH_GRANT_STALE`, `LAUNCH_GRANT_EXPIRED`, `SESSION_TERMINAL`, `COMPLETION_ALREADY_REQUESTED`), 422 invalid telemetry/completion, 503 signing not configured.
+Errors: 401 invalid session or continuation, 403 role (a non-Trainee token is refused by the framework before the gate: 403 without `code`; `FORBIDDEN` when the stored role no longer matches the token), Building access (`BUILDING_ACCESS_REQUIRED`) or a continuation token used for another session id (`CONTINUATION_SESSION_MISMATCH`), 404 outside owner scope, 409 state/precondition (`TRAINING_UNAVAILABLE`, `MODE_NOT_ALLOWED`, `CONTENT_APPROVAL_REQUIRED`, `RUNTIME_INCOMPATIBLE`, `RUBRIC_NOT_SUPPORTED`, `BUILDING_ENTITLEMENT_REQUIRED`, `LEARNER_LIMIT_REACHED`, `LAUNCH_GRANT_STALE`, `LAUNCH_GRANT_EXPIRED`, `SESSION_TERMINAL`, `COMPLETION_ALREADY_REQUESTED`), 422 invalid telemetry/completion, 503 signing not configured.
 
 ## Seats
 

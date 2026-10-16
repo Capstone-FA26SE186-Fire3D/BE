@@ -5,12 +5,12 @@ Source: Docs `ifc_ingestion_visual_interaction.md` 5.9. The backend stores and r
 Where codes appear:
 
 - `GET /api/revisions/{revisionId}/issues` → `items[].issueCode`, `severity`, `message`, `ifcGlobalIds` (the IFC elements the worker reported, `[]` when none; also in `evidence.ifcGlobalIds`). FE highlights these GlobalIds in the preview.
-- Upload: `IFC_UNSUPPORTED_FORMAT` is an HTTP error, not an issue — 400 at initiate when the filename is not `.ifc` (`errors.originalFilename`), 422 at upload-complete when the bytes do not start with the STEP header `ISO-10303-21;` (renamed `.rvt`, zip, ...). Nothing is created for the file.
+- Upload: `IFC_UNSUPPORTED_FORMAT` is an HTTP error, not an issue — 400 at initiate when the filename is not `.ifc` (`errors.originalFilename`), 422 at upload-complete when the bytes do not start with the STEP header `ISO-10303-21;` (renamed `.rvt`, zip, ...). At initiate nothing is created; at upload-complete the Draft revision and upload intent from initiate remain but the file is never adopted as the revision source.
 
 Revision status after Geometry QA (worker `preview_glb` output):
 
 - `Passed` → `ReadyForScenario`.
-- `Failed` (the worker reports a blocking issue as `Error`/`Critical`) → `NeedsFix`. The user fixes the IFC and uploads a new revision. `ConfirmedForTraining`, `Superseded` and `Rejected` revisions are not changed.
+- `Failed` (the worker reports a blocking issue as `Error`/`Critical`) → `NeedsFix`. The user fixes the IFC and uploads a new revision. `ConfirmedForTraining`, `Superseded` and `Rejected` revisions are not changed. Migration `20261016080000` also moves revisions whose Geometry run had already failed to `NeedsFix`.
 
 | Code | Docs blocking level | Meaning | User guidance (FE text) |
 |---|---|---|---|

@@ -64,7 +64,7 @@ public static partial class BuildingMetadataValidator
     public const string SchemaVersion = "fet3d.building/1";
     private static readonly string[] Root = ["schemaVersion", "revisionId", "sources", "units", "storeys", "spaces", "portals", "interactables", "materials", "qaIssues"];
     private static readonly string[] Interactable = ["id", "ifcGlobalId", "catalogKey", "source", "ifcClass", "confidence", "confirmedBy", "floorId", "position", "rotationY", "bbox"];
-    [GeneratedRegex("^[0-9A-Za-z_$]{22}$")] private static partial Regex GlobalId();
+    [GeneratedRegex("^[0-9A-Za-z_$]{22}\\z")] private static partial Regex GlobalId();
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")] private static partial Regex ItemId();
 
     public static string? DeclaredVersion(JsonNode? metadata) => metadata is JsonObject o && o["schemaVersion"] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
@@ -75,11 +75,20 @@ public static partial class BuildingMetadataValidator
         if (metadata is not JsonObject root) { issues.Add(new("FIELD_REQUIRED", "$", "Metadata must be an object.")); return issues; }
         foreach (var key in root.Select(p => p.Key).Where(k => !Root.Contains(k))) issues.Add(new("FIELD_UNKNOWN", $"$.{key}", "Not part of fet3d.building/1."));
         if (DeclaredVersion(root) != SchemaVersion) issues.Add(new("FIELD_REQUIRED", "$.schemaVersion", $"Use \"{SchemaVersion}\"."));
+        // A key sent as JSON null is invalid like any other wrong type; only an absent key means "not detected".
         foreach (var (name, max) in new[] { ("sources", 20), ("storeys", 500), ("spaces", 20000), ("portals", 20000), ("qaIssues", 5000) })
-            if (root[name] is { } node && (node is not JsonArray array || array.Count > max || array.Any(x => x is not JsonObject)))
+            if (root.ContainsKey(name) && (root[name] is not JsonArray array || array.Count > max || array.Any(x => x is not JsonObject)))
                 issues.Add(new("FIELD_INVALID", $"$.{name}", $"An array of at most {max} objects."));
-        if (root["materials"] is { } materials && materials is not JsonObject) issues.Add(new("FIELD_INVALID", "$.materials", "An object."));
-        if (root["interactables"] is null) return issues;
+        if (root.ContainsKey("materials") && root["materials"] is not JsonObject) issues.Add(new("FIELD_INVALID", "$.materials", "An object."));
+        // Space GlobalIds key the room facts (bim_facts), so each space appears once.
+        if (root["spaces"] is JsonArray spaces)
+        {
+            var spaceIds = new HashSet<string>(StringComparer.Ordinal);
+            for (var i = 0; i < spaces.Count; i++)
+                if (spaces[i] is JsonObject space && Str(space["ifcGlobalId"]) is { } spaceId && !spaceIds.Add(spaceId))
+                    issues.Add(new("ID_DUPLICATE", $"$.spaces[{i}].ifcGlobalId", "Each IfcSpace GlobalId appears once."));
+        }
+        if (!root.ContainsKey("interactables")) return issues;
         if (root["interactables"] is not JsonArray list || list.Count > 5000) { issues.Add(new("FIELD_INVALID", "$.interactables", "An array of at most 5000 candidates.")); return issues; }
         var ids = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < list.Count; i++)
@@ -95,14 +104,17 @@ public static partial class BuildingMetadataValidator
             if (c["ifcClass"] is { } cls && Str(cls) is not { Length: > 0 and <= 100 }) issues.Add(new("FIELD_INVALID", $"{path}.ifcClass", "1-100 characters."));
             if (Num(c["confidence"]) is not (>= 0 and <= 1)) issues.Add(new("FIELD_INVALID", $"{path}.confidence", "A number from 0 to 1."));
             if (c["floorId"] is { } floor && Str(floor) is not { Length: > 0 and <= 128 }) issues.Add(new("FIELD_INVALID", $"{path}.floorId", "A floor id of preview_glb metadata."));
-            if (!Vector(c["position"], positive: false)) issues.Add(new("FIELD_INVALID", $"{path}.position", "[x, y, z] finite metres."));
-            if (c["rotationY"] is { } rotation && Num(rotation) is null) issues.Add(new("FIELD_INVALID", $"{path}.rotationY", "Degrees, a finite number."));
-            if (c["bbox"] is { } bbox && !Vector(bbox, positive: true)) issues.Add(new("FIELD_INVALID", $"{path}.bbox", "[width, depth, height] positive metres."));
+            if (!Vector(c["position"], positive: false)) issues.Add(new("FIELD_INVALID", $"{path}.position", $"[x, y, z] metres within ±{MaxMetres}."));
+            if (c["rotationY"] is { } rotation && Num(rotation) is not (>= -360 and <= 360)) issues.Add(new("FIELD_INVALID", $"{path}.rotationY", "Degrees from -360 to 360."));
+            if (c.ContainsKey("bbox") && !Vector(c["bbox"], positive: true)) issues.Add(new("FIELD_INVALID", $"{path}.bbox", $"[width, depth, height] positive metres up to {MaxMetres}."));
         }
         return issues;
     }
 
     private static string? Str(JsonNode? node) => node is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
     private static double? Num(JsonNode? node) => node is JsonValue v && v.GetValueKind() == JsonValueKind.Number && v.TryGetValue<double>(out var d) && double.IsFinite(d) ? d : null;
-    private static bool Vector(JsonNode? node, bool positive) => node is JsonArray a && a.Count == 3 && a.All(x => Num(x) is { } n && (!positive || n > 0));
+    // Coordinates are served as decimals; a building larger than 100 km is not a valid model.
+    private const double MaxMetres = 100_000;
+    private static bool Vector(JsonNode? node, bool positive) => node is JsonArray a && a.Count == 3
+        && a.All(x => Num(x) is { } n && Math.Abs(n) <= MaxMetres && (!positive || n > 0));
 }

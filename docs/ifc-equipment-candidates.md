@@ -1,6 +1,6 @@
 # Equipment detected from IFC (IFC-04)
 
-The IFC worker proposes interactive equipment (fire equipment, water sources, exits, elevators) from the IFC; an OrganizationUser
+The IFC worker proposes interactive equipment (fire equipment, water sources, doors, elevators) from the IFC; an OrganizationUser
 confirms, retypes or rejects each candidate. Rule from Docs [IFC ingestion](../../Docs/ifc_ingestion_visual_interaction.md) 5.2/5.7:
 when the IFC has fire equipment or water sources the pipeline suggests them; when it has none the OrganizationUser places them in the
 editor. The 3D model always comes from the shared asset library, never from the IFC. Migration `20261015091000_AddEquipmentCandidates`.
