@@ -39,15 +39,17 @@ public sealed class IfcSourceInspector(IAmazonS3 s3, IConfiguration configuratio
             if (response.ContentLength > maxBytes || response.ETag != etag) return null;
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             var buffer = new byte[64 * 1024]; long length = 0;
+            var prefix = new byte[64]; var prefixLength = 0;
             while (true)
             {
                 var remaining = maxBytes - length;
                 var read = await response.ResponseStream.ReadAsync(buffer.AsMemory(0, remaining >= buffer.Length ? buffer.Length : (int)remaining + 1), ct);
                 if (read == 0) break;
                 length += read; if (length > maxBytes) return null;
+                if (prefixLength < prefix.Length) { var take = Math.Min(read, prefix.Length - prefixLength); Array.Copy(buffer, 0, prefix, prefixLength, take); prefixLength += take; }
                 hash.AppendData(buffer, 0, read);
             }
-            return new(length, Convert.ToHexStringLower(hash.GetHashAndReset()), etag);
+            return new(length, Convert.ToHexStringLower(hash.GetHashAndReset()), etag, IfcObjectDigest.IsStep(prefix.AsSpan(0, prefixLength)));
         }
         catch (AmazonS3Exception ex) when (ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.PreconditionFailed) { return null; }
         catch (AmazonS3Exception ex) { throw new IfcStorageFailure(ex); }

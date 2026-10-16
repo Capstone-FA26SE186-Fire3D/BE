@@ -57,6 +57,7 @@
               "weight": { "type": "number", "minimum": 0 },
               "threshold": { "type": "number" },
               "operator": { "enum": ["gte", "lte", "eq"] },
+              "label": { "type": "string", "minLength": 1, "maxLength": 200, "description": "Short criterion name shown to learners with the result." },
               "description": { "type": "string", "minLength": 1, "maxLength": 1000 }
             }
           }

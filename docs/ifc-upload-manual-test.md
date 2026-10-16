@@ -6,6 +6,7 @@
 4. PUT bytes lên uploadUrl bằng Content-Type application/octet-stream. Giữ đủ key/size/hash/filename của intent. Gọi upload-complete: 204; gọi lại: 204, một source. Không có nút multipart IFC tại BE.
 5. Key khác, actor khác, size/hash hoặc bytes lệch phải bị chặn. Source staging bị thay giữa inspect/copy không được adopt. Intent chưa complete hết 60 phút: 410; receipt đã commit vẫn replay được.
 6. Kiểm source cuối có `upload_verified_at`, hash thực và key riêng mỗi attempt. Lỗi copy/DB/audit giữ candidate + cleanup; retry sau lease dùng key mới, cleanup không xóa source đã adopt. S3 NotFound là cleanup thành công; provider lỗi được retry. Object được bảo vệ vẫn giữ job.
+7. Chỉ nhận IFC: initiate với fileName `model.rvt` (hoặc `.ifczip`, `.skp`) → 400 `IFC_UNSUPPORTED_FORMAT`, `errors.originalFilename`, không tạo revision. Đổi tên file không phải IFC thành `.ifc`, PUT và upload-complete → 422 `IFC_UNSUPPORTED_FORMAT` (bytes phải bắt đầu bằng `ISO-10303-21;`), không adopt source. Danh sách code QA: [ifc-qa-codes.md](ifc-qa-codes.md).
 
 Bằng chứng tự động: tests `IfcUploadBindingTests`, `IfcSourceInspectorTests`, `AuthIntegrationTests.Ifc_*` chạy actual migration history, API HTTP và restricted gate role; fake S3 bao phủ overwrite, cạnh tranh, replay mất response, lỗi audit sau copy, cleanup lỗi/retry và late orphan write. Không chứng minh S3/worker IFC/deployment thật. Process/readiness/worker là các task tiếp theo.
 

@@ -45,12 +45,13 @@ public sealed class TrainingSessionsController(ILearnerSessions sessions) : Cont
 
     /// <summary>The signed-in Trainee's own training history, newest first (startedAt desc, then id desc).</summary>
     /// <remarks>
-    /// Lists started sessions only: preparations and Organization playtests never appear, and other users' sessions are never
-    /// visible. Losing Building access later does not hide past sessions. Filters: status (Launching, Running, AwaitingSync,
-    /// Completed, CompletedWithSupersededRelease, ScenarioUnsurvivable, Aborted, Abandoned, Crashed), mode (Learn, Guided,
-    /// Assessment), buildingId, from/to on startedAt (from inclusive, to exclusive). Session status is not a pass: resultStatus is
-    /// Passed, NotPassed, Incomplete or NotAssessed once the server stored a result, otherwise null. Open the result with
-    /// GET /api/training/sessions/{id}/result. page >= 1, pageSize 1-100 (default 20); invalid filters return 400 VALIDATION_ERROR.
+    /// Live login only (a continuation token cannot list). Lists started sessions only: preparations and Organization playtests
+    /// never appear, and other users' sessions are never visible. Losing Building access later does not hide past sessions.
+    /// Filters: status (Launching, Running, AwaitingSync, Completed — the only states v7 sessions take), mode (Learn, Guided,
+    /// Assessment), buildingId (see GET /api/training/buildings), from/to on startedAt (from inclusive, to exclusive). Session status
+    /// is not a pass: resultStatus is Passed, NotPassed, Incomplete or NotAssessed once the server stored a result, otherwise null.
+    /// endReason Abandoned is how an abandoned play ends; it is not a status. Open the result with GET /api/training/sessions/{id}/result.
+    /// page >= 1, pageSize 1-100 (default 20); invalid filters return 400 VALIDATION_ERROR with errors per field.
     /// </remarks>
     [Authorize(Roles = "Trainee")]
     [HttpGet("sessions")]
@@ -58,17 +59,32 @@ public sealed class TrainingSessionsController(ILearnerSessions sessions) : Cont
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]
-    public async Task<IActionResult> List([FromQuery] string? status, [FromQuery] string? mode, [FromQuery] Guid? buildingId,
+    public async Task<IActionResult> List([FromQuery, OpenApi.EnumParameter("Launching", "Running", "AwaitingSync", "Completed")] string? status,
+        [FromQuery, OpenApi.EnumParameter("Learn", "Guided", "Assessment")] string? mode, [FromQuery] Guid? buildingId,
         [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
         Reply(await sessions.ListAsync(Live(), new(status, mode, buildingId, from, to, page, pageSize), ct));
 
+    /// <summary>Buildings the signed-in Trainee has played in, most recent session first, for the history Building filter.</summary>
+    /// <remarks>Live login only. Built from the Trainee's own started sessions; losing access later does not remove a Building.
+    /// page >= 1, pageSize 1-100 (default 20).</remarks>
+    [Authorize(Roles = "Trainee")]
+    [HttpGet("buildings")]
+    [ProducesResponseType<TrainingBuildingPage>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    public async Task<IActionResult> Buildings([FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
+        Reply(await sessions.BuildingsAsync(Live(), page, pageSize, ct));
+
+    /// <summary>A preparation (Prepared, Expired) or a started session of the caller. Accepts the session's continuation token.</summary>
+    /// <remarks>403 CONTINUATION_SESSION_MISMATCH when a continuation token is used for another session id.</remarks>
     [Authorize(AuthenticationSchemes = SyncSchemes, Roles = "Trainee")]
     [HttpGet("sessions/{id:guid}")]
     [ProducesResponseType<TrainingSessionView>(200)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
-    public async Task<IActionResult> Get(Guid id, CancellationToken ct) => Sync(id) is { } caller ? Reply(await sessions.GetAsync(caller, id, ct)) : Forbid();
+    public async Task<IActionResult> Get(Guid id, CancellationToken ct) => Sync(id) is { } caller ? Reply(await sessions.GetAsync(caller, id, ct)) : Mismatch();
 
     /// <summary>Online start: live session, lifecycle, Public/Private access, approval, Published release, entitlement, runtime and seat; returns a five-minute launch grant and a continuation token. Before launch the same session may call start again for a new grant generation.</summary>
     [Authorize(Roles = "Trainee")]
@@ -86,7 +102,9 @@ public sealed class TrainingSessionsController(ILearnerSessions sessions) : Cont
     [Authorize(Roles = "Trainee")]
     [HttpPost("sessions/{id:guid}/launched")]
     [ProducesResponseType<TrainingSessionView>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(422)]
@@ -96,19 +114,21 @@ public sealed class TrainingSessionsController(ILearnerSessions sessions) : Cont
     [HttpPost("sessions/{id:guid}/heartbeat")]
     [ProducesResponseType<HeartbeatResponse>(200)]
     [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
-    public async Task<IActionResult> Heartbeat(Guid id, CancellationToken ct) => Sync(id) is { } caller ? Reply(await sessions.HeartbeatAsync(caller, id, ct)) : Forbid();
+    public async Task<IActionResult> Heartbeat(Guid id, CancellationToken ct) => Sync(id) is { } caller ? Reply(await sessions.HeartbeatAsync(caller, id, ct)) : Mismatch();
 
     /// <summary>Append-only telemetry: same eventId and content replays; changed content or reused sequence is a per-event conflict. Returns acknowledged sequence and gaps.</summary>
     [Authorize(AuthenticationSchemes = SyncSchemes, Roles = "Trainee")]
     [HttpPost("sessions/{id:guid}/events:batch")]
     [ProducesResponseType<TrainingEventsResponse>(200)]
     [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(422)]
-    public async Task<IActionResult> Events(Guid id, TrainingEventsRequest request, CancellationToken ct) => Sync(id) is { } caller ? Reply(await sessions.RecordEventsAsync(caller, id, request, ct)) : Forbid();
+    public async Task<IActionResult> Events(Guid id, TrainingEventsRequest request, CancellationToken ct) => Sync(id) is { } caller ? Reply(await sessions.RecordEventsAsync(caller, id, request, ct)) : Mismatch();
 
     /// <summary>Pins lastEventSequence. 200 Completed with one immutable result, or 202 AwaitingSync with missing ranges until every event arrives.</summary>
     [Authorize(AuthenticationSchemes = SyncSchemes, Roles = "Trainee")]
@@ -117,23 +137,29 @@ public sealed class TrainingSessionsController(ILearnerSessions sessions) : Cont
     [ProducesResponseType<CompleteTrainingSessionResponse>(202)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(422)]
     public async Task<IActionResult> Complete(Guid id, CompleteTrainingSessionRequest request, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
-        if (Sync(id) is not { } caller) return Forbid();
+        if (Sync(id) is not { } caller) return Mismatch();
         var result = await sessions.CompleteAsync(caller, id, request, key, ct);
         return result.IsSuccess ? StatusCode(result.Value.Status, result.Value.Body) : Problem(result.Error!);
     }
 
+    /// <summary>The server-computed result of the caller's session. Accepts the session's continuation token.</summary>
+    /// <remarks>409 RESULT_NOT_READY until every event up to completion arrived (also for a preparation id). Criteria are listed for
+    /// Assessment only, each with the rubric label/description; reason and criteria[].reason are machine codes (see the schema).
+    /// 403 CONTINUATION_SESSION_MISMATCH when a continuation token is used for another session id; 403 FORBIDDEN for non-Trainee accounts.</remarks>
     [Authorize(AuthenticationSchemes = SyncSchemes, Roles = "Trainee")]
     [HttpGet("sessions/{id:guid}/result")]
     [ProducesResponseType<TrainingResultView>(200)]
     [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
-    public async Task<IActionResult> Result(Guid id, CancellationToken ct) => Sync(id) is { } caller ? Reply(await sessions.ResultAsync(caller, id, ct)) : Forbid();
+    public async Task<IActionResult> Result(Guid id, CancellationToken ct) => Sync(id) is { } caller ? Reply(await sessions.ResultAsync(caller, id, ct)) : Mismatch();
 
     /// <summary>Live login reissues the continuation for the same owner and started session; the previous token stops working.</summary>
     [Authorize(Roles = "Trainee")]
@@ -155,6 +181,8 @@ public sealed class TrainingSessionsController(ILearnerSessions sessions) : Cont
 
     private IActionResult Reply<T>(AuthResult<T> result) => result.IsSuccess ? Ok(result.Value) : Problem(result.Error!);
     private ObjectResult Problem(AuthError error) => Problem(statusCode: error.Status, title: error.Message, extensions: new Dictionary<string, object?> { ["code"] = error.Code, ["errors"] = error.Errors });
+    // A continuation token only syncs the session it was issued for.
+    private ObjectResult Mismatch() => Problem(new AuthError("CONTINUATION_SESSION_MISMATCH", "This continuation token belongs to another session.", 403));
 }
 
 /// <summary>Building QR: Organization/Admin manage codes; signed-in users resolve a token to its Building and list Trainings with normal access checks.</summary>

@@ -49,10 +49,17 @@ public sealed record TrainingSequenceRange(long From, long To);
 public sealed record TrainingEventsResponse(IReadOnlyList<Guid> Accepted, IReadOnlyList<Guid> Duplicates, IReadOnlyList<TrainingEventConflict> Conflicts,
     string Status, long AcknowledgedSequence, IReadOnlyList<TrainingSequenceRange> MissingRanges);
 public sealed record CompleteTrainingSessionResponse(string Status, TrainingSessionView Session, long AcknowledgedSequence, IReadOnlyList<TrainingSequenceRange> MissingRanges);
-public sealed record CriterionResult(string Id, string Metric, JsonElement? Value, string Operator, decimal Threshold, bool Mandatory, decimal Weight, bool Passed, string? Reason);
-/// <summary>Outcome Passed/NotPassed/Incomplete for Assessment, NotAssessed for Learn/Guided. Score is a server-computed percent; completion is not Passed.</summary>
+/// <summary>One rubric criterion as evaluated. Label and Description come from the pinned rubric (null when the author left them out);
+/// Reason is METRIC_UNAVAILABLE when the metric was not computed, otherwise null.</summary>
+public sealed record CriterionResult(string Id, string Metric, JsonElement? Value, string Operator, decimal Threshold, bool Mandatory, decimal Weight, bool Passed, string? Reason,
+    string? Label = null, string? Description = null);
+/// <summary>
+/// Outcome Passed/NotPassed/Incomplete for Assessment, NotAssessed for Learn/Guided (Criteria is then null: only Assessment is
+/// scored). ScorePercent is the server-computed weighted percent; PassThresholdPercent is the rubric pass threshold on the same
+/// 0-100 scale (Passed needs ScorePercent at least PassThresholdPercent and no failed mandatory criterion). Completion is not Passed.
+/// </summary>
 public sealed record TrainingResultView(Guid SessionId, string Mode, string Outcome, string Reason, decimal? ScorePercent, string? RubricHash,
-    IReadOnlyList<CriterionResult>? Criteria, JsonElement Metrics, long LastEventSequence, DateTime CreatedAt);
+    IReadOnlyList<CriterionResult>? Criteria, JsonElement Metrics, long LastEventSequence, DateTime CreatedAt, decimal? PassThresholdPercent = null);
 public sealed record HeartbeatResponse(DateTime ServerTime, string Status);
 
 /// <summary>Filters for the caller's training history; from/to bound startedAt (from inclusive, to exclusive).</summary>
@@ -68,6 +75,9 @@ public sealed record TrainingHistoryItem(Guid SessionId, string Status, string M
     DateTime StartedAt, DateTime? EndedAt, DateTime? ResultCreatedAt, TrainingHistoryReference Training, Guid ReleaseId,
     TrainingHistoryReference Building, TrainingHistoryScenario Scenario);
 public sealed record TrainingHistoryPage(IReadOnlyList<TrainingHistoryItem> Items, int TotalCount, int Page, int PageSize);
+/// <summary>A Building the caller has played in, for the history Building filter; most recent session first.</summary>
+public sealed record TrainingBuildingItem(Guid Id, string Name, int SessionCount, DateTime LastSessionAt);
+public sealed record TrainingBuildingPage(IReadOnlyList<TrainingBuildingItem> Items, int TotalCount, int Page, int PageSize);
 
 public interface ILearnerSessions
 {
@@ -82,6 +92,7 @@ public interface ILearnerSessions
     Task<AuthResult<TrainingContinuation>> ContinuationAsync(LearnerCaller caller, Guid id, CancellationToken ct);
     Task<AuthResult<IReadOnlyList<TrainingSessionView>>> ReconcileAsync(LearnerCaller caller, ReconcileTrainingRequest request, CancellationToken ct);
     Task<AuthResult<TrainingHistoryPage>> ListAsync(LearnerCaller caller, TrainingHistoryFilter filter, CancellationToken ct);
+    Task<AuthResult<TrainingBuildingPage>> BuildingsAsync(LearnerCaller caller, int page, int pageSize, CancellationToken ct);
 }
 
 public sealed record BuildingQrView(Guid Id, Guid BuildingId, string? Label, string Status, DateTime? CreatedAt = null, DateTime? RevokedAt = null, Guid? ReplacedBy = null, Guid? ReplacedId = null);

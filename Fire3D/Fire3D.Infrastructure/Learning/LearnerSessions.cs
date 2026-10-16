@@ -78,7 +78,22 @@ public sealed partial class LearnerSessions(Fire3DDbContext db, IOptions<Learner
     public async Task<AuthResult<TrainingResultView>> ResultAsync(LearnerCaller caller, Guid id, CancellationToken ct)
     {
         var result = await Gate("Result", caller, id, new { }, null, ct);
-        return result.IsSuccess ? AuthResult<TrainingResultView>.Ok(result.Value.GetProperty("result").Deserialize<TrainingResultView>(Json)!) : new(default, result.Error);
+        if (!result.IsSuccess) return new(default, result.Error);
+        var view = result.Value.GetProperty("result").Deserialize<TrainingResultView>(Json)!;
+        // Labels, descriptions and the pass threshold come from the rubric pinned by the session's scenario version.
+        await using var command = new NpgsqlCommand("SELECT learner_result_rubric(@actor,@session)::text", (NpgsqlConnection)db.Database.GetDbConnection());
+        command.Parameters.AddWithValue("actor", caller.ActorId); command.Parameters.AddWithValue("session", id);
+        if (await command.ExecuteScalarAsync(ct) is not string text) return AuthResult<TrainingResultView>.Ok(view);
+        using var rubric = JsonDocument.Parse(text);
+        var named = rubric.RootElement.GetProperty("criteria").EnumerateArray()
+            .Where(c => c.GetProperty("id").ValueKind == JsonValueKind.String)
+            .GroupBy(c => c.GetProperty("id").GetString()!).ToDictionary(g => g.Key, g => g.First());
+        static string? Text(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        var criteria = view.Criteria?.Select(c => named.TryGetValue(c.Id, out var n) ? c with { Label = Text(n, "label"), Description = Text(n, "description") } : c).ToList();
+        // Half-up like scorePercent; the outcome itself compares the unrounded ratio, so clients show outcome rather than recompute it.
+        var threshold = rubric.RootElement.GetProperty("passThreshold") is { ValueKind: JsonValueKind.Number } t && t.TryGetDecimal(out var ratio) && ratio is >= 0 and <= 1
+            ? Math.Round(ratio * 100, 2, MidpointRounding.AwayFromZero) : (decimal?)null;
+        return AuthResult<TrainingResultView>.Ok(view with { Criteria = criteria, PassThresholdPercent = view.Mode == "Assessment" ? threshold : null });
     }
 
     public async Task<AuthResult<TrainingContinuation>> ContinuationAsync(LearnerCaller caller, Guid id, CancellationToken ct)
@@ -153,8 +168,9 @@ public sealed partial class LearnerSessions(Fire3DDbContext db, IOptions<Learner
         return new(session, expires, token);
     }
 
-    private static readonly string[] HistoryStatuses = ["Launching", "Running", "AwaitingSync", "Completed", "CompletedWithSupersededRelease",
-        "ScenarioUnsurvivable", "Aborted", "Abandoned", "Crashed"];
+    // Statuses the v7 gates write (Launching, Running, Completed) plus the derived AwaitingSync. Other session_status_enum values
+    // are never written for v7 sessions, so filtering by them is a 400 rather than a filter that can only return nothing.
+    public static readonly string[] HistoryStatuses = ["Launching", "Running", "AwaitingSync", "Completed"];
     private static readonly string[] HistoryModes = ["Learn", "Guided", "Assessment"];
 
     public async Task<AuthResult<TrainingHistoryPage>> ListAsync(LearnerCaller caller, TrainingHistoryFilter filter, CancellationToken ct)
@@ -188,6 +204,28 @@ public sealed partial class LearnerSessions(Fire3DDbContext db, IOptions<Learner
             "UNAUTHORIZED" => "Sign in again.",
             "FORBIDDEN" => "Only Trainee accounts have a training history.",
             _ => "Training history filters are invalid."
+        }, value.GetProperty("status").GetInt32());
+    }
+
+    public async Task<AuthResult<TrainingBuildingPage>> BuildingsAsync(LearnerCaller caller, int page, int pageSize, CancellationToken ct)
+    {
+        if (page < 1 || pageSize is < 1 or > 100)
+            return AuthResult<TrainingBuildingPage>.Fail("VALIDATION_ERROR", "page >= 1 and pageSize 1-100.", 400,
+                new Dictionary<string, string[]> { [page < 1 ? "page" : "pageSize"] = [page < 1 ? "page must be at least 1." : "pageSize must be 1-100."] });
+        await db.Database.OpenConnectionAsync(ct);
+        await using var command = new NpgsqlCommand("SELECT learner_building_list_gate(@actor,@family,@input)::text", (NpgsqlConnection)db.Database.GetDbConnection());
+        command.Parameters.AddWithValue("actor", caller.ActorId);
+        command.Parameters.AddWithValue("family", NpgsqlDbType.Uuid, (object?)caller.FamilyId ?? DBNull.Value);
+        command.Parameters.AddWithValue("input", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(new { page, pageSize }, Json));
+        using var document = JsonDocument.Parse((string)(await command.ExecuteScalarAsync(ct))!);
+        var value = document.RootElement;
+        var code = value.GetProperty("code").GetString()!;
+        if (code == "OK") return AuthResult<TrainingBuildingPage>.Ok(value.GetProperty("result").Deserialize<TrainingBuildingPage>(Json)!);
+        return AuthResult<TrainingBuildingPage>.Fail(code, code switch
+        {
+            "UNAUTHORIZED" => "Sign in again.",
+            "FORBIDDEN" => "Only Trainee accounts have a training history.",
+            _ => "page >= 1 and pageSize 1-100."
         }, value.GetProperty("status").GetInt32());
     }
 

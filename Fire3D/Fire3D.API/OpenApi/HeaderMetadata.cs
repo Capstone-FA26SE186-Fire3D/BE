@@ -15,6 +15,13 @@ public sealed class DeprecatedParameterAttribute(string description) : Attribute
     public string Description { get; } = description;
 }
 
+/// <summary>Publishes the accepted values of a string query parameter as an OpenAPI enum; the handler still validates them.</summary>
+[AttributeUsage(AttributeTargets.Parameter)]
+public sealed class EnumParameterAttribute(params string[] values) : Attribute
+{
+    public IReadOnlyList<string> Values { get; } = values;
+}
+
 [AttributeUsage(AttributeTargets.Method, AllowMultiple=true)]
 public sealed class ResponseHeaderAttribute(string name) : Attribute
 {

@@ -466,7 +466,7 @@ Intent/audit được lưu trước khi ký URL; response `{revisionId, uploadUr
 
 BE kiểm owner/tenant/input trước S3. BE đọc có giới hạn, pin ETag, tính SHA-256 thật; ghi candidate riêng trước copy; kiểm bytes bản copy rồi finalize source/provenance/audit/cleanup atomic. Không giữ DB transaction khi chờ S3. Replay complete đã commit trả 204, không tạo source mới. Source legacy không được tự gắn nhãn verified.
 
-Lỗi: 400 `VALIDATION_ERROR` theo field/key sai; 404 resource ngoài scope; 409 input conflict/source thay đổi; 410 intent hết hạn; 422 bytes/size/hash lệch; 503 chưa cấu hình, S3 unavailable hoặc attempt đang chạy (`Retry-After: 1`). TTL không làm mất receipt đã commit.
+Lỗi: 400 `VALIDATION_ERROR` theo field/key sai; 400 `IFC_UNSUPPORTED_FORMAT` khi tên file không phải `.ifc` (initiate, kèm `errors.originalFilename`); 422 `IFC_UNSUPPORTED_FORMAT` khi nội dung không bắt đầu bằng header STEP `ISO-10303-21;` (complete); 404 resource ngoài scope; 409 input conflict/source thay đổi; 410 intent hết hạn; 422 bytes/size/hash lệch; 503 chưa cấu hình, S3 unavailable hoặc attempt đang chạy (`Retry-After: 1`). TTL không làm mất receipt đã commit.
 
 Mặc định upload tắt. Trước khi bật: áp `AddBoundIfcUploads`, đặt `IfcUpload:Enabled=true`, `IfcUpload:MaxBytes=<giới hạn deployment quyết định>`, `IfcUpload:CleanupEnabled=true` và S3. MaxBytes không có giá trị nghiệp vụ mặc định. Cleanup lease/retry giữ job đang được bảo vệ và tombstone đã xóa để tìm copy timeout hoàn thành muộn. Có thể tắt upload mới trong khi giữ cleanup bật.
 

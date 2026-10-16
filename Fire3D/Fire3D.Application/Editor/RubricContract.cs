@@ -3,7 +3,8 @@ using System.Text.Json.Nodes;
 namespace Fire3D.Application.Editor;
 
 public sealed record RubricMetric(string Id,string Description);
-public sealed record RubricCriterionShape(IReadOnlyList<string> RequiredFields,IReadOnlyList<string> OptionalFields,string IdPattern,int IdMaxLength,int DescriptionMaxLength,decimal WeightMinimum);
+/// <summary>label is the short name shown to learners next to the result; description explains the criterion.</summary>
+public sealed record RubricCriterionShape(IReadOnlyList<string> RequiredFields,IReadOnlyList<string> OptionalFields,string IdPattern,int IdMaxLength,int DescriptionMaxLength,decimal WeightMinimum,int LabelMaxLength);
 /// <summary>What the backend accepts for scenario rubrics, Library rubric samples and AI drafts. No pass threshold, weight or criterion is suggested.</summary>
 public sealed record RubricCatalog(IReadOnlyList<string> SupportedSchemaVersions,string DefaultSchemaVersion,IReadOnlyList<RubricMetric> Metrics,
     IReadOnlyList<string> Operators,RubricCriterionShape Criterion,int MaxCriteria,IReadOnlyList<string> RubricFields);
@@ -20,8 +21,9 @@ public static class RubricContract
     public const int MaxCriteria=100;
     public const int CriterionIdMaxLength=128;
     public const int DescriptionMaxLength=1000;
+    public const int LabelMaxLength=200;
     public static readonly string[] CriterionRequiredFields=["id","metric","mandatory","weight","operator","threshold"];
-    public static readonly string[] CriterionOptionalFields=["description"];
+    public static readonly string[] CriterionOptionalFields=["label","description"];
     public static readonly string[] RubricFields=["schema_version","pass_threshold","criteria"];
     public static bool IsSupportedVersion(JsonNode? node)=>node is JsonValue value&&value.TryGetValue<string>(out var text)&&SupportedSchemaVersions.Contains(text,StringComparer.Ordinal);
     public const string UnsupportedCode="RUBRIC_SCHEMA_VERSION_UNSUPPORTED";
@@ -37,6 +39,6 @@ public static class RubricContract
     };
     public static RubricCatalog Catalog { get; }=new(SupportedSchemaVersions,DefaultSchemaVersion,
         EditorContract.LearnerMetrics.Select(x=>new RubricMetric(x,MetricDescriptions.GetValueOrDefault(x,""))).ToArray(),Operators,
-        new(CriterionRequiredFields,CriterionOptionalFields,EditorContract.IdPattern().ToString(),CriterionIdMaxLength,DescriptionMaxLength,0m),
+        new(CriterionRequiredFields,CriterionOptionalFields,EditorContract.IdPattern().ToString(),CriterionIdMaxLength,DescriptionMaxLength,0m,LabelMaxLength),
         MaxCriteria,RubricFields);
 }

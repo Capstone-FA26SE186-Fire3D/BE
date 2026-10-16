@@ -216,7 +216,7 @@ internal sealed class IfcMemoryStorage
     });
     private Task<IfcObjectDigest?> Inspect(string key,string etag)
     {
-        Inspections++; var item=Objects[key];return Task.FromResult<IfcObjectDigest?>(item.Etag==etag?new(item.Bytes.Length,Convert.ToHexStringLower(SHA256.HashData(item.Bytes)),etag):null);
+        Inspections++; var item=Objects[key];return Task.FromResult<IfcObjectDigest?>(item.Etag==etag?new(item.Bytes.Length,Convert.ToHexStringLower(SHA256.HashData(item.Bytes)),etag,IfcObjectDigest.IsStep(item.Bytes)):null);
     }
     private async Task<bool> Copy(string key,string etag,string final)
     {

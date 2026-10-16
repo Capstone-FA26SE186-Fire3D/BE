@@ -67,7 +67,7 @@ public sealed partial class AuthIntegrationTests
     private async Task WithLearnerRuntime(Func<string, Task> action)
     {
         var login = "learner_runtime_" + Guid.NewGuid().ToString("N");
-        await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}';GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION learner_session_gate(text,uuid,uuid,uuid,uuid,jsonb,text),learner_session_list_gate(uuid,uuid,jsonb),building_qr_gate(text,uuid,uuid,uuid,jsonb) TO {login}");
+        await ExecuteAsync($"CREATE ROLE {login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{RuntimeTestPassword}';GRANT USAGE ON SCHEMA public TO {login};GRANT EXECUTE ON FUNCTION learner_session_gate(text,uuid,uuid,uuid,uuid,jsonb,text),learner_session_list_gate(uuid,uuid,jsonb),learner_result_rubric(uuid,uuid),learner_building_list_gate(uuid,uuid,jsonb),building_qr_gate(text,uuid,uuid,uuid,jsonb) TO {login}");
         try { await action(new NpgsqlConnectionStringBuilder(testConnection) { Username = login, Pooling = false }.ConnectionString); }
         finally { await ExecuteAsync($"DROP OWNED BY {login};DROP ROLE {login}"); }
     }
@@ -374,6 +374,13 @@ public sealed partial class AuthIntegrationTests
         var events = await offline.PostAsJsonAsync($"/api/training/sessions/{id}/events:batch", new { events = new[] { new { eventId = Guid.NewGuid(), sequence = 1, schemaVersion = "1", type = "ExitReached", occurredAt = DateTimeOffset.UtcNow, elapsedMs = 100, payload = new { } } } });
         Assert.Equal(HttpStatusCode.OK, events.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await offline.GetAsync($"/api/training/sessions/{Guid.NewGuid()}")).StatusCode);
+        // #96: a token used for another session is a ProblemDetails with a stable code, not an empty 403.
+        var mismatch = await offline.GetAsync($"/api/training/sessions/{Guid.NewGuid()}/result");
+        Assert.Equal(HttpStatusCode.Forbidden, mismatch.StatusCode);
+        Assert.Equal("CONTINUATION_SESSION_MISMATCH", (await mismatch.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>());
+        Assert.Equal(HttpStatusCode.Unauthorized, (await offline.GetAsync("/api/training/buildings")).StatusCode);
+        var buildings = (await http.GetFromJsonAsync<JsonObject>("/api/training/buildings"))!;
+        Assert.Equal(f.Building, buildings["items"]![0]!["id"]!.GetValue<Guid>());
         Assert.Equal(HttpStatusCode.Unauthorized, (await offline.PostAsync("/api/training/reconcile", JsonContent.Create(new { sessionIds = new[] { id } }))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await offline.GetAsync("/api/auth/me")).StatusCode);
         var completed = await offline.SendAsync(Keyed(HttpMethod.Post, $"/api/training/sessions/{id}/complete", new { lastEventSequence = 1, endReason = "Finished" }, "http-complete"));

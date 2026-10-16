@@ -63,6 +63,9 @@ public sealed class ProcessingWorkerController(IProcessingWorkerGate gate,IOptio
                             if(!Text(issue,"code",100))errors[path+".code"]=["A code of 1-100 characters is required."];
                             if(!Text(issue,"message",10000))errors[path+".message"]=["A message of 1-10000 characters is required."];
                             if(issue.TryGetProperty("details",out var details)&&details.ValueKind!=JsonValueKind.Object)errors[path+".details"]=["Details must be an object."];
+                            // IFC-03: the elements an issue is about; the first is stored as the issue's ifc_guid.
+                            if(issue.TryGetProperty("ifcGlobalIds",out var guids)&&(guids.ValueKind!=JsonValueKind.Array||guids.GetArrayLength()>100||guids.EnumerateArray().Any(g=>g.ValueKind!=JsonValueKind.String||!System.Text.RegularExpressions.Regex.IsMatch(g.GetString()!,"^[0-9A-Za-z_$]{22}\\z"))))
+                                errors[path+".ifcGlobalIds"]=["Use up to 100 IFC GlobalIds (22 characters)."];
                         }
                     }
                 }
@@ -79,6 +82,16 @@ public sealed class ProcessingWorkerController(IProcessingWorkerGate gate,IOptio
     /// </summary>
     private ObjectResult? EditorMetadataProblem(JsonElement output)
     {
+        if(output.GetProperty("artifactType").GetString()=="building_metadata")
+        {
+            // IFC-04: detected equipment and spaces; the backend serves the interactables, so the shape is checked before acceptance.
+            var building=System.Text.Json.Nodes.JsonNode.Parse(output.GetProperty("metadata").GetRawText());
+            if(BuildingMetadataValidator.DeclaredVersion(building) is { } declared && declared!=BuildingMetadataValidator.SchemaVersion)
+                return Problem(statusCode:422,title:"Building metadata schemaVersion is not supported.",extensions:new Dictionary<string,object?> { ["code"]="BUILDING_METADATA_VERSION_UNSUPPORTED" });
+            var found=BuildingMetadataValidator.Validate(building);
+            return found.Count==0?null:Problem(statusCode:422,title:"Building metadata does not satisfy fet3d.building/1.",
+                extensions:new Dictionary<string,object?> { ["code"]="BUILDING_METADATA_INVALID",["issues"]=found });
+        }
         if(output.GetProperty("artifactType").GetString()!="preview_glb")return null;
         var metadata=System.Text.Json.Nodes.JsonNode.Parse(output.GetProperty("metadata").GetRawText());
         var version=Fire3D.Application.Editor.EditorContract.DeclaredVersion(metadata);
