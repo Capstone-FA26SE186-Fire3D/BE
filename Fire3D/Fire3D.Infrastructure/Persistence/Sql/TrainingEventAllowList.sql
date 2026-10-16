@@ -3,8 +3,10 @@
 -- capability_contracts[*].events of the runtime the session pinned, with a payload matching that event's parameter schema.
 -- Any other event keeps its sequence (acknowledgement and completion never wait for it) but is stored with rejection_code
 -- EVENT_TYPE_UNSUPPORTED or EVENT_PAYLOAD_INVALID, returned in conflicts and never used for metrics.
+-- Metrics read core event types only, which are never rejected, so scores ignore rejected events while the completion-time
+-- fallback (last event) still counts every received event. An Assessment also needs a rubric with a positive total weight.
 -- Gate bodies are the ones from AddLearnerSessions / AddPlaytestRuntime with only the event insert, the replay branch and
--- the metric filter changed.
+-- the Assessment rubric check changed.
 CREATE TEMP TABLE training_event_permissions(original_set boolean,original_inherit boolean,changed boolean,had_create boolean) ON COMMIT DROP;
 DO $$ DECLARE os boolean;oi boolean;c boolean;BEGIN
  SELECT set_option,inherit_option INTO os,oi FROM pg_auth_members WHERE roleid='fet3d_ifc_upload_owner'::regrole AND member=current_user::regrole;
@@ -30,18 +32,22 @@ BEGIN
   IF jsonb_typeof(prop) IS DISTINCT FROM 'object' THEN RETURN false;END IF;
   t:=prop->>'type';
   IF t IN('number','integer') THEN
-   IF jsonb_typeof(v)<>'number' OR (t='integer' AND v::text !~ '^-?[0-9]+$') THEN RETURN false;END IF;
+   -- C# reads integers as 64-bit (long.TryParse of the token): no fraction or exponent, at most 18 digits.
+   IF jsonb_typeof(v)<>'number' OR (t='integer' AND v::text !~ '^-?[0-9]{1,18}$') THEN RETURN false;END IF;
    n:=v::text::numeric;
    IF jsonb_typeof(prop->'minimum')='number' AND n<(prop->>'minimum')::numeric THEN RETURN false;END IF;
    IF jsonb_typeof(prop->'maximum')='number' AND n>(prop->>'maximum')::numeric THEN RETURN false;END IF;
   ELSIF t='string' THEN
    IF jsonb_typeof(v)<>'string' THEN RETURN false;END IF;
    s:=v#>>'{}';
-   IF btrim(s)='' OR s ~ '[[:cntrl:]]' OR length(s)>COALESCE((prop->>'maxLength')::int,10000) THEN RETURN false;END IF;
+   -- Like C#: not blank (Unicode white space), no control characters, length in UTF-16 code units.
+   IF s ~ '^[[:space:]   -     　]*$' OR s ~ '[--]'
+    OR length(s)+(SELECT count(*) FROM regexp_matches(s,'[𐀀-􏿿]','g'))>COALESCE((prop->>'maxLength')::int,10000) THEN RETURN false;END IF;
   ELSIF t='boolean' THEN
    IF jsonb_typeof(v)<>'boolean' THEN RETURN false;END IF;
   ELSE RETURN false;END IF;
-  IF jsonb_typeof(prop->'enum')='array' AND NOT prop->'enum' @> jsonb_build_array(v) THEN RETURN false;END IF;
+  -- Enum values compare as JSON text like C# (1.0 is not 1, "1" is not 1).
+  IF jsonb_typeof(prop->'enum')='array' AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(prop->'enum') x WHERE x::text=v::text) THEN RETURN false;END IF;
  END LOOP;
  RETURN true;
 END $$;
@@ -50,63 +56,19 @@ END $$;
 -- so a session pinned to a runtime keeps its allow-list even if that runtime is later deactivated.
 CREATE FUNCTION training_event_rejection(p_runtime text,p_type text,p_payload jsonb) RETURNS text
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,public AS $$
-DECLARE spec jsonb;
+DECLARE spec jsonb;cat runtime_compatibility_catalog;
 BEGIN
  IF p_type IN('ExitReached','WrongExit','HazardExposure','Moved') THEN RETURN NULL;END IF;
- SELECT ev INTO spec FROM runtime_compatibility_catalog c
-  CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(c.capability_contracts)='object' THEN c.capability_contracts ELSE '{}'::jsonb END) cc(capability,contract)
+ -- The same row the editor and the published catalog use for this version (latest active, else latest).
+ SELECT * INTO cat FROM runtime_compatibility_catalog WHERE runtime_version=p_runtime ORDER BY is_active DESC,created_at DESC,id LIMIT 1;
+ IF cat.id IS NULL THEN RETURN 'EVENT_TYPE_UNSUPPORTED';END IF;
+ SELECT ev INTO spec FROM jsonb_each(CASE WHEN jsonb_typeof(cat.capability_contracts)='object' THEN cat.capability_contracts ELSE '{}'::jsonb END) cc(capability,contract)
   CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(cc.contract->'events')='array' THEN cc.contract->'events' ELSE '[]'::jsonb END) ev
-  WHERE c.runtime_version=p_runtime AND c.capabilities ? cc.capability AND ev->>'type'=p_type
-  ORDER BY cc.capability LIMIT 1;
+  WHERE cat.capabilities ? cc.capability AND ev->>'type'=p_type
+  ORDER BY cc.capability COLLATE "C" LIMIT 1;
  IF spec IS NULL THEN RETURN 'EVENT_TYPE_UNSUPPORTED';END IF;
  IF NOT capability_payload_valid(spec->'payload',p_payload) THEN RETURN 'EVENT_PAYLOAD_INVALID';END IF;
  RETURN NULL;
-END $$;
-
-CREATE OR REPLACE FUNCTION learner_session_finalize(p_id uuid) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
-DECLARE s sessions;v scenario_versions;metrics jsonb;c jsonb;results jsonb:='[]';val jsonb;passed boolean;total_w numeric:=0;passed_w numeric:=0;
- mandatory_failed boolean:=false;score numeric;outcome text;reason text;rid uuid;threshold numeric;
-BEGIN
- SELECT * INTO s FROM sessions WHERE id=p_id FOR UPDATE;
- IF EXISTS(SELECT 1 FROM session_results WHERE session_id=p_id) THEN RETURN (SELECT id FROM session_results WHERE session_id=p_id); END IF;
- SELECT * INTO v FROM scenario_versions WHERE id=s.scenario_version_id;
- SELECT jsonb_build_object(
-   'reached_exit',CASE WHEN bool_or(event_type='ExitReached') THEN 1 ELSE 0 END,
-   'completion_time_seconds',round(COALESCE(min(elapsed_ms) FILTER(WHERE event_type='ExitReached'),max(elapsed_ms))/1000.0,3),
-   'wrong_exits',count(*) FILTER(WHERE event_type='WrongExit'),
-   'hazard_exposure',COALESCE(sum((event_data->>'amount')::numeric) FILTER(WHERE event_type='HazardExposure'),0),
-   'distance_meters',COALESCE(sum((event_data->>'distanceMeters')::numeric) FILTER(WHERE event_type='Moved'),0))
-  INTO metrics FROM session_events WHERE session_id=p_id AND sequence_number<=s.completion_last_sequence AND rejection_code IS NULL;
- metrics:=jsonb_strip_nulls(metrics);
- IF jsonb_typeof(v.rubric->'criteria')='array' THEN
-  FOR c IN SELECT value FROM jsonb_array_elements(v.rubric->'criteria') LOOP
-   val:=metrics->(c->>'metric');threshold:=(c->>'threshold')::numeric;
-   -- A missing metric is a failed criterion, never unknown.
-   passed:=COALESCE(jsonb_typeof(val)='number' AND CASE c->>'operator' WHEN 'gte' THEN val::text::numeric>=threshold WHEN 'lte' THEN val::text::numeric<=threshold WHEN 'eq' THEN val::text::numeric=threshold ELSE false END,false);
-   results:=results||jsonb_build_array(jsonb_build_object('id',c->>'id','metric',c->>'metric','value',val,'operator',c->>'operator','threshold',threshold,
-    'mandatory',(c->>'mandatory')::boolean,'weight',(c->>'weight')::numeric,'passed',passed,'reason',CASE WHEN val IS NULL THEN 'METRIC_UNAVAILABLE' END));
-   total_w:=total_w+(c->>'weight')::numeric;
-   IF passed THEN passed_w:=passed_w+(c->>'weight')::numeric;ELSIF (c->>'mandatory')::boolean THEN mandatory_failed:=true;END IF;
-  END LOOP;
- END IF;
- score:=CASE WHEN total_w>0 THEN round(100*passed_w/total_w,2) END;
- IF s.mode<>'Assessment' THEN outcome:='NotAssessed';reason:='MODE_NOT_ASSESSED';score:=NULL;
- ELSIF s.completion_end_reason='Abandoned' THEN outcome:='Incomplete';reason:='ENDED_BEFORE_COMPLETION';score:=NULL;
- ELSIF total_w=0 OR v.rubric IS NULL THEN outcome:='NotAssessed';reason:='RUBRIC_NOT_SCORABLE';score:=NULL;
- ELSIF mandatory_failed THEN outcome:='NotPassed';reason:='MANDATORY_CRITERION_FAILED';
- ELSIF passed_w/total_w>=(v.rubric->>'pass_threshold')::numeric THEN outcome:='Passed';reason:='ALL_REQUIREMENTS_MET';
- ELSE outcome:='NotPassed';reason:='BELOW_PASS_THRESHOLD';END IF;
- rid:=gen_random_uuid();
- INSERT INTO session_results(id,session_id,completion_key,last_event_sequence,submission_payload,result_schema_version,rubric_version,score,time_taken_seconds,wrong_exits,
-  hazard_exposure_score,total_distance_meters,reached_exit,path_traveled,synced_at,created_at,contract_version,mode,outcome,outcome_reason,rubric_hash,criterion_results,metrics)
- VALUES(rid,s.id,gen_random_uuid(),s.completion_last_sequence,jsonb_build_object('lastEventSequence',s.completion_last_sequence,'endReason',s.completion_end_reason),'7',
-  COALESCE(v.rubric->>'schema_version','none'),score,least(round((metrics->>'completion_time_seconds')::numeric),2147483647)::int,least((metrics->>'wrong_exits')::bigint,2147483647)::int,
-  round(least((metrics->>'hazard_exposure')::numeric,9999999999.99),2),round(least((metrics->>'distance_meters')::numeric,9999999999.99),2),(metrics->>'reached_exit')::int=1,NULL,clock_timestamp(),clock_timestamp(),
-  7,s.mode::text,outcome,reason,s.rubric_hash,CASE WHEN s.mode='Assessment' THEN results END,metrics);
- UPDATE sessions SET status='Completed',ended_at=clock_timestamp() WHERE id=s.id;
- INSERT INTO audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,new_values,created_at)
- VALUES(gen_random_uuid(),s.trainee_user_id,s.organization_id,'System','Create','SessionResult',rid,s.id,jsonb_build_object('outcome',outcome,'mode',s.mode::text),now());
- RETURN rid;
 END $$;
 
 CREATE OR REPLACE FUNCTION learner_session_gate(p_action text,p_actor uuid,p_family uuid,p_continuation uuid,p_resource uuid,p_input jsonb,p_key text) RETURNS jsonb
@@ -164,6 +126,9 @@ BEGIN
   IF p_input->>'mode'='Assessment' AND (jsonb_typeof(v.rubric->'criteria') IS DISTINCT FROM 'array' OR EXISTS(SELECT 1 FROM jsonb_array_elements(v.rubric->'criteria') c
    WHERE NOT (c->>'metric')=ANY(ARRAY['reached_exit','completion_time_seconds','wrong_exits','hazard_exposure','distance_meters']))) THEN
    RETURN jsonb_build_object('code','RUBRIC_NOT_SUPPORTED','status',409);END IF;
+  -- An Assessment must be scorable: at least one criterion and a positive total weight (otherwise the result could only be NotAssessed).
+  IF p_input->>'mode'='Assessment' AND COALESCE((SELECT sum(CASE WHEN jsonb_typeof(c->'weight')='number' THEN (c->>'weight')::numeric ELSE 0 END)
+   FROM jsonb_array_elements(v.rubric->'criteria') c),0)<=0 THEN RETURN jsonb_build_object('code','RUBRIC_NOT_SUPPORTED','status',409);END IF;
   package:=jsonb_build_object('packageId',pk.id,'artifactId',art.id,'manifestArtifactId',pin.manifest_artifact_id,'validationRunId',pin.validation_run_id,
    'packageHash',pk.checksum_sha256,'manifestHash',pk.manifest_sha256,'buildTarget',pk.build_target,'minRuntimeVersion',art.metadata->>'minRuntimeVersion',
    'protocolVersion',art.metadata->>'protocolVersion','manifestSchemaVersion',art.metadata->>'manifestSchemaVersion','requiredCapabilities',art.metadata->'requiredCapabilities',
@@ -479,7 +444,7 @@ BEGIN
 END $$;
 
 DO $grants$ DECLARE r text;s record;sig text;BEGIN
- FOREACH sig IN ARRAY ARRAY['capability_payload_valid(jsonb,jsonb)','training_event_rejection(text,text,jsonb)','learner_session_finalize(uuid)',
+ FOREACH sig IN ARRAY ARRAY['capability_payload_valid(jsonb,jsonb)','training_event_rejection(text,text,jsonb)',
   'learner_session_gate(text,uuid,uuid,uuid,uuid,jsonb,text)','playtest_runtime_gate(text,uuid,uuid,uuid,jsonb,text)'] LOOP
   EXECUTE format('ALTER FUNCTION %s OWNER TO fet3d_ifc_upload_owner',sig);EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',sig);
   FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',sig,r);END IF;END LOOP;

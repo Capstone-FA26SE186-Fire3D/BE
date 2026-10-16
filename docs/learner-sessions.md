@@ -48,12 +48,14 @@ Event: `{eventId, sequence ≥ 1, schemaVersion, type, occurredAt, elapsedMs ≥
 
 ### Allowed event types (SCENARIO-02)
 
-Migration `20261016090000_AddTrainingEventAllowList`; the same rule applies to playtest events.
+Migration `20261016090000_AddTrainingEventAllowList`. The same type rule applies to playtest events, with the runtime the playtest
+chose at start (playtest core-event payloads are not range-checked).
 
 - Core events, valid for every runtime: `ExitReached`, `WrongExit`, `HazardExposure {amount}`, `Moved {distanceMeters}`. Metrics use only these.
-- Any other `type` must be declared in `capabilityContracts[*].events` of the runtime the session pinned at prepare
-  (`GET /api/scenario-interactions/catalog`), and `payload` must match that event's schema (declared properties only, required present,
-  type/range/length/enum; no schema means `{}`).
+- Any other `type` must be declared in `capabilityContracts[*].events` of the runtime the session pinned at prepare (the catalog row
+  of that version, even if it was later deactivated; `GET /api/scenario-interactions/catalog` shows active runtimes), and `payload` must
+  match that event's schema (declared properties only, required present, type/range/length/enum compared as JSON text, string length in
+  UTF-16 units; no schema means `{}`). PostgreSQL normalises numbers, so an integer written as `1e2` is read as `100`.
 - Otherwise the event is returned in `conflicts` with `EVENT_TYPE_UNSUPPORTED` or `EVENT_PAYLOAD_INVALID`. It still fills its
   sequence, so `acknowledgedSequence` advances and completion never waits for it; it is stored with `rejection_code` and never
   scored. Resending it returns the same conflict. The rest of the batch is accepted.
@@ -78,7 +80,12 @@ names map as follows. Each payload carries `objectId` (the editor object that em
 | `NpcGuided` | `npc_guided` | `npc.guide` | |
 | `SprinklerActivated` | `sprinkler_activated` (debrief only) | `suppression.sprinkler` | |
 
-No rubric metric uses these events yet; adding one (e.g. `used_elevator`) is a separate change.
+No rubric metric uses these events yet; adding one (e.g. `used_elevator`) is a separate change. Metrics read core events only, so
+rejected events never change a score; the `completion_time_seconds` fallback (last event, when no exit) counts every received event.
+
+Assessment needs a scorable rubric: at least one criterion and a positive total weight. Saving a complete draft otherwise fails with
+`RUBRIC_WEIGHT_REQUIRED`, `pass_threshold` must be between 0 and 1, and preparing an Assessment on an older unscorable version returns
+409 `RUBRIC_NOT_SUPPORTED`.
 
 Completion pins `lastEventSequence`. If events are missing the session is `AwaitingSync` (202); the arrival of the missing events, or a retry with the same key, finalizes it. Exactly one immutable result is written.
 
@@ -101,7 +108,7 @@ OpenAPI publishes every value below as an enum (#96).
 | Field | Values |
 |---|---|
 | `mode` | `Learn`, `Guided`, `Assessment` |
-| `outcome` | `Passed`, `NotPassed`, `Incomplete` (Assessment); `NotAssessed` (Learn, Guided) |
+| `outcome` | `Passed`, `NotPassed`, `Incomplete` (Assessment); `NotAssessed` (Learn, Guided; also an Assessment prepared before 16/10/2026 on an unscorable rubric, reason `RUBRIC_NOT_SCORABLE`) |
 | `reason` | `MODE_NOT_ASSESSED` (Learn/Guided), `ENDED_BEFORE_COMPLETION` (Abandoned), `RUBRIC_NOT_SCORABLE` (no rubric or total weight 0), `MANDATORY_CRITERION_FAILED`, `BELOW_PASS_THRESHOLD`, `ALL_REQUIREMENTS_MET` |
 | `scorePercent` | Passed weight / total weight × 100; null when not scored |
 | `passThresholdPercent` | The rubric `pass_threshold` (authored as a ratio 0–1) × 100, on the same scale as `scorePercent`; Assessment only |

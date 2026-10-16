@@ -529,7 +529,8 @@ public static class ScenarioStateV1Validator
         // Only the registered schema versions are accepted; legacy values remain readable in stored snapshots but are never accepted again.
         if (rubric["schema_version"] is null) { if (complete) r.Add("FIELD_REQUIRED", "$.rubric.schema_version", "Required."); }
         else if (!RubricContract.IsSupportedVersion(rubric["schema_version"])) r.Add(RubricContract.UnsupportedCode, "$.rubric.schema_version", RubricContract.UnsupportedMessage);
-        r.Number(rubric["pass_threshold"], "$.rubric.pass_threshold");
+        // A ratio of the total weight (0.7 = 70 %); 70 would make the rubric impossible to pass.
+        r.Number(rubric["pass_threshold"], "$.rubric.pass_threshold", min: 0, max: 1);
         var criteria = r.Array(rubric["criteria"], "$.rubric.criteria", RubricContract.MaxCriteria);
         if (criteria is null) return;
         if (complete && criteria.Count == 0) r.Add("FIELD_REQUIRED", "$.rubric.criteria", "At least one criterion is required.");
@@ -550,5 +551,8 @@ public static class ScenarioStateV1Validator
             if (c["label"] is not null) r.Text(c["label"], $"{path}.label", RubricContract.LabelMaxLength);
             if (c["description"] is not null) r.Text(c["description"], $"{path}.description", RubricContract.DescriptionMaxLength);
         }
+        // An Assessment is scored by weight; with no positive weight the result could only be NotAssessed.
+        if (complete && criteria.Count > 0 && criteria.Sum(x => x is JsonObject c && c["weight"] is JsonValue w && w.GetValueKind() == JsonValueKind.Number && double.TryParse(w.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d) && double.IsFinite(d) && d > 0 ? d : 0) <= 0)
+            r.Add("RUBRIC_WEIGHT_REQUIRED", "$.rubric.criteria", "At least one criterion needs a weight above 0.");
     }
 }

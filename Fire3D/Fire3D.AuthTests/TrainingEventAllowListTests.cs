@@ -20,8 +20,10 @@ public sealed partial class AuthIntegrationTests
 
     // SCENARIO-02: the pinned runtime declares AlarmRaised; anything else outside the core events is rejected.
     private Task DeclareAlarmEvent() => ExecuteAsync($"""
-        INSERT INTO runtime_compatibility_catalog(id,runtime_version,protocol_version,manifest_schema_version,capabilities) VALUES(gen_random_uuid(),'1.0.0','1','1','[]') ON CONFLICT DO NOTHING;
-        UPDATE runtime_compatibility_catalog SET capabilities=capabilities||'["alarm.call_point"]'::jsonb,capability_contracts=capability_contracts||'{AlarmContract}'::jsonb WHERE runtime_version='1.0.0';
+        INSERT INTO runtime_compatibility_catalog(id,runtime_version,protocol_version,manifest_schema_version,capabilities)
+         SELECT gen_random_uuid(),'1.0.0','1','1','[]' WHERE NOT EXISTS(SELECT 1 FROM runtime_compatibility_catalog WHERE runtime_version='1.0.0');
+        UPDATE runtime_compatibility_catalog SET capabilities=CASE WHEN capabilities ? 'alarm.call_point' THEN capabilities ELSE capabilities||'["alarm.call_point"]'::jsonb END,
+         capability_contracts=capability_contracts||'{AlarmContract}'::jsonb WHERE runtime_version='1.0.0';
         """);
 
     [PostgresFact]
@@ -59,7 +61,46 @@ public sealed partial class AuthIntegrationTests
             var result = (await store.ResultAsync(caller, id, default)).Value!;
             Assert.Equal("Passed", result.Outcome);
             Assert.Equal(4, result.Metrics.GetProperty("completion_time_seconds").GetDecimal());
+
+            // Without an exit the time is the last received event, rejected or not: an undeclared event still shows the session went on.
+            var learn = await Running(store, caller, f.Training, "Learn", "allow-learn");
+            await store.RecordEventsAsync(caller, learn, new([LearnerEvent(1, "Moved", 1000, new { distanceMeters = 1 }), LearnerEvent(2, "Teleported", 9000)]), default);
+            Assert.Equal(200, (await store.CompleteAsync(caller, learn, new(2, "TimedOut"), "allow-learn-complete", default)).Value.Status);
+            Assert.Equal(9, (await store.ResultAsync(caller, learn, default)).Value!.Metrics.GetProperty("completion_time_seconds").GetDecimal());
         });
+    }
+
+    // Option (a): an Assessment on a rubric that cannot be scored is refused at prepare instead of ending NotAssessed.
+    [PostgresFact]
+    public async Task Assessment_prepare_refuses_a_rubric_without_positive_weight()
+    {
+        var unscorable = JsonNode.Parse("""
+            {"schema_version":"1","pass_threshold":0.5,"criteria":[{"id":"exit","metric":"reached_exit","mandatory":false,"weight":0,"operator":"eq","threshold":1}]}
+            """)!.AsObject();
+        var f = await PublishedTraining(unscorable);
+        var trainee = await SeedTrainee();
+        await WithLearnerRuntime(async runtime =>
+        {
+            await using var db = BuildingContext(runtime);
+            var store = new LearnerSessions(db, Options.Create(LearnerOptions));
+            var caller = new LearnerCaller(trainee.Id, trainee.Family, null);
+            Assert.Equal("RUBRIC_NOT_SUPPORTED", (await store.PrepareAsync(caller, new(f.Training, "Assessment", "1.0.0"), "zero-weight", default)).Error?.Code);
+            Assert.True((await store.PrepareAsync(caller, new(f.Training, "Learn", "1.0.0"), "zero-weight-learn", default)).IsSuccess);
+        });
+    }
+
+    [PostgresFact]
+    public async Task Event_payload_checks_match_the_csharp_parameter_rules()
+    {
+        const string schema = """{"type":"object","additionalProperties":false,"properties":{"n":{"type":"number","enum":[1]},"i":{"type":"integer"},"s":{"type":"string","maxLength":3}}}""";
+        async Task<bool> Valid(string payload) => (bool)(await ScalarAsync($"SELECT capability_payload_valid('{schema}'::jsonb,'{payload}'::jsonb)"))!;
+        Assert.True(await Valid("""{"n":1,"i":5,"s":"ab"}"""));
+        Assert.False(await Valid("""{"n":1.0}"""));                      // enum compares JSON text
+        Assert.False(await Valid("""{"i":1234567890123456789}"""));      // beyond a 64-bit integer token
+        Assert.False(await Valid("""{"s":"\u00a0\u3000"}"""));          // Unicode white space is blank
+        Assert.False(await Valid("""{"s":"a\u0007"}"""));               // control character
+        Assert.False(await Valid("""{"s":"😀😀"}"""));                     // 4 UTF-16 units > maxLength 3
+        Assert.True(await Valid("""{"s":"😀a"}"""));
     }
 
     [PostgresFact]
@@ -111,6 +152,18 @@ public sealed class CapabilityEventContractTests
         Assert.Equal(5, sprinkler["required"]!.AsArray().Count);
         Assert.Equal(["Active", "Disabled", "Faulty"], sprinkler["properties"]!["state"]!["enum"]!.AsArray().Select(x => x!.GetValue<string>()));
         Assert.Null(sprinkler["properties"]!["state"]!["default"]);
+    }
+
+    [Fact]
+    public void Rubric_threshold_is_a_ratio_and_some_weight_is_positive()
+    {
+        var rubric = JsonNode.Parse("""
+            {"schema_version":"1","pass_threshold":70,"criteria":[{"id":"exit","metric":"reached_exit","mandatory":true,"weight":0,"operator":"eq","threshold":1}]}
+            """);
+        var codes = ScenarioStateV1Validator.ValidateRubricDocument(rubric).Select(x => $"{x.Code} {x.Path}").ToList();
+        Assert.Equal(["NUMBER_OUT_OF_RANGE $.rubric.pass_threshold", "RUBRIC_WEIGHT_REQUIRED $.rubric.criteria"], codes);
+        rubric!["pass_threshold"] = 0.7; rubric["criteria"]![0]!["weight"] = 1;
+        Assert.Empty(ScenarioStateV1Validator.ValidateRubricDocument(rubric));
     }
 
     [Theory]
