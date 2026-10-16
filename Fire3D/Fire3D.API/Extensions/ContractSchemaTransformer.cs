@@ -26,6 +26,7 @@ public sealed class ContractSchemaTransformer : IOpenApiSchemaTransformer
     public static readonly string[] ResultReasons = ["MODE_NOT_ASSESSED", "ENDED_BEFORE_COMPLETION", "RUBRIC_NOT_SCORABLE", "MANDATORY_CRITERION_FAILED", "BELOW_PASS_THRESHOLD", "ALL_REQUIREMENTS_MET"];
     public static readonly string[] CriterionOperators = ["gte", "lte", "eq"];
     public static readonly string[] CriterionReasons = ["METRIC_UNAVAILABLE"];
+    public static readonly string[] EventConflictCodes = ["EVENT_HASH_CONFLICT", "EVENT_SEQUENCE_CONFLICT", "EVENT_AFTER_COMPLETION", "EVENT_TYPE_UNSUPPORTED", "EVENT_PAYLOAD_INVALID"];
 
     public Task TransformAsync(OpenApiSchema schema, OpenApiSchemaTransformerContext context, CancellationToken ct)
     {
@@ -114,6 +115,12 @@ public sealed class ContractSchemaTransformer : IOpenApiSchemaTransformer
             Enum(schema, "operator", CriterionOperators, "Comparison of value against threshold.");
             Enum(schema, "reason", CriterionReasons, "METRIC_UNAVAILABLE when the metric was not computed (the criterion fails); otherwise null.");
         }
+        else if (type == typeof(Fire3D.Application.Learning.TrainingEventConflict))
+            Enum(schema, "code", EventConflictCodes, "EVENT_HASH_CONFLICT: same eventId, different content · EVENT_SEQUENCE_CONFLICT: sequence taken by another event · "
+                + "EVENT_AFTER_COMPLETION: after lastEventSequence · EVENT_TYPE_UNSUPPORTED / EVENT_PAYLOAD_INVALID: outside the runtime allow-list (sequence still acknowledged). Do not resend.", required: true);
+        else if (type == typeof(Fire3D.Application.Scenarios.PlaytestEventConflict))
+            Enum(schema, "code", EventConflictCodes.Where(x => x != "EVENT_AFTER_COMPLETION").ToArray(),
+                "EVENT_TYPE_UNSUPPORTED / EVENT_PAYLOAD_INVALID: outside the runtime allow-list (sequence still acknowledged). Do not resend.", required: true);
         else if (type == typeof(RetryProcessingJobRequest) && schema.Properties is not null)
         {
             schema.Required = new HashSet<string> { "reason" };

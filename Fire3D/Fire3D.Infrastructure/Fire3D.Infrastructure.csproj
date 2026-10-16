@@ -50,6 +50,7 @@
     <EmbeddedResource Include="Persistence/Sql/TrainingResultContract.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.TrainingResultContract.sql" />
     <EmbeddedResource Include="Persistence/Sql/EquipmentCandidates.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.EquipmentCandidates.sql" />
     <EmbeddedResource Include="Persistence/Sql/IfcQaContract.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.IfcQaContract.sql" />
+    <EmbeddedResource Include="Persistence/Sql/TrainingEventAllowList.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.TrainingEventAllowList.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />

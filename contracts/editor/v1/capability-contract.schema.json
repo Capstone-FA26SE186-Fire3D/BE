@@ -13,7 +13,30 @@
       "items": { "enum": ["Spawn", "Hazard", "Goal", "Npc", "BlockedElement", "Equipment"] }
     },
     "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
-    "parameters": { "$ref": "#/$defs/parameterSchema" }
+    "parameters": { "$ref": "#/$defs/parameterSchema" },
+    "events": {
+      "description": "Events the runtime may send for this capability (SCENARIO-02). A learner or playtest event whose type is neither a core event (ExitReached, WrongExit, HazardExposure, Moved) nor declared here for the pinned runtime is rejected with EVENT_TYPE_UNSUPPORTED; a payload that fails the event's schema with EVENT_PAYLOAD_INVALID. Capabilities of one runtime may share a type only with the same payload schema.",
+      "type": "array", "maxItems": 50,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["type"],
+        "properties": {
+          "type": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]{0,99}$", "not": { "enum": ["ExitReached", "WrongExit", "HazardExposure", "Moved"] } },
+          "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "payload": { "$ref": "#/$defs/parameterSchema", "description": "Absent means the event carries an empty payload." }
+        }
+      }
+    },
+    "actions": {
+      "description": "Unity interaction metadata (Docs 7). The backend checks only id and that event is a core event or declared in events; other fields pass through to Unity.",
+      "type": "array", "maxItems": 50,
+      "items": {
+        "type": "object", "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$" },
+          "event": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]{0,99}$" }
+        }
+      }
+    }
   },
   "$defs": {
     "parameterSchema": {

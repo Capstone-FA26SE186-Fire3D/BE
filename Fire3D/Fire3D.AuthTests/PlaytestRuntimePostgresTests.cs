@@ -42,8 +42,9 @@ public sealed partial class AuthIntegrationTests
         finally { await ExecuteAsync($"DROP OWNED BY {login};DROP ROLE {login}"); }
     }
 
-    private static PlaytestEvent Event(long sequence, Guid? id = null, string payload = "{\"step\":1}") =>
-        new(id ?? Guid.NewGuid(), sequence, "1", "move", DateTimeOffset.UtcNow, JsonDocument.Parse(payload).RootElement.Clone());
+    // Moved is a core event, allowed for every runtime; other types must be declared by the pinned runtime catalog.
+    private static PlaytestEvent Event(long sequence, Guid? id = null, string payload = "{\"step\":1}", string type = "Moved") =>
+        new(id ?? Guid.NewGuid(), sequence, "1", type, DateTimeOffset.UtcNow, JsonDocument.Parse(payload).RootElement.Clone());
 
     [PostgresFact]
     public async Task Playtest_handoff_binds_mobile_session_then_launch_sync_and_complete_once()

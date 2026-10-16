@@ -24,6 +24,8 @@ public sealed record PrepareTrainingSessionRequest(Guid TrainingId, string Mode,
 public sealed record LaunchedTrainingSessionRequest(int Generation);
 /// <summary>
 /// ElapsedMs is time since launch. Metric events: ExitReached, WrongExit, HazardExposure {amount ≥ 0}, Moved {distanceMeters ≥ 0}.
+/// Any other Type must be declared in capabilityContracts[*].events of the session's runtime (GET /api/scenario-interactions/catalog),
+/// with a payload matching that event's schema; otherwise the event is returned in conflicts (EVENT_TYPE_UNSUPPORTED / EVENT_PAYLOAD_INVALID).
 /// </summary>
 public sealed record TrainingEvent(Guid EventId, long Sequence, string SchemaVersion, string Type, DateTimeOffset OccurredAt, long ElapsedMs, JsonElement Payload);
 public sealed record TrainingEventsRequest(IReadOnlyList<TrainingEvent> Events);
@@ -44,6 +46,10 @@ public sealed record TrainingSessionView(Guid Id, string Status, Guid TrainingId
 public sealed record TrainingLaunch(Guid SessionId, int Generation, DateTime IssuedAt, DateTime ExpiresAt, string LaunchGrant);
 public sealed record TrainingContinuation(Guid SessionId, DateTime ExpiresAt, string Token);
 public sealed record StartTrainingSessionResponse(TrainingSessionView Session, TrainingLaunch Launch, TrainingContinuation Continuation);
+/// <summary>
+/// Do not resend a conflicting event. EVENT_TYPE_UNSUPPORTED and EVENT_PAYLOAD_INVALID still count as received for its sequence,
+/// so acknowledgement and completion continue; the event is never used for metrics.
+/// </summary>
 public sealed record TrainingEventConflict(Guid EventId, string Code);
 public sealed record TrainingSequenceRange(long From, long To);
 public sealed record TrainingEventsResponse(IReadOnlyList<Guid> Accepted, IReadOnlyList<Guid> Duplicates, IReadOnlyList<TrainingEventConflict> Conflicts,

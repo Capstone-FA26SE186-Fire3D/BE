@@ -43,6 +43,7 @@ public sealed record RedeemPlaytestHandoffRequest(string Code);
 public sealed record LaunchedPlaytestRequest(int Generation);
 public sealed record PlaytestEvent(Guid EventId,long Sequence,string SchemaVersion,string Type,DateTimeOffset? OccurredAt,JsonElement Payload);
 public sealed record PlaytestEventsRequest(IReadOnlyList<PlaytestEvent> Events);
+/// <summary>Same allow-list as learner events: core events or events declared by the pinned runtime; rejected events keep their sequence.</summary>
 public sealed record PlaytestEventConflict(Guid EventId,string Code);
 public sealed record SequenceRange(long From,long To);
 /// <summary>AcknowledgedSequence is the highest N with events 1..N stored; MissingRanges lists gaps below the highest received sequence.</summary>

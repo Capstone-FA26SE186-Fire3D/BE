@@ -46,6 +46,40 @@ The continuation JWT (issuer `FET3D.Learner`, audience `FET3D.Learner.Continuati
 
 Event: `{eventId, sequence ≥ 1, schemaVersion, type, occurredAt, elapsedMs ≥ 0, payload}`. Same `eventId` and content replays (`duplicates`); different content is `EVENT_HASH_CONFLICT`; a reused sequence is `EVENT_SEQUENCE_CONFLICT`; events after the pinned completion sequence are `EVENT_AFTER_COMPLETION`. The response returns `acknowledgedSequence` (highest N with 1..N stored) and `missingRanges`, so a lost ACK loses nothing.
 
+### Allowed event types (SCENARIO-02)
+
+Migration `20261016090000_AddTrainingEventAllowList`; the same rule applies to playtest events.
+
+- Core events, valid for every runtime: `ExitReached`, `WrongExit`, `HazardExposure {amount}`, `Moved {distanceMeters}`. Metrics use only these.
+- Any other `type` must be declared in `capabilityContracts[*].events` of the runtime the session pinned at prepare
+  (`GET /api/scenario-interactions/catalog`), and `payload` must match that event's schema (declared properties only, required present,
+  type/range/length/enum; no schema means `{}`).
+- Otherwise the event is returned in `conflicts` with `EVENT_TYPE_UNSUPPORTED` or `EVENT_PAYLOAD_INVALID`. It still fills its
+  sequence, so `acknowledgedSequence` advances and completion never waits for it; it is stored with `rejection_code` and never
+  scored. Resending it returns the same conflict. The rest of the batch is accepted.
+- `schemaVersion` of an event is stored as sent; it does not change the allow-list (pending Unity decision).
+
+Batch 1 proposal ([fixture](../contracts/editor/v1/fixtures/runtime-catalog.batch1.json), Docs IFC 6.1). API names are PascalCase; Docs
+names map as follows. Each payload carries `objectId` (the editor object that emitted it).
+
+| API event | Docs event | Capability | Extra payload |
+|---|---|---|---|
+| `AlarmRaised` | `alarm_raised` | `alarm.call_point` | |
+| `DetectorTriggered` | `detector_triggered` | `alarm.detector` | |
+| `ExtinguisherUsed` | `extinguisher_used` | `extinguisher.portable` | `durationSeconds` |
+| `ExtinguishAttemptLargeFire` | `extinguish_attempt_large_fire` | `extinguisher.portable` | |
+| `ItemWetted` | `item_wetted` | `water.sink`, `water.bath`, `water.shower` | `itemId` |
+| `NoseCoveredInSmoke` | `nose_covered_in_smoke` | `item.towel` | |
+| `CheckedDoorHeat` | `checked_door_heat` | `door.standard`, `door.fire`, `door.exit` | `hot` |
+| `ClosedDoor` | `closed_door` | `door.standard`, `door.fire`, `door.exit` | |
+| `UsedElevator` | `used_elevator` | `transport.elevator` | |
+| `ExitReached` (core) | `reached_exit` | `exit.stair`, `exit.final` | |
+| `WentBackForBelongings` | `went_back_for_belongings` | `bait.belongings` | |
+| `NpcGuided` | `npc_guided` | `npc.guide` | |
+| `SprinklerActivated` | `sprinkler_activated` (debrief only) | `suppression.sprinkler` | |
+
+No rubric metric uses these events yet; adding one (e.g. `used_elevator`) is a separate change.
+
 Completion pins `lastEventSequence`. If events are missing the session is `AwaitingSync` (202); the arrival of the missing events, or a retry with the same key, finalizes it. Exactly one immutable result is written.
 
 Metrics are computed only from received events:
