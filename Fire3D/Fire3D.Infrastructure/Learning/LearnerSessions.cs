@@ -90,7 +90,9 @@ public sealed partial class LearnerSessions(Fire3DDbContext db, IOptions<Learner
             .GroupBy(c => c.GetProperty("id").GetString()!).ToDictionary(g => g.Key, g => g.First());
         static string? Text(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
         var criteria = view.Criteria?.Select(c => named.TryGetValue(c.Id, out var n) ? c with { Label = Text(n, "label"), Description = Text(n, "description") } : c).ToList();
-        var threshold = rubric.RootElement.GetProperty("passThreshold") is { ValueKind: JsonValueKind.Number } t ? Math.Round(t.GetDecimal() * 100, 2) : (decimal?)null;
+        // Half-up like scorePercent; the outcome itself compares the unrounded ratio, so clients show outcome rather than recompute it.
+        var threshold = rubric.RootElement.GetProperty("passThreshold") is { ValueKind: JsonValueKind.Number } t && t.TryGetDecimal(out var ratio) && ratio is >= 0 and <= 1
+            ? Math.Round(ratio * 100, 2, MidpointRounding.AwayFromZero) : (decimal?)null;
         return AuthResult<TrainingResultView>.Ok(view with { Criteria = criteria, PassThresholdPercent = view.Mode == "Assessment" ? threshold : null });
     }
 

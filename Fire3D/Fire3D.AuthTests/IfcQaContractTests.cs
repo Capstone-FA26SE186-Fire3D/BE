@@ -107,6 +107,8 @@ public sealed class IfcQaContractUnitTests
         });
         var bad = await controller.Output(Guid.NewGuid(), (JsonElement)Input(new[] { "door-1" }), default);
         Assert.Equal(400, Assert.IsType<Microsoft.AspNetCore.Mvc.ObjectResult>(bad).StatusCode);
+        var newline = await controller.Output(Guid.NewGuid(), (JsonElement)Input(new[] { "1hOSvn6df7F8_7GcBWlRGQ\n" }), default);
+        Assert.Equal(400, Assert.IsType<Microsoft.AspNetCore.Mvc.ObjectResult>(newline).StatusCode);
         Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await controller.Output(Guid.NewGuid(), (JsonElement)Input(new[] { "1hOSvn6df7F8_7GcBWlRGQ" }), default));
         Assert.Equal(1, calls);
     }
