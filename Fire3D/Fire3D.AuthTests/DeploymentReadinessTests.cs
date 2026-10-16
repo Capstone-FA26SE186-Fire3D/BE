@@ -87,7 +87,7 @@ public sealed partial class AuthIntegrationTests
         await ExecuteAsync($"UPDATE users SET password_hash=(SELECT password_hash FROM users WHERE id='{adminId}') WHERE id='{tenant.User}'");
         using var org=factory!.CreateClient();
         org.DefaultRequestHeaders.Authorization=new("Bearer",(await LoginAsync($"ai-{tenant.User:N}@example.test")).AccessToken);
-        var created=await org.PostAsJsonAsync("/api/buildings",new{name="HQ",buildingType="Office",totalFloors=3,location=new{address="1 Example Street",city="Hanoi"}});
+        var created=await PostBuilding(org,new{name="HQ",buildingType="Office",totalFloors=3,location=new{address="1 Example Street",city="Hanoi"}});
         Assert.True(created.StatusCode==HttpStatusCode.Created,await created.Content.ReadAsStringAsync());
         var building=(await created.Content.ReadFromJsonAsync<BuildingResponse>())!;
         Assert.Equal(tenant.Org,building.OrganizationId);
@@ -100,7 +100,7 @@ public sealed partial class AuthIntegrationTests
             var response=await org.GetAsync(path);
             Assert.True(response.StatusCode==HttpStatusCode.OK,path+" "+await response.Content.ReadAsStringAsync());
         }
-        Assert.Equal(HttpStatusCode.OK,(await org.DeleteAsync($"/api/buildings/{building.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,(await SendBuilding(org,HttpMethod.Delete,building.Id,null,detail.Headers.ETag!.Tag)).StatusCode);
         Assert.Equal(HttpStatusCode.OK,(await org.GetAsync($"/api/buildings/{building.Id}")).StatusCode);
     }
 }

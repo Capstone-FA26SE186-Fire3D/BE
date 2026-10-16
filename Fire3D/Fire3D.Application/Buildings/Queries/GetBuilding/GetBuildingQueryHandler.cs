@@ -13,16 +13,6 @@ internal sealed class GetBuildingQueryHandler(IBuildingStore store, IAuthStore a
         var building = await store.FindBuildingAsync(query.BuildingId, scope.Value, ct);
         if (building == null)
             return AuthResult<BuildingResponse>.Fail("NOT_FOUND", "Building not found.", 404);
-
-        BuildingLocationResponse? locationResponse = building.BuildingLocation != null 
-            ? new BuildingLocationResponse(building.BuildingLocation.Id, building.BuildingLocation.Address, building.BuildingLocation.City, building.BuildingLocation.District, building.BuildingLocation.Latitude, building.BuildingLocation.Longitude, building.BuildingLocation.Geojson) 
-            : null;
-            
-        BuildingContactResponse? contactResponse = building.BuildingContact != null 
-            ? new BuildingContactResponse(building.BuildingContact.Id, building.BuildingContact.ContactName, building.BuildingContact.ContactRole, building.BuildingContact.Phone, building.BuildingContact.Email, building.BuildingContact.IsPrimary) 
-            : null;
-
-        var response = new BuildingResponse(building.Id, building.Name, building.BuildingType, building.TotalFloors, building.IsActive, building.OrganizationId, building.CreatedAt, building.UpdatedAt, locationResponse, contactResponse);
-        return AuthResult<BuildingResponse>.Ok(response);
+        return AuthResult<BuildingResponse>.Ok(BuildingMapping.ToResponse(building));
     }
 }

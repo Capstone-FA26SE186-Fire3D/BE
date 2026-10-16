@@ -353,7 +353,13 @@ public abstract class ContentControllerBase : ControllerBase
     }
     protected IActionResult? Paging(int page, int pageSize) => page >= 1 && pageSize is >= 1 and <= 100 ? null
         : Problem(statusCode: 400, title: "page >= 1 and pageSize 1-100.", extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR" });
+    // issues keeps code/path per finding; errors is the field map used by VALIDATION_ERROR elsewhere ("$.sources[0]" -> "sources[0]").
     protected ObjectResult Invalid(IReadOnlyList<Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ScenarioDraftValidationIssue> issues) =>
-        Problem(statusCode: 422, title: "Content does not satisfy its schema.", extensions: new Dictionary<string, object?> { ["code"] = "CONTENT_INVALID", ["issues"] = issues });
+        Problem(statusCode: 422, title: "Content does not satisfy its schema.", extensions: new Dictionary<string, object?>
+        {
+            ["code"] = "CONTENT_INVALID", ["issues"] = issues,
+            ["errors"] = issues.GroupBy(i => i.Path.StartsWith("$.", StringComparison.Ordinal) ? i.Path[2..] : i.Path.TrimStart('$'))
+                .ToDictionary(g => g.Key.Length == 0 ? "$" : g.Key, g => g.Select(i => i.Message).Distinct().ToArray())
+        });
     protected ObjectResult Problem(AuthError error) => Problem(statusCode: error.Status, title: error.Message, extensions: new Dictionary<string, object?> { ["code"] = error.Code });
 }

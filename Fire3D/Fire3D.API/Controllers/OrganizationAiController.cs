@@ -16,13 +16,24 @@ namespace Fire3D.API.Controllers;
 [Produces("application/json")]
 public sealed class OrganizationAiController(IOrganizationAiGates gates, IOptions<OrganizationAiOptions> options) : ContentControllerBase
 {
+    /// <summary>Sources the organization may pin now, with the link the client opens for each (Learn slug, Library item, document URL).</summary>
     [HttpGet("api/ai/organization/sources")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<AiSourceList>(200)]
     public async Task<IActionResult> Sources(CancellationToken ct) => Reply(await gates.OrganizationAsync("Sources", Actor, Family, Guid.Empty, new { }, null, ct));
 
+    /// <summary>What one request of each operation reserves now (estimatedReserve) and whether the organization balance covers it.</summary>
+    /// <remarks>policyActive=false means submit returns 503 AI_POLICY_UNAVAILABLE; canSubmit=false with an active policy means 409 AI_QUOTA_EXHAUSTED.</remarks>
+    [HttpGet("api/ai/organization/limits")]
+    [ProducesResponseType<AiLimitsView>(200)]
+    public async Task<IActionResult> Limits(CancellationToken ct) => Reply(await gates.OrganizationAsync("Limits", Actor, Family, Guid.Empty, new { }, null, ct));
+
     /// <summary>Queues a scenario draft suggestion for a Building of the caller's organization. Idempotency-Key required; returns 202 with the request.</summary>
+    /// <remarks>The request pins one revision with accepted geometry (revisionId, or the newest such revision) and sends its BIM facts:
+    /// floors, semantic anchors, annotations, quality flags and the active runtime capabilities. No such revision: 409 AI_REVISION_NOT_READY.
+    /// A finished draft has status Succeeded, resultType ScenarioDraft and result.status NeedsUserEdit: it must be edited and saved in the editor.</remarks>
     [HttpPost("api/ai/organization/scenario-draft")]
-    [ProducesResponseType<JsonElement>(202)]
+    [ProducesResponseType<AiRequestView>(202)]
+    [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(422)]
     [ProducesResponseType<ProblemDetails>(503)]
@@ -30,13 +41,14 @@ public sealed class OrganizationAiController(IOrganizationAiGates gates, IOption
     {
         var issues = OrganizationAiInput.Text(request.Prompt, "$.prompt");
         if (request.BuildingId == Guid.Empty) issues.Add(new("FIELD_REQUIRED", "$.buildingId", "Required."));
+        if (request.RevisionId == Guid.Empty) issues.Add(new("FIELD_INVALID", "$.revisionId", "Omit it or send a revision of the Building."));
         issues.AddRange(OrganizationAiInput.Sources(request.Sources));
-        return Submit("ScenarioDraft", new { buildingId = request.BuildingId, prompt = request.Prompt, sources = request.Sources ?? [] }, issues, key, ct);
+        return Submit("ScenarioDraft", new { buildingId = request.BuildingId, revisionId = request.RevisionId, prompt = request.Prompt, sources = request.Sources ?? [] }, issues, key, ct);
     }
 
     /// <summary>Queues a grounded answer over the caller's eligible sources. Idempotency-Key required; returns 202 with the request.</summary>
     [HttpPost("api/ai/organization/answer")]
-    [ProducesResponseType<JsonElement>(202)]
+    [ProducesResponseType<AiRequestView>(202)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(422)]
     [ProducesResponseType<ProblemDetails>(503)]
@@ -48,16 +60,18 @@ public sealed class OrganizationAiController(IOrganizationAiGates gates, IOption
     }
 
     /// <summary>The caller's organization AI requests, newest first, with the same fields as the detail.</summary>
-    /// <remarks>Filters: status (Queued, Running, Succeeded, InsufficientEvidence, SafetyRejected, Failed, NeedsReconcile), operation (ScenarioDraft, Answer),
-    /// mine=true for the caller's own requests. page defaults to 1, pageSize to 20 (maximum 100). Other organizations never appear.</remarks>
+    /// <remarks>Filters: status (Accepted, Processing, Succeeded, Failed, NeedsReconcile, Rejected), resultType (KnowledgeAnswer, ScenarioDraft,
+    /// InsufficientEvidence, RejectedBySafetyGate), operation (ScenarioDraft, Answer), mine=true for the caller's own requests.
+    /// page defaults to 1, pageSize to 20 (maximum 100). Other organizations never appear. Each item carries input (text, Building, revision,
+    /// inputHash) so a request lost on timeout can be found again.</remarks>
     [HttpGet("api/ai/requests")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<AiRequestPage>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
-    public async Task<IActionResult> List([FromQuery] string? status, [FromQuery] string? operation, [FromQuery] bool? mine, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
-        Paging(page, pageSize) ?? Reply(await gates.OrganizationRequestsAsync(Actor, Family, new { status, operation, mine, page, pageSize }, ct));
+    public async Task<IActionResult> List([FromQuery] string? status, [FromQuery] string? resultType, [FromQuery] string? operation, [FromQuery] bool? mine, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
+        Paging(page, pageSize) ?? Reply(await gates.OrganizationRequestsAsync(Actor, Family, new { status, resultType, operation, mine, page, pageSize }, ct));
 
     [HttpGet("api/ai/requests/{requestId:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<AiRequestView>(200)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> Get(Guid requestId, CancellationToken ct) => Reply(await gates.OrganizationAsync("Get", Actor, Family, requestId, new { }, null, ct));
 
@@ -71,6 +85,67 @@ public sealed class OrganizationAiController(IOrganizationAiGates gates, IOption
     }
 }
 
+/// <summary>Trainee AI: answers about Learn, a playable Training or the Trainee's own result, within an Admin-set daily allowance.</summary>
+[ApiController]
+[Authorize(Roles = "Trainee")]
+[Produces("application/json")]
+public sealed class TraineeAiController(IOrganizationAiGates gates, IOptions<OrganizationAiOptions> options) : ContentControllerBase
+{
+    /// <summary>Today's allowance (Asia/Ho_Chi_Minh day), what one question reserves, and whether an open Assessment attempt blocks AI.</summary>
+    [HttpGet("api/ai/trainee/quota")]
+    [ProducesResponseType<TraineeAiQuotaView>(200)]
+    public async Task<IActionResult> Quota(CancellationToken ct) => Reply(await gates.TraineeAsync("Quota", Actor, Family, Guid.Empty, new { }, null, ct));
+
+    /// <summary>Queues a grounded answer for the Trainee. Idempotency-Key required; returns 202 with the request.</summary>
+    /// <remarks>context.kind Learn needs postId and versionId of the current published version; Training needs a trainingId the Trainee may play
+    /// (Public Building or valid participation grant, Active Training, Published release); Result needs the Trainee's own sessionId with a saved result.
+    /// Unavailable context: 404 AI_CONTEXT_NOT_FOUND. Sources: approved Common knowledge sources and Learn posts only (Hidden posts are used
+    /// for retrieval without being listed). Blocked while an Assessment attempt is open: 409 AI_BLOCKED_DURING_ASSESSMENT. Today's allowance used
+    /// up: 409 AI_DAILY_QUOTA_EXHAUSTED; a retry with the same key never reserves twice. Rubric, scoring, drafts and private IFC never reach the AI.</remarks>
+    [HttpPost("api/ai/trainee/answer")]
+    [ProducesResponseType<AiRequestView>(202)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(422)]
+    [ProducesResponseType<ProblemDetails>(503)]
+    public async Task<IActionResult> Answer(TraineeAiRequest request, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
+    {
+        var issues = OrganizationAiInput.Text(request.Question, "$.question");
+        issues.AddRange(OrganizationAiInput.Sources(request.Sources, OrganizationAiInput.TraineeSourceKinds));
+        var context = request.Context;
+        if (context is not null && !(context.Kind switch
+            {
+                "Learn" => context.PostId is { } p && p != Guid.Empty && context.VersionId is { } v && v != Guid.Empty,
+                "Training" => context.TrainingId is { } t && t != Guid.Empty,
+                "Result" => context.SessionId is { } s && s != Guid.Empty,
+                _ => false
+            }))
+            issues.Add(new("FIELD_INVALID", "$.context", "Learn needs postId and versionId, Training needs trainingId, Result needs sessionId."));
+        if (issues.Count > 0) return Invalid(issues);
+        if (!options.Value.Configured)
+            return Problem(statusCode: 503, title: "The AI service is not configured.", extensions: new Dictionary<string, object?> { ["code"] = "AI_PROVIDER_UNAVAILABLE" });
+        var result = await gates.TraineeAsync("Submit", Actor, Family, Guid.Empty, new
+        {
+            question = request.Question, sources = request.Sources ?? [],
+            context = context is null ? null : new { kind = context.Kind, postId = context.PostId, versionId = context.VersionId, trainingId = context.TrainingId, sessionId = context.SessionId }
+        }, key, ct);
+        return result.IsSuccess ? Accepted($"/api/ai/trainee/requests/{result.Value.GetProperty("requestId").GetGuid()}", result.Value) : Problem(result.Error!);
+    }
+
+    /// <summary>The Trainee's own AI requests, newest first; status filter as in the organization list.</summary>
+    /// <remarks>resultWithheld=true: the context is no longer available (Building access lost, Learn post removed), so the answer and citations are hidden.</remarks>
+    [HttpGet("api/ai/trainee/requests")]
+    [ProducesResponseType<AiRequestPage>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> List([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
+        Paging(page, pageSize) ?? Reply(await gates.TraineeAsync("List", Actor, Family, Guid.Empty, new { status, page, pageSize }, null, ct));
+
+    [HttpGet("api/ai/trainee/requests/{requestId:guid}")]
+    [ProducesResponseType<AiRequestView>(200)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> Get(Guid requestId, CancellationToken ct) => Reply(await gates.TraineeAsync("Get", Actor, Family, requestId, new { }, null, ct));
+}
+
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.PlatformAdministration)]
 [Produces("application/json")]
@@ -78,19 +153,21 @@ public sealed partial class AdminAiController(IOrganizationAiGates gates, Fire3D
 {
     [GeneratedRegex("^[A-Za-z0-9._-]{1,100}$")] private static partial Regex VersionLabel();
 
+    /// <summary>All AI requests, newest first. Filters: status, operation (ScenarioDraft, Answer, TraineeAnswer), audience (organization, trainee), organizationId.</summary>
     [HttpGet("api/admin/ai/requests")]
-    [ProducesResponseType<JsonElement>(200)]
-    public async Task<IActionResult> Requests([FromQuery] string? status, [FromQuery] Guid? organizationId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
-        Paging(page, pageSize) ?? Reply(await gates.AdminAsync("ListRequests", Actor, Family, Guid.Empty, new { status, organizationId, page, pageSize }, null, null, ct));
+    [ProducesResponseType<AdminAiRequestPage>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> Requests([FromQuery] string? status, [FromQuery] string? operation, [FromQuery] string? audience, [FromQuery] Guid? organizationId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
+        Paging(page, pageSize) ?? Reply(await gates.AdminAsync("ListRequests", Actor, Family, Guid.Empty, new { status, operation, audience, organizationId, page, pageSize }, null, null, ct));
 
     [HttpGet("api/admin/ai/requests/{requestId:guid}")]
-    [ProducesResponseType<JsonElement>(200)]
+    [ProducesResponseType<AdminAiRequestView>(200)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<IActionResult> AiRequest(Guid requestId, CancellationToken ct) => Reply(await gates.AdminAsync("GetRequest", Actor, Family, requestId, new { }, null, null, ct));
 
     /// <summary>Schedules a provider lookup for a NeedsReconcile request. Never edits consumed usage. Idempotency-Key required.</summary>
     [HttpPost("api/admin/ai/requests/{requestId:guid}/reconcile")]
-    [ProducesResponseType<JsonElement>(202)]
+    [ProducesResponseType<AdminAiRequestView>(202)]
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> Reconcile(Guid requestId, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
@@ -98,19 +175,26 @@ public sealed partial class AdminAiController(IOrganizationAiGates gates, Fire3D
         return result.IsSuccess ? Accepted($"/api/admin/ai/requests/{requestId}", result.Value) : Problem(result.Error!);
     }
 
+    /// <summary>AI policies by operation and newest period first; page defaults to 1, pageSize to 20 (maximum 100).</summary>
     [HttpGet("api/admin/ai/policies")]
-    [ProducesResponseType<JsonElement>(200)]
-    public async Task<IActionResult> Policies(CancellationToken ct) => Reply(await gates.AdminAsync("ListPolicies", Actor, Family, Guid.Empty, new { }, null, null, ct));
+    [ProducesResponseType<AiPolicyPage>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> Policies([FromQuery] string? operation, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
+        Paging(page, pageSize) ?? Reply(await gates.AdminAsync("ListPolicies", Actor, Family, Guid.Empty, new { operation, page, pageSize }, null, null, ct));
 
     /// <summary>Creates an immutable reservation policy for one operation; periods of one operation may not overlap. Idempotency-Key required.</summary>
+    /// <remarks>TraineeAnswer also needs dailyUnits (1-100000000, at least reserveUnits): the units one Trainee may use per Vietnam calendar day.</remarks>
     [HttpPost("api/admin/ai/policies")]
-    [ProducesResponseType<JsonElement>(201)]
+    [ProducesResponseType<AiPolicyView>(201)]
     [ProducesResponseType<ProblemDetails>(409)]
     [ProducesResponseType<ProblemDetails>(422)]
     public async Task<IActionResult> CreatePolicy(CreateAiPolicyRequest request, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
         var issues = new List<ScenarioDraftValidationIssue>();
-        if (request.Operation is not ("ScenarioDraft" or "Answer")) issues.Add(new("VALUE_UNSUPPORTED", "$.operation", "ScenarioDraft or Answer."));
+        if (request.Operation is not ("ScenarioDraft" or "Answer" or "TraineeAnswer")) issues.Add(new("VALUE_UNSUPPORTED", "$.operation", "ScenarioDraft, Answer or TraineeAnswer."));
+        if (request.Operation == "TraineeAnswer" && (request.DailyUnits is not (>= 1 and <= 100_000_000) || request.DailyUnits < request.ReserveUnits))
+            issues.Add(new("VALUE_OUT_OF_RANGE", "$.dailyUnits", "1-100000000 and at least reserveUnits."));
+        if (request.Operation != "TraineeAnswer" && request.DailyUnits is not null) issues.Add(new("FIELD_INVALID", "$.dailyUnits", "Only TraineeAnswer has a daily allowance."));
         if (!OrganizationAiInput.QuotaUnit().IsMatch(request.QuotaUnit ?? "")) issues.Add(new("VALUE_UNSUPPORTED", "$.quotaUnit", "Lower-case quota unit of the billing policy."));
         if (request.ReserveUnits is < 1 or > 100_000_000) issues.Add(new("VALUE_OUT_OF_RANGE", "$.reserveUnits", "1-100000000."));
         if (request.MaxInputChars is < 1 or > 20_000) issues.Add(new("VALUE_OUT_OF_RANGE", "$.maxInputChars", "1-20000."));

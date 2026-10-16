@@ -9,9 +9,13 @@ internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, IAuthSt
 {
     public async Task<AuthResult<BuildingResponse>> Handle(UpdateBuildingCommand command, CancellationToken ct)
     {
+        if (!BuildingEtag.TryParse(command.IfMatch, out var expected))
+            return string.IsNullOrWhiteSpace(command.IfMatch)
+                ? AuthResult<BuildingResponse>.Fail("PRECONDITION_REQUIRED", "Send the Building ETag from GET in If-Match.", 428)
+                : AuthResult<BuildingResponse>.Fail("VALIDATION_ERROR", "If-Match must be the quoted Building ETag.", 400);
         var request = command.Request;
         var name = request.Name?.Trim();
-        
+
         var errors = BuildingValidation.Validate(name, request.BuildingType, request.TotalFloors, request.Location, request.Contact);
         if (errors.Count > 0)
             return AuthResult<BuildingResponse>.Fail("VALIDATION_ERROR", "Building validation failed.", 400, errors);
@@ -23,8 +27,9 @@ internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, IAuthSt
             return AuthResult<BuildingResponse>.Fail("NOT_FOUND", "Building not found.", 404);
         if (!await BuildingAuthorization.CanMutateAsync(accounts, command.ActorId, building.OrganizationId, ct))
             return AuthResult<BuildingResponse>.Fail("FORBIDDEN", "An active organization scope is required.", 403);
+        if (BuildingEtag.Version(building.UpdatedAt) != expected) return Stale();
         var now = clock.GetUtcNow().UtcDateTime;
-        
+
         building.Name = name!;
         building.BuildingType = request.BuildingType?.Trim();
         building.TotalFloors = request.TotalFloors;
@@ -65,21 +70,18 @@ internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, IAuthSt
             };
         }
 
-        if (!await store.UpdateBuildingWithAuditAsync(building, location, contact, command.ActorId, now, ct))
-            return AuthResult<BuildingResponse>.Fail("BUILDING_MUTATION_FAILED", "Building could not be updated.", 409);
+        switch (await store.UpdateBuildingWithAuditAsync(building, location, contact, command.ActorId, now, ct, expected))
+        {
+            case BuildingWriteOutcome.Stale: return Stale();
+            case BuildingWriteOutcome.Written: break;
+            default: return AuthResult<BuildingResponse>.Fail("BUILDING_MUTATION_FAILED", "Building could not be updated.", 409);
+        }
 
         // Fetch again to get the updated nested entities with their actual IDs
         var updatedBuilding = await store.FindBuildingAsync(command.BuildingId, building.OrganizationId, ct);
-        
-        BuildingLocationResponse? locationResponse = updatedBuilding!.BuildingLocation != null 
-            ? new BuildingLocationResponse(updatedBuilding.BuildingLocation.Id, updatedBuilding.BuildingLocation.Address, updatedBuilding.BuildingLocation.City, updatedBuilding.BuildingLocation.District, updatedBuilding.BuildingLocation.Latitude, updatedBuilding.BuildingLocation.Longitude, updatedBuilding.BuildingLocation.Geojson) 
-            : null;
-            
-        BuildingContactResponse? contactResponse = updatedBuilding.BuildingContact != null 
-            ? new BuildingContactResponse(updatedBuilding.BuildingContact.Id, updatedBuilding.BuildingContact.ContactName, updatedBuilding.BuildingContact.ContactRole, updatedBuilding.BuildingContact.Phone, updatedBuilding.BuildingContact.Email, updatedBuilding.BuildingContact.IsPrimary) 
-            : null;
-
-        var response = new BuildingResponse(updatedBuilding.Id, updatedBuilding.Name, updatedBuilding.BuildingType, updatedBuilding.TotalFloors, updatedBuilding.IsActive, updatedBuilding.OrganizationId, updatedBuilding.CreatedAt, updatedBuilding.UpdatedAt, locationResponse, contactResponse);
-        return AuthResult<BuildingResponse>.Ok(response);
+        return AuthResult<BuildingResponse>.Ok(BuildingMapping.ToResponse(updatedBuilding!));
     }
+
+    private static AuthResult<BuildingResponse> Stale() =>
+        AuthResult<BuildingResponse>.Fail("PRECONDITION_FAILED", "The Building changed since you read it. Reload it and retry.", 412);
 }

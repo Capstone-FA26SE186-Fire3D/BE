@@ -32,19 +32,22 @@ public sealed partial class AuthIntegrationTests
             var direct = await scope.ServiceProvider.GetRequiredService<MediatR.ISender>().Send(new Fire3D.Application.Buildings.Commands.CreateBuilding.CreateBuildingCommand(adminId, null, new("Office", null, 1, null, null)));
             Assert.Equal(400, direct.Error?.Status);
         }
-        var missing = await client.PostAsJsonAsync("/api/buildings", new { name = "Office", totalFloors = 1 });
+        var missing = await PostBuilding(client, new { name = "Office", totalFloors = 1 });
         Assert.True(missing.StatusCode == HttpStatusCode.BadRequest, await missing.Content.ReadAsStringAsync());
         Assert.Contains("organizationId", await missing.Content.ReadAsStringAsync());
-        var mismatch = await client.PostAsJsonAsync($"/api/buildings?organizationId={Guid.NewGuid()}", new { organizationId = organization, name = "Office", totalFloors = 1 });
+        var mismatchRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/buildings?organizationId={Guid.NewGuid()}") { Content = JsonContent.Create(new { organizationId = organization, name = "Office", totalFloors = 1 }) };
+        mismatchRequest.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
+        var mismatch = await client.SendAsync(mismatchRequest);
         Assert.Equal(HttpStatusCode.BadRequest, mismatch.StatusCode);
-        var created = await client.PostAsJsonAsync("/api/buildings", new { organizationId = organization, name = "Office", totalFloors = 1 });
+        var created = await PostBuilding(client, new { organizationId = organization, name = "Office", totalFloors = 1 });
         Assert.True(created.StatusCode == HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
         var building = (await created.Content.ReadFromJsonAsync<BuildingResponse>())!;
         Assert.Equal(organization, building.OrganizationId);
-        var updated = await client.PutAsJsonAsync($"/api/buildings/{building.Id}", new { name = "Updated", totalFloors = 2 });
+        var updated = await SendBuilding(client, HttpMethod.Put, building.Id, new { name = "Updated", totalFloors = 2 }, created.Headers.ETag!.Tag);
         Assert.True(updated.IsSuccessStatusCode, await updated.Content.ReadAsStringAsync());
-        Assert.Equal(HttpStatusCode.OK, (await client.DeleteAsync($"/api/buildings/{building.Id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.DeleteAsync($"/api/buildings/{building.Id}")).StatusCode);
+        var tag = updated.Headers.ETag!.Tag;
+        Assert.Equal(HttpStatusCode.OK, (await SendBuilding(client, HttpMethod.Delete, building.Id, null, tag)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendBuilding(client, HttpMethod.Delete, building.Id, null, tag)).StatusCode);
         Assert.Equal(3L, await ScalarAsync($"SELECT count(*) FROM audit_logs WHERE target_id='{building.Id}'"));
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/buildings/{building.Id}")).StatusCode);
     }
