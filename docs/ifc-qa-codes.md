@@ -18,7 +18,7 @@ Revision status after Geometry QA (worker `preview_glb` output):
 | `IFC_BODY_NONSTANDARD_CONTEXT` | Info | Body is in a context other than `Model` | None |
 | `IFC_NO_SPACES` | Block | No `IfcSpace` | Enable rooms/zones export |
 | `IFC_SPACE_UNNAMED` | Warning | Room has no `Name`/`LongName` | Name the room or classify it in the editor |
-| `IFC_EXIT_UNKNOWN` | Block before ReadyForScenario | No external exit door found | Pending team decision (see below) |
+| `IFC_EXIT_UNKNOWN` | Warning; revision stays `NeedsFix` until an exit door is confirmed | No external exit door found | Choose an existing door as exit in the equipment screen; no re-upload |
 | `IFC_NO_FIRE_EQUIPMENT` | Warning | No fire alarm/extinguishing device | Place it in the editor |
 | `IFC_NO_WATER_SOURCE` | Warning | No water source | Place it in the editor if the scenario needs one |
 | `IFC_LOW_CONFIDENCE_DEVICE` | Warning | Candidate below the confidence threshold | Confirm or reject (equipment-decisions) |
@@ -34,7 +34,13 @@ Other codes may appear; FE shows them generically with the worker `message`.
 
 Mapping to API severity: the worker sends Block as `Error` (or `Critical`) with outcome `Failed`, Warning as `Warning`, Info as `Info`. Error/Critical issues also block confirm-for-training and publish.
 
-`IFC_EXIT_UNKNOWN` is not enforced by the backend yet: Docs 5.9 says "confirm the exit in the editor" while the workflows say NeedsFix → fix the IFC. Until the team decides, the worker reports it like any other issue.
+`IFC_EXIT_UNKNOWN` (decided 16/10/2026, option B, BE#100; migration `20261016100000`): the worker reports it as `Warning`, so the
+Geometry run passes and the geometry is accepted, but the revision stays `NeedsFix`. `GET /api/revisions/{id}/equipment-candidates`
+returns `exitConfirmationRequired: true`; FE shows a "choose exit door" step. Confirming or retyping an existing `IfcDoor` candidate
+(`ifcClass` IfcDoor…, with `ifcGlobalId`) as `door.exit` through `PATCH .../equipment-decisions` moves the revision to
+`ReadyForScenario` without a new upload; rejecting every such door moves it back to `NeedsFix`. `door.exit` must be an `Equipment`
+capability of an active runtime. `exit.final`/`exit.stair` stay editor `Goal` objects. If the worker sends the code as `Error`, the
+run fails and the user must fix the IFC.
 
 ## Room names (bim-facts)
 

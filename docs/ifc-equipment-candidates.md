@@ -19,6 +19,14 @@ A Geometry attempt sends a second output beside `preview_glb`: `artifactType: "b
 - Put each candidate's `ifcGlobalId` in `preview_glb` `semanticMapping` too, otherwise the editor cannot anchor an Equipment object to it.
 - The validation run's candidate artifact stays the `preview_glb` (the gate no longer picks whichever output sorts first).
 
+## Exit door confirmation (`IFC_EXIT_UNKNOWN`, option B)
+
+When the accepted Geometry run carries the warning `IFC_EXIT_UNKNOWN`, the revision is `NeedsFix` and the view returns
+`exitConfirmationRequired: true` with `revisionStatus`. Saving a decision that Confirms or Retypes an `IfcDoor` candidate (worker must
+send `ifcClass` IfcDoor and its `ifcGlobalId`) as `door.exit` moves the revision to `ReadyForScenario`; when every such door is later
+Rejected it returns to `NeedsFix`. The decision is audited (with the resulting revision status) and is suggested again on the next
+revision like any other. See [ifc-qa-codes.md](ifc-qa-codes.md).
+
 ## API (OrganizationUser of the tenant, PlatformAdmin)
 
 | Method | Route | Notes |

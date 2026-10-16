@@ -16,7 +16,9 @@ public sealed class EquipmentCandidatesController(IEquipmentCandidates candidate
     /// <remarks>Candidates come from the building_metadata artifact of the accepted Geometry attempt (Passed QA, no blocking issue);
     /// needsConfirmation is true below confidence 0.9. A candidate without a decision may carry suggestedDecision from the newest
     /// earlier revision of the Building with the same ifcGlobalId; it is not applied until saved. No accepted geometry: 409
-    /// EQUIPMENT_CANDIDATES_UNAVAILABLE. The worker sent no building_metadata: metadataAvailable=false and no items. Another tenant: 404.</remarks>
+    /// EQUIPMENT_CANDIDATES_UNAVAILABLE. The worker sent no building_metadata: metadataAvailable=false and no items. Another tenant: 404.
+    /// exitConfirmationRequired=true (IFC_EXIT_UNKNOWN, revision NeedsFix): show the "choose exit door" step; confirming an IfcDoor
+    /// candidate as door.exit makes the revision ReadyForScenario (revisionStatus).</remarks>
     [HttpGet("api/revisions/{revisionId:guid}/equipment-candidates")]
     [ProducesResponseType<EquipmentCandidatesView>(200)]
     [ProducesResponseType<ProblemDetails>(401)]
@@ -31,7 +33,8 @@ public sealed class EquipmentCandidatesController(IEquipmentCandidates candidate
     /// detected catalogKey unless one is sent; Retyped needs catalogKey; Rejected takes none. A catalogKey must be an Equipment capability
     /// of an active runtime (GET /api/scenario-interactions/catalog). Missing If-Match 428, stale 412, unknown candidate or catalogKey 422
     /// EQUIPMENT_DECISION_INVALID. Decisions never change revision artifacts; the editor turns a confirmed candidate into an Equipment
-    /// object (anchorId = ifcGlobalId, capability = catalogKey).</remarks>
+    /// object (anchorId = ifcGlobalId, capability = catalogKey). When the revision waits for an exit (IFC_EXIT_UNKNOWN), at least one
+    /// IfcDoor Confirmed/Retyped as door.exit moves it to ReadyForScenario; rejecting every such door moves it back to NeedsFix.</remarks>
     [HttpPatch("api/revisions/{revisionId:guid}/equipment-decisions")]
     [ProducesResponseType<EquipmentCandidatesView>(200)]
     [ProducesResponseType<ProblemDetails>(400)]

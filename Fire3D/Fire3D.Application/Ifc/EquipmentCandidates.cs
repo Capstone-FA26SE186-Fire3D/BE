@@ -18,8 +18,13 @@ public sealed record EquipmentSuggestionView(string Decision, string? CatalogKey
 public sealed record EquipmentCandidateView(string Id, string IfcGlobalId, string CatalogKey, string Source, string? IfcClass, decimal Confidence,
     string? FloorId, IReadOnlyList<decimal> Position, decimal? RotationY, IReadOnlyList<decimal>? Bbox, bool NeedsConfirmation,
     EquipmentDecisionView? Decision, EquipmentSuggestionView? SuggestedDecision);
-/// <summary>Version is the decision overlay version (ETag); 0 before the first save. MetadataAvailable is false when the worker sent no building_metadata.</summary>
-public sealed record EquipmentCandidatesView(Guid RevisionId, Guid? ArtifactId, bool MetadataAvailable, long Version, IReadOnlyList<EquipmentCandidateView> Items);
+/// <summary>
+/// Version is the decision overlay version (ETag); 0 before the first save. MetadataAvailable is false when the worker sent no building_metadata.
+/// RevisionStatus is the revision's current status. ExitConfirmationRequired is true while the accepted Geometry run reported
+/// IFC_EXIT_UNKNOWN and no IfcDoor candidate is Confirmed/Retyped as door.exit: the revision stays NeedsFix until one is.
+/// </summary>
+public sealed record EquipmentCandidatesView(Guid RevisionId, Guid? ArtifactId, bool MetadataAvailable, long Version, IReadOnlyList<EquipmentCandidateView> Items,
+    string? RevisionStatus = null, bool ExitConfirmationRequired = false);
 public sealed record EquipmentDecisionInput(string CandidateId, string Decision, string? CatalogKey = null, string? Note = null);
 public sealed record EquipmentDecisionsRequest(IReadOnlyList<EquipmentDecisionInput> Items);
 
