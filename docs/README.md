@@ -12,6 +12,7 @@ Tài liệu sản phẩm chuẩn nằm trong repo `Docs`. Khi tài liệu BE và
 4. [Docs gốc: schema SQL](../../Docs/fire_evacuation_schema.sql) và [ERD](../../Docs/fire_evacuation_erd.md) — mô hình dữ liệu mục tiêu.
 5. [BE API guide](api-docs.md) — route/DTO/status của code hiện tại; mỗi điểm khác contract đích phải được ghi rõ.
 6. [BE implementation checklist](api-implementation-checklist.md) — phần đã có, phần còn thiếu và tiêu chí hoàn tất.
+7. [Nghiệm thu production](production-acceptance.md) — bằng chứng thật theo từng dịch vụ (#92).
 
 Chi tiết từng luồng: [authentication](authentication.md), [password reset](password-reset.md), [administration](administration.md), [architecture](backend-architecture.md), [integration test](integration-tests.md) và [IFC progress](ifc-api-progress.md). [Foundation](backend-foundation.md), [Week 2 review](week2-review.md) và [project review](project-review-2026-09-22.md) là ảnh chụp lịch sử; không dùng backlog/status ở đó thay cho API guide và checklist hiện hành.
 

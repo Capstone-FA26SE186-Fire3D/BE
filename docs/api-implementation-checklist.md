@@ -12,6 +12,8 @@ Tài liệu này là backlog đối chiếu code BE với chuẩn nghiệp vụ 
 
 - **14/10/2026 (`fix/p0-authz-auth-gaps`):** DB-01/AUTHZ-01/AUTH-01/04/05 được rà lại trên `main` `1eaf988`; lỗi và test bổ sung ghi ở dòng "Trạng thái 14/10/2026" từng mục. Supabase đã áp tới `20261014090000` (kiểm tra đọc ngày 14/10: grant thu hẹp, bảng recovery, RLS đúng); `20261014100000`/`20261014100100` chưa áp, phải áp cùng lúc deploy API.
 
+- **16/10/2026:** Supabase đã áp tới `20261015092000_AddIfcQaContract` (107 migration, backup trước khi áp). Đã đóng #77, #89, #91, #94 (PR #97, `feature/building-etag-ai-contracts`). Đã code và test, chờ merge theo thứ tự: PR #97 → `feature/training-result-ifc-equipment` (#96, IFC-04, IFC-03) → `feature/scenario-event-allowlist` (SCENARIO-02, migration `20261016090000_AddTrainingEventAllowList` chưa áp Supabase). RAG-01 không còn "ngoài phạm vi": API Trainee đã có, retrieval thật do service AI. Còn mở: #92 ([nghiệm thu production](production-acceptance.md)), luồng `IFC_EXIT_UNKNOWN` (chờ team chốt), STYLE-01 và nhiều IFC cho một revision.
+
 ## Kiểm chứng deployment bổ sung ngày 03/10/2026
 
 Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi baseline ghi kèm; bằng chứng mới về PayOS/deployment nằm tại [payos-deployment.md](payos-deployment.md).
@@ -78,6 +80,8 @@ Organization phone uniqueness có source cho email/Google/PATCH: `409 ORGANIZATI
 ### AUTHZ-01 — RÀ SOÁT CHUNG · Actor và tenant
 
 - **Trạng thái 12/10/2026:** các gate SECURITY DEFINER kiểm actor/role/live session/tenant/lifecycle trong DB và có test tenant khác/role sai qua #46–#69. `Guid.Empty` còn lại trong controller chỉ là resource placeholder cho list/create, không tắt tenant check. Nội dung dưới đây là baseline.
+
+- **Trạng thái 16/10/2026 (#94, PR #97):** `POST /api/buildings` bắt buộc `Idempotency-Key` (receipt v7 `application_command_receipts`, 409 khi khác input); `GET/PUT/DELETE /api/buildings/{id}` trả `ETag`, `PUT`/`DELETE` bắt buộc `If-Match` (428/412).
 
 - **Trạng thái 14/10/2026:** rà lại không thấy đọc/ghi chéo tenant trên route đang dùng (JWT được đối chiếu role/tenant/family với DB mỗi request). Đã sửa: `PUT /api/buildings/{id}` từ chối Building archive (404, kiểm lại dưới khóa); xóa initiate/finalize/confirm không còn được gọi trong `IfcWriteStore` (bỏ qua tenant khi null); `ProcessRevisionAsync` và `FailClosedPlaytestWriteStore` không còn coi tenant null/rỗng là mọi tenant. Có HTTP test GET/PUT/DELETE/list Building tenant khác và luật archive. Release đọc của Building archive vẫn hiển thị trong tenant (lịch sử), chờ quyết định sản phẩm.
 
@@ -161,19 +165,25 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 - **Contract/current:** Confirm requires exact scenarioVersionId/validationRunId/annotationSetId, accepted current worker attempt/artifact, matching hashes, Passed/runtime ready and no Error/Critical blocker. Returns reviewId, atomic receipt/audit; technical rejection preserves history.
 - **Remaining acceptance:** Built release consumes that exact confirmation and matching immutable approval/provenance. Fake worker evidence is not geometry/Unity acceptance.
 
-### IFC-03 — P1 · GAP · Worker IFC: hình học, phân loại và QA
+### IFC-03 — P1 · CODE/TEST phần BE (chờ merge) · GAP phần worker · Worker IFC: hình học, phân loại và QA
+
+- **Trạng thái 16/10/2026 (`feature/training-result-ifc-equipment`, migration `20261015092000`, đã áp Supabase):** chỉ nhận IFC (tên không phải `.ifc` → 400 `IFC_UNSUPPORTED_FORMAT`; nội dung không có header `ISO-10303-21;` → 422 cùng mã); issue của worker nhận `ifcGlobalIds` (≤100), lưu `ifc_guid`, trả `ifcGlobalIds` ở `GET /api/revisions/{id}/issues`; QA Geometry Failed → revision `NeedsFix`; bảng v7 `bim_facts` có trong migration, ghi `Name`/`LongName`/`Category` của `IfcSpace` từ `building_metadata.spaces`. 15 mã QA trong OpenAPI và `docs/ifc-qa-codes.md`; FE tự map câu hướng dẫn. Còn chờ: luồng `IFC_EXIT_UNKNOWN` (Docs 5.9 và workflows lệch nhau), phần worker Python bên dưới.
 
 - **Contract/current:** Đề xuất trong [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md) mục 5.1–5.3, 5.9 (Docs PR #15/#16, spike 32 file IFC). Source BE chưa có các bước này; `tools/ifc-spike` mới parse hình học cơ bản.
 - **Sửa code:** Chọn representation `Body` theo `RepresentationIdentifier` (20/25 file có `Axis` đứng trước; KIT đặt Body trong context `Design`); dựng lại phần tử có mesh rỗng; đọc type object qua `IfcRelDefinesByType` cho IFC2X3; đọc `IfcSpace.Name` + `LongName` với từ điển đa ngôn ngữ; không tự coi `IfcAlarm`/`IfcSensor` là báo cháy; ghi issue theo mã mục 5.9 (`IFC_NO_BODY_GEOMETRY`, `IFC_NO_SPACES`, `IFC_NOT_ARCHITECTURAL`, `IFC_NO_FLOOR_UNDER_SPACE`, `IFC_EXIT_UNKNOWN`, `IFC_UNSUPPORTED_FORMAT`…). Upload chỉ nhận `.ifc`; mô hình nhiều file bộ môn (mục 4) chờ chốt.
 - **Nghiệm thu:** Theo fixture/tiêu chí mục 2.1 và 10: KIT dựng đủ 119 tường; trường học Revit tìm 6 sprinkler và 11 thiết bị vệ sinh; file không có phòng phát `IFC_NO_SPACES`; file chỉ kết cấu bị chặn. File IFC bên thứ ba giữ ngoài repo.
 
-### IFC-04 — P1 · GAP · Thiết bị phát hiện và xác nhận
+### IFC-04 — P1 · CODE/TEST (chờ merge) · Thiết bị phát hiện và xác nhận
+
+- **Trạng thái 16/10/2026 (`feature/training-result-ifc-equipment`, migration `20261015091000`, đã áp Supabase):** artifact `building_metadata` (`fet3d.building/1`, schema + fixture ở `contracts/ifc/v1`) được kiểm từng trường trước khi nhận; `GET /api/revisions/{id}/equipment-candidates` (ETag, `needsConfirmation` khi confidence < 0.9, `suggestedDecision` từ revision trước) và `PATCH .../equipment-decisions` (If-Match, Confirmed/Retyped/Rejected, `catalogKey` phải là capability `Equipment` của runtime active, audit). Chi tiết `docs/ifc-equipment-candidates.md`. Còn chờ: worker phát `building_metadata` thật, màn FE.
 
 - **Contract/current:** Quy tắc đã chốt: IFC có thiết bị PCCC/nguồn nước thì pipeline tạo ứng viên; không có thì OrganizationUser đặt trong editor. Chưa có API/persistence.
 - **Sửa code:** API đọc ứng viên (`catalogKey`, `confidence`, `source=ifc|editor`, `ifcGlobalId`, vị trí/bbox) theo revision; OrganizationUser xác nhận, đổi loại hoặc bỏ, có audit/ETag. Mô hình 3D luôn lấy từ thư viện asset, không từ IFC.
 - **Nghiệm thu:** Tenant sai bị từ chối; xác nhận không sửa artifact revision; revision mới không kế thừa xác nhận cũ nếu `ifcGlobalId` không còn.
 
-### SCENARIO-02 — P1 · GAP · Cấu hình tương tác và sprinkler trong ScenarioVersion
+### SCENARIO-02 — P1 · CODE/TEST (chờ merge) · Cấu hình tương tác và sprinkler trong ScenarioVersion
+
+- **Trạng thái 16/10/2026 (`feature/scenario-event-allowlist`, migration `20261016090000`, chưa áp Supabase):** capability contract có thêm `events` (type PascalCase, payload theo schema tham số) và `actions` (metadata cho Unity). Event learner/playtest chỉ nhận event lõi (`ExitReached`, `WrongExit`, `HazardExposure`, `Moved`) hoặc event do runtime đã pin khai báo; còn lại trả `conflicts` mã `EVENT_TYPE_UNSUPPORTED`/`EVENT_PAYLOAD_INVALID`, vẫn giữ sequence nên không kẹt `AwaitingSync`, không tính metric. Catalog đợt 1 (16 capability, có `suppression.sprinkler` với `state` Active/Disabled/Faulty và tham số bắt buộc, không mặc định) là fixture `contracts/editor/v1/fixtures/runtime-catalog.batch1.json`; Admin đăng ký qua `POST /api/admin/runtime-catalog`. Bảng ánh xạ tên event Docs (snake_case) sang API (PascalCase) ở `docs/learner-sessions.md`. Còn chờ: Unity xác nhận tên/payload event và ý nghĩa `schemaVersion`; metric rubric mới cho các event này là việc riêng.
 
 - **Contract/current:** Mục 6–7 của tài liệu trên: catalog đợt 1 (có sprinkler), luật tương tác theo ngữ cảnh, tham số tác dụng từ nội dung đã duyệt.
 - **Sửa code:** Không thêm trường mới: dùng object `Equipment`/`Hazard` của contract `fet3d.editor/1` (`contracts/editor/v1`), coi `catalogKey` trong Docs là capability `{id,version}` của `GET /api/scenario-interactions/catalog`; bổ sung capability đợt 1 (mục 6.1, sprinkler mục 6.3) vào catalog và validate theo Organization Library/runtime; tham số tác dụng (khăn ướt, sprinkler…) không có giá trị mặc định ngầm; sprinkler có trạng thái `Active|Disabled|Faulty`; event mới (`alarm_raised`, `used_elevator`, `sprinkler_activated`…) được chấp nhận ở session event gate theo schema version.
@@ -211,6 +221,8 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 
 ### ASSESSMENT-01 — SOURCE/HTTP/DB TESTED · Kết quả theo rubric (FR-TRAINING-01,08)
 
+- **Trạng thái 16/10/2026 (#96, chờ merge):** OpenAPI có enum cho status/mode/outcome/reason/endReason; tiêu chí có `label`/`description`, kết quả có `passThresholdPercent`; `GET /api/training/buildings` cho Trainee; 403 `CONTINUATION_SESSION_MISMATCH`. Xem `docs/learner-sessions.md`.
+
 - **Trạng thái 12/10/2026:** kết quả theo rubric hash đã duyệt, outcome `Passed|NotPassed|Incomplete|NotAssessed` tách completion; rubric `schema_version` chuẩn `"1"` (#69). Nội dung dưới đây là lịch sử.
 
 - **Contract/current:** Chưa có đầy đủ runtime/result API v7; session Completed không suy ra Passed.
@@ -238,6 +250,8 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 
 ### AI-01 — SOURCE/HTTP/DB TESTED · AI request và quota
 
+- **Trạng thái 16/10/2026 (#89, #91, PR #97):** trạng thái request theo v7 (`status` + `resultType`, `result.status`), request có `input`, citation resolve theo nguồn đã pin kèm `link`; `GET /api/ai/organization/limits`; adapter contract v2 ([organization-ai.md](organization-ai.md)) gửi nguồn inline/hash và BIM context (revision, geometry, anchor, annotation, capability); bảng `knowledge_chunks` (pgvector) và role `fet3d_ai_indexer`. Provider AI thật vẫn chờ (#92).
+
 - **Trạng thái 12/10/2026:** request/quota pooled, reserve/settle/release, reconcile Admin, danh sách request của Organization (`GET /api/ai/requests`, #58). AI provider thật chưa có adapter (503 `AI_PROVIDER_UNAVAILABLE`). Nội dung dưới đây là lịch sử.
 
 - **Contract/current:** V7 dùng Organization quota pooled trả trước từ Building/package/top-up và Trainee daily quota riêng; chưa có luồng production BE request/quota đầy đủ. Không còn overage consent, AI billing period hoặc nợ trả sau.
@@ -259,7 +273,9 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 - **Source:** package6/12 months, monthly price, learnerLimit and quota/policy configuration. Quote pins capacity/quota/policy and fixed UTC service interval before Issue. New/Renewal reservations prevent overlapping checkouts; Paid/Applied provisioning adds immutable entitlement and quota grant atomically from snapshot.
 - **Docker evidence:** actual migrations, constrained grants, snapshot/catalog mutation, quota coverage, ETag/Issue concurrency, reservation/cancellation/late payment, provisioning rollback and retries. Legacy checkout recovery remains; no new sales from incomplete legacy snapshots.
 - **Pending:** rollout of all API/worker instances and real provider evidence. Upgrade, top-up, AI reserve/consume and learner seat allocation were added in #56. See billing-v7-rollout.md and publish-billing-v7-manual-test.md.
-### RAG-01 — NGOÀI PHẠM VI HIỆN TẠI · Learner-safe retrieval (FR-AI-03,05–06)
+### RAG-01 — CODE/TEST (retrieval do service AI) · Learner-safe retrieval (FR-AI-03,05–06)
+
+- **Trạng thái 16/10/2026 (#77, PR #97):** `POST /api/ai/trainee/answer` với ngữ cảnh Learn/Training/Result của chính Trainee; quota ngày `GET /api/ai/trainee/quota`; lịch sử `GET /api/ai/trainee/requests`; đang có lượt Assessment mở thì 409 `AI_BLOCKED_DURING_ASSESSMENT`. Retrieval/vector thật do service AI làm theo adapter v2.
 
 - **Trạng thái 12/10/2026:** không triển khai trong đợt này theo quyết định của nhóm; gồm `POST /api/ai/trainee/answer` và adapter AI provider thật. Nội dung dưới đây giữ làm yêu cầu khi mở lại.
 
