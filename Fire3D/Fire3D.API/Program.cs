@@ -134,7 +134,9 @@ app.UseAuthorization();
 // Liveness stays process-only so a database outage never makes the host restart the app; readiness checks DB and migrations.
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = check => !check.Tags.Contains(DatabaseReadinessCheck.Tag) && !check.Tags.Contains(ProcessingExecutorCheck.Tag) });
 app.MapHealthChecks("/health/ready", DatabaseReadinessCheck.Options).AllowAnonymous();
-app.MapHealthChecks("/health/worker", ProcessingExecutorCheck.Options).AllowAnonymous();
+// Machine key only: the codes describe the worker deployment, so they are not public.
+app.MapHealthChecks("/health/worker", ProcessingExecutorCheck.Options)
+    .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { AuthenticationSchemes = Fire3D.API.Authorization.ProcessingWorkerAuthentication.SchemeName });
 app.MapGet("/health/version", (IConfiguration configuration) => Results.Ok(new ArtifactVersionResponse(ArtifactVersion.Get(configuration))))
     .AllowAnonymous().Produces<ArtifactVersionResponse>(200);
 app.MapControllers();

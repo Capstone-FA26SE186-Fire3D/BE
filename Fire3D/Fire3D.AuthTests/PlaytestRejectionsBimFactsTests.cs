@@ -67,5 +67,9 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal("Office", rooms.Items[1].Name!.Value.GetString());
         var onlyUnnamed = (await store.ListBimFactElementsAsync(revision, null, new(QualityFlag: "SPACE_UNNAMED"), 1, 20, default))!;
         Assert.Equal(Id('A'), Assert.Single(onlyUnnamed.Items).IfcGlobalId);
+        Assert.Empty((await store.ListBimFactElementsAsync(revision, null, new(EntityType: "IfcDoor", QualityFlag: "SPACE_UNNAMED"), 1, 20, default))!.Items);
+        // Another tenant never sees the revision (404 at the API).
+        Assert.Null(await store.ListBimFactElementsAsync(revision, Guid.NewGuid(), new(), 1, 20, default));
+        Assert.Null(await store.ListBimFactsAsync(revision, Guid.NewGuid(), new(), 1, 20, default));
     }
 }

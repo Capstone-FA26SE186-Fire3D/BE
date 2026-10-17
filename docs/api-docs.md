@@ -24,7 +24,7 @@ OpenAPI tại host Azure tự báo build `d785937e5948f31486df66740a1f31ccd9ce25
 ## 1. Quy ước tích hợp
 
 - Dùng origin BE đang chạy làm `BASE_URL`; đường dẫn bên dưới đã có `/api`.
-- Swagger `/swagger`, OpenAPI `/openapi/v1.json`, liveness `/health`, readiness `/health/ready` (DB + migration đã áp; 503 `MIGRATIONS_PENDING` kèm danh sách) và `/health/version` không tính vào số action controller. Xem [deployment readiness](deployment-readiness.md).
+- Swagger `/swagger`, OpenAPI `/openapi/v1.json`, liveness `/health`, readiness `/health/ready` (DB + migration đã áp; 503 `MIGRATIONS_PENDING` kèm danh sách) và `/health/version` không tính vào số action controller. `/health/worker` (chỉ machine key `X-Worker-Key`) báo login `ProcessingExecutor` của worker có đúng quyền không, xem [Unity package worker](unity-package-worker.md#checking-the-worker-login-be118). Xem [deployment readiness](deployment-readiness.md).
 - Body: `Content-Type: application/json`, tên thuộc tính `camelCase`, GUID là chuỗi UUID, ngày giờ ISO 8601.
 - Enum JSON dùng tên như `"OrganizationUser"`; không gửi số cho role.
 - Không có envelope chung `{success,data}`. Đọc trực tiếp DTO. `204` và một số `200` không có body; không luôn gọi `response.json()`.

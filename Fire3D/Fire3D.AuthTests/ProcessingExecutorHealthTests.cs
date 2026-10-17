@@ -34,10 +34,12 @@ public sealed partial class AuthIntegrationTests
                         services.AddScoped<IProcessingWorkerGate>(p => new ProcessingRuntimeStore(p.GetRequiredService<Fire3D.Infrastructure.Persistence.Fire3DDbContext>(), config));
                     }));
                 using var http = host.CreateClient();
+                // The worker health codes describe the deployment: machine key only.
+                Assert.Equal(HttpStatusCode.Unauthorized, (await http.GetAsync("/health/worker")).StatusCode);
                 http.DefaultRequestHeaders.Add("X-Worker-Key", key);
                 var response = await http.PostAsJsonAsync("/internal/processing/package-jobs/lease", new { toolchainVersion = "fake-unity-v1" });
                 Assert.Equal(lease, response.StatusCode);
-                if (lease == HttpStatusCode.ServiceUnavailable) Assert.Contains("PROCESSING_EXECUTOR_FORBIDDEN", await response.Content.ReadAsStringAsync());
+                if (lease == HttpStatusCode.ServiceUnavailable) Assert.Contains(code, await response.Content.ReadAsStringAsync());
                 var health = await http.GetAsync("/health/worker");
                 Assert.Equal(worker, health.StatusCode);
                 Assert.Contains(code, await health.Content.ReadAsStringAsync());
@@ -46,6 +48,8 @@ public sealed partial class AuthIntegrationTests
             }
             await Check(new NpgsqlConnectionStringBuilder(testConnection) { Username = plain, Pooling = false }.ConnectionString,
                 HttpStatusCode.ServiceUnavailable, HttpStatusCode.ServiceUnavailable, "PROCESSING_EXECUTOR_FORBIDDEN");
+            await Check(new NpgsqlConnectionStringBuilder(testConnection) { Username = plain, Password = "wrong-password", Pooling = false }.ConnectionString,
+                HttpStatusCode.ServiceUnavailable, HttpStatusCode.ServiceUnavailable, "PROCESSING_EXECUTOR_LOGIN_FAILED");
             await WithProcessingRuntime((_, worker) => Check(worker, HttpStatusCode.NoContent, HttpStatusCode.OK, "\"OK\""));
         }
         finally { await ExecuteAsync($"DROP OWNED BY {plain};DROP ROLE {plain}"); }
