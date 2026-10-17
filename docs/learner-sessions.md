@@ -59,7 +59,7 @@ chose at start (playtest core-event payloads are not range-checked).
 - Otherwise the event is returned in `conflicts` with `EVENT_TYPE_UNSUPPORTED` or `EVENT_PAYLOAD_INVALID`. It still fills its
   sequence, so `acknowledgedSequence` advances and completion never waits for it; it is stored with `rejection_code` and never
   scored. Resending it returns the same conflict. The rest of the batch is accepted.
-- `schemaVersion` of an event is stored as sent; it does not change the allow-list (pending Unity decision).
+- `schemaVersion` of an event is stored as sent; it does not change the allow-list. Unity sends `"1"` for the current set (BE#101).
 
 Batch 1 proposal ([fixture](../contracts/editor/v1/fixtures/runtime-catalog.batch1.json), Docs IFC 6.1). API names are PascalCase; Docs
 names map as follows. Each payload carries `objectId` (the editor object that emitted it).
@@ -80,8 +80,11 @@ names map as follows. Each payload carries `objectId` (the editor object that em
 | `NpcGuided` | `npc_guided` | `npc.guide` | |
 | `SprinklerActivated` | `sprinkler_activated` (debrief only) | `suppression.sprinkler` | |
 
-No rubric metric uses these events yet; adding one (e.g. `used_elevator`) is a separate change. Metrics read core events only, so
-rejected events never change a score; the `completion_time_seconds` fallback (last event, when no exit) counts every received event.
+Unity confirmed these names and payloads for runtime `2.0.0` on 17/10/2026 (BE#101): `objectId` is the editor object id (the IFC
+GlobalId for a door that has no scenario object), `schemaVersion` is `"1"`, `eventId` a GUID. Runtime `2.0.0` also adds the Hazard
+capabilities `fire.source`, `smoke.source`, `event.power_outage`, `event.alarm` and the `npc.guide` parameters `behaviour`/`mobilityImpaired`
+(no events); `npc.evacuee` is not supported. The player-action events above have rubric metrics (see the metric table); rejected events
+never change a score, while the `completion_time_seconds` fallback (last event, when no exit) counts every received event.
 
 Assessment needs a scorable rubric: at least one criterion and a positive total weight. Saving a complete draft otherwise fails with
 `RUBRIC_WEIGHT_REQUIRED`, `pass_threshold` must be between 0 and 1, and preparing an Assessment on an older unscorable version returns
@@ -98,6 +101,12 @@ Metrics are computed only from received events:
 | `wrong_exits` | count of `WrongExit` |
 | `hazard_exposure` | sum of `HazardExposure.payload.amount` (finite, ≥ 0) |
 | `distance_meters` | sum of `Moved.payload.distanceMeters` (finite, ≥ 0) |
+| `alarm_raised`, `extinguisher_used`, `extinguish_attempt_large_fire`, `item_wetted`, `nose_covered_in_smoke`, `checked_door_heat`, `closed_door`, `used_elevator`, `went_back_for_belongings`, `npc_guided` | count of accepted events of the matching API type (`AlarmRaised`, `ExtinguisherUsed`, … see the batch 1 table); rejected events are not counted |
+
+The player-action metrics (migration `20261017110000_AddEventRubricMetrics`, BE#101) are named after the Docs IFC 6.1 events, so a
+criterion is tied to an event as Docs requires: for example `{"metric":"used_elevator","operator":"eq","threshold":0,"mandatory":true}`
+(never took the elevator) or `{"metric":"alarm_raised","operator":"gte","threshold":1}`. `DetectorTriggered` and `SprinklerActivated`
+are sent by the simulation, not the player, and have no metric. An event the session's runtime does not declare is rejected and counts 0.
 
 Criteria compare a metric with `gte`/`lte`/`eq`; a missing metric fails the criterion. Score = passed weight / total weight (stored as percent). Assessment: `Passed` when every mandatory criterion passes and the ratio reaches `pass_threshold`, otherwise `NotPassed`; `Abandoned` gives `Incomplete`. Learn and Guided give `NotAssessed`. Completion never implies Passed and the client never sends a score. Versioned editor drafts reject criteria on other metrics (`RUBRIC_METRIC_UNSUPPORTED`), and Assessment prepare rejects legacy versions with unsupported metrics (`RUBRIC_NOT_SUPPORTED`).
 

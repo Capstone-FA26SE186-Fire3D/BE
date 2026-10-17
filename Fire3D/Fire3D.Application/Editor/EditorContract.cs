@@ -21,10 +21,29 @@ public static partial class EditorContract
     public static readonly string[] CapabilityRequiredKinds = ["Hazard", "Npc", "Equipment"];
     public const int MaxFloors = 500, MaxMappings = 100_000, MaxObjects = 2_000;
     /// <summary>
-    /// Rubric metrics the server can compute from learner telemetry (ExitReached, WrongExit, HazardExposure.amount, Moved.distanceMeters).
-    /// A criterion on any other metric is rejected before release; scores are never taken from the client.
+    /// Player-action metrics (Docs IFC 6.1 "event cho rubric"): the metric id is the Docs event name and its value is the number of
+    /// accepted events of that API type. Simulation events (DetectorTriggered, SprinklerActivated) are not player actions and are not scored.
+    /// Keep in sync with learner_session_finalize and learner_rubric_metrics() (RubricEventMetrics.sql).
     /// </summary>
-    public static readonly string[] LearnerMetrics = ["reached_exit", "completion_time_seconds", "wrong_exits", "hazard_exposure", "distance_meters"];
+    public static readonly IReadOnlyDictionary<string, string> EventCountMetrics = new Dictionary<string, string>
+    {
+        ["alarm_raised"] = "AlarmRaised",
+        ["extinguisher_used"] = "ExtinguisherUsed",
+        ["extinguish_attempt_large_fire"] = "ExtinguishAttemptLargeFire",
+        ["item_wetted"] = "ItemWetted",
+        ["nose_covered_in_smoke"] = "NoseCoveredInSmoke",
+        ["checked_door_heat"] = "CheckedDoorHeat",
+        ["closed_door"] = "ClosedDoor",
+        ["used_elevator"] = "UsedElevator",
+        ["went_back_for_belongings"] = "WentBackForBelongings",
+        ["npc_guided"] = "NpcGuided"
+    };
+    /// <summary>
+    /// Rubric metrics the server can compute from learner telemetry: the core metrics (ExitReached, WrongExit, HazardExposure.amount,
+    /// Moved.distanceMeters) and the player-action counts above. A criterion on any other metric is rejected before release; scores are
+    /// never taken from the client.
+    /// </summary>
+    public static readonly string[] LearnerMetrics = ["reached_exit", "completion_time_seconds", "wrong_exits", "hazard_exposure", "distance_meters", .. EventCountMetrics.Keys];
     /// <summary>
     /// Learner/playtest events every runtime may send; the metrics above are computed from them. Any other event type must be
     /// declared in <c>events</c> of a capability of the session's pinned runtime, otherwise it is rejected (EVENT_TYPE_UNSUPPORTED).

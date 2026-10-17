@@ -56,6 +56,7 @@
     <EmbeddedResource Include="Persistence/Sql/RevokeClientRoleGrants.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.RevokeClientRoleGrants.sql" />
     <EmbeddedResource Include="Persistence/Sql/RevisionStyle.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.RevisionStyle.sql" />
     <EmbeddedResource Include="Persistence/Sql/AlignProductionSchema.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.AlignProductionSchema.sql" />
+    <EmbeddedResource Include="Persistence/Sql/RubricEventMetrics.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.RubricEventMetrics.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />

@@ -38,7 +38,8 @@ public static class RubricContract
         ["distance_meters"]="Sum of Moved distances in metres."
     };
     public static RubricCatalog Catalog { get; }=new(SupportedSchemaVersions,DefaultSchemaVersion,
-        EditorContract.LearnerMetrics.Select(x=>new RubricMetric(x,MetricDescriptions.GetValueOrDefault(x,""))).ToArray(),Operators,
+        EditorContract.LearnerMetrics.Select(x=>new RubricMetric(x,MetricDescriptions.GetValueOrDefault(x)??
+            $"Number of accepted {EditorContract.EventCountMetrics[x]} events (rejected events are not counted).")).ToArray(),Operators,
         new(CriterionRequiredFields,CriterionOptionalFields,EditorContract.IdPattern().ToString(),CriterionIdMaxLength,DescriptionMaxLength,0m,LabelMaxLength),
         MaxCriteria,RubricFields);
 }
