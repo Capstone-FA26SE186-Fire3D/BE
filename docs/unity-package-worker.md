@@ -1,6 +1,6 @@
 # Unity package worker (BE#110) and package download (Mobile#22)
 
-The Unity build worker runs Unity Editor 6000.6.3f1 in batch mode on a team Azure VM with **no inbound port**. It pulls package
+The Unity build worker runs Unity Editor 6000.6.6f1 in batch mode on a team Azure VM with **no inbound port**. It pulls package
 jobs from the backend, downloads its inputs and uploads its outputs through short signed S3 URLs, and never holds S3 or database
 credentials. Contract of the files: [`contracts/package/v1/manifest.schema.json`](../contracts/package/v1/manifest.schema.json)
 (`fet3d.package/1`). Migration `20261017120000_AddPackageBuildPull`.
@@ -12,7 +12,7 @@ ProcessingWorker__WorkerApiEnabled=true
 ProcessingWorker__PackagePullEnabled=true          # the HTTP dispatcher then skips package jobs
 ProcessingWorker__PackageLeaseSeconds=300          # 60-900, lease of package jobs on claim and renew
 ProcessingWorker__MachineKey=<32-512 random characters, the VM's X-Worker-Key>
-ProcessingWorker__AllowedToolchains__0=<the Unity worker toolchain id, e.g. unity-6000.6.3f1-worker-1>
+ProcessingWorker__AllowedToolchains__0=<the Unity worker toolchain id, e.g. unity-6000.6.6f1-worker-1>
 ConnectionStrings__ProcessingExecutor=<restricted login, member of fet3d_processing_executor>
 ```
 
