@@ -20,6 +20,16 @@ Pull works with the `Http` transport (dispatcher on or off). The API refuses to 
 because the Redis publisher would still push package jobs. Apply the migration before deploying the binary; keep pull off until the
 VM is ready (with pull off, package jobs stay with the push dispatcher as before).
 
+## Production state (17/10/2026)
+
+- The VM `UNITY-WORKER` runs the Unity repo agent `Tools/PackageWorker` (Windows PowerShell 5.1, Scheduled Task started at boot,
+  `X-Worker-Key` stored with DPAPI). It sends `toolchainVersion: "unity-6000.6.6f1-worker-1"`, so `AllowedToolchains` must contain
+  exactly that string (the value was still `unity-6000.6.3f1-worker-1` and answered `400 VALIDATION_ERROR` until it was changed).
+- The `ProcessingExecutor` connection string must be a login that is a member of `fet3d_processing_executor`: the lease calls
+  `processing_package_lease_gate`, which is granted to that role only. Production answered `500` on lease with key and toolchain
+  accepted and `/health/ready` healthy; tracked in BE#118.
+- The VM is deallocated when idle; jobs created meanwhile wait in the database and are leased when it starts again.
+
 ## Worker loop
 
 All calls use the header `X-Worker-Key`; user tokens are rejected (401). Base URL: the API (`https://api.fet3d.io.vn`).
