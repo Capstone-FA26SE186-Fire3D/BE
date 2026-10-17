@@ -14,6 +14,8 @@ Tài liệu này là backlog đối chiếu code BE với chuẩn nghiệp vụ 
 
 - **16/10/2026 (sau deploy):** PR #97, #104, #105, #106 đã merge và deploy, production `main` `4606fe9`, readiness Healthy. Supabase 109 migration tới `20261016090000`. Đã xong: #77, #89, #91, #94, #96, IFC-03, IFC-04, SCENARIO-02. `IFC_EXIT_UNKNOWN` đã chốt phương án B (#100), BE làm ở `feature/ifc-exit-door-confirmation` (migration `20261016100000`) cùng việc thu quyền client role của Supabase (`20261016101000`). Còn mở: #92 ([nghiệm thu production](production-acceptance.md)), #101 (Unity xác nhận event), #102 (FE tích hợp, câu 2–6), #103 (nhiều IFC), STYLE-01.
 
+- **17/10/2026:** `IFC_EXIT_UNKNOWN` phương án B (#107), compat header Building (#108, cờ mặc định tắt) và STYLE-01 (#109) đã merge và deploy (`b5b328e`). Smoke test production phát hiện 73 trigger tạo tay chặn mọi lần tạo Building (500); migration `20261017100000_AlignProductionSchema` đã áp lên Supabase (113 migration) và POST Building trả 201 trở lại ([nghiệm thu production](production-acceptance.md#cập-nhật-17102026)). Quét 269 route production chỉ đọc: không có 5xx. Unity trả lời #101 (runtime `2.0.0`): BE cập nhật catalog đợt 1 (20 capability) và thêm metric rubric cho event hành động người chơi (`20261017110000_AddEventRubricMetrics`, branch `feature/runtime-catalog-2`). Việc tiếp: #110 (Unity build worker trên Azure VM).
+
 ## Kiểm chứng deployment bổ sung ngày 03/10/2026
 
 Các trạng thái lịch sử bên dưới chỉ có giá trị trong phạm vi baseline ghi kèm; bằng chứng mới về PayOS/deployment nằm tại [payos-deployment.md](payos-deployment.md).
