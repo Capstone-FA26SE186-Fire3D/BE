@@ -73,8 +73,30 @@ public sealed class ProcessingWorkerController(IProcessingWorkerGate gate,IOptio
         }
         if(errors.Count>0)return Problem(statusCode:400,title:"Worker command validation failed.",extensions:new Dictionary<string,object?> { ["code"]="VALIDATION_ERROR",["errors"]=errors });
         if(action=="Output"&&EditorMetadataProblem(input.GetProperty("output")) is { } editor)return editor;
+        if(action=="Output"&&PackageManifestProblem(input.GetProperty("output")) is { } manifest)return manifest;
+        // BE#110: package jobs take the configured lease length on claim and renew (Geometry keeps 60 s); a worker-sent value is ignored.
+        if(action is "Claim" or "Renew")
+        {
+            var command=System.Text.Json.Nodes.JsonNode.Parse(input.GetRawText())!.AsObject();
+            command["leaseSeconds"]=options.Value.PackageLeaseSeconds;
+            input=JsonSerializer.SerializeToElement(command);
+        }
+        var storage=HttpContext?.RequestServices?.GetService(typeof(IPackageStorage)) as IPackageStorage;
+        if(action=="Complete"&&storage is not null&&await gate.ContextAsync(input.GetProperty("attemptId").GetGuid(),input.GetProperty("leaseToken").GetGuid(),ct) is { } context
+            &&await PackageWorkerResponses.VerifyAsync(context,storage,ct) is { } problem)
+            return Problem(statusCode:problem.Status,title:problem.Message,extensions:new Dictionary<string,object?> { ["code"]=problem.Code });
         var result=await gate.ExecuteAsync(action,job,input,ct);
-        return result.IsSuccess?Ok(result.Value):Problem(statusCode:result.Error!.Status,title:result.Error.Message,extensions:new Dictionary<string,object?> { ["code"]=result.Error.Code });
+        if(!result.IsSuccess)return Problem(statusCode:result.Error!.Status,title:result.Error.Message,extensions:new Dictionary<string,object?> { ["code"]=result.Error.Code });
+        // Package claims carry signed input URLs instead of object keys.
+        return Ok(action=="Claim"&&storage is not null?await PackageWorkerResponses.PresentAsync(result.Value,storage,ct):result.Value);
+    }
+    /// <summary>A fet3d.package/1 manifest output must list its files and floors correctly (BE#110).</summary>
+    private ObjectResult? PackageManifestProblem(JsonElement output)
+    {
+        if(output.GetProperty("artifactType").GetString()!="manifest"||output.GetProperty("schemaVersion").GetString()!=PackageManifest.SchemaVersion)return null;
+        var found=PackageManifest.Validate(System.Text.Json.Nodes.JsonNode.Parse(output.GetProperty("metadata").GetRawText()),null);
+        return found.Count==0?null:Problem(statusCode:422,title:"The manifest does not satisfy fet3d.package/1.",
+            extensions:new Dictionary<string,object?> { ["code"]="PACKAGE_MANIFEST_INVALID",["errors"]=found.GroupBy(x=>x.Path).ToDictionary(x=>x.Key,x=>x.Select(y=>y.Message).ToArray()) });
     }
     /// <summary>
     /// Geometry preview metadata that declares a schemaVersion must satisfy that editor contract before acceptance.

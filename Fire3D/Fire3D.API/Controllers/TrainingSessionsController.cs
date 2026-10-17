@@ -161,6 +161,24 @@ public sealed class TrainingSessionsController(ILearnerSessions sessions) : Cont
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> Result(Guid id, CancellationToken ct) => Sync(id) is { } caller ? Reply(await sessions.ResultAsync(caller, id, ct)) : Mismatch();
 
+    /// <summary>Short-lived download URLs (10 minutes) for the pinned fet3d.package/1 package of a started session (Mobile#22).</summary>
+    /// <remarks>Live login that started the session only, while it is Launching or Running and not completing; call again for fresh
+    /// URLs. Verify manifest.json against manifest.sha256 and every file against its sha256 before sending Launch to Unity.
+    /// 409 PACKAGE_SESSION_NOT_ACTIVE (another login, or the session ended), 409 PACKAGE_FORMAT_UNSUPPORTED (package built before
+    /// fet3d.package/1, no file list).</remarks>
+    [Authorize(Roles = "Trainee")]
+    [HttpGet("sessions/{id:guid}/package")]
+    [ProducesResponseType<RuntimePackageDownload>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    public async Task<IActionResult> Package(Guid id, [FromServices] Fire3D.Application.Ifc.IRuntimePackageFiles files, [FromServices] Fire3D.Application.Ifc.IPackageStorage storage, CancellationToken ct)
+    {
+        var pinned = await files.GetAsync("Training", User.GetActorId(), User.GetSessionFamilyId(), id, ct);
+        return pinned.IsSuccess ? Ok(await PackageWorkerResponses.DownloadAsync(pinned.Value, storage, ct)) : Problem(pinned.Error!);
+    }
+
     /// <summary>Live login reissues the continuation for the same owner and started session; the previous token stops working.</summary>
     [Authorize(Roles = "Trainee")]
     [HttpPost("sessions/{id:guid}/continuation")]

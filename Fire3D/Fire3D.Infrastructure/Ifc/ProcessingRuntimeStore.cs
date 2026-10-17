@@ -25,18 +25,36 @@ public sealed class ProcessingRuntimeStore(Fire3DDbContext db, IConfiguration co
         cmd.Parameters.AddWithValue("action",action);cmd.Parameters.AddWithValue("job",job);cmd.Parameters.AddWithValue("input",NpgsqlDbType.Jsonb,input.GetRawText());
         var value=Parse(await cmd.ExecuteScalarAsync(ct));
         if(Error(value) is { } error) return new(default,error);
-        if(action=="Claim")
-        {
-            await using var context=new NpgsqlCommand("SELECT processing_worker_context(@attempt,@token)::text",connection);
-            context.Parameters.AddWithValue("attempt",value.GetProperty("attemptId").GetGuid());context.Parameters.AddWithValue("token",value.GetProperty("leaseToken").GetGuid());
-            if(await context.ExecuteScalarAsync(ct) is string snapshot)
-            {
-                var node=System.Text.Json.Nodes.JsonNode.Parse(value.GetRawText())!;
-                foreach(var field in System.Text.Json.Nodes.JsonNode.Parse(snapshot)!.AsObject())node[field.Key]=field.Value?.DeepClone();
-                value=JsonSerializer.SerializeToElement(node);
-            }
-        }
+        if(action=="Claim")value=await WithContextAsync(connection,value,ct);
         return AuthResult<JsonElement>.Ok(value);
+    }
+    public async Task<AuthResult<JsonElement?>> LeasePackageAsync(JsonElement input,CancellationToken ct)
+    {
+        await using var connection=new NpgsqlConnection(configuration.GetConnectionString("ProcessingExecutor"));await connection.OpenAsync(ct);
+        await using var cmd=new NpgsqlCommand("SELECT processing_package_lease_gate(@input)::text",connection);
+        cmd.Parameters.AddWithValue("input",NpgsqlDbType.Jsonb,input.GetRawText());
+        var value=Parse(await cmd.ExecuteScalarAsync(ct));
+        if(value.GetProperty("code").GetString()=="EMPTY")return AuthResult<JsonElement?>.Ok(null);
+        if(Error(value) is { } error) return new(null,error);
+        return AuthResult<JsonElement?>.Ok(await WithContextAsync(connection,value,ct));
+    }
+    public async Task<JsonElement?> ContextAsync(Guid attempt,Guid leaseToken,CancellationToken ct)
+    {
+        await using var connection=new NpgsqlConnection(configuration.GetConnectionString("ProcessingExecutor"));await connection.OpenAsync(ct);
+        return await ContextAsync(connection,attempt,leaseToken,ct);
+    }
+    private static async Task<JsonElement?> ContextAsync(NpgsqlConnection connection,Guid attempt,Guid token,CancellationToken ct)
+    {
+        await using var context=new NpgsqlCommand("SELECT processing_worker_context(@attempt,@token)::text",connection);
+        context.Parameters.AddWithValue("attempt",attempt);context.Parameters.AddWithValue("token",token);
+        return await context.ExecuteScalarAsync(ct) is string snapshot ? Parse(snapshot) : null;
+    }
+    private static async Task<JsonElement> WithContextAsync(NpgsqlConnection connection,JsonElement value,CancellationToken ct)
+    {
+        if(await ContextAsync(connection,value.GetProperty("attemptId").GetGuid(),value.GetProperty("leaseToken").GetGuid(),ct) is not { } snapshot)return value;
+        var node=System.Text.Json.Nodes.JsonNode.Parse(value.GetRawText())!;
+        foreach(var field in System.Text.Json.Nodes.JsonNode.Parse(snapshot.GetRawText())!.AsObject())node[field.Key]=field.Value?.DeepClone();
+        return JsonSerializer.SerializeToElement(node);
     }
     public async Task<JsonElement> ExecuteAsync(string action,string? key,Guid? token,Guid? receipt,CancellationToken ct)
     {

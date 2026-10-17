@@ -1,0 +1,103 @@
+# Unity package worker (BE#110) and package download (Mobile#22)
+
+The Unity build worker runs Unity Editor 6000.6.3f1 in batch mode on a team Azure VM with **no inbound port**. It pulls package
+jobs from the backend, downloads its inputs and uploads its outputs through short signed S3 URLs, and never holds S3 or database
+credentials. Contract of the files: [`contracts/package/v1/manifest.schema.json`](../contracts/package/v1/manifest.schema.json)
+(`fet3d.package/1`). Migration `20261017120000_AddPackageBuildPull`.
+
+## Deployment settings
+
+```ini
+ProcessingWorker__WorkerApiEnabled=true
+ProcessingWorker__PackagePullEnabled=true          # the HTTP dispatcher then skips package jobs
+ProcessingWorker__PackageLeaseSeconds=300          # 60-900, lease of package jobs on claim and renew
+ProcessingWorker__MachineKey=<32-512 random characters, the VM's X-Worker-Key>
+ProcessingWorker__AllowedToolchains__0=<the Unity worker toolchain id, e.g. unity-6000.6.3f1-worker-1>
+ConnectionStrings__ProcessingExecutor=<restricted login, member of fet3d_processing_executor>
+```
+
+Pull works with the `Http` transport (dispatcher on or off). The API refuses to start with pull plus `RedisStreams` delivery,
+because the Redis publisher would still push package jobs. Apply the migration before deploying the binary; keep pull off until the
+VM is ready (with pull off, package jobs stay with the push dispatcher as before).
+
+## Worker loop
+
+All calls use the header `X-Worker-Key`; user tokens are rejected (401). Base URL: the API (`https://api.fet3d.io.vn`).
+
+1. **Lease** `POST /internal/processing/package-jobs/lease` `{ "toolchainVersion": "...", "buildTarget": "Android" }`
+   - `204`: nothing to build; poll again later (e.g. every 30 s).
+   - `200`: the claim of the oldest waiting `PlaytestPackage`/`ReleasePackage` job with that build target:
+     `jobId`, `kind`, `attemptId`, `leaseToken`, `leaseUntil`, `outputPrefix`, `inputHash`, `inputSnapshot`
+     (`scenarioVersionId`, `scenarioHash`, `rubricHash`, `buildTarget`, …), `scenarioSnapshot` (the approved `fet3d.editor/1`
+     state; write it as `scenario.json`), `geometryAttemptId` and `inputs[]`.
+   - `inputs[]`: one entry per artifact of the revision's accepted Geometry attempt (`preview_glb`, `building_metadata`, …):
+     `artifactType`, `artifactId`, `sha256`, `sizeBytes`, `schemaVersion`, `url` (GET, 15 minutes), `expiresAt`. Check the SHA-256
+     after download. `url` is null when the object is missing or its size changed: fail the job, do not build from other bytes.
+     `inputs` is empty when the revision has no accepted Geometry yet (the job cannot be built: fail it).
+   - `409 PACKAGE_PULL_DISABLED`: pull is off on this deployment. `400`: toolchain not allowed.
+2. **Renew** `POST /internal/processing/jobs/{jobId}/renew` `{ attemptId, leaseToken }` about every `PackageLeaseSeconds / 3`
+   (100 s with the default) while Unity runs. A lost lease answers `409 ATTEMPT_STALE`: stop the build and discard its output.
+3. **Inputs again** `POST /internal/processing/jobs/{jobId}/inputs` `{ attemptId, leaseToken }` re-signs `inputs[]` if they expired.
+4. **Upload URLs** `POST /internal/processing/jobs/{jobId}/upload-urls`
+   `{ attemptId, leaseToken, files: [ { path, sizeBytes, sha256 } ] }` for every output file **including `manifest.json`**
+   (1-2001 files). Returns `{ outputPrefix, files: [ { path, url, headers, expiresAt } ] }`: `PUT` the file body to `url` within 30
+   minutes and send **exactly** the returned `headers` (`x-amz-checksum-sha256`, `x-amz-sdk-checksum-algorithm`). S3 rejects a body
+   whose SHA-256 differs. Single PUT only (no multipart). Paths are relative (`floor_L1`, `bundles/floor_L1_lighting`), no `..`.
+5. **Outputs** `POST /internal/processing/jobs/{jobId}/outputs`, twice, with the same `objectKey = outputPrefix + "manifest.json"`,
+   `sha256Hash` and `sizeBytes` of manifest.json:
+   - `artifactType: "manifest"`, `schemaVersion: "fet3d.package/1"`, `metadata`: the manifest document (all required fields of the
+     schema, including `files[]` and `floors[]`). `422 PACKAGE_MANIFEST_INVALID` lists the problems by path.
+   - `artifactType: "unity_package"`, any `schemaVersion`, `metadata` with `buildTarget` (the pinned one), `protocolVersion`,
+     `manifestSchemaVersion`, `minRuntimeVersion`, `requiredCapabilities` (same values as the manifest). It may add provenance
+     (`unityVersion`, `runtimeVersion`, input hashes, `fileCount`, `totalSizeBytes`).
+   - `outcome` `Passed` (or `Failed` with issues when the build ran but the result is unusable), `validatorVersion`, `issues[]`.
+6. **Complete** `POST /internal/processing/jobs/{jobId}/complete` `{ attemptId, leaseToken, outputHash }` (the `outputHash` of the
+   last output call). Before accepting, the backend reads S3: manifest.json and every listed file must exist under the attempt prefix
+   with the declared size and S3-verified SHA-256, and manifest.json must list the same `files` and `floors` as the registered
+   metadata. Otherwise `409 PACKAGE_STORAGE_MISMATCH` (fix the upload and call Complete again while the lease lasts) or
+   `503 PACKAGE_STORAGE_UNAVAILABLE` (retry). `422 PACKAGE_MANIFEST_INVALID`: the two outputs do not name the same object.
+7. **Fail** `POST /internal/processing/jobs/{jobId}/fail` `{ attemptId, leaseToken, reason }` (Unity exit code 1, missing inputs).
+   The job becomes Failed; the OrganizationUser retries it explicitly. Never fail for a lost lease.
+
+A worker that dies keeps its attempt until the lease passes; the next lease call recovers the job under a new attempt (new
+`attemptId`, new prefix). Run one job per Unity project at a time. The worker never publishes and never writes billing data.
+
+## Why the manifest is the package
+
+The `manifest` and `unity_package` outputs name the same `manifest.json`, so `packageHash` = `manifestHash` everywhere
+(release, playtest, learner start). The chain of trust is: package hash → manifest.json → SHA-256 of each file it lists. Existing
+release/playtest/learner pins keep working unchanged. Packages registered before this contract (one file, no `files[]`) still
+work for those flows but have no download endpoint (`409 PACKAGE_FORMAT_UNSUPPORTED`).
+
+## Mobile download
+
+- Learner: `GET /api/training/sessions/{id}/package` (Trainee, live login that started the session).
+- Playtest: `GET /api/playtests/{playtestId}/package` (OrganizationUser, the Mobile login that redeemed the handoff and started).
+
+Only while the session is `Launching` or `Running` (not completing). Response (no storage keys):
+
+```json
+{
+  "schemaVersion": "fet3d.package/1",
+  "manifest": { "url": "https://…", "sha256": "…", "sizeBytes": 2048 },
+  "files": [ { "path": "floor_L1", "url": "https://…", "sha256": "…", "sizeBytes": 10485760 } ],
+  "floors": [ { "id": "L1", "bundle": "floor_L1", "lightingBundle": "floor_L1_lighting", "scene": "L1" } ],
+  "runtimeVersion": "2.0.0", "buildTarget": "Android", "expiresAt": "…"
+}
+```
+
+URLs last 10 minutes; call again for fresh ones. Save every file under one folder at its `path` next to `manifest.json`, check
+manifest.json against `manifest.sha256` and each file against its `sha256`, then send `Launch` with `manifestPath`. Cache by
+manifest hash; a cache never allows a new start offline. Errors: `409 PACKAGE_SESSION_NOT_ACTIVE` (another login, or the session
+ended), `409 PACKAGE_FORMAT_UNSUPPORTED`, `404` outside scope.
+
+## Tests and limits
+
+`AuthIntegrationTests.Package_pull_*`, `Package_lease_endpoint_*`, `Playtest_package_files_*` (actual migrations, restricted
+logins) and `PackageWorkerUnitTests` (storage verification, signed checksum header, manifest rules). S3 is faked in tests; a real
+VM, Unity build and AWS checksum behaviour are not verified yet. The S3 bucket must support `x-amz-checksum-sha256` on presigned PUT
+and `ChecksumMode` on HEAD (AWS S3 does); without stored checksums every Complete returns `PACKAGE_STORAGE_MISMATCH`.
+
+Open decisions: a separate machine key for the Unity VM (it shares `MachineKey` with the IFC worker today); whether package jobs
+should pin the Geometry attempt in `input_snapshot` (today the accepted attempt is resolved at lease time and returned as
+`geometryAttemptId` for provenance); whether learner downloads should also accept the continuation token.

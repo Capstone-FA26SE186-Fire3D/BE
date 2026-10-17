@@ -11,6 +11,10 @@ public sealed class ProcessingWorkerOptions
     public string MachineKey { get; set; } = "";
     public string[] AllowedToolchains { get; set; } = [];
     public int PollSeconds { get; set; } = 5;
+    /// <summary>BE#110: the Unity worker leases package jobs itself (outbound only); the push dispatcher then skips package jobs.</summary>
+    public bool PackagePullEnabled { get; set; }
+    /// <summary>Lease length of package jobs on claim and renew (60-900 seconds); a Unity bake takes tens of minutes.</summary>
+    public int PackageLeaseSeconds { get; set; } = 300;
 }
 public interface IRevisionProcessingStore
 {
@@ -19,6 +23,29 @@ public interface IRevisionProcessingStore
 public interface IProcessingWorkerGate
 {
     Task<AuthResult<JsonElement>> ExecuteAsync(string action, Guid job, JsonElement input, CancellationToken ct);
+    /// <summary>Leases and claims the oldest deliverable package job; null when none is waiting.</summary>
+    Task<AuthResult<JsonElement?>> LeasePackageAsync(JsonElement input, CancellationToken ct);
+    /// <summary>Worker context of a live attempt (null when the attempt or lease is not current).</summary>
+    Task<JsonElement?> ContextAsync(Guid attempt, Guid leaseToken, CancellationToken ct);
+}
+/// <summary>Short-lived S3 URLs and checks for the package worker and package downloads; never returns credentials.</summary>
+public interface IPackageStorage
+{
+    /// <summary>GET URL after a HEAD size check; null when the object is missing or its size differs.</summary>
+    Task<SignedDownload?> SignVerifiedGetAsync(string key, long sizeBytes, TimeSpan lifetime, CancellationToken ct);
+    Task<SignedDownload> SignGetAsync(string key, TimeSpan lifetime, CancellationToken ct);
+    /// <summary>PUT URL that S3 accepts only with the given SHA-256 (x-amz-checksum-sha256); returns the headers the client must send.</summary>
+    Task<SignedUpload> SignPutAsync(string key, string sha256Hex, TimeSpan lifetime, CancellationToken ct);
+    /// <summary>Size and stored SHA-256 checksum (hex) of an object; null when missing.</summary>
+    Task<(long Size, string? Sha256Hex)?> HeadAsync(string key, CancellationToken ct);
+    /// <summary>Whole object when it is at most maxBytes, otherwise null.</summary>
+    Task<byte[]?> ReadAsync(string key, long maxBytes, CancellationToken ct);
+}
+public sealed record SignedUpload(string Url, IReadOnlyDictionary<string, string> Headers, DateTimeOffset ExpiresAt);
+/// <summary>Pinned fet3d.package/1 files of a started learner session or playtest.</summary>
+public interface IRuntimePackageFiles
+{
+    Task<AuthResult<JsonElement>> GetAsync(string kind, Guid actor, Guid family, Guid id, CancellationToken ct);
 }
 public interface IProcessingDispatchGate
 {

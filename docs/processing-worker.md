@@ -22,6 +22,9 @@ ConnectionStrings__ProcessingExecutor=<restricted-login-member-of-fet3d_processi
 
 Do not commit credentials. API identity executes request/dispatch/requeue gates; worker executor only executes `processing_worker_gate`. Neither has direct provenance/outbox writes. The migration owner is restricted NOLOGIN; temporary membership/schema CREATE is restored. Configure worker URL in deployment, never in user requests. HTTPS only; redirects disabled; delivery timeout 15 seconds, lease 60 seconds, retry capped 30 minutes, 10 delivery failures become Failed.
 
+Unity package jobs can instead be pulled by an outbound-only worker (`ProcessingWorker__PackagePullEnabled=true`, lease 60-900 s,
+signed input/upload URLs, `fet3d.package/1` storage check before Complete): see [Unity package worker](unity-package-worker.md).
+
 ## User flow
 
 `POST /api/revisions/{revisionId}/process`, header `Idempotency-Key: process-file-001`: verified source required; returns 202 `{jobId}` + Location. Missing key 400; unverified source 422 `IFC_SOURCE_NOT_VERIFIED`. Same key/input replays; concurrent different keys still map to one logical job. Job, canonical schema `1` event, receipt and audit commit together.
