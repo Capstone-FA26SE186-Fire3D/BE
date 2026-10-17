@@ -77,6 +77,8 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Ifc.IAnnotationStore, Fire3D.Infrastructure.Ifc.AnnotationStore>();
         services.AddScoped<Fire3D.Application.Ifc.IEquipmentCandidates, Fire3D.Infrastructure.Ifc.EquipmentCandidates>();
         services.AddScoped<Fire3D.Application.Ifc.IRevisionStyles, Fire3D.Infrastructure.Ifc.RevisionStyles>();
+        services.AddScoped<Fire3D.Application.Ifc.IPackageStorage, Fire3D.Infrastructure.Storage.S3PackageStorage>();
+        services.AddScoped<Fire3D.Application.Ifc.IRuntimePackageFiles, Fire3D.Infrastructure.Ifc.RuntimePackageFilesStore>();
         services.AddOptions<Fire3D.Application.Ifc.RedisProcessingOptions>().Bind(configuration.GetSection("Redis"))
             .Validate(o => !o.Enabled || (!string.IsNullOrWhiteSpace(o.Host) && Uri.CheckHostName(o.Host) != UriHostNameType.Unknown && o.Port is >= 1 and <= 65535 && !string.IsNullOrWhiteSpace(o.Password)), "Enabled Redis requires Host, Port and Password.")
             .Validate<Microsoft.Extensions.Hosting.IHostEnvironment>((o, env) => !o.Enabled || o.Ssl || env.IsDevelopment(), "Redis requires TLS outside Development.")
@@ -92,6 +94,9 @@ public static class ApplicationExtensions
             .Validate(o => !(o.WorkerApiEnabled || o.ConsumerEnabled || o.DispatcherEnabled && o.Transport == "Http") || o.MachineKey.Length is >= 32 and <= 512, "Processing worker requires a separate machine key of 32-512 characters.")
             .Validate(o => !o.WorkerApiEnabled || (!string.IsNullOrWhiteSpace(configuration.GetConnectionString("ProcessingExecutor")) && o.AllowedToolchains.Length > 0), "Worker API requires restricted ProcessingExecutor connection and an explicit toolchain allowlist.")
             .Validate(o => !(o.ConsumerEnabled || o.DispatcherEnabled && o.Transport == "Http") || (Uri.TryCreate(o.WorkerUrl,UriKind.Absolute,out var url) && url.Scheme=="https" && string.IsNullOrEmpty(url.UserInfo)), "HTTP delivery requires a configured HTTPS worker URL.")
+            // BE#110: the Redis publisher does not skip package jobs, so pull is combined only with the HTTP dispatcher (or none).
+            .Validate(o => !o.PackagePullEnabled || (o.WorkerApiEnabled && !(o.Transport == "RedisStreams" && (o.DispatcherEnabled || o.ConsumerEnabled))), "Package pull requires the worker API and the Http transport.")
+            .Validate(o => o.PackageLeaseSeconds is >= 60 and <= 900, "ProcessingWorker PackageLeaseSeconds must be 60-900.")
             .ValidateOnStart();
         services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions,Fire3D.API.Authorization.ProcessingWorkerAuthentication>(Fire3D.API.Authorization.ProcessingWorkerAuthentication.SchemeName,_=>{});
         services.AddScoped<Fire3D.Infrastructure.Ifc.ProcessingRuntimeStore>();

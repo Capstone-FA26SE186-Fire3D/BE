@@ -26,6 +26,20 @@ public sealed class PlaytestsController(IPlaytestLifecycle playtests) : Controll
     public async Task<IActionResult> Get(Guid playtestId, CancellationToken ct) =>
         Reply(await playtests.GetAsync(User.GetActorId(), User.GetSessionFamilyId(), playtestId, ct));
 
+    /// <summary>Short-lived download URLs (10 minutes) for the pinned fet3d.package/1 package, for the Mobile session that started the playtest.</summary>
+    /// <remarks>Only while the playtest is Launching or Running; same response and checks as GET /api/training/sessions/{id}/package.</remarks>
+    [HttpGet("{playtestId:guid}/package")]
+    [ProducesResponseType<RuntimePackageDownload>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    public async Task<IActionResult> Package(Guid playtestId, [FromServices] Fire3D.Application.Ifc.IRuntimePackageFiles files, [FromServices] Fire3D.Application.Ifc.IPackageStorage storage, CancellationToken ct)
+    {
+        var pinned = await files.GetAsync("Playtest", User.GetActorId(), User.GetSessionFamilyId(), playtestId, ct);
+        return pinned.IsSuccess ? Ok(await PackageWorkerResponses.DownloadAsync(pinned.Value, storage, ct)) : Reply(pinned);
+    }
+
     /// <summary>Creates a five-minute single-use code for QR/deep link. A new code revokes earlier open codes. Only before start.</summary>
     /// <remarks>The code is 32 random bytes (base64url); only its hash is stored, plus a short-lived ciphertext so a retry with the
     /// same Idempotency-Key returns the same code. Requires Playtest:HandoffKey and HandoffDeepLinkBaseUrl, otherwise 503.</remarks>
