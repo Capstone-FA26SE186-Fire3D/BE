@@ -161,10 +161,12 @@ public sealed class TrainingSessionsController(ILearnerSessions sessions) : Cont
     [ProducesResponseType<ProblemDetails>(409)]
     public async Task<IActionResult> Result(Guid id, CancellationToken ct) => Sync(id) is { } caller ? Reply(await sessions.ResultAsync(caller, id, ct)) : Mismatch();
 
-    /// <summary>Short-lived download URLs (10 minutes) for the pinned fet3d.package/1 package of a started session (Mobile#22).</summary>
-    /// <remarks>Live login that started the session only, while it is Launching or Running and not completing; call again for fresh
-    /// URLs. Verify manifest.json against manifest.sha256 and every file against its sha256 before sending Launch to Unity.
-    /// 409 PACKAGE_SESSION_NOT_ACTIVE (another login, or the session ended), 409 PACKAGE_FORMAT_UNSUPPORTED (package built before
+    /// <summary>Short-lived download URLs (10 minutes) for the pinned fet3d.package/1 package of a preparation or started session (Mobile#22).</summary>
+    /// <remarks>Download and verify right after prepare, before start (FR-TRAINING-04): a Prepared, unexpired preparation of the
+    /// caller is served and no seat is used; start still checks access, entitlement and the seat. After start, only the login that
+    /// started the session, while it is Launching or Running and not completing. Call again for fresh URLs. Verify manifest.json
+    /// against manifest.sha256 and every file against its sha256 before sending Launch to Unity. 409 PACKAGE_SESSION_NOT_ACTIVE
+    /// (expired preparation, another login, or the session ended), 409 PACKAGE_FORMAT_UNSUPPORTED (package built before
     /// fet3d.package/1, no file list).</remarks>
     [Authorize(Roles = "Trainee")]
     [HttpGet("sessions/{id:guid}/package")]

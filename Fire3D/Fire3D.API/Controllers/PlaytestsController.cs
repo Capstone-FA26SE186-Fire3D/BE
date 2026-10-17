@@ -26,8 +26,9 @@ public sealed class PlaytestsController(IPlaytestLifecycle playtests) : Controll
     public async Task<IActionResult> Get(Guid playtestId, CancellationToken ct) =>
         Reply(await playtests.GetAsync(User.GetActorId(), User.GetSessionFamilyId(), playtestId, ct));
 
-    /// <summary>Short-lived download URLs (10 minutes) for the pinned fet3d.package/1 package, for the Mobile session that started the playtest.</summary>
-    /// <remarks>Only while the playtest is Launching or Running; same response and checks as GET /api/training/sessions/{id}/package.</remarks>
+    /// <summary>Short-lived download URLs (10 minutes) for the pinned fet3d.package/1 package, for the Mobile session of the playtest.</summary>
+    /// <remarks>Before start: the Mobile session that redeemed the handoff (download and verify, then start; no Trial unit is used).
+    /// After start: the session that started it, while Launching or Running. Same response as GET /api/training/sessions/{id}/package.</remarks>
     [HttpGet("{playtestId:guid}/package")]
     [ProducesResponseType<RuntimePackageDownload>(200)]
     [ProducesResponseType<ProblemDetails>(401)]

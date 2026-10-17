@@ -71,10 +71,15 @@ work for those flows but have no download endpoint (`409 PACKAGE_FORMAT_UNSUPPOR
 
 ## Mobile download
 
-- Learner: `GET /api/training/sessions/{id}/package` (Trainee, live login that started the session).
-- Playtest: `GET /api/playtests/{playtestId}/package` (OrganizationUser, the Mobile login that redeemed the handoff and started).
+Docs FR-TRAINING-04: prepare pins the package, Mobile downloads and verifies it, then calls start (which alone checks access,
+entitlement and the seat). Migration `20261017130000_AllowPackageDownloadBeforeStart`.
 
-Only while the session is `Launching` or `Running` (not completing). Response (no storage keys):
+- Learner: `GET /api/training/sessions/{id}/package` (Trainee). With the preparation id right after prepare (Prepared, not
+  expired; no seat is used), and with the same id after start for the login that started it (`Launching`/`Running`, not completing).
+- Playtest: `GET /api/playtests/{playtestId}/package` (OrganizationUser). Before start for the Mobile login that redeemed the
+  handoff (no Trial unit is used); after start for the login that started it (`Launching`/`Running`).
+
+Response (no storage keys):
 
 ```json
 {
@@ -88,8 +93,8 @@ Only while the session is `Launching` or `Running` (not completing). Response (n
 
 URLs last 10 minutes; call again for fresh ones. Save every file under one folder at its `path` next to `manifest.json`, check
 manifest.json against `manifest.sha256` and each file against its `sha256`, then send `Launch` with `manifestPath`. Cache by
-manifest hash; a cache never allows a new start offline. Errors: `409 PACKAGE_SESSION_NOT_ACTIVE` (another login, or the session
-ended), `409 PACKAGE_FORMAT_UNSUPPORTED`, `404` outside scope.
+manifest hash; a cache never allows a new start offline. Errors: `409 PACKAGE_SESSION_NOT_ACTIVE` (expired preparation, another
+login, or the session ended), `409 PACKAGE_FORMAT_UNSUPPORTED`, `404` outside scope.
 
 ## Tests and limits
 
