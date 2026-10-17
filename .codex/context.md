@@ -203,3 +203,17 @@ Phụ trách: Nguyễn Hoàng Nam (BE, IFC). Việc liên quan repo này:
 - Cấu hình tương tác: dùng object `Equipment`/`Hazard` của `fet3d.editor/1` (`contracts/editor/v1`); `catalogKey` trong Docs = capability `{id,version}` của `GET /api/scenario-interactions/catalog`, validate theo Organization Library và runtime capability; tham số tác dụng (khăn ướt, sprinkler…) chỉ từ nội dung đã duyệt; sprinkler có trạng thái `Active|Disabled|Faulty` (mục 6.3, 7).
 - Lưu preset phong cách và override vật liệu theo nhóm cho revision (mục 5.5); worker Blender/Unity áp dụng tự động.
 - Fixture kiểm thử: danh sách ở mục 2.1 và tiêu chí ở mục 10; giữ file IFC bên thứ ba ngoài repo vì license chưa rõ.
+
+## Unity runtime và pipeline bake — 2026-10-17
+
+Quyết định của trưởng nhóm, đã vào Docs (PR #21–#24) và issue:
+- Unity runtime đã chạy trong Editor 6000.6.3f1: mô phỏng lửa/khói/nhiệt + NPC bằng **Entities**, camera third-person, tương tác theo ngữ cảnh, HUD, telemetry, nạp AssetBundle. APK demo build được (IL2CPP/ARM64). Code đang ở nhánh `feature/third-person-player-camera` của repo Unity, chưa lên `develop`.
+- **Ưu tiên hình ảnh:** Unity build worker chạy batch trên **Azure VM Windows do BE vận hành** (BE#110). Worker import GLB, gán material theo `libraryKey`, bake lightmap + light/reflection probe cho 2 bộ ánh sáng (bình thường, mất điện), xuất AssetBundle theo tầng + `manifest.json` (`fet3d.package/1`, SHA-256 từng file). Không dùng Addressables.
+- Texture PBR chỉ nằm trong project Unity (bundle `fet3d-materials` cài sẵn trong app). GLB chỉ mang `libraryKey`; BE và worker không lưu file ảnh.
+- `IFC_EXIT_UNKNOWN` = phương án B, chỉ dùng `door.exit` (BE#100).
+- Event Unity gửi (BE#101): `eventId` là GUID, `schemaVersion` = `"1"` (chuỗi), `objectId` = id object trong `fet3d.editor/1`; core `Moved`/`HazardExposure` mỗi 5 giây; Unity không chấm Đạt/Chưa đạt.
+
+Việc của repo BE:
+- **BE#110:** dựng và vận hành Azure VM cho Unity build worker; chốt job `UnityPackageBuild` (claim/renew/output/fail theo cơ chế lease/attempt hiện có), upload output lên S3, ghi provenance (input hash, `unityVersion`, `runtimeVersion`). Lệnh worker: `-executeMethod Fire3D.Unity.Editor.ContentPipeline.BuildWorker.Run -fet3dInput <dir> -fet3dOutput <dir> -fet3dTarget Android`; exit 0/1.
+- **BE#101 đã có câu trả lời của Unity:** giữ toàn bộ tên event batch 1. Cần đăng ký thêm capability `fire.source`, `smoke.source`, `event.power_outage`, `event.alarm` (Hazard) và tham số `npc.guide` (`behaviour`, `mobilityImpaired`) vào catalog runtime `2.0.0`. `npc.evacuee` không được hỗ trợ.
+- Manifest package mà Mobile tải: `fet3d.package/1` gồm `floors[]` (`bundle`, `lightingBundle`, `scene`) và `files[]` (`path`, `sha256`, `size`). Mobile#22 cần URL tải và các trường này từ API learner session.
