@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -23,7 +23,7 @@ public sealed partial class AuthIntegrationTests
     private static object PackageMetadata() => new
     {
         buildTarget = "Android", protocolVersion = "1", manifestSchemaVersion = "1", minRuntimeVersion = "2.0.0", runtimeVersion = "2.0.0",
-        requiredCapabilities = new[] { "door.exit" }, unityVersion = "6000.6.3f1", materialLibraryVersion = "1",
+        requiredCapabilities = new[] { "door.exit" }, unityVersion = "6000.6.6f1", materialLibraryVersion = "1",
         floors = new[] { new { id = "L1", bundle = "floor_L1", lightingBundle = "floor_L1_lighting", scene = "L1" } },
         files = new[] { new { path = "floor_L1", sha256 = Sha("floor"), size = 5L }, new { path = "floor_L1_lighting", sha256 = Sha("light"), size = 5L } }
     };
@@ -286,7 +286,7 @@ public sealed class PackageWorkerUnitTests
         var valid = JsonNode.Parse(JsonSerializer.Serialize(new
         {
             buildTarget = "Android", protocolVersion = "1", manifestSchemaVersion = "1", minRuntimeVersion = "2.0.0", runtimeVersion = "2.0.0",
-            requiredCapabilities = Array.Empty<string>(), unityVersion = "6000.6.3f1", materialLibraryVersion = "1",
+            requiredCapabilities = Array.Empty<string>(), unityVersion = "6000.6.6f1", materialLibraryVersion = "1",
             floors = new[] { new { bundle = "floor_L1" } }, files = new[] { new { path = "floor_L1", sha256 = new string('a', 64), size = 1L } }
         }))!;
         Assert.Empty(PackageManifest.Validate(valid, "Android"));

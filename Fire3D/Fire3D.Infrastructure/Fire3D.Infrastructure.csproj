@@ -59,6 +59,7 @@
     <EmbeddedResource Include="Persistence/Sql/RubricEventMetrics.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.RubricEventMetrics.sql" />
     <EmbeddedResource Include="Persistence/Sql/PackageBuildPull.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PackageBuildPull.sql" />
     <EmbeddedResource Include="Persistence/Sql/PackageDownloadBeforeStart.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PackageDownloadBeforeStart.sql" />
+    <EmbeddedResource Include="Persistence/Sql/AiUsageAnalyticsV7.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.AiUsageAnalyticsV7.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />

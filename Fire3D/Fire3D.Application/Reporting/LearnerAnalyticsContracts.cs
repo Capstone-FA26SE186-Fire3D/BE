@@ -40,8 +40,14 @@ public sealed record AnalyticsCohortRow(string Key, string? Label, long Plays, l
 public sealed record AnalyticsDebriefRow(string CriterionId, string Metric, long Evaluated, long Passed, decimal PassRate);
 public sealed record AnalyticsQuotaUnits(string QuotaUnit, long Units);
 public sealed record AnalyticsReconcile(long Requests, long ReservedUnits);
+/// <summary>
+/// Requests created in range by v7 status (Accepted, Processing, Succeeded, Failed, NeedsReconcile, Rejected); ResultTypes splits Succeeded by
+/// result type (KnowledgeAnswer, ScenarioDraft, InsufficientEvidence, RejectedBySafetyGate). ByAudience (organization, trainee) only in
+/// the platform-wide report; an organization report counts only its own (organization) requests.
+/// </summary>
 public sealed record AnalyticsAiUsage(IReadOnlyList<AnalyticsQuotaUnits> SettledUnits, IReadOnlyList<AnalyticsQuotaUnits> OpenReservations,
-    AnalyticsReconcile NeedsReconcile, IReadOnlyDictionary<string, long> Requests);
+    AnalyticsReconcile NeedsReconcile, IReadOnlyDictionary<string, long> Requests, IReadOnlyDictionary<string, long> ResultTypes,
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, long>>? ByAudience);
 /// <summary>
 /// Training report. Completed excludes Abandoned sessions; Abandoned and AwaitingSync are separate. Duration is the runtime's
 /// completion_time_seconds. ByOrganization only for the platform-wide report; Cohorts only with groupBy; Organization only for

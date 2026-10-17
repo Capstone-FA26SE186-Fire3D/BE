@@ -7,6 +7,21 @@ using Microsoft.Extensions.Configuration;
 using Npgsql;
 using NpgsqlTypes;
 namespace Fire3D.Infrastructure.Ifc;
+/// <summary>
+/// BE#118: the ProcessingExecutor login cannot run the worker gates (not a member of fet3d_processing_executor) or cannot log in.
+/// A deployment configuration problem, answered 503 with Code instead of a generic 500.
+/// </summary>
+public sealed class ProcessingExecutorUnavailableException(string code,Exception inner):Exception("The processing executor login is not usable: "+code,inner)
+{
+    public string Code { get; }=code;
+    /// <summary>Configuration code for a database exception, or null when it is not a login or permission problem.</summary>
+    public static string? CodeFor(Exception ex)=>(ex as PostgresException??ex.InnerException as PostgresException)?.SqlState switch
+    {
+        PostgresErrorCodes.InsufficientPrivilege=>"PROCESSING_EXECUTOR_FORBIDDEN",
+        PostgresErrorCodes.InvalidPassword or PostgresErrorCodes.InvalidAuthorizationSpecification=>"PROCESSING_EXECUTOR_LOGIN_FAILED",
+        _=>null
+    };
+}
 public sealed class ProcessingRuntimeStore(Fire3DDbContext db, IConfiguration configuration) : IRevisionProcessingStore,IProcessingWorkerGate,IProcessingDispatchGate
 {
     public async Task<AuthResult<Guid>> RequestAsync(Guid actor,Guid revision,string key,CancellationToken ct)
@@ -17,31 +32,35 @@ public sealed class ProcessingRuntimeStore(Fire3DDbContext db, IConfiguration co
         var value=Parse(await cmd.ExecuteScalarAsync(ct));
         return Error(value) is { } error ? new(default,error) : AuthResult<Guid>.Ok(value.GetProperty("jobId").GetGuid());
     }
-    public async Task<AuthResult<JsonElement>> ExecuteAsync(string action,Guid job,JsonElement input,CancellationToken ct)
+    // Separate restricted executor: API identity cannot execute the worker gate or directly write provenance.
+    public Task<AuthResult<JsonElement>> ExecuteAsync(string action,Guid job,JsonElement input,CancellationToken ct)=>ExecutorAsync(async connection=>
     {
-        // Separate restricted executor: API identity cannot execute the worker gate or directly write provenance.
-        await using var connection=new NpgsqlConnection(configuration.GetConnectionString("ProcessingExecutor"));await connection.OpenAsync(ct);
         await using var cmd=new NpgsqlCommand("SELECT processing_worker_gate(@action,@job,@input)::text",connection);
         cmd.Parameters.AddWithValue("action",action);cmd.Parameters.AddWithValue("job",job);cmd.Parameters.AddWithValue("input",NpgsqlDbType.Jsonb,input.GetRawText());
         var value=Parse(await cmd.ExecuteScalarAsync(ct));
-        if(Error(value) is { } error) return new(default,error);
+        if(Error(value) is { } error) return new AuthResult<JsonElement>(default,error);
         if(action=="Claim")value=await WithContextAsync(connection,value,ct);
         return AuthResult<JsonElement>.Ok(value);
-    }
-    public async Task<AuthResult<JsonElement?>> LeasePackageAsync(JsonElement input,CancellationToken ct)
+    },ct);
+    public Task<AuthResult<JsonElement?>> LeasePackageAsync(JsonElement input,CancellationToken ct)=>ExecutorAsync(async connection=>
     {
-        await using var connection=new NpgsqlConnection(configuration.GetConnectionString("ProcessingExecutor"));await connection.OpenAsync(ct);
         await using var cmd=new NpgsqlCommand("SELECT processing_package_lease_gate(@input)::text",connection);
         cmd.Parameters.AddWithValue("input",NpgsqlDbType.Jsonb,input.GetRawText());
         var value=Parse(await cmd.ExecuteScalarAsync(ct));
         if(value.GetProperty("code").GetString()=="EMPTY")return AuthResult<JsonElement?>.Ok(null);
-        if(Error(value) is { } error) return new(null,error);
+        if(Error(value) is { } error) return new AuthResult<JsonElement?>(null,error);
         return AuthResult<JsonElement?>.Ok(await WithContextAsync(connection,value,ct));
-    }
-    public async Task<JsonElement?> ContextAsync(Guid attempt,Guid leaseToken,CancellationToken ct)
+    },ct);
+    public Task<JsonElement?> ContextAsync(Guid attempt,Guid leaseToken,CancellationToken ct)=>ExecutorAsync(connection=>ContextAsync(connection,attempt,leaseToken,ct),ct);
+    // BE#118: a login that is not a member of fet3d_processing_executor (or a wrong password) is a deployment problem, not a 500.
+    private async Task<T> ExecutorAsync<T>(Func<NpgsqlConnection,Task<T>> work,CancellationToken ct)
     {
-        await using var connection=new NpgsqlConnection(configuration.GetConnectionString("ProcessingExecutor"));await connection.OpenAsync(ct);
-        return await ContextAsync(connection,attempt,leaseToken,ct);
+        try
+        {
+            await using var connection=new NpgsqlConnection(configuration.GetConnectionString("ProcessingExecutor"));await connection.OpenAsync(ct);
+            return await work(connection);
+        }
+        catch(Exception ex) when(ProcessingExecutorUnavailableException.CodeFor(ex) is { } code) { throw new ProcessingExecutorUnavailableException(code,ex); }
     }
     private static async Task<JsonElement?> ContextAsync(NpgsqlConnection connection,Guid attempt,Guid token,CancellationToken ct)
     {
