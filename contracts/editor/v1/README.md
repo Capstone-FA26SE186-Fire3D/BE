@@ -36,7 +36,7 @@ A document without `schemaVersion` is legacy: drafts keep the historical typed s
 saved. Legacy Geometry metadata is never reported as satisfying this contract: editor preview and floors return
 `ReprocessRequired` without coordinates or a download URL.
 
-Training modes use the database vocabulary `Learn`, `Guided`, `Assessment`. Rubric criteria must use a server-computed metric (`reached_exit`, `completion_time_seconds`, `wrong_exits`, `hazard_exposure`, `distance_meters`); see [learner sessions](../../../docs/learner-sessions.md).
+Training modes use the database vocabulary `Learn`, `Guided`, `Assessment`. Rubric criteria must use a server-computed metric: the core metrics (`reached_exit`, `completion_time_seconds`, `wrong_exits`, `hazard_exposure`, `distance_meters`) or a player-action count named after the Docs event (`alarm_raised`, `used_elevator`, …); `GET /api/scenario-rubrics/catalog` lists them all. See [learner sessions](../../../docs/learner-sessions.md).
 
 Structural validation is not geometry QA and not Unity acceptance. Object kinds are placement categories; behaviour
 comes only from capabilities published in the runtime catalog. No Unity behaviour is inferred or seeded here.
@@ -45,8 +45,10 @@ A capability contract may declare `events` (`[{type, description?, payload?}]`, 
 subset) and `actions` (`[{id, event?, ...}]`, Unity interaction metadata passed through unchanged). Learner and playtest events are
 accepted only for core types or types declared here by the session's runtime; see
 [learner sessions](../../../docs/learner-sessions.md#allowed-event-types-scenario-02). `fixtures/runtime-catalog.batch1.json` is the
-batch 1 proposal (Docs IFC 6.1/6.3, 16 capabilities including `suppression.sprinkler`), registered with `POST /api/admin/runtime-catalog`
-under a new runtime version; it is data, not a seed.
+Unity runtime `2.0.0` catalog (Docs IFC 6.1/6.3, 20 capabilities including `suppression.sprinkler` and the Hazards `fire.source`,
+`smoke.source`, `event.power_outage`, `event.alarm`; confirmed by Unity in BE#101). PlatformAdmin registers it with
+`POST /api/admin/runtime-catalog` (without `_comment`); it is data, not a seed. Timeline Hazards still need a placement in the editor;
+the runtime ignores it.
 
 ## Rubric schema version (#69)
 

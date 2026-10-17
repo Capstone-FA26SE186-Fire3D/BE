@@ -144,8 +144,17 @@ public sealed class CapabilityEventContractTests
         var catalog = Batch1();
         var (contracts, issues) = Parse(catalog);
         Assert.Empty(issues);
-        Assert.Equal(16, contracts.Count);
+        Assert.Equal(20, contracts.Count);
+        Assert.Equal(catalog["capabilities"]!.AsArray().Select(x => x!.GetValue<string>()).Order(), contracts.Keys.Order());
         Assert.Equal(["CheckedDoorHeat", "ClosedDoor"], contracts["door.exit"].Events!.Select(x => x.Type));
+        // Runtime 2.0.0 additions from Unity (BE#101, 17/10/2026): hazards and timeline events carry no events, npc.guide gets parameters.
+        foreach (var hazard in new[] { "fire.source", "smoke.source", "event.power_outage", "event.alarm" })
+        {
+            Assert.Equal(["Hazard"], contracts[hazard].ObjectKinds);
+            Assert.True(contracts[hazard].Events is null or { Count: 0 });
+        }
+        Assert.Equal(["behaviour", "mobilityImpaired"], contracts["npc.guide"].Parameters!["required"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.False(contracts.ContainsKey("npc.evacuee"));
         Assert.Equal(["AlarmRaised"], contracts["alarm.call_point"].Events!.Select(x => x.Type));
         // The sprinkler effect parameters have no defaults: a scenario object must set every one of them.
         var sprinkler = contracts["suppression.sprinkler"].Parameters!;

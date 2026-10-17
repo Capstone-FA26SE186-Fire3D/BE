@@ -1,12 +1,12 @@
 {
-  "_comment": "Batch 1 interaction catalog (Docs ifc_ingestion_visual_interaction.md 6.1/6.3) as a POST /api/admin/runtime-catalog body. Data, not a seed: event names, payloads and parameter ranges are a proposal until Unity confirms them; register it under a new runtimeVersion. Safety values (towel multiplier, sprinkler thresholds) have no defaults and come from approved content per scenario.",
+  "_comment": "Batch 1 interaction catalog (Docs ifc_ingestion_visual_interaction.md 6.1/6.3) as a POST /api/admin/runtime-catalog body for Unity runtime 2.0.0. Event names and payloads confirmed by Unity on 17/10/2026 (BE#101), which also added fire.source, smoke.source, event.power_outage, event.alarm and the npc.guide parameters. Data, not a seed: PlatformAdmin registers it. Safety values (towel multiplier, detector and sprinkler thresholds) have no defaults and come from approved content per scenario; without them Unity disables the effect.",
   "runtimeVersion": "2.0.0",
   "protocolVersion": "1",
   "manifestSchemaVersion": "1",
   "capabilities": [
     "alarm.call_point", "alarm.detector", "extinguisher.portable", "water.sink", "water.bath", "water.shower", "item.towel",
     "door.standard", "door.fire", "door.exit", "transport.elevator", "exit.stair", "exit.final", "bait.belongings", "npc.guide",
-    "suppression.sprinkler"
+    "suppression.sprinkler", "fire.source", "smoke.source", "event.power_outage", "event.alarm"
   ],
   "capabilityContracts": {
     "alarm.call_point": {
@@ -139,6 +139,7 @@
       "version": "1.0.0",
       "objectKinds": ["Npc"],
       "description": "NPC the player can call and lead to an exit.",
+      "parameters": { "type": "object", "additionalProperties": false, "required": ["behaviour", "mobilityImpaired"], "properties": { "behaviour": { "type": "string", "enum": ["calm", "panic"] }, "mobilityImpaired": { "type": "boolean" } } },
       "events": [
         { "type": "NpcGuided", "description": "Docs npc_guided.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
       ],
@@ -163,6 +164,30 @@
       "events": [
         { "type": "SprinklerActivated", "description": "Docs sprinkler_activated; not a player action, debrief and analytics only.", "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "maxLength": 128 } } } }
       ]
+    },
+    "fire.source": {
+      "version": "1.0.0",
+      "objectKinds": ["Hazard"],
+      "description": "Fire source; ignites activationSeconds after the session starts.",
+      "parameters": { "type": "object", "additionalProperties": false, "required": ["intensity", "activationSeconds"], "properties": { "intensity": { "type": "number", "minimum": 0, "maximum": 10 }, "activationSeconds": { "type": "number", "minimum": 0, "maximum": 86400 } } }
+    },
+    "smoke.source": {
+      "version": "1.0.0",
+      "objectKinds": ["Hazard"],
+      "description": "Smoke source (simulation units per second); starts activationSeconds after the session starts.",
+      "parameters": { "type": "object", "additionalProperties": false, "required": ["ratePerSecond", "activationSeconds"], "properties": { "ratePerSecond": { "type": "number", "minimum": 0 }, "activationSeconds": { "type": "number", "minimum": 0, "maximum": 86400 } } }
+    },
+    "event.power_outage": {
+      "version": "1.0.0",
+      "objectKinds": ["Hazard"],
+      "description": "Timeline event: power goes out at atSeconds (outage lighting set). Placement is required by the editor contract but not used by the runtime.",
+      "parameters": { "type": "object", "additionalProperties": false, "required": ["atSeconds"], "properties": { "atSeconds": { "type": "number", "minimum": 0, "maximum": 86400 } } }
+    },
+    "event.alarm": {
+      "version": "1.0.0",
+      "objectKinds": ["Hazard"],
+      "description": "Timeline event: the building alarm sounds at atSeconds; fails = true means the alarm system is broken and detectors stay silent. Placement is required by the editor contract but not used by the runtime.",
+      "parameters": { "type": "object", "additionalProperties": false, "required": ["atSeconds", "fails"], "properties": { "atSeconds": { "type": "number", "minimum": 0, "maximum": 86400 }, "fails": { "type": "boolean" } } }
     }
   }
 }
