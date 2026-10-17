@@ -205,7 +205,8 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
         : Problem(statusCode: 422, title: "Use a full YouTube, Facebook or TikTok video URL.", extensions: new Dictionary<string, object?> { ["code"] = "LEARN_MEDIA_INVALID" });
 }
 
-/// <summary>Organization Library: PlatformAdmin maintains versioned templates, rubric samples and equipment metadata; OrganizationUsers read published versions of active items.</summary>
+/// <summary>Organization Library: PlatformAdmin maintains versioned templates, rubric samples, equipment metadata, style presets and colour schemes
+/// (kinds ScenarioTemplate, RubricSample, Equipment, StylePreset, ColorScheme); OrganizationUsers read published versions of active items.</summary>
 [ApiController]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class LibraryController(IContentGates gates) : ContentControllerBase

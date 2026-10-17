@@ -1,0 +1,57 @@
+{
+  "_comment": "Sample Library payloads for STYLE-01 (Docs ifc_ingestion_visual_interaction.md 5.5). PlatformAdmin creates one Library item per preset (kind StylePreset) and per scheme (kind ColorScheme), adds a version with the payload below and publishes it. Data, not a seed; material keys follow the Docs 5.5 library table.",
+  "StylePreset": {
+    "SCHOOL": {
+      "description": "School: tiled floors, painted plaster walls, ceiling tiles; vinyl corridors, tiled WC, epoxy workshops.",
+      "buildingTypes": ["school"],
+      "keywords": ["classroom", "student", "workshop", "library", "teacher"],
+      "materials": {
+        "default": { "floor": "floor.tile", "wall": "wall.plaster", "ceiling": "ceiling.tile" },
+        "wc": { "floor": "floor.tile", "wall": "wall.tile" },
+        "corridor": { "floor": "floor.vinyl" },
+        "workshop": { "floor": "floor.epoxy", "wall": "wall.brick" },
+        "lobby": { "floor": "stone" }
+      },
+      "defaultScheme": "WARM-NEUTRAL"
+    },
+    "HOSPITAL": {
+      "description": "Hospital or clinic: vinyl floors, plaster walls; tiled WC, epoxy labs, stone lobby.",
+      "buildingTypes": ["hospital", "clinic"],
+      "keywords": ["ward", "clinic", "dent", "exam", "lab", "patient"],
+      "materials": {
+        "default": { "floor": "floor.vinyl", "wall": "wall.plaster", "ceiling": "ceiling.tile" },
+        "wc": { "floor": "floor.tile", "wall": "wall.tile" },
+        "lab": { "floor": "floor.epoxy" },
+        "lobby": { "floor": "stone" }
+      },
+      "defaultScheme": "CALM-GREEN"
+    },
+    "OFFICE": {
+      "description": "Office: carpet in offices, tiles elsewhere.",
+      "buildingTypes": ["office"],
+      "keywords": ["office", "meeting", "conference", "reception"],
+      "materials": {
+        "default": { "floor": "floor.tile", "wall": "wall.plaster", "ceiling": "ceiling.tile" },
+        "office": { "floor": "floor.carpet" },
+        "wc": { "floor": "floor.tile", "wall": "wall.tile" },
+        "lobby": { "floor": "stone" }
+      },
+      "defaultScheme": "WARM-NEUTRAL"
+    },
+    "RESIDENTIAL": {
+      "description": "Residential: wood floors, plaster walls; tiled kitchen and bathroom.",
+      "buildingTypes": ["residential"],
+      "keywords": ["bedroom", "living", "kitchen", "bath"],
+      "materials": {
+        "default": { "floor": "floor.wood", "wall": "wall.plaster", "ceiling": "wall.plaster" },
+        "wc": { "floor": "floor.tile", "wall": "wall.tile" },
+        "kitchen": { "floor": "floor.tile", "wall": "wall.tile" }
+      },
+      "defaultScheme": "WARM-NEUTRAL"
+    }
+  },
+  "ColorScheme": {
+    "WARM-NEUTRAL": { "description": "Warm neutral walls with a muted teal accent.", "colors": { "wall": "#E9E3D8", "accentWall": "#8FA9A3", "doorWood": "#A27A52", "skirting": "#5E4E40" } },
+    "CALM-GREEN": { "description": "Light grey-green for care buildings.", "colors": { "wall": "#E4EBE6", "accentWall": "#9DB8A8", "doorWood": "#B8936A", "skirting": "#6B6F6A" } }
+  }
+}

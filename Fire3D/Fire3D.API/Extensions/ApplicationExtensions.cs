@@ -76,6 +76,7 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Ifc.IPreviewDownloadSigner, Fire3D.Infrastructure.Storage.S3PreviewDownloadSigner>();
         services.AddScoped<Fire3D.Application.Ifc.IAnnotationStore, Fire3D.Infrastructure.Ifc.AnnotationStore>();
         services.AddScoped<Fire3D.Application.Ifc.IEquipmentCandidates, Fire3D.Infrastructure.Ifc.EquipmentCandidates>();
+        services.AddScoped<Fire3D.Application.Ifc.IRevisionStyles, Fire3D.Infrastructure.Ifc.RevisionStyles>();
         services.AddOptions<Fire3D.Application.Ifc.RedisProcessingOptions>().Bind(configuration.GetSection("Redis"))
             .Validate(o => !o.Enabled || (!string.IsNullOrWhiteSpace(o.Host) && Uri.CheckHostName(o.Host) != UriHostNameType.Unknown && o.Port is >= 1 and <= 65535 && !string.IsNullOrWhiteSpace(o.Password)), "Enabled Redis requires Host, Port and Password.")
             .Validate<Microsoft.Extensions.Hosting.IHostEnvironment>((o, env) => !o.Enabled || o.Ssl || env.IsDevelopment(), "Redis requires TLS outside Development.")
