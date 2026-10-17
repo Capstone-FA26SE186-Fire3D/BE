@@ -19,7 +19,7 @@ public sealed partial class IfcReadStore
 
     // All SQL is owned by this store. Resource IDs, scope and pagination are parameters.
     private async Task<T?> ReadJsonAsync<T>(string sql, Guid id, Guid? tenant, CancellationToken ct,
-        int page = 1, int pageSize = 20) where T : class
+        int page = 1, int pageSize = 20, IReadOnlyDictionary<string, string?>? text = null) where T : class
     {
         await db.Database.OpenConnectionAsync(ct);
         try
@@ -33,6 +33,8 @@ public sealed partial class IfcReadStore
             Add("offset", DbType.Int32, (page - 1) * pageSize);
             Add("limit", DbType.Int32, pageSize);
             Add("page", DbType.Int32, page);
+            // Optional text filters: always bound as parameters, NULL when absent.
+            foreach (var (name, filter) in text ?? new Dictionary<string, string?>()) Add(name, DbType.String, (object?)filter ?? DBNull.Value);
             var value = await command.ExecuteScalarAsync(ct);
             return value is null or DBNull ? null : JsonSerializer.Deserialize<T>((string)value, JsonOptions);
             void Add(string name, DbType type, object value)

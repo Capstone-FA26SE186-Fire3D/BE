@@ -503,7 +503,8 @@ Tất cả cần Editor; list nhận page/pageSize. Sai filter/Guid.Empty 400, s
 | GET | `/api/processing-jobs/{jobId}/qa` | 200 JobQaResponse |
 | GET | `/api/revisions/{revisionId}/issues` | 200 Page<RevisionIssueResponse> |
 | GET | `/api/revisions/{revisionId}/artifacts` | 200 Page<RevisionArtifactResponse> |
-| GET | `/api/revisions/{revisionId}/bim-facts` | 200 Page<BimFactResponse> |
+| GET | `/api/revisions/{revisionId}/bim-facts` | 200 Page<BimFactResponse>; thứ tự ổn định theo phần tử, lọc `entityType`/`ifcGlobalId`/`qualityFlag` ([chi tiết](ifc-qa-codes.md#room-names-bim-facts)) |
+| GET | `/api/revisions/{revisionId}/bim-facts/elements` | 200 Page<BimFactElementResponse>, mỗi phòng một dòng (BE#120) |
 
 | DTO | Thuộc tính JSON |
 | --- | --- |

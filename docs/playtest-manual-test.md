@@ -17,6 +17,8 @@ Query buildingId is optional and must match the scenario if supplied. Alternativ
 
 Response 201: id, scenarioVersionId, artifactId, validationRunId, packageHash, manifestHash, buildTarget. No entitlement is assigned, no Trial is consumed, no launch grant is returned. Replay keeps the original immutable pin even if the draft is subsequently edited.
 
+Rejected runtime events (BE#120): `GET /api/playtests/{playtestId}` returns `rejectedEvents` = `{ total, byCode: { EVENT_TYPE_UNSUPPORTED, EVENT_PAYLOAD_INVALID }, recent: [{ eventId, sequence, type, code, receivedAt }] }` (newest 20). These events were stored but never scored: the type is not declared by the pinned runtime capabilities, or the payload fails the event schema. The Web shows them so the author can fix the capability or payload.
+
 Package download (Mobile#22): after the Mobile app redeems the handoff, it calls `GET /api/playtests/{playtestId}/package` for ten-minute signed URLs of the pinned `fet3d.package/1` files, verifies every SHA-256, then starts (no Trial unit is used by the download). After start only the starting session may call it, while Launching/Running. See [Unity package worker](unity-package-worker.md#mobile-download).
 
 2. Configure launch signing in environment/secret (never commit the key):

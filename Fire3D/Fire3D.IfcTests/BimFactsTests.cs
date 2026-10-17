@@ -14,8 +14,20 @@ public class BimFactsTests
     {
         var actor=RevisionAccessTests.Actor(role);
         var store=StubProxy.For<IIfcReadStore>((_,_)=>throw new Exception("Unexpected access"));
-        var result=await new ListBimFactsHandler(RevisionAccessTests.Accounts(actor),store).Handle(new(actor.Id,Guid.NewGuid(),page,size),default);
+        var result=await new ListBimFactsHandler(RevisionAccessTests.Accounts(actor),store).Handle(new ListBimFactsQuery(actor.Id,Guid.NewGuid(),page,size),default);
         Assert.Equal(expected,result.Error?.Status);
+    }
+    [Theory]
+    [InlineData("ifcGlobalId","short")]
+    [InlineData("entityType","Ifc Space")]
+    [InlineData("qualityFlag","SPACE-UNNAMED;")]
+    public async Task Invalid_filters_are_field_errors_before_storage(string field,string value)
+    {
+        var actor=RevisionAccessTests.Actor(UserRole.OrganizationUser);
+        var store=StubProxy.For<IIfcReadStore>((_,_)=>throw new Exception("Unexpected access"));
+        var filters=field switch { "ifcGlobalId"=>new BimFactFilters(IfcGlobalId:value),"entityType"=>new BimFactFilters(EntityType:value),_=>new BimFactFilters(QualityFlag:value) };
+        var result=await new ListBimFactsHandler(RevisionAccessTests.Accounts(actor),store).Handle(new ListBimFactElementsQuery(actor.Id,Guid.NewGuid(),1,20,filters),default);
+        Assert.Equal(400,result.Error?.Status); Assert.True(result.Error!.Errors!.ContainsKey(field));
     }
     [Fact]
     public async Task Tenant_scope_is_preserved_for_missing_resources()
@@ -25,7 +37,7 @@ public class BimFactsTests
             Assert.Equal(nameof(IIfcReadStore.ListBimFactsAsync),method); Assert.Equal(actor.OrganizationId,args[1]);
             return Task.FromResult<PageResponse<BimFactResponse>?>(null);
         });
-        var result=await new ListBimFactsHandler(RevisionAccessTests.Accounts(actor),store).Handle(new(actor.Id,Guid.NewGuid()),default);
+        var result=await new ListBimFactsHandler(RevisionAccessTests.Accounts(actor),store).Handle(new ListBimFactsQuery(actor.Id,Guid.NewGuid()),default);
         Assert.Equal(404,result.Error?.Status);
     }
 }
@@ -36,13 +48,13 @@ public sealed partial class IfcReadSqlTests
     {
         await using var db=database.Context();
         var store=new IfcReadStore(db);
-        var result=await store.ListBimFactsAsync(database.Revision,database.Tenant,1,20,default);
+        var result=await store.ListBimFactsAsync(database.Revision,database.Tenant,new(),1,20,default);
         Assert.NotNull(result); var item=Assert.Single(result.Items);
         Assert.Equal(database.Fact,item.Id);
         Assert.Equal("IfcSpace",item.EntityType); Assert.Equal(new string('c',64),item.SourceHash); Assert.Null(item.Value);
-        Assert.Null(await store.ListBimFactsAsync(database.Revision,database.OtherTenant,1,20,default));
-        Assert.NotNull(await store.ListBimFactsAsync(database.Revision,null,1,20,default));
-        var next=await store.ListBimFactsAsync(database.Revision,database.Tenant,2,1,default);
+        Assert.Null(await store.ListBimFactsAsync(database.Revision,database.OtherTenant,new(),1,20,default));
+        Assert.NotNull(await store.ListBimFactsAsync(database.Revision,null,new(),1,20,default));
+        var next=await store.ListBimFactsAsync(database.Revision,database.Tenant,new(),2,1,default);
         Assert.NotNull(next); Assert.Empty(next.Items); Assert.Equal(1,next.TotalCount);
     }
 }

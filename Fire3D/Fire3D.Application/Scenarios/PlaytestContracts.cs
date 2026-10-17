@@ -20,7 +20,13 @@ public sealed record PlaytestRecoveryView(bool CanStart,bool CanReissueGrant,boo
 public sealed record PlaytestStatusResponse(Guid Id,Guid BuildingId,Guid RevisionId,Guid ScenarioVersionId,string Status,DateTime CreatedAt,
  DateTime? StartedAt,DateTime? EndedAt,string? RuntimeVersion,PlaytestPackageView Package,PlaytestGrantView? Grant,DateTime? LaunchedAt,
  DateTime? LastHeartbeatAt,long AcknowledgedSequence,bool BoundToMobile,bool LaunchSession,DateTime? OpenHandoffExpiresAt,
- PlaytestRecoveryView Recovery,PlaytestCompletionView? Completion,Guid? OpenHandoffId=null);
+ PlaytestRecoveryView Recovery,PlaytestCompletionView? Completion,Guid? OpenHandoffId=null,PlaytestRejectedEvents? RejectedEvents=null);
+/// <summary>
+/// BE#120: runtime events the backend refused (stored, never scored): EVENT_TYPE_UNSUPPORTED (type not declared by the pinned
+/// runtime capabilities) or EVENT_PAYLOAD_INVALID (payload fails the event schema). Recent lists the newest 20 by sequence.
+/// </summary>
+public sealed record PlaytestRejectedEvents(long Total,IReadOnlyDictionary<string,long> ByCode,IReadOnlyList<PlaytestRejectedEvent> Recent);
+public sealed record PlaytestRejectedEvent(Guid EventId,long Sequence,string Type,string Code,DateTime ReceivedAt);
 /// <summary>Stored once at completion. Summary is the object the runtime sent (opaque to the backend, never scored here).</summary>
 public sealed record PlaytestCompletionView(long LastEventSequence,JsonElement Summary,DateTime CompletedAt,string CompletionHash);
 /// <summary>One of the caller's playtests; open it with GET /api/playtests/{id}.</summary>
