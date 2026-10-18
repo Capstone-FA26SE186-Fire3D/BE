@@ -98,6 +98,8 @@ work for those flows but have no download endpoint (`409 PACKAGE_FORMAT_UNSUPPOR
 
 ## Mobile download
 
+After the download Mobile launches Unity with the bridge protocol in [`contracts/runtime/v1`](../contracts/runtime/v1/README.md).
+
 Docs FR-TRAINING-04: prepare pins the package, Mobile downloads and verifies it, then calls start (which rechecks access,
 entitlement and the seat). Migration `20261017130000_AllowPackageDownloadBeforeStart`.
 

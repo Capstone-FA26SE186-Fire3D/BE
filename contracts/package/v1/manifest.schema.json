@@ -16,6 +16,10 @@
     "requiredCapabilities": { "type": "array", "maxItems": 100, "items": { "type": "string", "minLength": 1, "maxLength": 100 } },
     "unityVersion": { "type": "string", "minLength": 1, "maxLength": 100 },
     "materialLibraryVersion": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "revisionId": { "type": "string", "format": "uuid", "description": "Revision the package was built from (provenance)." },
+    "lightingScenarios": { "type": "array", "items": { "type": "string" }, "description": "Names of the lighting sets baked into the package (normal and power outage)." },
+    "metadata": { "type": "string", "description": "Relative path of building_metadata.json (fet3d.building/1); listed in files." },
+    "scenario": { "type": "string", "description": "Relative path of scenario.json (fet3d.editor/1 snapshot); listed in files." },
     "floors": {
       "type": "array", "minItems": 1, "maxItems": 500,
       "items": {
@@ -24,7 +28,8 @@
           "id": { "type": "string" },
           "bundle": { "type": "string", "description": "Path of the floor scene bundle; must be listed in files." },
           "lightingBundle": { "type": "string", "description": "Path of the outage lighting bundle; must be listed in files." },
-          "scene": { "type": "string" }
+          "scene": { "type": "string" },
+          "elevation": { "type": "number", "description": "Floor elevation in metres." }
         }
       }
     },

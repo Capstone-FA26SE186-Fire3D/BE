@@ -1,0 +1,144 @@
+{
+  "valid": [
+    {
+      "file": "launch.training.json",
+      "schema": "launch.schema.json"
+    },
+    {
+      "file": "launch.playtest-resume.json",
+      "schema": "launch.schema.json"
+    },
+    {
+      "file": "control.pause.json",
+      "schema": "control.schema.json"
+    },
+    {
+      "file": "control.abort-empty.json",
+      "schema": "control.schema.json"
+    },
+    {
+      "file": "bridge.ready.json",
+      "schema": "bridge-message.schema.json"
+    },
+    {
+      "file": "bridge.launched.json",
+      "schema": "bridge-message.schema.json"
+    },
+    {
+      "file": "bridge.events.json",
+      "schema": "bridge-message.schema.json"
+    },
+    {
+      "file": "bridge.completed.json",
+      "schema": "bridge-message.schema.json"
+    },
+    {
+      "file": "bridge.error-before-launch.json",
+      "schema": "bridge-message.schema.json"
+    },
+    {
+      "file": "bridge.exited.json",
+      "schema": "bridge-message.schema.json"
+    },
+    {
+      "file": "training-result.assessment.json",
+      "schema": "training-result.schema.json"
+    },
+    {
+      "file": "training-result.learn.json",
+      "schema": "training-result.schema.json"
+    }
+  ],
+  "invalid": [
+    {
+      "file": "launch.protocol-2.json",
+      "schema": "launch.schema.json",
+      "why": "protocolVersion must be \"1\" (Unity: PROTOCOL_UNSUPPORTED)"
+    },
+    {
+      "file": "launch.unknown-mode.json",
+      "schema": "launch.schema.json",
+      "why": "mode is Learn, Guided or Assessment (Unity: MODE_UNSUPPORTED)"
+    },
+    {
+      "file": "launch.negative-resume.json",
+      "schema": "launch.schema.json",
+      "why": "resumeFromSequence >= 0"
+    },
+    {
+      "file": "launch.with-grant.json",
+      "schema": "launch.schema.json",
+      "why": "Launch never carries the launch grant or any token"
+    },
+    {
+      "file": "launch.not-manifest-path.json",
+      "schema": "launch.schema.json",
+      "why": "manifestPath points at manifest.json"
+    },
+    {
+      "file": "control.unknown-field.json",
+      "schema": "control.schema.json",
+      "why": "Pause/Abort accept only sessionId"
+    },
+    {
+      "file": "bridge.unknown-type.json",
+      "schema": "bridge-message.schema.json",
+      "why": "type is one of Ready, Launched, Events, Completed, Error, Exited"
+    },
+    {
+      "file": "bridge.launched-without-session.json",
+      "schema": "bridge-message.schema.json",
+      "why": "every message after Ready carries sessionId"
+    },
+    {
+      "file": "bridge.events-empty.json",
+      "schema": "bridge-message.schema.json",
+      "why": "Events carries 1-500 events"
+    },
+    {
+      "file": "bridge.events-501.json",
+      "schema": "bridge-message.schema.json",
+      "why": "at most 500 events per message (BE events:batch limit)"
+    },
+    {
+      "file": "bridge.event-schema-version-number.json",
+      "schema": "bridge-message.schema.json",
+      "why": "event schemaVersion is the string \"1\""
+    },
+    {
+      "file": "bridge.moved-negative.json",
+      "schema": "bridge-message.schema.json",
+      "why": "Moved.distanceMeters is a finite number >= 0 (BE rejects the batch)"
+    },
+    {
+      "file": "bridge.exposure-missing-amount.json",
+      "schema": "bridge-message.schema.json",
+      "why": "HazardExposure needs payload.amount"
+    },
+    {
+      "file": "bridge.event-sequence-zero.json",
+      "schema": "bridge-message.schema.json",
+      "why": "sequence starts at 1"
+    },
+    {
+      "file": "bridge.completed-unknown-reason.json",
+      "schema": "bridge-message.schema.json",
+      "why": "endReason is Finished, TimedOut or Abandoned"
+    },
+    {
+      "file": "bridge.error-lowercase-code.json",
+      "schema": "bridge-message.schema.json",
+      "why": "error codes are UPPER_SNAKE_CASE"
+    },
+    {
+      "file": "training-result.unknown-outcome.json",
+      "schema": "training-result.schema.json",
+      "why": "outcome is Passed, NotPassed, Incomplete or NotAssessed: completion is not a result"
+    },
+    {
+      "file": "training-result.missing-reason.json",
+      "schema": "training-result.schema.json",
+      "why": "reason is always present"
+    }
+  ]
+}

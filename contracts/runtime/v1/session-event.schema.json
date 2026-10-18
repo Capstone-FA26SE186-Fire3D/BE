@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fet3d.io.vn/contracts/runtime/v1/session-event.schema.json",
+  "title": "Runtime session event (protocol 1)",
+  "description": "One telemetry event as Unity emits it in the Events bridge message and as Mobile sends it unchanged in POST /api/training/sessions/{id}/events:batch (or /api/playtests/{id}/events:batch). Same shape as the BE TrainingEvent DTO. Core events carry the metric payloads below; any other type must be declared by the pinned runtime catalog (capabilityContracts[*].events), otherwise BE answers it in conflicts (EVENT_TYPE_UNSUPPORTED / EVENT_PAYLOAD_INVALID) and it must not be resent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "sequence", "schemaVersion", "type", "occurredAt", "elapsedMs", "payload"],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid", "description": "GUID, unique per event; a resend keeps the same eventId and content." },
+    "sequence": { "type": "integer", "minimum": 1, "description": "1, 2, 3, ... without gaps; after a resume it continues after resumeFromSequence." },
+    "schemaVersion": { "const": "1", "description": "Event payload version, a string." },
+    "type": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]{0,99}$" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "elapsedMs": { "type": "integer", "minimum": 0, "description": "Milliseconds since launch." },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "enum": ["ExitReached", "WrongExit"] } } },
+      "then": { "properties": { "payload": { "type": "object", "additionalProperties": false, "required": ["objectId"], "properties": { "objectId": { "type": "string", "minLength": 1, "maxLength": 128, "description": "Id of the Goal object in fet3d.editor/1." } } } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "HazardExposure" } } },
+      "then": { "properties": { "payload": { "type": "object", "additionalProperties": false, "required": ["amount"], "properties": { "amount": { "type": "number", "minimum": 0, "maximum": 1000000000, "description": "Simulated exposure integrated over the last interval (not a medical value)." } } } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "Moved" } } },
+      "then": { "properties": { "payload": { "type": "object", "additionalProperties": false, "required": ["distanceMeters"], "properties": { "distanceMeters": { "type": "number", "minimum": 0, "maximum": 1000000000 } } } } }
+    }
+  ]
+}
