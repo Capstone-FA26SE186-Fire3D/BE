@@ -206,6 +206,11 @@ public sealed partial class AuthIntegrationTests
             // Before any handoff the preparing session is the one start accepts (canStart), so it passes the access check
             // (this old package then has no file list).
             Assert.Equal("PACKAGE_FORMAT_UNSUPPORTED", (await files.GetAsync("Playtest", f.Owner, f.Web, id, default)).Error?.Code);
+            // Second review: before start the download uses start's entitlement rule; a Trial with no playtest left is refused the same way.
+            await ExecuteAsync($"SET session_replication_role=replica;UPDATE service_entitlements SET playtest_units_used=playtest_units_granted WHERE id='{f.Trial}';SET session_replication_role=origin;");
+            Assert.Equal("PLAYTEST_ENTITLEMENT_REQUIRED", (await files.GetAsync("Playtest", f.Owner, f.Web, id, default)).Error?.Code);
+            Assert.Equal("PLAYTEST_ENTITLEMENT_REQUIRED", (await store.StartAsync(f.Owner, f.Web, id, new("1.0.0"), "pkg-start-no-units", default)).Error?.Code);
+            await ExecuteAsync($"SET session_replication_role=replica;UPDATE service_entitlements SET playtest_units_used=0 WHERE id='{f.Trial}';SET session_replication_role=origin;");
             var code = (await store.CreateHandoffAsync(f.Owner, f.Web, id, "pkg-handoff", default)).Value!.Code;
             Assert.True((await store.RedeemHandoffAsync(f.Owner, f.Mobile, new(code), default)).IsSuccess);
             // A package built before fet3d.package/1 has no file list.

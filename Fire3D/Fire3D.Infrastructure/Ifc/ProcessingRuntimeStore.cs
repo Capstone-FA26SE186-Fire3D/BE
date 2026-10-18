@@ -18,7 +18,7 @@ public sealed class ProcessingExecutorUnavailableException(string code,Exception
     public static string? CodeFor(Exception ex)=>(ex as PostgresException??ex.InnerException as PostgresException) switch
     {
         // Only the login lacking EXECUTE on a worker gate (or the schema): a 42501 raised inside a gate body (RLS, an owner grant)
-        // is a defect, not a deployment setting, and stays a 500.
+        // is a defect, not a deployment setting, and stays a 500. Supabase/PostgreSQL report these messages in English (lc_messages C).
         { SqlState: PostgresErrorCodes.InsufficientPrivilege } p when p.MessageText.StartsWith("permission denied for function",StringComparison.Ordinal)
             || p.MessageText.StartsWith("permission denied for schema",StringComparison.Ordinal)=>"PROCESSING_EXECUTOR_FORBIDDEN",
         { SqlState: PostgresErrorCodes.InvalidPassword or PostgresErrorCodes.InvalidAuthorizationSpecification }=>"PROCESSING_EXECUTOR_LOGIN_FAILED",

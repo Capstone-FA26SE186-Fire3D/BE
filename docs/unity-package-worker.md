@@ -32,7 +32,7 @@ VM is ready (with pull off, package jobs stay with the push dispatcher as before
 
 ## Checking the worker login (BE#118)
 
-`GET /health/worker` (header `X-Worker-Key` required, codes only, result cached 30 s) checks the `ProcessingExecutor` login: `200 OK`, `200 WORKER_API_DISABLED`, or `503`
+`GET /health/worker` (header `X-Worker-Key` required, so it answers `401` unless the worker API is enabled with a valid key; codes only, result cached 30 s) checks the `ProcessingExecutor` login: `200 OK` or `503`
 with `PROCESSING_EXECUTOR_FORBIDDEN` (the login is not a member of `fet3d_processing_executor`, or cannot execute the lease gate
 while pull is on), `PROCESSING_EXECUTOR_LOGIN_FAILED` (wrong user or password), `PROCESSING_EXECUTOR_UNREACHABLE`, or
 `PROCESSING_EXECUTOR_TOO_PRIVILEGED` (works, but the login bypasses row security, e.g. `postgres`: use a dedicated login). It is not
@@ -98,10 +98,10 @@ work for those flows but have no download endpoint (`409 PACKAGE_FORMAT_UNSUPPOR
 
 ## Mobile download
 
-Docs FR-TRAINING-04: prepare pins the package, Mobile downloads and verifies it, then calls start (which alone checks access,
+Docs FR-TRAINING-04: prepare pins the package, Mobile downloads and verifies it, then calls start (which rechecks access,
 entitlement and the seat). Migration `20261017130000_AllowPackageDownloadBeforeStart`.
 
-- Before start the download passes the same checks as start, without allocating anything (migration `20261018110000_RecheckPackageDownloadAccess`): learner live session, Building/organization active, Public or participation grant, Training/release available, content approval, runtime, an Active paid entitlement and a free or existing seat (`BUILDING_ACCESS_REQUIRED`, `TRAINING_UNAVAILABLE`, `BUILDING_ENTITLEMENT_REQUIRED`, `LEARNER_LIMIT_REACHED`, …); playtest Building/organization active and an Active or Trial entitlement.
+- Before start the download passes the same checks as start, without allocating anything (migration `20261018110000_RecheckPackageDownloadAccess`): learner live session, Building/organization active, Public or participation grant, Training/release available, content approval, runtime, an Active paid entitlement and a free or existing seat (`BUILDING_ACCESS_REQUIRED`, `TRAINING_UNAVAILABLE`, `BUILDING_ENTITLEMENT_REQUIRED`, `LEARNER_LIMIT_REACHED`, …); playtest Building/organization active and the entitlement start would use (Active with an Applied BuildingService payment, or Trial with playtest units left; otherwise `PLAYTEST_ENTITLEMENT_REQUIRED`), nothing consumed (migration `20261018120000_MatchPackageDownloadToStart`). Unverified pending registrations are refused like at start.
 - Learner: `GET /api/training/sessions/{id}/package` (Trainee). With the preparation id right after prepare (Prepared, not
   expired; no seat is used), and with the same id after start for the login that started it (`Launching`/`Running`, not completing).
 - Playtest: `GET /api/playtests/{playtestId}/package` (OrganizationUser). Before start for the session start would accept (the Mobile

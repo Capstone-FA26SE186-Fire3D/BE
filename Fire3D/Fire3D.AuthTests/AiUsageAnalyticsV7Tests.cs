@@ -35,7 +35,7 @@ public sealed partial class AuthIntegrationTests
             INSERT INTO ai_requests(id,organization_id,actor_user_id,audience,operation,policy_id,quota_unit,reserved_units,status,consumed_units,input,input_hash,sources,result,result_type,lease_token,lease_until,completed_at,next_attempt_at,created_at,updated_at) VALUES {rows};
             SET session_replication_role=origin;
             """);
-        async Task<JsonElement> Usage(string scope) => JsonDocument.Parse((string)(await ScalarAsync($"SELECT analytics_ai_usage({scope},'2026-03-01','2026-04-01',now())::text"))!).RootElement.Clone();
+        async Task<JsonElement> Usage(string scope) => JsonDocument.Parse((string)(await ScalarAsync($"SELECT analytics_ai_usage({scope},'2026-03-01T00:00:00Z','2026-04-01T00:00:00Z',now())::text"))!).RootElement.Clone();
 
         var mine = await Usage($"'{org}'");
         // jsonb objects have no key order: compare by key.

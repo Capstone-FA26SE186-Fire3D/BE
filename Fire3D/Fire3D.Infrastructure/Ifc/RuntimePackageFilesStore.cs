@@ -24,6 +24,9 @@ public sealed class RuntimePackageFilesStore(Fire3DDbContext db) : IRuntimePacka
         "LEARNER_LIMIT_REACHED"=>"The Building has no free learner seat; the package cannot be downloaded.",
         "BUILDING_ACCESS_REQUIRED"=>"This Building requires participation access.",
         "TRAINING_UNAVAILABLE"=>"The Training is not available now.",
+        "CONTENT_APPROVAL_REQUIRED"=>"The scenario version is no longer approved.",
+        "RUNTIME_INCOMPATIBLE"=>"The pinned package needs another runtime version.",
+        "PLAYTEST_ENTITLEMENT_REQUIRED"=>"The Building has no active service period or Trial playtest left; the package cannot be downloaded.",
         "PACKAGE_FORMAT_UNSUPPORTED"=>"This package was not built as fet3d.package/1 and has no downloadable file list.",
         "NOT_FOUND"=>"The session was not found.",
         _=>"The package cannot be read."
