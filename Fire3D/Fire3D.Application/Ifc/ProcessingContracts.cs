@@ -15,26 +15,6 @@ public sealed class ProcessingWorkerOptions
     public bool PackagePullEnabled { get; set; }
     /// <summary>Lease length of package jobs on claim and renew (60-900 seconds); a Unity bake takes tens of minutes.</summary>
     public int PackageLeaseSeconds { get; set; } = 300;
-    /// <summary>The Geometry (IFC) worker leases Geometry jobs itself (outbound only); the push dispatcher then skips Geometry jobs.</summary>
-    public bool GeometryPullEnabled { get; set; }
-    /// <summary>Lease length of pulled Geometry attempts on lease and renew (60-900 seconds); push Geometry attempts keep 60 seconds.</summary>
-    public int GeometryLeaseSeconds { get; set; } = 600;
-
-    /// <summary>Lease lengths accepted for pulled jobs.</summary>
-    public static bool IsValidLeaseSeconds(int seconds) => seconds is >= 60 and <= 900;
-    /// <summary>
-    /// A pull mode needs the worker API and cannot be combined with Redis delivery: the Redis publisher skips no job kind, so it would
-    /// still push the pulled jobs.
-    /// </summary>
-    public bool IsValidPullMode(bool pull) => !pull || (WorkerApiEnabled && !(Transport == "RedisStreams" && (DispatcherEnabled || ConsumerEnabled)));
-    /// <summary>Key passed to processing_dispatch_gate('Claim') so the HTTP dispatcher leaves pulled job kinds to their pull lease.</summary>
-    public string? DispatchExclusion => (PackagePullEnabled, GeometryPullEnabled) switch
-    {
-        (true, true) => "ExcludePackagesAndGeometry",
-        (true, false) => "ExcludePackages",
-        (false, true) => "ExcludeGeometry",
-        _ => null
-    };
 }
 public interface IRevisionProcessingStore
 {
@@ -45,8 +25,6 @@ public interface IProcessingWorkerGate
     Task<AuthResult<JsonElement>> ExecuteAsync(string action, Guid job, JsonElement input, CancellationToken ct);
     /// <summary>Leases and claims the oldest deliverable package job; null when none is waiting.</summary>
     Task<AuthResult<JsonElement?>> LeasePackageAsync(JsonElement input, CancellationToken ct);
-    /// <summary>Leases and claims the oldest deliverable Geometry job; null when none is waiting.</summary>
-    Task<AuthResult<JsonElement?>> LeaseGeometryAsync(JsonElement input, CancellationToken ct);
     /// <summary>Worker context of a live attempt (null when the attempt or lease is not current).</summary>
     Task<JsonElement?> ContextAsync(Guid attempt, Guid leaseToken, CancellationToken ct);
 }

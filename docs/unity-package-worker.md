@@ -16,7 +16,6 @@ ProcessingWorker__AllowedToolchains__0=<the Unity worker toolchain id, e.g. unit
 ConnectionStrings__ProcessingExecutor=<restricted login, member of fet3d_processing_executor>
 ```
 
-The Geometry (IFC) worker on the same VM pulls Geometry jobs the same way: see [Geometry worker](geometry-worker.md).
 Pull works with the `Http` transport (dispatcher on or off). The API refuses to start with pull plus `RedisStreams` delivery,
 because the Redis publisher would still push package jobs. Apply the migration before deploying the binary; keep pull off until the
 VM is ready (with pull off, package jobs stay with the push dispatcher as before).

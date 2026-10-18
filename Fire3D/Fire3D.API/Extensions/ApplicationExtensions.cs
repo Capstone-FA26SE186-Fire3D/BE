@@ -95,11 +95,8 @@ public static class ApplicationExtensions
             .Validate(o => !o.WorkerApiEnabled || (!string.IsNullOrWhiteSpace(configuration.GetConnectionString("ProcessingExecutor")) && o.AllowedToolchains.Length > 0), "Worker API requires restricted ProcessingExecutor connection and an explicit toolchain allowlist.")
             .Validate(o => !(o.ConsumerEnabled || o.DispatcherEnabled && o.Transport == "Http") || (Uri.TryCreate(o.WorkerUrl,UriKind.Absolute,out var url) && url.Scheme=="https" && string.IsNullOrEmpty(url.UserInfo)), "HTTP delivery requires a configured HTTPS worker URL.")
             // BE#110: the Redis publisher does not skip package jobs, so pull is combined only with the HTTP dispatcher (or none).
-            .Validate(o => o.IsValidPullMode(o.PackagePullEnabled), "Package pull requires the worker API and the Http transport.")
-            .Validate(o => Fire3D.Application.Ifc.ProcessingWorkerOptions.IsValidLeaseSeconds(o.PackageLeaseSeconds), "ProcessingWorker PackageLeaseSeconds must be 60-900.")
-            // Geometry pull: same rule; the Geometry worker on the VM leases Geometry jobs and the HTTP dispatcher skips them.
-            .Validate(o => o.IsValidPullMode(o.GeometryPullEnabled), "Geometry pull requires the worker API and the Http transport.")
-            .Validate(o => Fire3D.Application.Ifc.ProcessingWorkerOptions.IsValidLeaseSeconds(o.GeometryLeaseSeconds), "ProcessingWorker GeometryLeaseSeconds must be 60-900.")
+            .Validate(o => !o.PackagePullEnabled || (o.WorkerApiEnabled && !(o.Transport == "RedisStreams" && (o.DispatcherEnabled || o.ConsumerEnabled))), "Package pull requires the worker API and the Http transport.")
+            .Validate(o => o.PackageLeaseSeconds is >= 60 and <= 900, "ProcessingWorker PackageLeaseSeconds must be 60-900.")
             .ValidateOnStart();
         services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions,Fire3D.API.Authorization.ProcessingWorkerAuthentication>(Fire3D.API.Authorization.ProcessingWorkerAuthentication.SchemeName,_=>{});
         services.AddScoped<Fire3D.Infrastructure.Ifc.ProcessingRuntimeStore>();

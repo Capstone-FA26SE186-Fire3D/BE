@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-276 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+275 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -271,7 +271,6 @@
 | POST | /api/training/sessions/{id}/start | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409, 503 |
 | GET | /api/validation-runs/{validationRunId} | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /health/version | Anonymous | None | 200 |
-| POST | /internal/processing/geometry-jobs/lease | ProcessingWorker | None | 200 |
 | POST | /internal/processing/jobs/{jobId}/claim | ProcessingWorker | None | 200 |
 | POST | /internal/processing/jobs/{jobId}/complete | ProcessingWorker | None | 200 |
 | POST | /internal/processing/jobs/{jobId}/fail | ProcessingWorker | None | 200 |

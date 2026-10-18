@@ -45,12 +45,9 @@ public sealed class ProcessingRuntimeStore(Fire3DDbContext db, IConfiguration co
         if(action=="Claim")value=await WithContextAsync(connection,value,ct);
         return AuthResult<JsonElement>.Ok(value);
     },ct);
-    public Task<AuthResult<JsonElement?>> LeasePackageAsync(JsonElement input,CancellationToken ct)=>LeaseAsync("processing_package_lease_gate",input,ct);
-    public Task<AuthResult<JsonElement?>> LeaseGeometryAsync(JsonElement input,CancellationToken ct)=>LeaseAsync("processing_geometry_lease_gate",input,ct);
-    private Task<AuthResult<JsonElement?>> LeaseAsync(string gate,JsonElement input,CancellationToken ct)=>ExecutorAsync(async connection=>
+    public Task<AuthResult<JsonElement?>> LeasePackageAsync(JsonElement input,CancellationToken ct)=>ExecutorAsync(async connection=>
     {
-        // gate is one of the two constant lease gate names above, never caller input.
-        await using var cmd=new NpgsqlCommand($"SELECT {gate}(@input)::text",connection);
+        await using var cmd=new NpgsqlCommand("SELECT processing_package_lease_gate(@input)::text",connection);
         cmd.Parameters.AddWithValue("input",NpgsqlDbType.Jsonb,input.GetRawText());
         var value=Parse(await cmd.ExecuteScalarAsync(ct));
         if(value.GetProperty("code").GetString()=="EMPTY")return AuthResult<JsonElement?>.Ok(null);
