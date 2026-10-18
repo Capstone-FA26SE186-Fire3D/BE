@@ -142,9 +142,44 @@ public sealed partial class AuthIntegrationTests
         });
     }
 
-    // Mobile#22: the Mobile login that started a playtest downloads the pinned fet3d.package/1 files through short signed URLs.
+    // FR-TRAINING-04: prepare pins the package and Mobile downloads/verifies it before start; start alone uses the seat.
     [PostgresFact]
-    public async Task Playtest_package_files_are_offered_only_to_the_starting_mobile_session()
+    public async Task Learner_package_files_are_downloadable_after_prepare_without_using_a_seat()
+    {
+        var f = await PublishedTraining();
+        var trainee = await SeedTrainee(); var other = await SeedTrainee();
+        await WithLearnerRuntime(async runtime =>
+        {
+            await using var db = BuildingContext(runtime);
+            var store = new Fire3D.Infrastructure.Learning.LearnerSessions(db, Options.Create(LearnerOptions));
+            var caller = new Fire3D.Application.Learning.LearnerCaller(trainee.Id, trainee.Family, null);
+            var prepared = await store.PrepareAsync(caller, new(f.Training, "Learn", "1.0.0"), "pkg-learn-prepare", default);
+            Assert.True(prepared.IsSuccess, prepared.Error?.Code);
+            var id = prepared.Value!.Id;
+            var metadata = JsonSerializer.Serialize(PackageMetadata());
+            await ExecuteAsync($"UPDATE revision_artifacts SET schema_version='fet3d.package/1',object_key='worker-output/o/j/l/manifest.json',metadata=metadata||'{metadata}'::jsonb WHERE id=(SELECT (package->>'manifestArtifactId')::uuid FROM training_session_preparations WHERE id='{id}')");
+            await using var reader = BuildingContext(testConnection);
+            var files = new RuntimePackageFilesStore(reader);
+            var before = await files.GetAsync("Training", trainee.Id, trainee.Family, id, default);
+            Assert.True(before.IsSuccess, before.Error?.Code);
+            Assert.Equal("worker-output/o/j/l/", before.Value.GetProperty("prefix").GetString());
+            Assert.Equal(0L, await ScalarAsync($"SELECT count(*) FROM billing_learner_seats WHERE trainee_id='{trainee.Id}'"));
+            Assert.Equal("NOT_FOUND", (await files.GetAsync("Training", other.Id, other.Family, id, default)).Error?.Code);
+
+            Assert.True((await store.StartAsync(caller, id, "pkg-learn-start", default)).IsSuccess);
+            Assert.True((await files.GetAsync("Training", trainee.Id, trainee.Family, id, default)).IsSuccess);
+
+            // An expired preparation no longer downloads.
+            var second = (await store.PrepareAsync(caller, new(f.Training, "Guided", "1.0.0"), "pkg-learn-prepare-2", default)).Value!.Id;
+            await ExecuteAsync($"UPDATE training_session_preparations SET expires_at=now()-interval '1 second' WHERE id='{second}'");
+            Assert.Equal("PACKAGE_SESSION_NOT_ACTIVE", (await files.GetAsync("Training", trainee.Id, trainee.Family, second, default)).Error?.Code);
+        });
+    }
+
+    // Mobile#22 / FR-TRAINING-04: the Mobile login that redeemed the handoff downloads the pinned fet3d.package/1 files before start
+    // (start then rechecks entitlement), and keeps them while the playtest runs.
+    [PostgresFact]
+    public async Task Playtest_package_files_are_offered_only_to_the_mobile_session_before_and_after_start()
     {
         var f = await SeedPlaytestRuntime();
         var stranger = await SeedReadyPackage("PlaytestPackage"); var strangerFamily = await SeedPlaytestFamily(stranger.Owner);
@@ -160,12 +195,16 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal("PACKAGE_SESSION_NOT_ACTIVE", (await files.GetAsync("Playtest", f.Owner, f.Web, id, default)).Error?.Code);
             var code = (await store.CreateHandoffAsync(f.Owner, f.Web, id, "pkg-handoff", default)).Value!.Code;
             Assert.True((await store.RedeemHandoffAsync(f.Owner, f.Mobile, new(code), default)).IsSuccess);
-            Assert.True((await store.StartAsync(f.Owner, f.Mobile, id, new("1.0.0"), "pkg-start", default)).IsSuccess);
             // A package built before fet3d.package/1 has no file list.
             Assert.Equal("PACKAGE_FORMAT_UNSUPPORTED", (await files.GetAsync("Playtest", f.Owner, f.Mobile, id, default)).Error?.Code);
 
             var metadata = JsonSerializer.Serialize(PackageMetadata());
             await ExecuteAsync($"UPDATE revision_artifacts SET schema_version='fet3d.package/1',object_key='worker-output/o/j/a/manifest.json',metadata=metadata||'{metadata}'::jsonb WHERE id=(SELECT manifest_artifact_id FROM playtest_package_pins WHERE playtest_id='{id}')");
+            // Before start: the redeeming Mobile session downloads and verifies; the web session that prepared it does not.
+            Assert.True((await files.GetAsync("Playtest", f.Owner, f.Mobile, id, default)).IsSuccess);
+            Assert.Equal("PACKAGE_SESSION_NOT_ACTIVE", (await files.GetAsync("Playtest", f.Owner, f.Web, id, default)).Error?.Code);
+            Assert.Equal(0, await ScalarAsync($"SELECT playtest_units_used FROM service_entitlements WHERE id='{f.Trial}'"));
+            Assert.True((await store.StartAsync(f.Owner, f.Mobile, id, new("1.0.0"), "pkg-start", default)).IsSuccess);
             var pinned = await files.GetAsync("Playtest", f.Owner, f.Mobile, id, default);
             Assert.True(pinned.IsSuccess, pinned.Error?.Code);
             Assert.Equal("worker-output/o/j/a/", pinned.Value.GetProperty("prefix").GetString());
