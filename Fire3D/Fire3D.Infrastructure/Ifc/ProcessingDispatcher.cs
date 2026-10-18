@@ -20,8 +20,8 @@ public sealed class ProcessingDispatcher(IServiceScopeFactory scopes,IHttpClient
     {
         using var scope=scopes.CreateScope();var gates=scope.ServiceProvider.GetRequiredService<IProcessingDispatchGate>();
         await gates.ExecuteAsync("Recover",null,null,null,ct);
-        // BE#110: with package pull on, the Unity worker leases package jobs itself; the dispatcher only delivers the rest.
-        var delivery=await gates.ExecuteAsync("Claim",options.Value.PackagePullEnabled?"ExcludePackages":null,null,null,ct);if(delivery.GetProperty("code").GetString()=="EMPTY")return false;
+        // BE#110 + Geometry pull: pulled job kinds (packages, Geometry) are leased by their worker; the dispatcher delivers the rest.
+        var delivery=await gates.ExecuteAsync("Claim",options.Value.DispatchExclusion,null,null,ct);if(delivery.GetProperty("code").GetString()=="EMPTY")return false;
         var key=delivery.GetProperty("eventKey").GetString()!;var lease=delivery.GetProperty("leaseToken").GetGuid();
         var acknowledged=false;
         try
