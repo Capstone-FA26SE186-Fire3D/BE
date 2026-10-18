@@ -39,7 +39,9 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
     .AddOperationTransformer<AuthoringOperationTransformer>()
     .AddSchemaTransformer<ContractSchemaTransformer>()
     .AddOperationTransformer<SuccessResponseTransformer>());
-builder.Services.AddHealthChecks().AddCheck<DatabaseReadinessCheck>("database", tags: [DatabaseReadinessCheck.Tag]);
+builder.Services.AddHealthChecks().AddCheck<DatabaseReadinessCheck>("database", tags: [DatabaseReadinessCheck.Tag])
+    .AddCheck<ProcessingExecutorCheck>("processingExecutor", tags: [ProcessingExecutorCheck.Tag]);
+builder.Services.AddExceptionHandler<ProcessingExecutorExceptionHandler>();
 
 // Cấu hình Firebase Admin SDK
 var firebaseCredentialJson = FirebaseAdminConfiguration.GetCredentialJson(
@@ -130,8 +132,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Liveness stays process-only so a database outage never makes the host restart the app; readiness checks DB and migrations.
-app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = check => !check.Tags.Contains(DatabaseReadinessCheck.Tag) });
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = check => !check.Tags.Contains(DatabaseReadinessCheck.Tag) && !check.Tags.Contains(ProcessingExecutorCheck.Tag) });
 app.MapHealthChecks("/health/ready", DatabaseReadinessCheck.Options).AllowAnonymous();
+app.MapHealthChecks("/health/worker", ProcessingExecutorCheck.Options).AllowAnonymous();
 app.MapGet("/health/version", (IConfiguration configuration) => Results.Ok(new ArtifactVersionResponse(ArtifactVersion.Get(configuration))))
     .AllowAnonymous().Produces<ArtifactVersionResponse>(200);
 app.MapControllers();

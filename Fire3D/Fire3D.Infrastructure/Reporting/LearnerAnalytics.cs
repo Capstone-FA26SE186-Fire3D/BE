@@ -24,7 +24,7 @@ public sealed class LearnerAnalytics(Fire3DDbContext db,IOptions<LearnerAnalytic
         ["export"]="CSV of the cohort rows with the same filters and definitions; at most 10000 rows and 10 successful exports per account per UTC day.",
         ["outcomes"]="Server result outcome Passed/NotPassed/Incomplete/NotAssessed; passRate uses Passed/(Passed+NotPassed).",
         ["duration"]="Runtime completion_time_seconds of completed cohort sessions (elapsed play time), so offline sync delay is never counted.",
-        ["aiUsage"]="Settled AI units in range; open reservations and NeedsReconcile reported separately at asOf.",
+        ["aiUsage"]="Settled AI units in range; open reservations and NeedsReconcile reported separately at asOf. requests counts requests created in range by v7 status (Accepted, Processing, Succeeded, Failed, NeedsReconcile, Rejected); resultTypes splits Succeeded by result type; byAudience (organization/trainee) only in the platform-wide report.",
         ["revenue"]="Applied payment transactions by receipt time in range, per currency; quotation totals are not revenue.",
         ["rates"]="A rate without samples is null, not 0.",
         ["consistency"]="Authorization and every aggregate share one read-only RepeatableRead PostgreSQL snapshot."

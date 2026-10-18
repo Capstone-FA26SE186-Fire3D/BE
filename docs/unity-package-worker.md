@@ -30,6 +30,23 @@ VM is ready (with pull off, package jobs stay with the push dispatcher as before
   accepted and `/health/ready` healthy; tracked in BE#118.
 - The VM is deallocated when idle; jobs created meanwhile wait in the database and are leased when it starts again.
 
+## Checking the worker login (BE#118)
+
+`GET /health/worker` (anonymous, codes only) checks the `ProcessingExecutor` login: `200 OK`, `200 WORKER_API_DISABLED`, or `503`
+with `PROCESSING_EXECUTOR_FORBIDDEN` (the login is not a member of `fet3d_processing_executor`, or cannot execute the lease gate
+while pull is on), `PROCESSING_EXECUTOR_LOGIN_FAILED` (wrong user or password), `PROCESSING_EXECUTOR_UNREACHABLE`, or
+`PROCESSING_EXECUTOR_TOO_PRIVILEGED` (works, but the login bypasses row security, e.g. `postgres`: use a dedicated login). It is not
+part of `/health` or `/health/ready`, so a worker misconfiguration never marks the API unhealthy. Worker calls with such a login
+answer `503` with the same code instead of `500`. Create the login once:
+
+```sql
+CREATE ROLE fet3d_processing_worker LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION CONNECTION LIMIT 10 PASSWORD '<random>';
+GRANT fet3d_processing_executor TO fet3d_processing_worker;
+GRANT USAGE ON SCHEMA public TO fet3d_processing_worker;
+```
+
+Through the Supabase pooler the connection string user is `fet3d_processing_worker.<project-ref>`; keep the API's host and port.
+
 ## Worker loop
 
 All calls use the header `X-Worker-Key`; user tokens are rejected (401). Base URL: the API (`https://api.fet3d.io.vn`).
