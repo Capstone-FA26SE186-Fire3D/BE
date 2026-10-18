@@ -23,7 +23,11 @@ public sealed partial class AuthIntegrationTests
             Row(org, "organization", "Answer", "Succeeded", "RejectedBySafetyGate"),
             Row(org, "organization", "Answer", "NeedsReconcile", null),
             Row(other, "organization", "Answer", "Failed", null),
-            Row(null, "trainee", "TraineeAnswer", "Succeeded", "InsufficientEvidence")
+            Row(null, "trainee", "TraineeAnswer", "Succeeded", "InsufficientEvidence"),
+            Row(org, "organization", "Answer", "Rejected", null),
+            // Outside [from,to): never counted.
+            Row(org, "organization", "Answer", "Accepted", null).Replace("'2026-03-05T00:00:00Z'", "'2026-04-02T00:00:00Z'"),
+            Row(org, "organization", "Answer", "Failed", null).Replace("'2026-03-05T00:00:00Z'", "'2026-02-28T23:59:59Z'")
         });
         // Policies, users and organizations are not needed to count rows: skip foreign keys for the fixture, keep every CHECK.
         await ExecuteAsync($"""
@@ -31,12 +35,12 @@ public sealed partial class AuthIntegrationTests
             INSERT INTO ai_requests(id,organization_id,actor_user_id,audience,operation,policy_id,quota_unit,reserved_units,status,consumed_units,input,input_hash,sources,result,result_type,lease_token,lease_until,completed_at,next_attempt_at,created_at,updated_at) VALUES {rows};
             SET session_replication_role=origin;
             """);
-        async Task<JsonElement> Usage(string scope) => JsonDocument.Parse((string)(await ScalarAsync($"SELECT analytics_ai_usage({scope},'2026-03-01','2026-04-01',now())::text"))!).RootElement.Clone();
+        async Task<JsonElement> Usage(string scope) => JsonDocument.Parse((string)(await ScalarAsync($"SELECT analytics_ai_usage({scope},'2026-03-01T00:00:00Z','2026-04-01T00:00:00Z',now())::text"))!).RootElement.Clone();
 
         var mine = await Usage($"'{org}'");
         // jsonb objects have no key order: compare by key.
         static Dictionary<string, int> Counts(JsonElement e) => e.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.GetInt32());
-        Assert.Equal(new Dictionary<string, int> { ["Accepted"] = 1, ["Processing"] = 1, ["Succeeded"] = 3, ["Failed"] = 0, ["NeedsReconcile"] = 1, ["Rejected"] = 0 }, Counts(mine.GetProperty("requests")));
+        Assert.Equal(new Dictionary<string, int> { ["Accepted"] = 1, ["Processing"] = 1, ["Succeeded"] = 3, ["Failed"] = 0, ["NeedsReconcile"] = 1, ["Rejected"] = 1 }, Counts(mine.GetProperty("requests")));
         Assert.Equal(new Dictionary<string, int> { ["KnowledgeAnswer"] = 1, ["ScenarioDraft"] = 1, ["InsufficientEvidence"] = 0, ["RejectedBySafetyGate"] = 1 }, Counts(mine.GetProperty("resultTypes")));
         Assert.Equal(JsonValueKind.Null, mine.GetProperty("byAudience").ValueKind);
 

@@ -5,7 +5,7 @@ using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 namespace Fire3D.Infrastructure.Ifc;
-/// <summary>BE#110: pinned fet3d.package/1 manifest and files of a started learner session or playtest (runtime_package_files).</summary>
+/// <summary>BE#110: pinned fet3d.package/1 manifest and files of a preparation, playtest or started session (runtime_package_files).</summary>
 public sealed class RuntimePackageFilesStore(Fire3DDbContext db) : IRuntimePackageFiles
 {
     public async Task<AuthResult<JsonElement>> GetAsync(string kind,Guid actor,Guid family,Guid id,CancellationToken ct)
@@ -19,7 +19,14 @@ public sealed class RuntimePackageFilesStore(Fire3DDbContext db) : IRuntimePacka
     }
     private static string Message(string code)=>code switch
     {
-        "PACKAGE_SESSION_NOT_ACTIVE"=>"The package can be downloaded only by the login that started this play, until it completes.",
+        "PACKAGE_SESSION_NOT_ACTIVE"=>"The package is not available to this login now: the preparation expired, the playtest is not bound to this session, or the play was started elsewhere or ended.",
+        "BUILDING_ENTITLEMENT_REQUIRED"=>"The Building has no active service period; the package cannot be downloaded.",
+        "LEARNER_LIMIT_REACHED"=>"The Building has no free learner seat; the package cannot be downloaded.",
+        "BUILDING_ACCESS_REQUIRED"=>"This Building requires participation access.",
+        "TRAINING_UNAVAILABLE"=>"The Training is not available now.",
+        "CONTENT_APPROVAL_REQUIRED"=>"The scenario version is no longer approved.",
+        "RUNTIME_INCOMPATIBLE"=>"The pinned package needs another runtime version.",
+        "PLAYTEST_ENTITLEMENT_REQUIRED"=>"The Building has no active service period or Trial playtest left; the package cannot be downloaded.",
         "PACKAGE_FORMAT_UNSUPPORTED"=>"This package was not built as fet3d.package/1 and has no downloadable file list.",
         "NOT_FOUND"=>"The session was not found.",
         _=>"The package cannot be read."

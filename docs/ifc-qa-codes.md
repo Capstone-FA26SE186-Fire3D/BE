@@ -45,3 +45,10 @@ run fails and the user must fix the IFC.
 ## Room names (bim-facts)
 
 When Geometry QA passes, `building_metadata.spaces` (`fet3d.building/1`) is stored in `bim_facts`: one row per space for `Name`, `LongName` and `Category` (entity `IfcSpace`, `sourceHash` = IFC SHA-256). A space without name and long name gets `qualityFlags: ["SPACE_UNNAMED"]` on its `Name` row. Read with `GET /api/revisions/{revisionId}/bim-facts`.
+
+Reading them (BE#120): facts are ordered by `ifcGlobalId` then `propertyPath`, so the three facts of a room are adjacent and never
+split by paging. Optional filters `entityType` (e.g. `IfcSpace`), `ifcGlobalId` (22 characters) and `qualityFlag` (e.g.
+`SPACE_UNNAMED`, which returns every fact of a flagged element); invalid values answer `400 VALIDATION_ERROR` per field.
+`GET /api/revisions/{revisionId}/bim-facts/elements` returns one item per element, paged by element: `ifcGlobalId`, `entityType`,
+`name`, `longName`, `category`, `qualityFlags` (union of its facts), `sourceHash`, `updatedAt`; with `qualityFlag=SPACE_UNNAMED` it
+lists the unnamed rooms without loading every fact.

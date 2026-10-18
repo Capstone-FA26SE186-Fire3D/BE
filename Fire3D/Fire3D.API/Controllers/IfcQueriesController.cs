@@ -186,6 +186,8 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
     /// page mặc định 1; pageSize 20, tối đa 100. Response items,totalCount,page,pageSize.
     /// Revision hợp lệ chưa có dữ liệu trả items rỗng; revision không tồn tại/ngoài scope trả 404.
     /// Trả ifcGlobalId,entityType,propertyPath,value,sourceHash,qualityFlags để editor/AI truy vết nguồn. Không suy diễn facts thiếu; value có thể null.
+    /// Thứ tự ổn định theo ifcGlobalId rồi propertyPath (các dòng của một phòng luôn liền nhau). Lọc tùy chọn: entityType (vd IfcSpace),
+    /// ifcGlobalId (22 ký tự), qualityFlag (vd SPACE_UNNAMED: trả mọi dòng của phần tử có cờ đó). Giá trị lọc sai trả 400 theo field.
     /// </remarks>
     [HttpGet("revisions/{revisionId:guid}/bim-facts")]
     [ProducesResponseType<PageResponse<BimFactResponse>>(200)]
@@ -194,11 +196,32 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(404)]
     public async Task<ActionResult<PageResponse<BimFactResponse>>> ListBimFacts(Guid revisionId,
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? entityType = null, [FromQuery] string? ifcGlobalId = null,
+        [FromQuery] string? qualityFlag = null, CancellationToken ct = default)
     {
-        var actor = User.GetActorId();
-        var result = await sender.Send(new ListBimFactsQuery(actor, revisionId, page, pageSize), ct);
-        return result.IsSuccess ? Ok(result.Value) : Problem(statusCode: result.Error!.Status,
-            title: result.Error.Message, extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+        var result = await sender.Send(new ListBimFactsQuery(User.GetActorId(), revisionId, page, pageSize, new(entityType, ifcGlobalId, qualityFlag)), ct);
+        return result.IsSuccess ? Ok(result.Value) : BimFactProblem(result.Error!);
     }
+
+    /// <summary>BIM facts gom theo phần tử (mỗi phòng một dòng): name, longName, category, qualityFlags.</summary>
+    /// <remarks>
+    /// Cùng quyền và bộ lọc như GET bim-facts; phân trang theo phần tử, thứ tự theo ifcGlobalId. qualityFlags là hợp các cờ của mọi
+    /// fact của phần tử, nên lọc qualityFlag=SPACE_UNNAMED liệt kê các phòng chưa có tên mà không cần tải hết facts (BE#120).
+    /// </remarks>
+    [HttpGet("revisions/{revisionId:guid}/bim-facts/elements")]
+    [ProducesResponseType<PageResponse<BimFactElementResponse>>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<ActionResult<PageResponse<BimFactElementResponse>>> ListBimFactElements(Guid revisionId,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? entityType = null, [FromQuery] string? ifcGlobalId = null,
+        [FromQuery] string? qualityFlag = null, CancellationToken ct = default)
+    {
+        var result = await sender.Send(new ListBimFactElementsQuery(User.GetActorId(), revisionId, page, pageSize, new(entityType, ifcGlobalId, qualityFlag)), ct);
+        return result.IsSuccess ? Ok(result.Value) : BimFactProblem(result.Error!);
+    }
+
+    private ObjectResult BimFactProblem(Fire3D.Application.Authentication.AuthError error) => Problem(statusCode: error.Status, title: error.Message,
+        extensions: new Dictionary<string, object?> { ["code"] = error.Code, ["errors"] = error.Errors });
 }

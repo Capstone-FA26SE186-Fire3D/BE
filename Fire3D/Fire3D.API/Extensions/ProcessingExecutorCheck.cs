@@ -9,16 +9,30 @@ using Npgsql;
 namespace Fire3D.API.Extensions;
 
 /// <summary>
-/// BE#118: GET /health/worker checks the restricted ProcessingExecutor login the worker API runs on. Kept out of /health and
-/// /health/ready, so a worker misconfiguration never marks the whole API unhealthy. Only codes are reported, never connection details.
+/// BE#118: GET /health/worker (machine key only) checks the restricted ProcessingExecutor login the worker API runs on. Kept out of
+/// /health and /health/ready, so a worker misconfiguration never marks the whole API unhealthy. Only codes are reported, never
+/// connection details. A result is reused for 30 seconds so repeated calls never turn into repeated database logins (a wrong
+/// password would otherwise hit the pooler's failed-authentication limit).
 /// </summary>
 public sealed class ProcessingExecutorCheck(IOptions<ProcessingWorkerOptions> options, IConfiguration configuration) : IHealthCheck
 {
     public const string Tag = "worker";
+    private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(30);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset At, HealthCheckResult Result)> Recent = new();
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken ct = default)
     {
         if (!options.Value.WorkerApiEnabled) return HealthCheckResult.Healthy("WORKER_API_DISABLED");
+        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+            (configuration.GetConnectionString("ProcessingExecutor") ?? "") + "|" + options.Value.PackagePullEnabled)));
+        if (Recent.TryGetValue(key, out var cached) && DateTimeOffset.UtcNow - cached.At < CacheFor) return cached.Result;
+        var result = await ProbeAsync(ct);
+        Recent[key] = (DateTimeOffset.UtcNow, result);
+        return result;
+    }
+
+    private async Task<HealthCheckResult> ProbeAsync(CancellationToken ct)
+    {
         try
         {
             await using var connection = new NpgsqlConnection(configuration.GetConnectionString("ProcessingExecutor"));

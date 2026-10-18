@@ -3,7 +3,8 @@ namespace Fire3D.Application.Ifc;
 public interface IIfcReadStore
 {
     Task<PageResponse<RevisionProcessingLogResponse>?> ListRevisionProcessingLogsAsync(Guid revisionId, Guid? organizationId, int page, int pageSize, CancellationToken ct);
-    Task<PageResponse<BimFactResponse>?> ListBimFactsAsync(Guid revisionId, Guid? organizationId, int page, int pageSize, CancellationToken ct);
+    Task<PageResponse<BimFactResponse>?> ListBimFactsAsync(Guid revisionId, Guid? organizationId, BimFactFilters filters, int page, int pageSize, CancellationToken ct);
+    Task<PageResponse<BimFactElementResponse>?> ListBimFactElementsAsync(Guid revisionId, Guid? organizationId, BimFactFilters filters, int page, int pageSize, CancellationToken ct);
     Task<PageResponse<RevisionArtifactResponse>?> ListRevisionArtifactsAsync(Guid revisionId, Guid? organizationId, int page, int pageSize, CancellationToken ct);
     Task<PageResponse<RevisionIssueResponse>?> ListRevisionIssuesAsync(Guid revisionId, Guid? organizationId, int page, int pageSize, CancellationToken ct);
     Task<JobQaResponse?> GetJobQaAsync(Guid jobId, Guid? organizationId, int page, int pageSize, CancellationToken ct);

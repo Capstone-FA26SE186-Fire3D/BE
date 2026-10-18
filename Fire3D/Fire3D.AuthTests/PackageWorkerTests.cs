@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -168,11 +168,22 @@ public sealed partial class AuthIntegrationTests
 
             Assert.True((await store.StartAsync(caller, id, "pkg-learn-start", default)).IsSuccess);
             Assert.True((await files.GetAsync("Training", trainee.Id, trainee.Family, id, default)).IsSuccess);
+            Assert.Equal(1L, await ScalarAsync($"SELECT count(*) FROM billing_learner_seats WHERE trainee_id='{trainee.Id}'"));
 
             // An expired preparation no longer downloads.
             var second = (await store.PrepareAsync(caller, new(f.Training, "Guided", "1.0.0"), "pkg-learn-prepare-2", default)).Value!.Id;
             await ExecuteAsync($"UPDATE training_session_preparations SET expires_at=now()-interval '1 second' WHERE id='{second}'");
             Assert.Equal("PACKAGE_SESSION_NOT_ACTIVE", (await files.GetAsync("Training", trainee.Id, trainee.Family, second, default)).Error?.Code);
+
+            // Review fix: before start the download passes the start checks. A Building without a current paid period, or a Training
+            // that has ended, refuses it although the preparation is still valid.
+            var third = (await store.PrepareAsync(caller, new(f.Training, "Learn", "1.0.0"), "pkg-learn-prepare-3", default)).Value!.Id;
+            var building = (Guid)(await ScalarAsync($"SELECT building_id FROM training_session_preparations WHERE id='{third}'"))!;
+            // Entitlement rows are immutable by trigger; the fixture ends the period directly.
+            await ExecuteAsync($"SET session_replication_role=replica;UPDATE service_entitlements SET ends_at=now()-interval '1 second' WHERE building_id='{building}' AND status='Active';SET session_replication_role=origin;");
+            Assert.Equal("BUILDING_ENTITLEMENT_REQUIRED", (await files.GetAsync("Training", trainee.Id, trainee.Family, third, default)).Error?.Code);
+            await ExecuteAsync($"UPDATE trainings SET end_date=now()-interval '1 second' WHERE id='{f.Training}'");
+            Assert.Equal("TRAINING_UNAVAILABLE", (await files.GetAsync("Training", trainee.Id, trainee.Family, third, default)).Error?.Code);
         });
     }
 
@@ -192,7 +203,14 @@ public sealed partial class AuthIntegrationTests
             var store = new PlaytestLifecycle(db, Options.Create(HandoffOptions));
             var id = (await store.PrepareAsync(f.Owner, f.Web, f.Building, f.Scenario, new(f.Revision, ScenarioVersionId: f.Version), "pkg-prepare", default)).Value!.Id;
             var files = new RuntimePackageFilesStore(db);
-            Assert.Equal("PACKAGE_SESSION_NOT_ACTIVE", (await files.GetAsync("Playtest", f.Owner, f.Web, id, default)).Error?.Code);
+            // Before any handoff the preparing session is the one start accepts (canStart), so it passes the access check
+            // (this old package then has no file list).
+            Assert.Equal("PACKAGE_FORMAT_UNSUPPORTED", (await files.GetAsync("Playtest", f.Owner, f.Web, id, default)).Error?.Code);
+            // Second review: before start the download uses start's entitlement rule; a Trial with no playtest left is refused the same way.
+            await ExecuteAsync($"SET session_replication_role=replica;UPDATE service_entitlements SET playtest_units_used=playtest_units_granted WHERE id='{f.Trial}';SET session_replication_role=origin;");
+            Assert.Equal("PLAYTEST_ENTITLEMENT_REQUIRED", (await files.GetAsync("Playtest", f.Owner, f.Web, id, default)).Error?.Code);
+            Assert.Equal("PLAYTEST_ENTITLEMENT_REQUIRED", (await store.StartAsync(f.Owner, f.Web, id, new("1.0.0"), "pkg-start-no-units", default)).Error?.Code);
+            await ExecuteAsync($"SET session_replication_role=replica;UPDATE service_entitlements SET playtest_units_used=0 WHERE id='{f.Trial}';SET session_replication_role=origin;");
             var code = (await store.CreateHandoffAsync(f.Owner, f.Web, id, "pkg-handoff", default)).Value!.Code;
             Assert.True((await store.RedeemHandoffAsync(f.Owner, f.Mobile, new(code), default)).IsSuccess);
             // A package built before fet3d.package/1 has no file list.
