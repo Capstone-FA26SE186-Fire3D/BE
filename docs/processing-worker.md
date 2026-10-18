@@ -6,7 +6,7 @@ Transport defaults to PostgreSQL transactional outbox → configured HTTP worker
 
 Apply `AddBoundIfcUploads` then `AddProcessingWorkerGates`. Both are additive; legacy sources/artifacts are not marked verified/accepted. Preflight stops on invalid job hashes or duplicate logical inputs. Do not reset/delete data to hide a failed preflight.
 
-Defaults: `ProcessingWorker__DispatcherEnabled=false`, `ProcessingWorker__WorkerApiEnabled=false`. A process 202 means durable job only, even with dispatcher disabled.
+Defaults: `ProcessingWorker__DispatcherEnabled=false`, `ProcessingWorker__WorkerApiEnabled=false`, `ProcessingWorker__PackagePullEnabled=false`, `ProcessingWorker__GeometryPullEnabled=false`. A process 202 means durable job only, even with dispatcher disabled.
 
 For an enabled worker deployment, configure:
 
@@ -24,6 +24,9 @@ Do not commit credentials. API identity executes request/dispatch/requeue gates;
 
 Unity package jobs can instead be pulled by an outbound-only worker (`ProcessingWorker__PackagePullEnabled=true`, lease 60-900 s,
 signed input/upload URLs, `fet3d.package/1` storage check before Complete): see [Unity package worker](unity-package-worker.md).
+Geometry jobs can be pulled the same way (`ProcessingWorker__GeometryPullEnabled=true`, default false; `GeometryLeaseSeconds`
+default 600, 60-900; signed IFC source, signed uploads, storage check before Complete): see [Geometry worker](geometry-worker.md).
+With either pull mode on, the HTTP dispatcher skips those job kinds; pull is refused together with RedisStreams delivery.
 
 ## User flow
 
