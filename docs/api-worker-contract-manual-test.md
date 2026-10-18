@@ -14,3 +14,18 @@ Use a migrated disposable environment first. Deploy the four forward migrations 
 Check results separately: source code, HTTP tests, PostgreSQL migration/grants/races, fake S3/worker tests, actual deployment/providers. Linux decoder tests must use a healthy runtime; a corrupt local SDK image is not an application decoder failure. Training analytics, learner lifecycle and real Unity acceptance remain outside this batch.
 
 Source validation for this batch: full Release Auth/Billing/PayOS/Avatar/reporting/Redis suite511 passed,0 failed,0 skipped; IFC suite118 passed,0 failed,0 skipped. Linux decoder/Avatar subset25 passed,0 failed,0 skipped (overlaps the Windows suite, not25 additional unique tests). PostgreSQL uses actual migrations including non-superuser ownership transfer and restricted runtime gates; Redis/S3/HTTP workers are disposable/fake. Restore/advisory scan and Debug/Release builds were clean; no new warning suppression was added. The four new migrations, deployed workers/API and real providers have not been accepted on Supabase/Azure in this batch.
+
+## Geometry pull check (migration `20261019090000_AddGeometryPull`)
+
+On a disposable environment with `ProcessingWorker__GeometryPullEnabled=true` and the Geometry toolchain in `AllowedToolchains`
+(contract: [geometry-worker.md](geometry-worker.md)):
+
+1. `GET /health/worker` with `X-Worker-Key` answers `200 OK` (the worker login can execute `processing_geometry_lease_gate`).
+2. Upload and process an IFC revision. `POST /internal/processing/geometry-jobs/lease` returns `200` with `kind: "Geometry"`, a
+   `leaseUntil` about `GeometryLeaseSeconds` ahead and one `ifc_source` input whose URL downloads bytes with the declared SHA-256.
+   A second lease call answers `204`; the HTTP dispatcher log shows no delivery for that job.
+3. Request upload URLs for `building.glb` and `building_metadata.json`, PUT both with the returned headers, register `preview_glb`
+   and `building_metadata` outputs, then `complete`. Before the uploads, `complete` answers `409 GEOMETRY_STORAGE_MISMATCH`.
+4. Stop the worker mid-job: after the lease passes, the next lease returns the same job under a new `attemptId`; the old attempt's
+   renew answers `409 ATTEMPT_STALE`.
+5. With `GeometryPullEnabled=false` the lease answers `409 GEOMETRY_PULL_DISABLED` and Geometry jobs go to the push dispatcher again.

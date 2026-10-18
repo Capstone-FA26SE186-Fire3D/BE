@@ -24,7 +24,7 @@ public sealed class ProcessingExecutorCheck(IOptions<ProcessingWorkerOptions> op
     {
         if (!options.Value.WorkerApiEnabled) return HealthCheckResult.Healthy("WORKER_API_DISABLED");
         var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
-            (configuration.GetConnectionString("ProcessingExecutor") ?? "") + "|" + options.Value.PackagePullEnabled)));
+            (configuration.GetConnectionString("ProcessingExecutor") ?? "") + "|" + options.Value.PackagePullEnabled + "|" + options.Value.GeometryPullEnabled)));
         if (Recent.TryGetValue(key, out var cached) && DateTimeOffset.UtcNow - cached.At < CacheFor) return cached.Result;
         var result = await ProbeAsync(ct);
         Recent[key] = (DateTimeOffset.UtcNow, result);
@@ -40,13 +40,16 @@ public sealed class ProcessingExecutorCheck(IOptions<ProcessingWorkerOptions> op
             await using var command = new NpgsqlCommand("""
                 SELECT has_function_privilege(current_user,'processing_worker_gate(text,uuid,jsonb)','EXECUTE'),
                        has_function_privilege(current_user,'processing_package_lease_gate(jsonb)','EXECUTE'),
-                       r.rolsuper OR r.rolbypassrls
+                       r.rolsuper OR r.rolbypassrls,
+                       -- Absent before migration AddGeometryPull: reported as not executable instead of failing the probe.
+                       COALESCE(has_function_privilege(current_user,to_regprocedure('processing_geometry_lease_gate(jsonb)')::oid,'EXECUTE'),false)
                 FROM pg_roles r WHERE r.rolname=current_user
                 """, connection);
             await using var reader = await command.ExecuteReaderAsync(ct);
             if (!await reader.ReadAsync(ct)) return HealthCheckResult.Unhealthy("PROCESSING_EXECUTOR_FORBIDDEN");
-            var (gate, lease, privileged) = (reader.GetBoolean(0), reader.GetBoolean(1), reader.GetBoolean(2));
-            if (!gate || options.Value.PackagePullEnabled && !lease) return HealthCheckResult.Unhealthy("PROCESSING_EXECUTOR_FORBIDDEN");
+            var (gate, lease, privileged, geometryLease) = (reader.GetBoolean(0), reader.GetBoolean(1), reader.GetBoolean(2), reader.GetBoolean(3));
+            if (!gate || options.Value.PackagePullEnabled && !lease || options.Value.GeometryPullEnabled && !geometryLease)
+                return HealthCheckResult.Unhealthy("PROCESSING_EXECUTOR_FORBIDDEN");
             // Works, but defeats the separation: the worker login must not bypass row security.
             return privileged ? HealthCheckResult.Degraded("PROCESSING_EXECUTOR_TOO_PRIVILEGED") : HealthCheckResult.Healthy("OK");
         }

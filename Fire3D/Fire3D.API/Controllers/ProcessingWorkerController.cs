@@ -74,20 +74,22 @@ public sealed class ProcessingWorkerController(IProcessingWorkerGate gate,IOptio
         if(errors.Count>0)return Problem(statusCode:400,title:"Worker command validation failed.",extensions:new Dictionary<string,object?> { ["code"]="VALIDATION_ERROR",["errors"]=errors });
         if(action=="Output"&&EditorMetadataProblem(input.GetProperty("output")) is { } editor)return editor;
         if(action=="Output"&&PackageManifestProblem(input.GetProperty("output")) is { } manifest)return manifest;
-        // BE#110: package jobs take the configured lease length on claim and renew (Geometry keeps 60 s); a worker-sent value is ignored.
+        // BE#110: package jobs take the configured lease length on claim and renew; a worker-sent value is ignored. Geometry attempts
+        // obtained through the Geometry pull lease renew with GeometryLeaseSeconds; push Geometry attempts keep 60 s (decided in SQL).
         if(action is "Claim" or "Renew")
         {
             var command=System.Text.Json.Nodes.JsonNode.Parse(input.GetRawText())!.AsObject();
             command["leaseSeconds"]=options.Value.PackageLeaseSeconds;
+            command["geometryLeaseSeconds"]=options.Value.GeometryLeaseSeconds;
             input=JsonSerializer.SerializeToElement(command);
         }
         var storage=HttpContext?.RequestServices?.GetService(typeof(IPackageStorage)) as IPackageStorage;
         if(action=="Complete"&&storage is not null&&await gate.ContextAsync(input.GetProperty("attemptId").GetGuid(),input.GetProperty("leaseToken").GetGuid(),ct) is { } context
-            &&await PackageWorkerResponses.VerifyAsync(context,storage,ct) is { } problem)
+            &&(await PackageWorkerResponses.VerifyAsync(context,storage,ct)??await PackageWorkerResponses.VerifyGeometryAsync(context,storage,ct)) is { } problem)
             return Problem(statusCode:problem.Status,title:problem.Message,extensions:new Dictionary<string,object?> { ["code"]=problem.Code });
         var result=await gate.ExecuteAsync(action,job,input,ct);
         if(!result.IsSuccess)return Problem(statusCode:result.Error!.Status,title:result.Error.Message,extensions:new Dictionary<string,object?> { ["code"]=result.Error.Code });
-        // Package claims carry signed input URLs instead of object keys.
+        // Package claims carry signed input URLs instead of object keys; push Geometry claims keep sourceKey (internal context removed).
         return Ok(action=="Claim"&&storage is not null?await PackageWorkerResponses.PresentAsync(result.Value,storage,ct):result.Value);
     }
     /// <summary>A fet3d.package/1 manifest output must list its files and floors correctly (BE#110).</summary>

@@ -40,12 +40,15 @@ public sealed class PackageWorkerController(IProcessingWorkerGate gate, IPackage
         return Ok(await PackageWorkerResponses.PresentAsync(claim, storage, ct));
     }
 
-    /// <summary>Signs the input URLs again (they expire after 15 minutes) for the current attempt.</summary>
+    /// <summary>
+    /// Signs the input URLs again (they expire after 15 minutes) for the current attempt: the accepted Geometry artifacts of a package
+    /// job, or the verified IFC source of a Geometry job.
+    /// </summary>
     [HttpPost("internal/processing/jobs/{jobId:guid}/inputs")]
     public async Task<IActionResult> Inputs(Guid jobId, JsonElement input, CancellationToken ct)
     {
         if (await LiveContextAsync(jobId, input, ct) is not { } context) return Stale();
-        return Ok(await PackageWorkerResponses.PresentAsync(context, storage, ct, inputsOnly: true));
+        return Ok(await PackageWorkerResponses.PresentAsync(context, storage, ct, inputsOnly: true, signSource: true));
     }
 
     /// <summary>PUT URLs under the attempt's output prefix, one per file; each URL only accepts a body with the declared SHA-256.</summary>
@@ -86,11 +89,11 @@ public sealed class PackageWorkerController(IProcessingWorkerGate gate, IPackage
     {
         if (input.ValueKind != JsonValueKind.Object || !Id(input, "attemptId", out var attempt) || !Id(input, "leaseToken", out var token)) return null;
         var context = await gate.ContextAsync(attempt, token, ct);
-        // Only a live package attempt of this job; a finished (Succeeded) attempt no longer uploads or downloads.
+        // Only a live package or Geometry attempt of this job; a finished (Succeeded) attempt no longer uploads or downloads.
         return context is { } c && c.TryGetProperty("jobId", out var job) && job.GetString() == jobId.ToString() && c.TryGetProperty("outputPrefix", out _) ? c : null;
     }
 
-    private ObjectResult Stale() => Fail(409, "ATTEMPT_STALE", "Use the current attempt and lease token of a running package job.");
+    private ObjectResult Stale() => Fail(409, "ATTEMPT_STALE", "Use the current attempt and lease token of a running package or Geometry job.");
     private ObjectResult Fail(int status, string code, string title, Dictionary<string, string[]>? errors = null) =>
         Problem(statusCode: status, title: title, extensions: new Dictionary<string, object?> { ["code"] = code, ["errors"] = errors });
     private static bool Id(JsonElement input, string name, out Guid id) { id = default; return input.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && value.TryGetGuid(out id) && id != Guid.Empty; }
@@ -98,12 +101,24 @@ public sealed class PackageWorkerController(IProcessingWorkerGate gate, IPackage
         input.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 0 } text && text.Length <= max && !string.IsNullOrWhiteSpace(text) && !text.Any(char.IsControl) ? text : null;
 }
 
-/// <summary>Turns worker context (object keys) into what the worker sees (signed URLs only) and checks package storage before Complete.</summary>
+/// <summary>Turns worker context (object keys) into what the worker sees (signed URLs only) and checks worker storage before Complete.</summary>
 public static class PackageWorkerResponses
 {
-    public static async Task<JsonElement> PresentAsync(JsonElement claim, IPackageStorage storage, CancellationToken ct, bool inputsOnly = false)
+    /// <summary>
+    /// Package jobs: geometryInputs become signed inputs[]. Geometry jobs: with signSource the verified IFC source becomes inputs[] (pull
+    /// lease and /inputs); without it (push claim) the source stays as the existing sourceKey. Internal context fields never leave.
+    /// </summary>
+    public static async Task<JsonElement> PresentAsync(JsonElement claim, IPackageStorage storage, CancellationToken ct, bool inputsOnly = false, bool signSource = false)
     {
         var node = JsonNode.Parse(claim.GetRawText())!.AsObject();
+        if (signSource && node["sourceInput"] is JsonObject source)
+        {
+            node["inputs"] = new JsonArray(await SignSourceAsync(source, storage, ct));
+            node.Remove("sourceKey");
+        }
+        node.Remove("sourceInput");
+        node.Remove("geometryOutputs");
+        node.Remove("pulled");
         if (node["geometryInputs"] is JsonArray geometry)
         {
             var inputs = new JsonArray();
@@ -124,6 +139,39 @@ public static class PackageWorkerResponses
         node.Remove("packageManifest");
         if (inputsOnly) return JsonSerializer.SerializeToElement(new JsonObject { ["inputs"] = node["inputs"]?.DeepClone() ?? new JsonArray(), ["outputPrefix"] = node["outputPrefix"]?.DeepClone() });
         return JsonSerializer.SerializeToElement(node);
+    }
+
+    /// <summary>The verified IFC source as an input entry; url is null when the object is missing or its size changed (fail the job).</summary>
+    private static async Task<JsonObject> SignSourceAsync(JsonObject source, IPackageStorage storage, CancellationToken ct)
+    {
+        var signed = await storage.SignVerifiedGetAsync(source["objectKey"]!.GetValue<string>(), source["sizeBytes"]!.GetValue<long>(), PackageWorkerController.InputLifetime, ct);
+        return new JsonObject
+        {
+            ["artifactType"] = source["artifactType"]?.DeepClone(), ["artifactId"] = source["artifactId"]?.DeepClone(), ["sha256"] = source["sha256"]?.DeepClone(),
+            ["sizeBytes"] = source["sizeBytes"]?.DeepClone(), ["url"] = signed?.Url, ["expiresAt"] = signed?.ExpiresAt
+        };
+    }
+
+    /// <summary>
+    /// Geometry pull: before a pulled Geometry attempt completes, every registered output object exists under the attempt prefix with
+    /// the declared size and S3-verified SHA-256 (uploaded through upload-urls). Push attempts are not checked (unchanged contract).
+    /// </summary>
+    public static async Task<(int Status, string Code, string Message)?> VerifyGeometryAsync(JsonElement context, IPackageStorage storage, CancellationToken ct)
+    {
+        if (!context.TryGetProperty("kind", out var kind) || kind.GetString() != "Geometry" || !context.TryGetProperty("pulled", out var pulled)
+            || pulled.ValueKind != JsonValueKind.True || !context.TryGetProperty("geometryOutputs", out var outputs) || outputs.ValueKind != JsonValueKind.Array) return null;
+        try
+        {
+            foreach (var output in outputs.EnumerateArray())
+            {
+                var stored = await storage.HeadAsync(output.GetProperty("objectKey").GetString()!, ct);
+                if (stored is not { } s || s.Size != output.GetProperty("sizeBytes").GetInt64() || s.Sha256Hex != output.GetProperty("sha256Hash").GetString())
+                    return (409, "GEOMETRY_STORAGE_MISMATCH", "Uploaded Geometry outputs do not match the registered outputs.");
+            }
+            return null;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception) { return (503, "GEOMETRY_STORAGE_UNAVAILABLE", "Geometry output storage could not be checked; retry Complete."); }
     }
 
     /// <summary>
