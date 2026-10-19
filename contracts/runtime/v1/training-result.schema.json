@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fet3d.io.vn/contracts/runtime/v1/training-result.schema.json",
+  "title": "Training result (BE TrainingResultView)",
+  "description": "Body of GET /api/training/sessions/{id}/result once the session is Completed (409 RESULT_NOT_READY before). The server computes it from the received events and the pinned rubric; Unity never scores. Mobile shows it (debrief) and may pass it to Unity unchanged.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sessionId", "mode", "outcome", "reason", "scorePercent", "rubricHash", "criteria", "metrics", "lastEventSequence", "createdAt", "passThresholdPercent"],
+  "properties": {
+    "sessionId": { "type": "string", "format": "uuid" },
+    "mode": { "enum": ["Learn", "Guided", "Assessment"] },
+    "outcome": { "enum": ["Passed", "NotPassed", "Incomplete", "NotAssessed"], "description": "Completion is not Passed; only Assessment is scored." },
+    "reason": { "enum": ["ALL_REQUIREMENTS_MET", "BELOW_PASS_THRESHOLD", "MANDATORY_CRITERION_FAILED", "ENDED_BEFORE_COMPLETION", "MODE_NOT_ASSESSED", "RUBRIC_NOT_SCORABLE"] },
+    "scorePercent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+    "rubricHash": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "criteria": { "type": ["array", "null"], "items": { "$ref": "#/$defs/criterion" }, "description": "Assessment only; null for Learn and Guided." },
+    "metrics": { "type": "object", "description": "Server metrics by name (reached_exit, completion_time_seconds, wrong_exits, hazard_exposure, distance_meters, player-action counts); see GET /api/scenario-rubrics/catalog." },
+    "lastEventSequence": { "type": "integer", "minimum": 0 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "passThresholdPercent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 }
+  },
+  "$defs": {
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "metric", "value", "operator", "threshold", "mandatory", "weight", "passed", "reason", "label", "description"],
+      "properties": {
+        "id": { "type": "string" },
+        "metric": { "type": "string" },
+        "value": { "description": "Metric value (number), or null when the metric was not computed." },
+        "operator": { "enum": ["gte", "lte", "eq"] },
+        "threshold": { "type": "number" },
+        "mandatory": { "type": "boolean" },
+        "weight": { "type": "number", "minimum": 0 },
+        "passed": { "type": "boolean" },
+        "reason": { "type": ["string", "null"], "enum": ["METRIC_UNAVAILABLE", null] },
+        "label": { "type": ["string", "null"] },
+        "description": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

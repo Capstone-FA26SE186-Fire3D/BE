@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fet3d.io.vn/contracts/runtime/v1/bridge-message.schema.json",
+  "title": "Bridge message, Unity to Mobile (protocol 1)",
+  "description": "JSON passed to com.fet3d.unity.Fire3DUnityBridge.onUnityMessage(json). Ready comes before Launch and has no session yet; every other message carries the launched sessionId.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "payload"],
+  "properties": {
+    "type": { "enum": ["Ready", "Launched", "Events", "Completed", "Error", "Exited"] },
+    "sessionId": { "type": ["string", "null"], "format": "uuid" },
+    "payload": {}
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "Ready" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ready" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "Launched" } } },
+      "then": { "required": ["sessionId"], "properties": { "sessionId": { "type": "string" }, "payload": { "$ref": "#/$defs/launched" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "Events" } } },
+      "then": { "required": ["sessionId"], "properties": { "sessionId": { "type": "string" }, "payload": { "$ref": "#/$defs/events" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "Completed" } } },
+      "then": { "required": ["sessionId"], "properties": { "sessionId": { "type": "string" }, "payload": { "$ref": "#/$defs/completed" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "Error" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/error" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "Exited" } } },
+      "then": { "required": ["sessionId"], "properties": { "sessionId": { "type": "string" }, "payload": { "type": "object", "additionalProperties": false } } }
+    }
+  ],
+  "$defs": {
+    "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+    "ready": {
+      "description": "Unity is loaded; Mobile may send Launch.",
+      "type": "object", "additionalProperties": false, "required": ["runtimeVersion", "protocolVersion"],
+      "properties": { "runtimeVersion": { "$ref": "#/$defs/version" }, "protocolVersion": { "const": "1" } }
+    },
+    "launched": {
+      "description": "The package is loaded and the play runs: Mobile calls POST .../launched {generation} with the current grant generation.",
+      "type": "object", "additionalProperties": false, "required": ["runtimeVersion", "resumeFromSequence"],
+      "properties": { "runtimeVersion": { "$ref": "#/$defs/version" }, "resumeFromSequence": { "type": "integer", "minimum": 0 } }
+    },
+    "events": {
+      "description": "1-500 events in sequence order. Mobile stores them durably first, then sends them unchanged in events:batch; it retries missingRanges and never resends events listed in conflicts.",
+      "type": "array", "minItems": 1, "maxItems": 500,
+      "items": { "$ref": "session-event.schema.json" }
+    },
+    "completed": {
+      "description": "End of play. Mobile calls POST .../complete {lastEventSequence, endReason} with an Idempotency-Key; 202 AwaitingSync means sync the missing events and call again. elapsedMs, reachedExit and collapsed are for the local summary only: BE computes the result from the events.",
+      "type": "object", "additionalProperties": false, "required": ["lastEventSequence", "endReason"],
+      "properties": {
+        "lastEventSequence": { "type": "integer", "minimum": 0 },
+        "endReason": { "enum": ["Finished", "TimedOut", "Abandoned"] },
+        "elapsedMs": { "type": "integer", "minimum": 0 },
+        "reachedExit": { "type": "boolean" },
+        "collapsed": { "type": "boolean" }
+      }
+    },
+    "error": {
+      "description": "Unity refused or lost the play. Mobile shows the message and closes Unity. Known codes are listed in README.md; unknown codes are shown generically.",
+      "type": "object", "additionalProperties": false, "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$" },
+        "message": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    }
+  }
+}

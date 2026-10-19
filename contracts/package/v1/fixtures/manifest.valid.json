@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "fet3d.package/1",
+  "jobId": "3f2a9c41-7b6d-4e2a-9c1f-5a8b7d6e4c21",
+  "revisionId": "8d1e2f3a-4b5c-4d6e-8f70-1a2b3c4d5e6f",
+  "buildTarget": "Android",
+  "protocolVersion": "1",
+  "manifestSchemaVersion": "1",
+  "runtimeVersion": "2.0.0",
+  "minRuntimeVersion": "2.0.0",
+  "requiredCapabilities": ["door.exit", "fire.source", "extinguisher.portable"],
+  "unityVersion": "6000.6.6f1",
+  "materialLibraryVersion": "1",
+  "lightingScenarios": ["normal", "outage"],
+  "metadata": "building_metadata.json",
+  "scenario": "scenario.json",
+  "floors": [
+    { "id": "L1", "bundle": "floor_l1", "lightingBundle": "floor_l1_lighting", "scene": "Floor_L1", "elevation": 0 },
+    { "id": "L2", "bundle": "floor_l2", "lightingBundle": "floor_l2_lighting", "scene": "Floor_L2", "elevation": 3.5 }
+  ],
+  "files": [
+    { "path": "floor_l1", "sha256": "1111111111111111111111111111111111111111111111111111111111111111", "size": 10485760 },
+    { "path": "floor_l1_lighting", "sha256": "2222222222222222222222222222222222222222222222222222222222222222", "size": 2097152 },
+    { "path": "floor_l2", "sha256": "3333333333333333333333333333333333333333333333333333333333333333", "size": 9437184 },
+    { "path": "floor_l2_lighting", "sha256": "4444444444444444444444444444444444444444444444444444444444444444", "size": 1572864 },
+    { "path": "building_metadata.json", "sha256": "5555555555555555555555555555555555555555555555555555555555555555", "size": 48213 },
+    { "path": "scenario.json", "sha256": "6666666666666666666666666666666666666666666666666666666666666666", "size": 12045 }
+  ]
+}

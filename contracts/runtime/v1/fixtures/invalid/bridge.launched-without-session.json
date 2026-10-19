@@ -1,0 +1,7 @@
+{
+  "type": "Launched",
+  "payload": {
+    "runtimeVersion": "2.0.0",
+    "resumeFromSequence": 0
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "type": "Ready",
+  "sessionId": null,
+  "payload": {
+    "runtimeVersion": "2.0.0",
+    "protocolVersion": "1"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "sessionId": "5b2d7a3e-8f41-4c9e-9a77-0d2f6c1e4b10",
+  "mode": "Learn",
+  "outcome": "NotAssessed",
+  "reason": "MODE_NOT_ASSESSED",
+  "scorePercent": null,
+  "rubricHash": null,
+  "criteria": null,
+  "metrics": {
+    "reached_exit": 0,
+    "completion_time_seconds": 300.0
+  },
+  "lastEventSequence": 12,
+  "createdAt": "2026-10-18T08:05:00Z",
+  "passThresholdPercent": null
+}

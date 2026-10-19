@@ -1,0 +1,34 @@
+{
+  "sessionId": "5b2d7a3e-8f41-4c9e-9a77-0d2f6c1e4b10",
+  "mode": "Assessment",
+  "outcome": "Completed",
+  "reason": "ALL_REQUIREMENTS_MET",
+  "scorePercent": 100.0,
+  "rubricHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "criteria": [
+    {
+      "id": "exit",
+      "metric": "reached_exit",
+      "value": 1,
+      "operator": "eq",
+      "threshold": 1,
+      "mandatory": true,
+      "weight": 2,
+      "passed": true,
+      "reason": null,
+      "label": "Thoát ra ngoài",
+      "description": "Tới được lối thoát an toàn."
+    }
+  ],
+  "metrics": {
+    "reached_exit": 1,
+    "completion_time_seconds": 21.4,
+    "wrong_exits": 0,
+    "hazard_exposure": 0.35,
+    "distance_meters": 4.2,
+    "alarm_raised": 1
+  },
+  "lastEventSequence": 4,
+  "createdAt": "2026-10-18T08:01:00Z",
+  "passThresholdPercent": 70.0
+}

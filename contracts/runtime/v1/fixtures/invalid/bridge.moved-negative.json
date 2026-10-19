@@ -1,0 +1,50 @@
+{
+  "type": "Events",
+  "sessionId": "5b2d7a3e-8f41-4c9e-9a77-0d2f6c1e4b10",
+  "payload": [
+    {
+      "eventId": "0e6f1c2a-3b4d-4e5f-8a9b-000000000001",
+      "sequence": 1,
+      "schemaVersion": "1",
+      "type": "Moved",
+      "occurredAt": "2026-10-18T08:00:01.000Z",
+      "elapsedMs": 5000,
+      "payload": {
+        "distanceMeters": -1
+      }
+    },
+    {
+      "eventId": "0e6f1c2a-3b4d-4e5f-8a9b-000000000002",
+      "sequence": 2,
+      "schemaVersion": "1",
+      "type": "AlarmRaised",
+      "occurredAt": "2026-10-18T08:00:02.000Z",
+      "elapsedMs": 6200,
+      "payload": {
+        "objectId": "call-1"
+      }
+    },
+    {
+      "eventId": "0e6f1c2a-3b4d-4e5f-8a9b-000000000003",
+      "sequence": 3,
+      "schemaVersion": "1",
+      "type": "HazardExposure",
+      "occurredAt": "2026-10-18T08:00:03.000Z",
+      "elapsedMs": 10000,
+      "payload": {
+        "amount": 0.35
+      }
+    },
+    {
+      "eventId": "0e6f1c2a-3b4d-4e5f-8a9b-000000000004",
+      "sequence": 4,
+      "schemaVersion": "1",
+      "type": "ExitReached",
+      "occurredAt": "2026-10-18T08:00:04.000Z",
+      "elapsedMs": 21400,
+      "payload": {
+        "objectId": "exit-north"
+      }
+    }
+  ]
+}

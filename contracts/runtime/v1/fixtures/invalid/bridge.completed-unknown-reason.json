@@ -1,0 +1,11 @@
+{
+  "type": "Completed",
+  "sessionId": "5b2d7a3e-8f41-4c9e-9a77-0d2f6c1e4b10",
+  "payload": {
+    "lastEventSequence": 4,
+    "endReason": "Crashed",
+    "elapsedMs": 21500,
+    "reachedExit": true,
+    "collapsed": false
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fet3d.io.vn/contracts/runtime/v1/launch.schema.json",
+  "title": "Launch command, Mobile to Unity (protocol 1)",
+  "description": "JSON argument of UnitySendMessage(\"Fire3DBridge\", \"Launch\", json). Mobile sends it only after BE start succeeded (POST /api/training/sessions/{id}/start or POST /api/playtests/{id}/start) and every package file passed its SHA-256 check. It carries no launch grant, continuation or user token: Unity never verifies or stores credentials.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "sessionId", "kind", "mode", "runtimeVersion", "manifestPath", "resumeFromSequence"],
+  "properties": {
+    "protocolVersion": { "const": "1" },
+    "sessionId": { "type": "string", "format": "uuid", "description": "Learner session id or playtest id from BE." },
+    "kind": { "enum": ["Training", "Playtest"] },
+    "mode": { "enum": ["Learn", "Guided", "Assessment"], "description": "Training mode of the session; must be in the scenario modePolicy.allowedModes (Unity answers MODE_NOT_ALLOWED otherwise)." },
+    "runtimeVersion": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$", "description": "Runtime version pinned by the session (TrainingSessionView.runtimeVersion)." },
+    "manifestPath": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "manifest\\.json$", "description": "Absolute local path of the verified fet3d.package/1 manifest.json; the other files sit next to it at their manifest path." },
+    "resumeFromSequence": { "type": "integer", "minimum": 0, "description": "0 for a new play; when resuming, BE acknowledgedSequence. Unity numbers events from resumeFromSequence + 1." },
+    "locale": { "type": "string", "pattern": "^[a-z]{2}(-[A-Z]{2})?$", "description": "UI language, e.g. vi. Optional." }
+  }
+}

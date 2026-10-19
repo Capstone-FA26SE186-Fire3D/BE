@@ -17,6 +17,9 @@ Disabled by default: prepare works, start and continuation return `503 LEARNER_L
 
 ## Endpoints (Trainee)
 
+The Mobile ↔ Unity bridge that drives these calls (Launch, Events, Completed, error codes) and the event/result shapes are in
+[`contracts/runtime/v1`](../contracts/runtime/v1/README.md), with valid and invalid fixtures shared by BE, Mobile and Unity.
+
 | Method | Route | Notes |
 |---|---|---|
 | GET | `/api/training/sessions` | Trainee history (#78), live login only. The caller's own started sessions, newest first (`startedAt`, id); preparations and Organization playtests never appear; losing Building access keeps history. Filters `status` (Launching, Running, AwaitingSync, Completed — the only states v7 sessions take; other values return 400), `mode`, `buildingId`, `from`/`to` on startedAt (to exclusive), `page`, `pageSize` ≤100. Items: `sessionId, status, mode, resultStatus` (Passed/NotPassed/Incomplete/NotAssessed or null without a stored result), `endReason, startedAt, endedAt, resultCreatedAt`, pinned `training`, `releaseId`, `building`, `scenario` (name, version). Response `{items,totalCount,page,pageSize}`. |
