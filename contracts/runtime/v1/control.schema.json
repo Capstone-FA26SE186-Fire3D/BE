@@ -1,11 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fet3d.io.vn/contracts/runtime/v1/control.schema.json",
-  "title": "Pause / Abort command, Mobile to Unity (protocol 1)",
-  "description": "JSON argument of UnitySendMessage(\"Fire3DBridge\", \"Pause\" | \"Abort\", json). Pause when the app goes to the background (Unity also pauses itself and flushes its events); Abort stops the play; the session is then completed with endReason Abandoned (Assessment outcome Incomplete).",
-  "type": "object",
-  "additionalProperties": false,
-  "properties": {
-    "sessionId": { "type": "string", "format": "uuid", "description": "Optional; when present it must be the running session." }
-  }
+  "title": "Pause / Resume / Abort command, Mobile to Unity (protocol 1)",
+  "description": "Argument of UnitySendMessage(\"Fire3DBridge\", \"Pause\" | \"Resume\" | \"Abort\", argument). Pause when the app goes to the background (Unity also pauses itself and flushes its events); Resume when the Unity activity is in the foreground again; Abort stops the play, and the session is then completed with endReason Abandoned (Assessment outcome Incomplete). Unity ignores the argument: Mobile sends an empty string for Pause and Resume and {\"reason\": ...} for Abort.",
+  "oneOf": [
+    { "const": "", "description": "No argument (Mobile Pause and Resume)." },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sessionId": { "type": "string", "format": "uuid", "description": "Optional; when present it must be the running session." },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 100, "description": "Optional, for logs only, e.g. BackButton, LaunchGrantExpired." }
+      }
+    }
+  ]
 }
