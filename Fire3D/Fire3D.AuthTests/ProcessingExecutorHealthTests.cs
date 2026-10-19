@@ -55,3 +55,21 @@ public sealed partial class AuthIntegrationTests
         finally { await ExecuteAsync($"DROP OWNED BY {plain};DROP ROLE {plain}"); }
     }
 }
+
+public sealed class ProcessingExecutorCodeTests
+{
+    // BE#118 (18/10/2026): production lease answered 500 on the Supavisor circuit breaker of the executor login.
+    [Theory]
+    [InlineData("XX000", "(ECIRCUITBREAKER) failed to retrieve database credentials after multiple attempts, new connections are temporarily blocked", "PROCESSING_EXECUTOR_LOGIN_FAILED")]
+    [InlineData("XX000", "Tenant or user not found", "PROCESSING_EXECUTOR_LOGIN_FAILED")]
+    [InlineData("28P01", "password authentication failed for user \"fet3d_processing_worker\"", "PROCESSING_EXECUTOR_LOGIN_FAILED")]
+    [InlineData("42501", "permission denied for function processing_package_lease_gate", "PROCESSING_EXECUTOR_FORBIDDEN")]
+    [InlineData("42501", "permission denied for table processing_jobs", null)]
+    [InlineData("XX000", "unexpected internal error", null)]
+    public void Executor_login_errors_map_to_configuration_codes(string sqlState, string message, string? code)
+    {
+        var error = new PostgresException(message, "FATAL", "FATAL", sqlState);
+        Assert.Equal(code, ProcessingExecutorUnavailableException.CodeFor(error));
+        Assert.Equal(code, ProcessingExecutorUnavailableException.CodeFor(new InvalidOperationException("wrapped", error)));
+    }
+}

@@ -22,6 +22,11 @@ public sealed class ProcessingExecutorUnavailableException(string code,Exception
         { SqlState: PostgresErrorCodes.InsufficientPrivilege } p when p.MessageText.StartsWith("permission denied for function",StringComparison.Ordinal)
             || p.MessageText.StartsWith("permission denied for schema",StringComparison.Ordinal)=>"PROCESSING_EXECUTOR_FORBIDDEN",
         { SqlState: PostgresErrorCodes.InvalidPassword or PostgresErrorCodes.InvalidAuthorizationSpecification }=>"PROCESSING_EXECUTOR_LOGIN_FAILED",
+        // The Supabase pooler (Supavisor) reports login problems as XX000: an unknown user or a user without the .<project-ref>
+        // suffix ("Tenant or user not found"), and after repeated failures "(ECIRCUITBREAKER) failed to retrieve database
+        // credentials ...", which blocks the login for a few minutes (BE#118, 18/10/2026).
+        { SqlState: PostgresErrorCodes.InternalError } p when p.MessageText.Contains("(ECIRCUITBREAKER)",StringComparison.Ordinal)
+            || p.MessageText.StartsWith("Tenant or user not found",StringComparison.Ordinal)=>"PROCESSING_EXECUTOR_LOGIN_FAILED",
         _=>null
     };
 }
