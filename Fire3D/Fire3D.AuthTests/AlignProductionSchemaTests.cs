@@ -33,4 +33,32 @@ public sealed partial class AuthIntegrationTests
         Assert.True((bool)(await ScalarAsync("SELECT has_schema_privilege('fire3d_api','extensions','USAGE')"))!);
         Assert.Equal(HttpStatusCode.Created, (await PostBuilding(http, new { name = "After", totalFloors = 1 })).StatusCode);
     }
+
+    // Production drift (19/10/2026): Docs v7 CHECK constraints refused the first Geometry Complete. The forward migration drops only
+    // constraints whose name and definition match the legacy ones, restores the current quotation checks, and keeps the rest.
+    [PostgresFact]
+    public async Task Drop_legacy_constraints_removes_only_matching_definitions()
+    {
+        await ExecuteAsync("""
+            ALTER TABLE revision_artifacts ADD CONSTRAINT revision_artifacts_artifact_type_check CHECK (artifact_type = ANY (ARRAY['Preview'::text, 'Geometry'::text, 'Graph'::text, 'HazardGrid'::text, 'CandidatePackage'::text]));
+            ALTER TABLE scenario_versions ADD CONSTRAINT scenario_versions_spawn_config_check CHECK (jsonb_typeof(spawn_config) = 'object'::text AND spawn_config ? 'nodeId'::text);
+            ALTER TABLE quotations DROP CONSTRAINT check_quotation_issued;
+            ALTER TABLE quotations ADD CONSTRAINT check_quotation_issued CHECK (status = 'Draft'::quotation_status_enum OR (issued_by IS NOT NULL AND issued_at IS NOT NULL));
+            ALTER TABLE validation_runs ADD CONSTRAINT validation_runs_kind_check CHECK (kind = ANY (ARRAY['Geometry'::text, 'Scenario'::text, 'PlaytestPackage'::text]));
+            ALTER TABLE users ADD CONSTRAINT users_email_check CHECK (email = lower(btrim(email)) AND POSITION(('@'::text) IN (email)) > 1);
+            """);
+        using var stream = typeof(Fire3DDbContext).Assembly.GetManifestResourceStream("Fire3D.Infrastructure.Persistence.Sql.DropLegacyConstraints.sql")!;
+        var sql = await new StreamReader(stream).ReadToEndAsync();
+        await ExecuteAsync(sql);
+        await ExecuteAsync(sql);
+
+        async Task<long> Count(string name) => (long)(await ScalarAsync($"SELECT count(*) FROM pg_constraint WHERE conname='{name}'"))!;
+        Assert.Equal(0L, await Count("revision_artifacts_artifact_type_check"));
+        Assert.Equal(0L, await Count("scenario_versions_spawn_config_check"));
+        // Another definition under a listed name is not the legacy constraint; one only fixtures violate stays.
+        Assert.Equal(1L, await Count("validation_runs_kind_check"));
+        Assert.Equal(1L, await Count("users_email_check"));
+        Assert.Contains("Cancelled", (string)(await ScalarAsync("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='check_quotation_issued'"))!);
+        Assert.Equal(1L, await Count("check_quotation_amounts"));
+    }
 }
