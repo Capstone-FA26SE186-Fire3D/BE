@@ -29,14 +29,19 @@ complete and result shapes match the BE API DTOs, so the schemas cannot drift fr
 
 Playtests use the same messages with `kind: "Playtest"` and the `/api/playtests/{id}/…` endpoints. When the app goes to the
 background Mobile sends `Pause`; Unity also pauses itself and flushes its events. When the Unity activity is in the foreground
-again Mobile sends `Resume`. `Abort` (back button, expired launch grant) ends the play as `Abandoned`. Unity ignores the argument
+again Mobile sends `Resume`. `Abort` (back button, expired launch grant) depends on the state (runtime 2.0.1): while the package
+loads it cancels the launch (`Error LAUNCH_CANCELLED`, no `Launched`); during the play it ends it as `Abandoned` (`Completed`,
+result screen); on the result screen it closes it like the exit button (`Exited`). Unity ignores the argument
 of the three commands: Mobile sends `""` for `Pause`/`Resume` and `{"reason": "BackButton"}` for `Abort`. After a crash or offline
 period Mobile resumes with `resumeFromSequence` = BE `acknowledgedSequence` and Unity numbers new events from there (continuation
 token, 7 days).
 
 Unity runs one session at a time and stays loaded between sessions. After `Exited` it unloads the package and sends `Ready` again;
-Mobile may then send the next `Launch` (step 4) without restarting Unity. A `Launch` that fails before `Launched` (bad launch,
-package or mode) leaves Unity idle without a new `Ready`, so Mobile may send `Launch` again at once.
+Mobile may then send the next `Launch` (step 4) without restarting Unity. A `Launch` that fails after loading started (package,
+mode, world build, `LAUNCH_CANCELLED`) unloads what it loaded, then sends `Error` followed by `Ready` (runtime 2.0.1; 2.0.0 sent no
+`Ready`, so Mobile falls back after 5 s). A rejected `Launch` JSON (`LAUNCH_INVALID`, `PROTOCOL_UNSUPPORTED`, `MODE_UNSUPPORTED`)
+and `SESSION_BUSY` change nothing and send no `Ready`: Mobile treats Unity as idle only after a `Ready`, and holds a busy launch
+until the next one.
 
 ## Error codes (`Error.payload.code`)
 
@@ -65,7 +70,8 @@ message and brings the React Native screen back (with `SESSION_BUSY` the earlier
 | `SCENARIO_OBJECT_INVALID` | a scenario object cannot be placed (unknown capability, missing parameters) |
 | `BUNDLE_LOAD_FAILED` | a floor scene bundle cannot be loaded |
 | `WORLD_BUILD_FAILED` | the simulation world could not be built |
-| `SESSION_BUSY` | a play is already running |
+| `SESSION_BUSY` | a launch or play is already in progress; wait for `Ready` |
+| `LAUNCH_CANCELLED` | `Abort` arrived while the package was loading (runtime 2.0.1) |
 
 BE error codes of the API calls in the flow are documented with each endpoint ([learner sessions](../../../docs/learner-sessions.md),
 [playtest](../../../docs/playtest-manual-test.md)).
