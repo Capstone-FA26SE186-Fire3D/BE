@@ -40,7 +40,7 @@ The detail shape is `{review:{...},content:{...},rubric:{...},learningObjectives
 | Validation outcome is not Passed | 409 RELEASE_QA_NOT_PASSED |
 | Error/Critical blocker | 409 RELEASE_QA_BLOCKERS_PRESENT |
 | Accepted runtime-ready package/manifest | 409 RELEASE_ARTIFACT_REQUIRED |
-| Package/runtime metadata compatibility | 409 PACKAGE_COMPATIBILITY_REQUIRED |
+| Package/runtime metadata compatibility (manifest and unity_package compared on protocolVersion, manifestSchemaVersion, buildTarget, minRuntimeVersion, requiredCapabilities; extra provenance allowed, BE#130) | 409 PACKAGE_COMPATIBILITY_REQUIRED |
 | Key reused with different canonical input | 409 IDEMPOTENCY_KEY_CONFLICT |
 | Publish rollout flag disabled | 503 PUBLISH_GATE_UNAVAILABLE |
 

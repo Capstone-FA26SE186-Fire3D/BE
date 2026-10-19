@@ -19,6 +19,11 @@ public sealed class ProcessingWorkerOptions
     public bool GeometryPullEnabled { get; set; }
     /// <summary>Lease length of pulled Geometry attempts on lease and renew (60-900 seconds); push Geometry attempts keep 60 seconds.</summary>
     public int GeometryLeaseSeconds { get; set; } = 600;
+    /// <summary>
+    /// BE#131: build targets a package worker serves (compared ordinally). A package build for another target would stay Queued forever
+    /// and, holding the revision's single live job, block every later build of that revision.
+    /// </summary>
+    public string[] PackageBuildTargets { get; set; } = ["Android"];
 
     /// <summary>Lease lengths accepted for pulled jobs.</summary>
     public static bool IsValidLeaseSeconds(int seconds) => seconds is >= 60 and <= 900;

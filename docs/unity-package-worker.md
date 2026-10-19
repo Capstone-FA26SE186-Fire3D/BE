@@ -13,6 +13,7 @@ ProcessingWorker__PackagePullEnabled=true          # the HTTP dispatcher then sk
 ProcessingWorker__PackageLeaseSeconds=300          # 60-900, lease of package jobs on claim and renew
 ProcessingWorker__MachineKey=<32-512 random characters, the VM's X-Worker-Key>
 ProcessingWorker__AllowedToolchains__0=<the Unity worker toolchain id, e.g. unity-6000.6.6f1-worker-1>
+ProcessingWorker__PackageBuildTargets__0=Android   # default; package-builds refuses other targets (400 BUILD_TARGET_UNSUPPORTED)
 ConnectionStrings__ProcessingExecutor=<restricted login, member of fet3d_processing_executor>
 ```
 
@@ -78,7 +79,8 @@ All calls use the header `X-Worker-Key`; user tokens are rejected (401). Base UR
      schema, including `files[]` and `floors[]`). `422 PACKAGE_MANIFEST_INVALID` lists the problems by path.
    - `artifactType: "unity_package"`, any `schemaVersion`, `metadata` with `buildTarget` (the pinned one), `protocolVersion`,
      `manifestSchemaVersion`, `minRuntimeVersion`, `requiredCapabilities` (same values as the manifest). It may add provenance
-     (`unityVersion`, `runtimeVersion`, input hashes, `fileCount`, `totalSizeBytes`).
+     (`unityVersion`, `runtimeVersion`, input hashes, `fileCount`, `totalSizeBytes`): playtest start, release Build and Publish compare
+     only those five fields between the two outputs (migration `20261019130000_CompareReleasePackageContractFields`, BE#130).
    - `outcome` `Passed` (or `Failed` with issues when the build ran but the result is unusable), `validatorVersion`, `issues[]`.
 6. **Complete** `POST /internal/processing/jobs/{jobId}/complete` `{ attemptId, leaseToken, outputHash }` (the `outputHash` of the
    last output call). Before accepting, the backend reads S3: manifest.json and every listed file must exist under the attempt prefix

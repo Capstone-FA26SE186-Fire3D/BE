@@ -239,7 +239,7 @@
 | POST | /api/scenario-drafts/{draftId}/validate-state | Bearer | None | 200, 400, 403, 404 |
 | GET | /api/scenario-interactions/catalog | Bearer | None | 200 |
 | GET | /api/scenario-rubrics/catalog | Bearer | None | 200, 401, 403 |
-| POST | /api/scenario-versions/{id}/package-builds | Bearer | Idempotency-Key | 202, 400, 409 |
+| POST | /api/scenario-versions/{id}/package-builds | Bearer | Idempotency-Key | 202, 400 (incl. BUILD_TARGET_UNSUPPORTED), 409 (incl. PROCESSING_JOB_ACTIVE) |
 | POST | /api/scenario-versions/{id}/submit | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
 | GET | /api/scenario-versions/{versionId} | Bearer | None | 200, 400, 403, 404 |
 | GET | /api/scenario-versions/{versionId}/readiness | Bearer | None | 200, 401, 403, 404 |
