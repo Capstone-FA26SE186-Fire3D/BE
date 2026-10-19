@@ -17,6 +17,14 @@
       "schema": "control.schema.json"
     },
     {
+      "file": "control.resume-empty.json",
+      "schema": "control.schema.json"
+    },
+    {
+      "file": "control.abort-back-button.json",
+      "schema": "control.schema.json"
+    },
+    {
       "file": "bridge.ready.json",
       "schema": "bridge-message.schema.json"
     },
@@ -78,7 +86,17 @@
     {
       "file": "control.unknown-field.json",
       "schema": "control.schema.json",
-      "why": "Pause/Abort accept only sessionId"
+      "why": "the object form accepts only sessionId and reason"
+    },
+    {
+      "file": "control.non-empty-string.json",
+      "schema": "control.schema.json",
+      "why": "the string form is only the empty string"
+    },
+    {
+      "file": "control.reason-too-long.json",
+      "schema": "control.schema.json",
+      "why": "reason is at most 100 characters"
     },
     {
       "file": "bridge.unknown-type.json",

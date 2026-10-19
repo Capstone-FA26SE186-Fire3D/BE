@@ -8,7 +8,7 @@ complete and result shapes match the BE API DTOs, so the schemas cannot drift fr
 | File | Direction | Carried by |
 |---|---|---|
 | `launch.schema.json` | Mobile → Unity | `UnitySendMessage("Fire3DBridge", "Launch", json)` |
-| `control.schema.json` | Mobile → Unity | `UnitySendMessage("Fire3DBridge", "Pause" \| "Abort", json)` |
+| `control.schema.json` | Mobile → Unity | `UnitySendMessage("Fire3DBridge", "Pause" \| "Resume" \| "Abort", argument)`: `""` or `{sessionId?, reason?}` |
 | `bridge-message.schema.json` | Unity → Mobile | `com.fet3d.unity.Fire3DUnityBridge.onUnityMessage(json)`: `{type, sessionId, payload}` |
 | `session-event.schema.json` | Unity → Mobile → BE | items of the `Events` payload = items of `events:batch` (BE `TrainingEvent`) |
 | `training-result.schema.json` | BE → Mobile (→ Unity) | `GET /api/training/sessions/{id}/result` (BE `TrainingResultView`) |
@@ -28,13 +28,21 @@ complete and result shapes match the BE API DTOs, so the schemas cannot drift fr
 | 8 | shows the server result | `Exited` (player left) | `GET .../result` (Unity never scores) |
 
 Playtests use the same messages with `kind: "Playtest"` and the `/api/playtests/{id}/…` endpoints. When the app goes to the
-background Mobile sends `Pause`; Unity also pauses itself and flushes its events. After a crash or offline period Mobile resumes
-with `resumeFromSequence` = BE `acknowledgedSequence` and Unity numbers new events from there (continuation token, 7 days).
+background Mobile sends `Pause`; Unity also pauses itself and flushes its events. When the Unity activity is in the foreground
+again Mobile sends `Resume`. `Abort` (back button, expired launch grant) ends the play as `Abandoned`. Unity ignores the argument
+of the three commands: Mobile sends `""` for `Pause`/`Resume` and `{"reason": "BackButton"}` for `Abort`. After a crash or offline
+period Mobile resumes with `resumeFromSequence` = BE `acknowledgedSequence` and Unity numbers new events from there (continuation
+token, 7 days).
+
+Unity runs one session at a time and stays loaded between sessions. After `Exited` it unloads the package and sends `Ready` again;
+Mobile may then send the next `Launch` (step 4) without restarting Unity. A `Launch` that fails before `Launched` (bad launch,
+package or mode) leaves Unity idle without a new `Ready`, so Mobile may send `Launch` again at once.
 
 ## Error codes (`Error.payload.code`)
 
-Unity sends `Error {code, message}`; Mobile shows the message and closes Unity. Codes are `UPPER_SNAKE_CASE`; an unknown code is
-shown generically.
+Unity sends `Error {code, message}`. An `Error` before `Launched` means that `Launch` did not start a play: Mobile shows the
+message and brings the React Native screen back (with `SESSION_BUSY` the earlier play keeps running). Codes are
+`UPPER_SNAKE_CASE`; an unknown code is shown generically.
 
 | Code | Meaning |
 |---|---|
