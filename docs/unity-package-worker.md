@@ -35,7 +35,8 @@ VM is ready (with pull off, package jobs stay with the push dispatcher as before
 
 `GET /health/worker` (header `X-Worker-Key` required, so it answers `401` unless the worker API is enabled with a valid key; codes only, result cached 30 s) checks the `ProcessingExecutor` login: `200 OK` or `503`
 with `PROCESSING_EXECUTOR_FORBIDDEN` (the login is not a member of `fet3d_processing_executor`, or cannot execute the lease gate
-while pull is on), `PROCESSING_EXECUTOR_LOGIN_FAILED` (wrong user or password), `PROCESSING_EXECUTOR_UNREACHABLE`, or
+while pull is on), `PROCESSING_EXECUTOR_LOGIN_FAILED` (wrong user or password; through the Supabase pooler also `Tenant or user not found` and, after
+repeated failures, `ECIRCUITBREAKER`, which blocks the login for a few minutes even once the setting is fixed), `PROCESSING_EXECUTOR_UNREACHABLE`, or
 `PROCESSING_EXECUTOR_TOO_PRIVILEGED` (works, but the login bypasses row security, e.g. `postgres`: use a dedicated login). It is not
 part of `/health` or `/health/ready`, so a worker misconfiguration never marks the API unhealthy. Worker calls with such a login
 answer `503` with the same code instead of `500`. Create the login once:
