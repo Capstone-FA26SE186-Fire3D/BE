@@ -80,7 +80,15 @@ public sealed class RedisProcessingStream(IOptions<RedisProcessingOptions> optio
 
     public async Task<bool> ConnectedAsync(CancellationToken ct)
     {
-        try { await (await DatabaseAsync(ct)).PingAsync().WaitAsync(ct); return true; }
+        try
+        {
+            var db = await DatabaseAsync(ct);
+            await db.PingAsync().WaitAsync(ct);
+            // XLEN also verifies stream-key access/type without creating a stream or consumer group.
+            // A new deployment with no stream yet returns zero. This does not prove write-command ACLs.
+            await db.StreamLengthAsync(StreamName).WaitAsync(ct);
+            return true;
+        }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (RedisException) { return false; }
     }

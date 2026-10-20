@@ -35,6 +35,12 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await ScalarAsync("SELECT pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management',0))",ct);
+        // Access mutations take the building advisory lock before updating its row. Match that order
+        // before JobScopeSql takes FOR SHARE; the gate reacquires this same transaction lock safely.
+        await ScalarAsync("""
+            SELECT pg_advisory_xact_lock(hashtextextended('fire3d:building:'||r.building_id,0))
+            FROM public.processing_jobs j JOIN public.revisions r ON r.id=j.revision_id WHERE j.id=@job
+            """,ct,("job",jobId));
         var tenant = await ScalarAsync(JobScopeSql, ct, ("actor",actorId), ("job",jobId));
         if (tenant is not Guid organizationId)
             return AuthResult<RetryProcessingJobResponse>.Fail("NOT_FOUND", "Processing job is unavailable in this scope.", 404);
@@ -52,7 +58,7 @@ public sealed partial class IfcWriteStore(Fire3DDbContext db) : IIfcWriteStore
         }
         if (outcome is "Conflict" or "NotClaimable")
             return AuthResult<RetryProcessingJobResponse>.Fail(outcome == "Conflict" ? "JOB_CONFLICT" : "JOB_NOT_CLAIMABLE",
-                "Only a failed job can be requeued with a new requestId.", 409);
+                "Only a failed job or a queued job with exhausted delivery can be retried with a new requestId.", 409);
         if (outcome is not ("Requeued" or "AlreadyRequeued"))
             throw new InvalidOperationException("Unexpected processing gate result.");
         if (outcome == "Requeued")

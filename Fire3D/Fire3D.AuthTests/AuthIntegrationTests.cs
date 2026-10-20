@@ -376,7 +376,8 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
     private async Task<LoginResponse> LoginAsync(string email = "admin@example.test")
     {
         var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.StatusCode == HttpStatusCode.OK,
+            response.IsSuccessStatusCode ? "Unexpected login status." : await response.Content.ReadAsStringAsync());
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.False(payload.TryGetProperty("accessTokenExpiresAt", out _));
         Assert.False(payload.TryGetProperty("refreshTokenExpiresAt", out _));

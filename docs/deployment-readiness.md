@@ -7,7 +7,7 @@ The deployment of `b6a7d74` (and later `973c29f`) answered `500` on Building det
 | Endpoint | Meaning |
 | --- | --- |
 | `GET /health` | Liveness only (process is up). It never checks the database, so a DB outage does not make the host restart the app. |
-| `GET /health/ready` | Readiness: the database is reachable **and** every EF migration in this build is applied. `200 {"status":"Healthy"}` or `503` with `checks.database.code`. |
+| `GET /health/ready` | Readiness: the database is reachable, every EF migration in this build is applied, and enabled Redis processing dependencies pass their read-only checks. `200 {"status":"Healthy"}` or `503` with dependency codes under `checks`. |
 | `GET /health/version` | Commit of the running image. |
 
 `/health/ready` codes:
@@ -21,15 +21,61 @@ The deployment of `b6a7d74` (and later `973c29f`) answered `500` on Building det
 
 The response never contains the connection string. The raw SQL recovery files (`002_password_reset_recovery.sql`, `003_local_password.sql`, `005_email_verification.sql`) are not EF migrations and are not covered by this check.
 
+### Processing readiness
+
+When `ProcessingWorker:Transport` is `RedisStreams` and either dispatcher or consumer is enabled, `/health/ready` includes the tagged `processing` check. `/health` remains process liveness. The processing probe performs Redis `PING` and read-only `XLEN` on the configured stream, then checks the database login's effective gate `EXECUTE` privilege without calling any gate:
+
+| Dependency | Connection / required gate | Failure codes |
+| --- | --- | --- |
+| Redis streams | Configured Redis connection and stream keys | `PROCESSING_REDIS_UNAVAILABLE` |
+| Enabled dispatcher | `DispatcherExecutor` / `processing_stream_dispatch_gate(text,jsonb)` | `PROCESSING_DISPATCHER_FORBIDDEN`, `PROCESSING_DISPATCHER_UNAVAILABLE` |
+| Enabled consumer | `DefaultConnection` / `processing_stream_consumer_gate(text,jsonb)` | `PROCESSING_CONSUMER_FORBIDDEN`, `PROCESSING_CONSUMER_UNAVAILABLE` |
+| Recovery (either loop enabled) | `DefaultConnection` / `processing_stream_recovery_gate(text,jsonb)` | `PROCESSING_RECOVERY_FORBIDDEN`, `PROCESSING_RECOVERY_UNAVAILABLE` |
+
+Database checks require a restricted login: superuser or `BYPASSRLS` roles fail readiness even if they can execute the gate. `FORBIDDEN` means the effective privilege/login check failed; `UNAVAILABLE` means the connection/probe failed. The probe never calls the remote HTTP worker, writes streams, creates consumer groups, or claims/recovers jobs. Redis reads do not prove write ACLs or an end-to-end worker handoff; verify those separately through the authorized operational flow.
+
 ## Unhandled errors
 
 An unexpected exception still returns ProblemDetails `500`, now with `code: "INTERNAL_ERROR"` and `traceId`. Search the app log by `traceId`; handler errors keep their own codes.
 
-## CI smoke test
+## Azure release gate
 
-`.github/workflows/azure-deploy.yml` runs after the version check:
+`.github/workflows/azure-deploy.yml` tests the deployment helper on pull requests. Release runs build a commit-tagged candidate, then run `tools/deployment/migration_preflight.py` **before** `azure/webapps-deploy`. Production deployment runs are serialized and are not cancelled when a newer run starts. Images are deployed by commit tag; the workflow no longer updates the mutable `latest` tag.
 
-1. `GET /health/ready` must be `200`. Otherwise the job fails with the readiness body (pending migration IDs).
-2. Anonymous reads that touch the database (`/api/learn/situations`, `/api/learn/posts`) and `/openapi/v1.json` must not return `5xx`.
+Set the required GitHub Actions secret **`DEPLOY_PREFLIGHT_CONNECTION`** to a PostgreSQL URI for the **same database used by the production app**:
 
-A failed smoke test means the image is deployed but the database is behind: apply the pending migrations to the deployment database, then re-run the job.
+```text
+postgresql://PREFLIGHT_USER:URL_ENCODED_PASSWORD@DATABASE_HOST:5432/DATABASE_NAME?sslmode=require
+```
+
+Use a dedicated database account with only connection access, schema usage on `public`, and `SELECT` on `public."__EFMigrationsHistory"`. Do not use a migration-owner or administrator credential. The runner must be able to reach that database. The secret is a PostgreSQL URI, **not** an Npgsql `Host=...;Password=...` connection string. Percent-encode reserved characters in the username/password. Supported query parameter: `sslmode=require`, `verify-ca`, or `verify-full` (default `require`; certificate verification modes also need the appropriate trusted CA on the runner).
+
+The helper extracts migration IDs from `[Migration("...")]` attributes in the checked-out candidate, including designer files, and checks that each exists in the database history. It uses a static `SELECT` inside `BEGIN READ ONLY` / `ROLLBACK`, disables psql startup files and password prompts, and bounds connection, query and process time. Credentials are passed via process environment, never command arguments or logs; psql diagnostics are suppressed to avoid exposing connection details. Treat the runner as trusted because its process environment contains the credential. See [PostgreSQL environment variables](https://www.postgresql.org/docs/current/libpq-envars.html).
+
+Missing/invalid secrets, unreadable/empty candidate migrations, connection errors, missing/empty/inaccessible history, timeouts, or missing migration IDs fail the job before Azure changes its running image. The workflow never applies migrations. Apply reviewed migrations separately through the authorized database process, then rerun deployment. A missing secret intentionally blocks the first release after this change.
+
+This gate verifies recorded EF migration history, not the complete live schema or manually executed recovery SQL. It assumes the secret targets the production database and the default `public` history table. Changes to migration compilation/discovery or the history schema require updating this helper. Schema compatibility of separately applied migrations with the currently running image still needs release review.
+
+## Post-deployment verification
+
+After deployment:
+
+1. `GET /health/version` must return `200` with a JSON `version` exactly equal to the candidate commit SHA. The workflow retries for at most 30 attempts.
+2. `GET /health/ready` must return `200`; otherwise the job reports the readiness response.
+3. Anonymous reads (`/api/learn/situations`, `/api/learn/posts`) and `/openapi/v1.json` must return `200`. Redirects, authentication errors, missing routes and server errors all fail.
+
+Every HTTP request has a 10-second connection timeout and 20-second total timeout. These checks can still fail after the new image is running (for example, dependency failure after preflight). A failed smoke test does not automatically roll back or prove the database is behind. Inspect the failing endpoint and readiness codes, then use the authorized release process to restore the previously validated commit-tagged image if needed; verify schema compatibility first. No Azure slot or additional control-plane credential is assumed.
+
+Run helper regression tests locally without a database:
+
+```sh
+python -m unittest discover -s tools/deployment -p 'test_*.py'
+```
+
+## Render configuration
+
+The Azure workflow also calls `processing-tests.yml` and requires it to pass before the production deploy job. It exercises Redis/worker recovery and readiness against disposable PostgreSQL 17 and Redis 7.4 services. These tests do not use deployment credentials or production data.
+
+The Blueprint's `dockerContext: .` is the BE repository root, while `dockerfilePath` remains `./Fire3D/Dockerfile`. This provides the `Fire3D/` directory expected by the Dockerfile and the root `database/` SQL files embedded by Infrastructure. `.dockerignore` excludes local tooling, build output and secret files while retaining SQL and contract resources. See [Render's Docker context settings](https://render.com/docs/blueprint-spec#docker).
+
+Set `Jwt__SigningKey` (not `Jwt__Key`) to a Base64-encoded random key with at least 32 decoded bytes; for example generate it securely with `openssl rand -base64 32` and store the output only in Render's secret environment settings. Set `AuthEmail__FrontendUrl` (not `Auth__FrontendUrl`) to the actual frontend origin used in authentication emails. Existing services need these environment keys updated as well as the Blueprint. Render's `/health` check remains liveness; the Azure preflight does not protect direct Render deploys, which require the same reviewed migration check before release.
