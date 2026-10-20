@@ -40,6 +40,10 @@ jobs:
       Mailgun__ApiKey: test-key
       Mailgun__Domain: example.test
       Mailgun__From: noreply@example.test
+      # Placeholders: login resolves the S3 client, which needs a region; these tests never call S3.
+      AWS__Region: ap-southeast-1
+      AWS__AccessKey: test-only
+      AWS__SecretKey: test-only
       AuthEmail__WorkerEnabled: 'false'
       Redis__Enabled: 'false'
       ProcessingWorker__DispatcherEnabled: 'false'
