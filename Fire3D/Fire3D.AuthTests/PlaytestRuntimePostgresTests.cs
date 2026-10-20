@@ -183,6 +183,31 @@ public sealed partial class AuthIntegrationTests
         });
     }
 
+    // A playtest cancelled before start has no started_family; launchSession was JSON null and GET/Cancel answered 500 (prod 20/10).
+    [PostgresFact]
+    public async Task Playtest_cancelled_before_start_reads_as_cancelled_for_every_session()
+    {
+        var f = await SeedPlaytestRuntime();
+        await WithPlaytestRuntimeGates(async runtime =>
+        {
+            await using var db = BuildingContext(runtime);
+            var store = new PlaytestLifecycle(db, Options.Create(HandoffOptions));
+            var id = (await store.PrepareAsync(f.Owner, f.Web, f.Building, f.Scenario, new(f.Revision, ScenarioVersionId: f.Version), "nf-prepare", default)).Value!.Id;
+            var handoff = (await store.CreateHandoffAsync(f.Owner, f.Web, id, "nf-handoff", default)).Value!;
+            Assert.True((await store.RedeemHandoffAsync(f.Owner, f.Mobile, new(handoff.Code), default)).Value!.LaunchSession);
+            var cancelled = await store.CancelAsync(f.Owner, f.Web, id, "nf-cancel", default);
+            Assert.True(cancelled.IsSuccess, cancelled.Error?.Code);
+            foreach (var family in new[] { f.Web, f.Mobile })
+            {
+                var status = await store.GetAsync(f.Owner, family, id, default);
+                Assert.True(status.IsSuccess, status.Error?.Code);
+                Assert.Equal("Cancelled", status.Value!.Status);
+                Assert.False(status.Value.LaunchSession);
+                Assert.Equal(new PlaytestRecoveryView(false, false, false, false, false), status.Value.Recovery);
+            }
+        });
+    }
+
     [PostgresFact]
     public async Task Playtest_HTTP_status_location_handoff_configuration_and_openapi()
     {
