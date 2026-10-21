@@ -10,6 +10,20 @@ namespace Fire3D.Infrastructure.Workers;
 public sealed class PasswordResetWorker(IServiceScopeFactory scopes, IOptions<AuthEmailOptions> options,
     ILogger<PasswordResetWorker> logger) : BackgroundService
 {
+    internal const string Subject = "[FET3D] Đặt lại mật khẩu";
+
+    // Vietnamese like the registration OTP email; the link lifetime matches LocalPasswordReset (30 minutes).
+    internal static string Html(string link) => $"""
+        <!doctype html><html lang="vi"><body style="font-family:Arial,sans-serif;color:#222">
+        <h1 style="color:#d32f2f">FET3D</h1>
+        <h2>Đặt lại mật khẩu</h2>
+        <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản FET3D của bạn.</p>
+        <p><a href="{WebUtility.HtmlEncode(link)}" style="display:inline-block;background:#d32f2f;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Đặt lại mật khẩu</a></p>
+        <p>Liên kết có hiệu lực trong 30 phút và chỉ dùng được một lần.</p>
+        <p>Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này; mật khẩu hiện tại vẫn giữ nguyên.</p>
+        </body></html>
+        """;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!options.Value.WorkerEnabled) return;
@@ -32,10 +46,8 @@ public sealed class PasswordResetWorker(IServiceScopeFactory scopes, IOptions<Au
                         var provider = scope.ServiceProvider.GetRequiredService<ILocalPasswordReset>();
                         var link = await provider.CreateLinkAsync(job.Email,timeout.Token);
                         if (link is null) { await queue.CompleteAsync(job,stoppingToken); continue; }
-                        var html = "<p>A password reset was requested for your FET3D account.</p><p><a href=\"" +
-                            WebUtility.HtmlEncode(link) + "\">Reset password</a></p><p>Ignore this email if you did not request it.</p>";
                         await scope.ServiceProvider.GetRequiredService<IEmailService>()
-                            .SendAsync(job.Email,"Reset your FET3D password",html,timeout.Token);
+                            .SendAsync(job.Email,Subject,Html(link),timeout.Token);
                     }
                     await queue.CompleteAsync(job,stoppingToken);
                 }
