@@ -50,6 +50,27 @@ postgresql://PREFLIGHT_USER:URL_ENCODED_PASSWORD@DATABASE_HOST:5432/DATABASE_NAM
 
 Use a dedicated database account with only connection access, schema usage on `public`, and `SELECT` on `public."__EFMigrationsHistory"`. Do not use a migration-owner or administrator credential. The runner must be able to reach that database. The secret is a PostgreSQL URI, **not** an Npgsql `Host=...;Password=...` connection string. Percent-encode reserved characters in the username/password. Supported query parameter: `sslmode=require`, `verify-ca`, or `verify-full` (default `require`; certificate verification modes also need the appropriate trusted CA on the runner).
 
+### Production setup (BE#148, applied 21/10/2026)
+
+Production uses the dedicated login `fet3d_deploy_preflight`, created once by the database owner in the Supabase SQL editor. The password is chosen by the operator and stored only in the GitHub secret:
+
+```sql
+CREATE ROLE fet3d_deploy_preflight LOGIN PASSWORD '<random letters and digits>'
+  NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION CONNECTION LIMIT 3;
+ALTER ROLE fet3d_deploy_preflight SET default_transaction_read_only = on;
+ALTER ROLE fet3d_deploy_preflight SET statement_timeout = '10s';
+GRANT CONNECT ON DATABASE postgres TO fet3d_deploy_preflight;
+GRANT USAGE ON SCHEMA public TO fet3d_deploy_preflight;
+GRANT SELECT ON public."__EFMigrationsHistory" TO fet3d_deploy_preflight;
+-- The history table has row level security (policies only for fire3d_api and fet3d_backend_executor).
+-- Without this policy the login sees zero rows and the gate fails with "Migration history is empty or invalid".
+CREATE POLICY deploy_preflight_read ON public."__EFMigrationsHistory" FOR SELECT TO fet3d_deploy_preflight USING (true);
+```
+
+Through the Supabase pooler (Supavisor) the user name carries the project reference: `fet3d_deploy_preflight.<project-ref>`, for example `postgresql://fet3d_deploy_preflight.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require`. To rotate, `ALTER ROLE ... PASSWORD` and replace the secret; nothing else uses this login.
+
+Release order for a pull request that adds a migration: review its SQL, back up `public` (`pg_dump -n public -Fc`), apply the EF script for exactly the new migrations with `psql -v ON_ERROR_STOP=1`, check `__EFMigrationsHistory` and the changed functions, and only then merge. Merging first is safe but the deployment stops at the gate until the migration is applied; rerun the failed job afterwards.
+
 The helper extracts migration IDs from `[Migration("...")]` attributes in the checked-out candidate, including designer files, and checks that each exists in the database history. It uses a static `SELECT` inside `BEGIN READ ONLY` / `ROLLBACK`, disables psql startup files and password prompts, and bounds connection, query and process time. Credentials are passed via process environment, never command arguments or logs; psql diagnostics are suppressed to avoid exposing connection details. Treat the runner as trusted because its process environment contains the credential. See [PostgreSQL environment variables](https://www.postgresql.org/docs/current/libpq-envars.html).
 
 Missing/invalid secrets, unreadable/empty candidate migrations, connection errors, missing/empty/inaccessible history, timeouts, or missing migration IDs fail the job before Azure changes its running image. The workflow never applies migrations. Apply reviewed migrations separately through the authorized database process, then rerun deployment. A missing secret intentionally blocks the first release after this change.
