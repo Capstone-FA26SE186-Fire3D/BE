@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 using Fire3D.Application.Email;
 using Fire3D.Infrastructure.Billing;
@@ -12,8 +12,8 @@ public sealed class BillingNotificationTests
 {
     private sealed class CountingEmail : IEmailService
     {
-        public int Sent;public Func<Task>? During;
-        public async Task SendAsync(string to,string subject,string html,CancellationToken ct){if(During is not null)await During();Interlocked.Increment(ref Sent);}
+        public int Sent;public Func<Task>? During;public string? Subject,Html;
+        public async Task SendAsync(string to,string subject,string html,CancellationToken ct){if(During is not null)await During();Subject=subject;Html=html;Interlocked.Increment(ref Sent);}
     }
     private static async Task<(BillingApiTests.Factory Factory,Guid Entitlement)> ExpiringEntitlement(BillingDatabase db)
     {
@@ -35,6 +35,11 @@ public sealed class BillingNotificationTests
         Assert.Equal(1,await first.DispatchAsync(default));
         Assert.Equal(1,email.Sent);
         Assert.Equal("Sent",await db.Scalar("SELECT status FROM notification_deliveries WHERE channel='Email'"));
+        // The stored notification and the email are Vietnamese, with the end time in Vietnam time.
+        Assert.Equal("Dịch vụ tòa nhà sắp hết hạn",await db.Scalar("SELECT title FROM organization_notifications"));
+        Assert.Contains("(giờ Việt Nam)",(string)(await db.Scalar("SELECT body FROM organization_notifications"))!);
+        Assert.Equal("[FET3D] Dịch vụ tòa nhà sắp hết hạn",email.Subject);
+        Assert.Contains("lang=\"vi\"",email.Html);
         // A worker that crashed after claiming leaves an expired lease; the next worker reclaims it (at-least-once).
         await db.Sql("UPDATE notification_deliveries SET status='Sending',sent_at=NULL,lease_token=gen_random_uuid(),lease_until=now()-interval '1 second' WHERE channel='Email'");
         Assert.Equal(1,await second.DispatchAsync(default));
