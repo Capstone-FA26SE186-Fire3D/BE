@@ -162,12 +162,13 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
         existing.Name = building.Name; existing.BuildingType = building.BuildingType; existing.TotalFloors = building.TotalFloors; existing.UpdatedAt = now;
         if (location is not null)
         {
-            if (existing.BuildingLocation is null) existing.BuildingLocation = location;
+            // A first location has a client-generated key: mark it Added, or EF treats it as existing and issues an UPDATE of 0 rows.
+            if (existing.BuildingLocation is null) { location.BuildingId = existing.Id; db.Add(location); existing.BuildingLocation = location; }
             else { existing.BuildingLocation.Address = location.Address; existing.BuildingLocation.City = location.City; existing.BuildingLocation.District = location.District; existing.BuildingLocation.Latitude = location.Latitude; existing.BuildingLocation.Longitude = location.Longitude; existing.BuildingLocation.Geojson = location.Geojson; existing.BuildingLocation.UpdatedAt = now; }
         }
         if (contact is not null)
         {
-            if (existing.BuildingContact is null) existing.BuildingContact = contact;
+            if (existing.BuildingContact is null) { contact.BuildingId = existing.Id; db.Add(contact); existing.BuildingContact = contact; }
             else { existing.BuildingContact.ContactName = contact.ContactName; existing.BuildingContact.ContactRole = contact.ContactRole; existing.BuildingContact.Phone = contact.Phone; existing.BuildingContact.Email = contact.Email; existing.BuildingContact.IsPrimary = contact.IsPrimary; existing.BuildingContact.UpdatedAt = now; }
         }
         AddAudit(actorId, existing.OrganizationId, existing.Id, "Update", now);
