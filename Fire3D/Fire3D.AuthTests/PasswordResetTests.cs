@@ -157,4 +157,14 @@ public class PasswordResetTests
         }.GetVerificationPageBaseUrl());
         Assert.Throws<InvalidOperationException>(() => new AuthEmailOptions { VerificationUrl = "https://api.example.test/?token=bad" }.GetVerificationPageBaseUrl());
     }
+    [Fact]
+    public void Reset_email_is_vietnamese_and_encodes_the_link()
+    {
+        var html=Fire3D.Infrastructure.Workers.PasswordResetWorker.Html("https://app.example.test/reset-password?token=ab&x=\"<y>");
+        Assert.Equal("[FET3D] Đặt lại mật khẩu",Fire3D.Infrastructure.Workers.PasswordResetWorker.Subject);
+        Assert.Contains("lang=\"vi\"",html);
+        Assert.Contains("href=\"https://app.example.test/reset-password?token=ab&amp;x=&quot;&lt;y&gt;\"",html);
+        Assert.Contains("30 phút",html);
+        Assert.DoesNotContain("Reset password",html);
+    }
 }
