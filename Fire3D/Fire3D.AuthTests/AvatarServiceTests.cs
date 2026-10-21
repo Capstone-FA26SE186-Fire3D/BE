@@ -285,6 +285,224 @@ public sealed class AvatarServiceTests
         Assert.Empty(cleanup.QueuedKeys);
     }
 
+    private static (AvatarService Service, User User, AvatarStoreFake Store, AvatarStorageFake Storage) Fixture(
+        AvatarStoreFake? store = null, AvatarStorageFake? storage = null, DateTimeOffset? now = null)
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "avatar@example.test", IsActive = true };
+        store ??= new AvatarStoreFake();
+        storage ??= new AvatarStorageFake();
+        TimeProvider clock = now is null ? TimeProvider.System : new FixedTimeProvider(now.Value);
+        return (new AvatarService(new AvatarAuthStoreFake(user), store, new AvatarCleanupStoreFake(), storage, clock), user, store, storage);
+    }
+
+    [Fact]
+    public async Task Upload_file_requires_a_revision_and_content_before_creating_an_intent()
+    {
+        var (service, user, store, storage) = Fixture();
+        Assert.Equal(400, (await service.UploadFileAsync(user.Id, 0, "image/png", 1, new MemoryStream([1]), default)).Error?.Status);
+        var missing = await service.UploadFileAsync(user.Id, 1, "image/png", 1, null!, default);
+        Assert.Equal(("VALIDATION_ERROR", 400), (missing.Error?.Code, missing.Error?.Status));
+        Assert.Null(store.LastIntent);
+        Assert.False(storage.UploadedDirectly);
+    }
+
+    [Fact]
+    public async Task Upload_file_returns_intent_validation_errors_unchanged()
+    {
+        var (service, user, store, _) = Fixture();
+        var result = await service.UploadFileAsync(user.Id, 1, "image/gif", 10, new MemoryStream(new byte[10]), default);
+        Assert.Equal(400, result.Error?.Status);
+        Assert.Null(store.LastIntent);
+    }
+
+    [Fact]
+    public async Task Upload_file_is_unavailable_when_the_saved_intent_cannot_be_reloaded()
+    {
+        var (service, user, _, storage) = Fixture(new AvatarStoreFake { LoseIntents = true });
+        var result = await service.UploadFileAsync(user.Id, 1, "image/png", 3, new MemoryStream([1, 2, 3]), default);
+        Assert.Equal(("AVATAR_UPLOAD_UNAVAILABLE", 503), (result.Error?.Code, result.Error?.Status));
+        Assert.False(storage.UploadedDirectly);
+    }
+
+    [Fact]
+    public async Task Upload_file_maps_storage_failure_to_503_without_completing()
+    {
+        var (service, user, store, _) = Fixture(storage: new AvatarStorageFake { UploadFailure = new InvalidOperationException("s3 down") });
+        var result = await service.UploadFileAsync(user.Id, 1, "image/png", 3, new MemoryStream([1, 2, 3]), default);
+        Assert.Equal(("AVATAR_UPLOAD_UNAVAILABLE", 503), (result.Error?.Code, result.Error?.Status));
+        Assert.False(store.Finalized);
+    }
+
+    [Fact]
+    public async Task Upload_file_propagates_cancellation_from_storage()
+    {
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        var (service, user, store, _) = Fixture(storage: new AvatarStorageFake { UploadFailure = new OperationCanceledException(cancelled.Token) });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.UploadFileAsync(user.Id, 1, "image/png", 3, new MemoryStream([1, 2, 3]), cancelled.Token));
+        Assert.False(store.Finalized);
+    }
+
+    [Fact]
+    public async Task Complete_rejects_unknown_expired_and_stale_completed_intents()
+    {
+        var now = new DateTimeOffset(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
+        var (service, user, store, storage) = Fixture(now: now);
+        var unknown = await service.CompleteUploadAsync(user.Id, 1, new(Guid.NewGuid()), default);
+        Assert.Equal(("INVALID_AVATAR_UPLOAD", 409), (unknown.Error?.Code, unknown.Error?.Status));
+
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
+        store.LastIntent!.ExpiresAt = now.UtcDateTime;
+        var expired = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+        Assert.Equal(("INVALID_AVATAR_UPLOAD", 409), (expired.Error?.Code, expired.Error?.Status));
+        Assert.Contains("expired", expired.Error!.Message);
+
+        store.LastIntent.CompletedAt = now.UtcDateTime.AddHours(-24).AddSeconds(-1);
+        var stale = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value.UploadId), default);
+        Assert.Equal(("INVALID_AVATAR_UPLOAD", 409), (stale.Error?.Code, stale.Error?.Status));
+        Assert.Contains("replay window", stale.Error!.Message);
+        Assert.Empty(storage.CopiedKeys);
+    }
+
+    [Fact]
+    public async Task Complete_rejects_unavailable_accounts_and_missing_upload_ids()
+    {
+        var (service, user, _, _) = Fixture();
+        Assert.Equal(400, (await service.CompleteUploadAsync(user.Id, 1, new(Guid.Empty), default)).Error?.Status);
+        user.IsActive = false;
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(Guid.NewGuid()), default);
+        Assert.Equal(("UNAUTHORIZED", 401), (result.Error?.Code, result.Error?.Status));
+    }
+
+    [Theory]
+    [InlineData(2048L, "image/png")]
+    [InlineData(1024L, "image/jpeg")]
+    public async Task Complete_rejects_metadata_that_differs_from_the_intent(long size, string mime)
+    {
+        var (service, user, store, storage) = Fixture(storage: new AvatarStorageFake { MetadataSize = size, MetadataMime = mime });
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+        Assert.Equal(("INVALID_AVATAR_UPLOAD", 400), (result.Error?.Code, result.Error?.Status));
+        Assert.False(storage.Copied);
+        Assert.False(store.Finalized);
+    }
+
+    [Theory]
+    [InlineData(AvatarCandidateReservationStatus.PreconditionFailed, "PRECONDITION_FAILED", 412)]
+    [InlineData(AvatarCandidateReservationStatus.Unavailable, "INVALID_AVATAR_UPLOAD", 409)]
+    public async Task Complete_maps_a_failed_copy_reservation_without_copying(AvatarCandidateReservationStatus status, string code, int http)
+    {
+        var (service, user, store, storage) = Fixture(new AvatarStoreFake { ReservationStatus = status });
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+        Assert.Equal((code, http), (result.Error?.Code, result.Error?.Status));
+        Assert.False(storage.Copied);
+        Assert.False(store.Finalized);
+    }
+
+    [Fact]
+    public async Task Complete_replay_reports_a_superseded_upload_when_the_profile_points_elsewhere()
+    {
+        var (service, user, store, storage) = Fixture();
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", 1024), default);
+        store.LastIntent!.CompletedAt = DateTime.UtcNow;
+        store.LastIntent.FinalObjectKey = "avatars/users/older";
+        store.LastIntent.ExpectedProfileRevision = 1;
+        user.AvatarStorageKey = "avatars/users/newer";
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+        Assert.Equal(("AVATAR_UPLOAD_SUPERSEDED", 409), (result.Error?.Code, result.Error?.Status));
+        Assert.Empty(storage.CopiedKeys);
+    }
+
+    [Fact]
+    public async Task Complete_rejects_a_decodable_image_in_an_unsupported_format()
+    {
+        // A decodable 1x1 24-bit BMP passes the fake PNG prefix check but must fail the decoded-format check.
+        byte[] bmp = [(byte)'B', (byte)'M', 58, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0,
+            40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 24, 0, 0, 0, 0, 0, 4, 0, 0, 0,
+            0x13, 0x0B, 0, 0, 0x13, 0x0B, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 255, 0];
+        using (var codec = SKCodec.Create(new MemoryStream(bmp))) Assert.Equal(SKEncodedImageFormat.Bmp, codec?.EncodedFormat);
+        var (service, user, store, storage) = ImageFixture(bmp, "image/png");
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", bmp.Length), default);
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+        Assert.Equal("INVALID_AVATAR_CONTENT", result.Error?.Code);
+        Assert.False(storage.Copied);
+        Assert.False(store.Finalized);
+    }
+
+    [Fact]
+    public async Task Complete_accepts_an_apng_that_declares_exactly_one_frame()
+    {
+        var png = CreatePngBytes();
+        using var animated = new MemoryStream();
+        animated.Write(png.AsSpan(0, 33));
+        WritePngChunk(animated, "acTL", [0, 0, 0, 1, 0, 0, 0, 0]);
+        WritePngChunk(animated, "fcTL", [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 10, 0, 0]);
+        animated.Write(png.AsSpan(33));
+        var bytes = animated.ToArray();
+        var (service, user, store, storage) = ImageFixture(bytes, "image/png");
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", bytes.Length), default);
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+        Assert.True(result.IsSuccess, result.Error?.Code);
+        Assert.True(storage.Copied);
+        Assert.True(store.Finalized);
+    }
+
+    [Fact]
+    public async Task Complete_rejects_a_png_without_an_end_chunk()
+    {
+        var png = CreatePngBytes();
+        var bytes = png[..^12]; // Drop IEND.
+        var (service, user, store, storage) = ImageFixture(bytes, "image/png");
+        var upload = await service.CreateUploadIntentAsync(user.Id, new("image/png", bytes.Length), default);
+        var result = await service.CompleteUploadAsync(user.Id, 1, new(upload.Value!.UploadId), default);
+        Assert.Equal("INVALID_AVATAR_CONTENT", result.Error?.Code);
+        Assert.False(storage.Copied);
+        Assert.False(store.Finalized);
+    }
+
+    [Fact]
+    public async Task Get_avatar_returns_404_until_set_then_a_five_minute_url_with_the_profile_revision()
+    {
+        var now = new DateTimeOffset(2026, 10, 2, 9, 0, 0, TimeSpan.Zero);
+        var (service, user, _, _) = Fixture(now: now);
+        var missing = await service.GetAvatarAsync(user.Id, default);
+        Assert.Equal(("AVATAR_NOT_FOUND", 404), (missing.Error?.Code, missing.Error?.Status));
+        user.AvatarStorageKey = "avatars/users/current";
+        user.ProfileRevision = 7;
+        var result = await service.GetAvatarAsync(user.Id, default);
+        Assert.Equal(new AvatarResponse("https://storage.test/download", now.UtcDateTime.AddMinutes(5), 7), result.Value);
+        user.IsActive = false;
+        Assert.Equal(401, (await service.GetAvatarAsync(user.Id, default)).Error?.Status);
+    }
+
+    [Theory]
+    [InlineData(AvatarDeleteStatus.Deleted, null, null)]
+    [InlineData(AvatarDeleteStatus.PreconditionFailed, "PRECONDITION_FAILED", 412)]
+    [InlineData(AvatarDeleteStatus.Unavailable, "UNAUTHORIZED", 401)]
+    public async Task Delete_avatar_maps_store_outcomes(AvatarDeleteStatus status, string? code, int? http)
+    {
+        var (service, user, _, _) = Fixture(new AvatarStoreFake { DeleteStatus = status });
+        var result = await service.DeleteAvatarAsync(user.Id, 3, default);
+        Assert.Equal((code, http), (result.Error?.Code, result.Error?.Status));
+        Assert.Equal(code is null, result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task Delete_avatar_validates_revision_and_account_before_the_store()
+    {
+        var store = new AvatarStoreFake();
+        var (service, user, _, _) = Fixture(store);
+        var invalid = await service.DeleteAvatarAsync(user.Id, 0, default);
+        Assert.Equal(("VALIDATION_ERROR", 400), (invalid.Error?.Code, invalid.Error?.Status));
+        user.DeletedAt = DateTime.UtcNow;
+        var deleted = await service.DeleteAvatarAsync(user.Id, 1, default);
+        Assert.Equal(("UNAUTHORIZED", 401), (deleted.Error?.Code, deleted.Error?.Status));
+        Assert.Equal(0, store.DeleteCalls);
+    }
+
     private sealed class AvatarAuthStoreFake(User user) : IAuthStore
     {
         public Task<User?> FindUserAsync(Guid id, CancellationToken ct) => Task.FromResult<User?>(id == user.Id ? user : null);
@@ -327,10 +545,16 @@ public sealed class AvatarServiceTests
         public bool Finalized { get; private set; }
         public AvatarUploadIntent? LastIntent { get; private set; }
         public AvatarFinalizeStatus[] FinalizeStatuses { get; init; } = [AvatarFinalizeStatus.Finalized];
+        public AvatarCandidateReservationStatus? ReservationStatus { get; init; }
+        public AvatarDeleteStatus DeleteStatus { get; init; } = AvatarDeleteStatus.Deleted;
+        public bool LoseIntents { get; init; }
+        public int DeleteCalls { get; private set; }
         public Task SaveUploadIntentAsync(AvatarUploadIntent intent, CancellationToken ct) { intents.Add(intent.Id, intent); LastIntent = intent; return Task.CompletedTask; }
-        public Task<AvatarUploadIntent?> FindUploadIntentAsync(Guid id, Guid userId, CancellationToken ct) => Task.FromResult(intents.GetValueOrDefault(id) is { UserId: var owner } intent && owner == userId ? intent : null);
+        public Task<AvatarUploadIntent?> FindUploadIntentAsync(Guid id, Guid userId, CancellationToken ct) => Task.FromResult(!LoseIntents && intents.GetValueOrDefault(id) is { UserId: var owner } intent && owner == userId ? intent : null);
         public Task<AvatarCandidateReservation> ReserveCopyCandidateAsync(Guid intentId, Guid userId, long expectedProfileRevision, string sourceEtag, DateTime now, CancellationToken ct)
         {
+            if (ReservationStatus is { } forced && forced != AvatarCandidateReservationStatus.Reserved)
+                return Task.FromResult(new AvatarCandidateReservation(forced, null));
             var intent = intents[intentId];
             if (intent.CandidateAttemptId.HasValue)
                 return Task.FromResult(new AvatarCandidateReservation(AvatarCandidateReservationStatus.Reserved,
@@ -349,7 +573,11 @@ public sealed class AvatarServiceTests
             Finalized |= status == AvatarFinalizeStatus.Finalized;
             return Task.FromResult(new AvatarFinalizeResult(status, null));
         }
-        public Task<AvatarDeleteResult> DeleteAvatarAsync(Guid userId, long expectedProfileRevision, DateTime deletedAt, CancellationToken ct) => Task.FromResult(new AvatarDeleteResult(AvatarDeleteStatus.Deleted, null));
+        public Task<AvatarDeleteResult> DeleteAvatarAsync(Guid userId, long expectedProfileRevision, DateTime deletedAt, CancellationToken ct)
+        {
+            DeleteCalls++;
+            return Task.FromResult(new AvatarDeleteResult(DeleteStatus, null));
+        }
     }
 
     private sealed class AvatarStorageFake : IStorageService
@@ -368,8 +596,10 @@ public sealed class AvatarServiceTests
         public bool CopySucceeds { get; init; } = true;
         public List<string> CopiedKeys { get; } = [];
         public List<string> DeletedKeys { get; } = [];
+        public Exception? UploadFailure { get; init; }
         public Task UploadObjectAsync(string objectKey, Stream content, long contentLength, string contentType, CancellationToken ct)
         {
+            if (UploadFailure is not null) return Task.FromException(UploadFailure);
             UploadedDirectly = true;
             UploadedLength = contentLength;
             UploadedKey = objectKey;
