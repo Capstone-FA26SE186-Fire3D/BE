@@ -191,6 +191,19 @@ public sealed class GoogleLinkPostgresTests
     }
 
     [BillingPostgresFact]
+    public async Task Verified_identity_without_a_usable_uid_or_email_is_rejected_before_locking()
+    {
+        await using var db = await BillingDatabase.Create(false); await Prepare(db); await using var context = db.Context();
+        foreach (var identity in new VerifiedIdentity[] { new("", "owner@example.test", null, DateTimeOffset.UtcNow),
+            new(new string('u', 129), "owner@example.test", null, DateTimeOffset.UtcNow), new("google-uid", "not-an-email", null, DateTimeOffset.UtcNow) })
+        {
+            var error = (await Link(context, Provider(() => Task.FromResult(identity)))).Error;
+            Assert.Equal(("INVALID_FIREBASE_TOKEN", 401), (error?.Code, error?.Status));
+        }
+        Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM users WHERE firebase_uid IS NOT NULL"));
+    }
+
+    [BillingPostgresFact]
     public async Task Invalid_google_and_provider_outage_have_distinct_errors()
     {
         await using var db = await BillingDatabase.Create(false); await Prepare(db); await using var context = db.Context();
