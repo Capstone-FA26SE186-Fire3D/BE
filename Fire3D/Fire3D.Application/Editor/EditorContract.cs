@@ -412,8 +412,11 @@ public static class ParameterSchema
 public static class ScenarioStateV1Validator
 {
     private static readonly string[] Root = ["schemaVersion", "name", "geometry", "runtimeVersion", "objects", "timeLimitSeconds", "rubric",
-        "learningObjectives", "learnerInstructions", "modePolicy", "randomSeed", "replanIntervalSeconds", "libraryRefs"];
+        "learningObjectives", "learnerInstructions", "modePolicy", "randomSeed", "replanIntervalSeconds", "libraryRefs", "wind", "routingConfig"];
     private static readonly string[] Geometry = ["artifactId", "sha256Hash"];
+    private static readonly string[] Wind = ["directionDegrees", "strength"];
+    /// <summary>A* edge weights of Docs technology: distance + hazardExposure*wh + congestion*wc + portalPenalty*wp + blocked*wb.</summary>
+    private static readonly string[] RoutingWeights = ["hazardExposureWeight", "congestionWeight", "portalPenaltyWeight", "blockedWeight"];
     private static readonly string[] LibraryRef = ["versionId", "kind", "code"];
     private static readonly string[] LibraryKinds = ["ScenarioTemplate", "RubricSample", "Equipment"];
     private static readonly string[] Object = ["id", "kind", "placement", "anchorId", "capability", "parameters", "label"];
@@ -467,6 +470,15 @@ public static class ScenarioStateV1Validator
                 if (libraryRef["code"] is not null) r.Text(libraryRef["code"], path + ".code", 80);
             }
         ValidateRubric(r, root["rubric"], complete);
+        // BE#144: optional, but complete when present. A missing field is an error, never a default that changes the scenario.
+        if (r.Object(root["wind"], "$.wind", Wind, required: false) is { } wind)
+        {
+            if (r.Number(wind["directionDegrees"], "$.wind.directionDegrees", min: 0, max: 360) is >= 360)
+                r.Add("NUMBER_OUT_OF_RANGE", "$.wind.directionDegrees", "Must be at least 0 and below 360.");
+            r.Number(wind["strength"], "$.wind.strength", min: 0, max: 1);
+        }
+        if (r.Object(root["routingConfig"], "$.routingConfig", RoutingWeights, required: false) is { } routing)
+            foreach (var weight in RoutingWeights) r.Number(routing[weight], $"$.routingConfig.{weight}", min: 0, max: 1_000);
 
         var kinds = new Dictionary<string, int>(StringComparer.Ordinal);
         if (r.Array(root["objects"], "$.objects", EditorContract.MaxObjects, complete) is { } objects)
