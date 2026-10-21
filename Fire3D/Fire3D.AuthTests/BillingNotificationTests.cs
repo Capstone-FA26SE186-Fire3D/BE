@@ -3,6 +3,7 @@ using System.Text.Json;
 using Fire3D.Application.Email;
 using Fire3D.Application.Notifications;
 using Fire3D.Infrastructure.Billing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -13,15 +14,16 @@ public sealed class BillingNotificationTests
 {
     private sealed class CountingEmail : IEmailService
     {
-        public int Sent;public Func<Task>? During;public string? Subject,Html;
-        public async Task SendAsync(string to,string subject,string html,CancellationToken ct){if(During is not null)await During();Subject=subject;Html=html;Interlocked.Increment(ref Sent);}
+        public int Sent;public Func<Task>? During;public Func<CancellationToken,Task>? Hold;public string? Subject,Html;
+        public async Task SendAsync(string to,string subject,string html,CancellationToken ct)
+        {if(During is not null)await During();if(Hold is not null)await Hold(ct);Subject=subject;Html=html;Interlocked.Increment(ref Sent);}
     }
     private sealed class CountingPush : INotificationService
     {
-        public int Calls;public int Delivered=1;public Guid? User;public IDictionary<string,string>? Data;
+        public int Calls;public int Delivered=1;public Guid? User;public IDictionary<string,string>? Data;public Func<Exception>? Fail;
         public Task<bool> SendPushAsync(string fcmToken,string title,string body,IDictionary<string,string>? data=null,CancellationToken ct=default)=>Task.FromResult(true);
         public Task<int> SendPushToUserAsync(Guid userId,string title,string body,IDictionary<string,string>? data=null,CancellationToken ct=default)
-        {Calls++;User=userId;Data=data;return Task.FromResult(Delivered);}
+        {Calls++;User=userId;Data=data;return Fail is null?Task.FromResult(Delivered):Task.FromException<int>(Fail());}
     }
     private static async Task<(BillingApiTests.Factory Factory,Guid Entitlement)> ExpiringEntitlement(BillingDatabase db)
     {
@@ -134,5 +136,85 @@ public sealed class BillingNotificationTests
         Assert.Equal(0,await reminders.DispatchAsync(default));
         Assert.Equal("Pending",await db.Scalar("SELECT status FROM notification_deliveries WHERE channel='Push'"));
         Assert.Equal("PUSH_UNAVAILABLE",await db.Scalar("SELECT last_error FROM notification_deliveries WHERE channel='Push'"));
+    }
+
+    [BillingPostgresFact]
+    public async Task Shutdown_mid_send_keeps_the_lease_and_a_push_provider_error_is_retried_with_backoff()
+    {
+        await using var db=await BillingDatabase.Create();var (seedFactory,_)=await ExpiringEntitlement(db);using var __=seedFactory;
+        var options=Options.Create(new BillingReminderOptions{Enabled=true,LeadDays=5,MaxAttempts=3,LeaseSeconds=30});
+        await db.Sql("INSERT INTO user_devices(user_id,device_uuid,fcm_token,notifications_enabled,fcm_token_generation) SELECT u.id,'device-1','fcm-live',true,1 FROM users u JOIN service_entitlements e ON e.organization_id=u.organization_id WHERE u.role='OrganizationUser'");
+        var email=new CountingEmail();var push=new CountingPush();var log=new CapturedLog<BillingReminders>();
+        await using var context=db.Context();var reminders=new BillingReminders(context,email,options,log,push);
+        Assert.Equal(1,await reminders.ScheduleAsync(DateTime.UtcNow,default));
+        // Park the push delivery so the first dispatch handles the email alone.
+        await db.Sql("UPDATE notification_deliveries SET status='Failed' WHERE channel='Push'");
+        using(var stopping=new CancellationTokenSource())
+        {
+            email.During=()=>{stopping.Cancel();throw new OperationCanceledException(stopping.Token);};
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(()=>reminders.DispatchAsync(stopping.Token));
+        }
+        // The claim stays leased (not failed, not retried early); once the lease expires another worker reclaims it.
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM notification_deliveries WHERE channel='Email' AND status='Sending' AND attempts=1 AND lease_token IS NOT NULL AND lease_until>now()"));
+        email.During=null;push.Fail=()=>new HttpRequestException("fcm.googleapis.com unreachable");
+        await db.Sql("UPDATE notification_deliveries SET lease_until=now()-interval '1 second' WHERE channel='Email'; UPDATE notification_deliveries SET status='Pending',next_attempt_at=now() WHERE channel='Push'");
+        Assert.Equal(1,await reminders.DispatchAsync(default));
+        Assert.Equal(1,email.Sent);
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM notification_deliveries WHERE channel='Email' AND status='Sent' AND attempts=2"));
+        // A push provider failure is a retryable delivery error: Pending again, with a backoff, lease released.
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM notification_deliveries WHERE channel='Push' AND status='Pending' AND last_error='PUSH_UNAVAILABLE' AND lease_token IS NULL AND next_attempt_at>now()+interval '30 seconds'"));
+        Assert.Equal("Billing reminder push "+await db.Scalar("SELECT id FROM notification_deliveries WHERE channel='Push'")+" failed with HttpRequestException",
+            Assert.Single(log.Entries,x=>x.Level==Microsoft.Extensions.Logging.LogLevel.Warning).Message);
+        Assert.DoesNotContain("owner@example.test",log.All());
+        // Shutdown during the push call propagates and leaves the push claim leased as well.
+        await db.Sql("UPDATE notification_deliveries SET next_attempt_at=now() WHERE channel='Push'");
+        using(var stopping=new CancellationTokenSource())
+        {
+            push.Fail=()=>{stopping.Cancel();return new OperationCanceledException(stopping.Token);};
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(()=>reminders.DispatchAsync(stopping.Token));
+        }
+        Assert.Equal("Sending",await db.Scalar("SELECT status FROM notification_deliveries WHERE channel='Push'"));
+    }
+
+    [BillingPostgresFact]
+    public async Task Reminder_worker_schedules_and_dispatches_each_cycle_and_survives_a_failed_cycle()
+    {
+        // Disabled: the worker returns without touching its scope.
+        var disabledLog=new CapturedLog<BillingReminderWorker>();
+        var disabled=new BillingReminderWorker(WorkerHarness.Scopes(_=>{}),Options.Create(new BillingReminderOptions{Enabled=false}),disabledLog);
+        await disabled.StartAsync(default);await disabled.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5));await disabled.StopAsync(default);
+        Assert.Empty(disabledLog.Entries);
+        // A failed cycle is logged by type and the worker waits for the next poll; shutdown cancels that wait.
+        var failedLog=new CapturedLog<BillingReminderWorker>();var failed=WorkerHarness.Signal();failedLog.Logged=(_,_)=>failed.TrySetResult();
+        var broken=new BillingReminderWorker(WorkerHarness.Scopes(_=>{}),Options.Create(new BillingReminderOptions{Enabled=true}),failedLog);
+        await WorkerHarness.Run(broken,failed.Task);
+        Assert.Equal("Billing reminder cycle failed with InvalidOperationException",Assert.Single(failedLog.Entries).Message);
+        Assert.False(broken.ExecuteTask!.IsFaulted);
+        // Live cycles: the worker schedules the expiring entitlement and emails it through its own scope.
+        await using var db=await BillingDatabase.Create();var (seedFactory,_)=await ExpiringEntitlement(db);using var __=seedFactory;
+        var email=new CountingEmail();var inFlight=WorkerHarness.Signal();
+        var options=Options.Create(new BillingReminderOptions{Enabled=true,LeadDays=5,PollSeconds=1});
+        var scopes=WorkerHarness.Scopes(s=>s.AddLogging().AddSingleton(options).AddSingleton<IEmailService>(email)
+            .AddScoped(_=>db.Context()).AddScoped<BillingReminders>());
+        // Shutdown in the middle of a send ends the loop cleanly; the claimed delivery keeps its lease for the next worker.
+        var log=new CapturedLog<BillingReminderWorker>();var first=new BillingReminderWorker(scopes,options,log);
+        email.Hold=ct=>{inFlight.TrySetResult();return WorkerHarness.UntilStopped(ct);};
+        await WorkerHarness.Run(first,inFlight.Task);
+        Assert.True(first.ExecuteTask!.IsCompletedSuccessfully);Assert.Empty(log.Entries);Assert.Equal(0,email.Sent);
+        Assert.Equal("Sending",await db.Scalar("SELECT status FROM notification_deliveries WHERE channel='Email'"));
+        await db.Sql("UPDATE notification_deliveries SET lease_until=now()-interval '1 second' WHERE channel='Email'");
+        var sent=WorkerHarness.Signal();email.Hold=null;email.During=()=>{sent.TrySetResult();return Task.CompletedTask;};
+        var worker=new BillingReminderWorker(scopes,options,log);
+        await worker.StartAsync(default);
+        try
+        {
+            await sent.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            var deadline=DateTime.UtcNow.AddSeconds(10);
+            while(!Equals("Sent",await db.Scalar("SELECT status FROM notification_deliveries WHERE channel='Email'")))
+            {Assert.True(DateTime.UtcNow<deadline,"The email delivery was not completed.");await Task.Delay(50);}
+        }
+        finally{await worker.StopAsync(default);}
+        Assert.Equal(1,email.Sent);Assert.Empty(log.Entries);
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM organization_notifications"));
     }
 }

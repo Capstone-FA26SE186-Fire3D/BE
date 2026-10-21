@@ -58,6 +58,48 @@ public sealed class FirebaseGoogleVerificationTests
             .VerifyGoogleTokenAsync("id-token", default)).AuthTime);
     }
 
+    [Fact]
+    public async Task Auth_time_accepts_every_numeric_claim_shape_and_rejects_out_of_range_values()
+    {
+        async Task<DateTimeOffset?> AuthTime(object value)
+        {
+            var claims = Claims(); claims["auth_time"] = value;
+            return (await Provider(new Verifier((_, _) => Task.FromResult(new VerifiedFirebaseClaims("google-uid", claims))))
+                .VerifyGoogleTokenAsync("id-token", default)).AuthTime;
+        }
+        var expected = DateTimeOffset.FromUnixTimeSeconds(1_760_000_000);
+        Assert.Equal(expected, await AuthTime(1_760_000_000));          // int
+        Assert.Equal(expected, await AuthTime(1_760_000_000.9d));       // double is truncated to whole seconds
+        Assert.Equal(expected, await AuthTime(new JValue(1_760_000_000L))); // Newtonsoft claim from the SDK
+        Assert.Null(await AuthTime(double.NaN));
+        Assert.Null(await AuthTime(new JValue("1760000000")));
+        Assert.Null(await AuthTime(-1L));
+        Assert.Null(await AuthTime(253_402_300_800L)); // after year 9999
+    }
+
+    [Fact]
+    public async Task Sign_in_provider_is_read_from_any_dictionary_shape_and_other_shapes_are_invalid()
+    {
+        var claims = Claims();
+        IDictionary<string, object> expando = new System.Dynamic.ExpandoObject();
+        expando["sign_in_provider"] = "google.com";
+        claims["firebase"] = expando; // IDictionary that is not IReadOnlyDictionary
+        Assert.Equal("google-uid", (await Provider(new Verifier((_, _) => Task.FromResult(new VerifiedFirebaseClaims("google-uid", claims))))
+            .VerifyGoogleTokenAsync("id-token", default)).Uid);
+        claims["firebase"] = "google.com";
+        await AssertInvalid(claims);
+        claims["firebase"] = JObject.Parse("{\"sign_in_provider\":7}");
+        await AssertInvalid(claims);
+    }
+
+    [Fact]
+    public async Task Malformed_token_argument_from_sdk_is_an_invalid_token_not_an_outage()
+    {
+        var error = await Assert.ThrowsAsync<GoogleIdentityException>(() =>
+            Provider(new Verifier((_, _) => throw new ArgumentException("idToken must not be empty"))).VerifyGoogleTokenAsync("token", default));
+        Assert.Equal(GoogleIdentityFailure.InvalidToken, error.Failure);
+    }
+
     [Theory]
     [InlineData("password")]
     [InlineData("anonymous")]

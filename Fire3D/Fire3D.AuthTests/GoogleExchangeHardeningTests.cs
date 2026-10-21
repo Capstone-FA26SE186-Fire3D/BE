@@ -149,4 +149,67 @@ public sealed class GoogleExchangeHardeningTests
         Assert.Equal("EMAIL_NOT_VERIFIED", result.Error?.Code);
         Assert.Equal(403, result.Error?.Status);
     }
+
+    [Fact]
+    public async Task Expired_pending_registration_cannot_sign_in_with_google()
+    {
+        var user = new User { Id = Guid.NewGuid(), FirebaseUid = "google-uid", Email = "user@example.test", Role = UserRole.Trainee,
+            IsActive = true, RegistrationExpiresAt = DateTime.UtcNow.AddMinutes(-1) };
+        var store = ResetProxy.For<IAuthStore>((method, _) => method switch
+        {
+            "FindUserByFirebaseUidAsync" => Task.FromResult<User?>(user),
+            "BeginUserTransactionAsync" => Task.FromResult<IAuthTransaction>(new Transaction()),
+            _ => throw new Exception("Must not issue session: " + method)
+        });
+        var provider = ResetProxy.For<IIdentityProvider>((_, _) => Task.FromResult(new VerifiedIdentity(user.FirebaseUid, user.Email)));
+        var tokens = ResetProxy.For<ITokenService>((_, _) => throw new Exception("Must not issue tokens"));
+        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, GoogleOnboardingTestDoubles.Proofs())
+            .Handle(new("token"), default);
+        Assert.Equal("REGISTRATION_EXPIRED", result.Error?.Code);
+        Assert.Equal(403, result.Error?.Status);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("oversized")]
+    public async Task Missing_or_oversized_token_is_rejected_before_verification(string token)
+    {
+        if (token == "oversized") token = new string('a', 16385);
+        var provider = ResetProxy.For<IIdentityProvider>((_, _) => throw new Exception("Must not call the provider"));
+        var store = ResetProxy.For<IAuthStore>((_, _) => throw new Exception("Must not access DB"));
+        var tokens = ResetProxy.For<ITokenService>((_, _) => throw new Exception("Must not issue tokens"));
+        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, GoogleOnboardingTestDoubles.Proofs())
+            .Handle(new(token), default);
+        Assert.Equal(400, result.Error?.Status);
+        Assert.Equal("INVALID_FIREBASE_TOKEN", result.Error?.Code);
+    }
+
+    [Theory]
+    [InlineData("uid", "not-an-email")]
+    [InlineData(" ", "user@example.test")]
+    [InlineData("long", "user@example.test")]
+    public async Task Verified_identity_without_a_usable_uid_or_email_is_rejected(string uid, string email)
+    {
+        if (uid == "long") uid = new string('u', 129);
+        var provider = ResetProxy.For<IIdentityProvider>((_, _) => Task.FromResult(new VerifiedIdentity(uid, email)));
+        var store = ResetProxy.For<IAuthStore>((_, _) => throw new Exception("Must not access DB"));
+        var tokens = ResetProxy.For<ITokenService>((_, _) => throw new Exception("Must not issue tokens"));
+        var result = await new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, GoogleOnboardingTestDoubles.Proofs())
+            .Handle(new("token"), default);
+        Assert.Equal(401, result.Error?.Status);
+        Assert.Equal("INVALID_FIREBASE_TOKEN", result.Error?.Code);
+    }
+
+    [Fact]
+    public async Task Request_cancellation_during_verification_propagates_instead_of_becoming_503()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var provider = ResetProxy.For<IIdentityProvider>((_, _) => { cancellation.Cancel(); throw new OperationCanceledException(cancellation.Token); });
+        var store = ResetProxy.For<IAuthStore>((_, _) => throw new Exception("Must not access DB"));
+        var tokens = ResetProxy.For<ITokenService>((_, _) => throw new Exception("Must not issue tokens"));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new ExchangeFirebaseTokenCommandHandler(store, tokens, provider, TimeProvider.System, GoogleOnboardingTestDoubles.Proofs())
+                .Handle(new("token"), cancellation.Token));
+    }
 }
