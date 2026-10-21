@@ -24,7 +24,7 @@ Nguồn chuẩn: [v7 contract](../../Docs/schema_v7_contract.md) và [requiremen
 
 ## Source #52, #54–#58 — nhánh `feature/issues-52-58-completion` (2026-10-11)
 
-Trạng thái source, chưa merge/deploy/áp Supabase. Chi tiết API ở `docs/` của repo này; trạng thái tổng hợp ở Docs requirements mục 10.
+Các nhóm source này đã có trên `main`. Chi tiết API ở `docs/`; không suy deployment hoặc trạng thái áp migration Supabase chỉ từ việc source đã merge.
 
 - Editor `fet3d.editor/1`: schema/fixture dùng chung tại `contracts/editor/v1`, validator strict trong `Application/Editor/EditorContract.cs`, metric rubric theo allowlist server.
 - Logic nghiệp vụ mới nằm trong gate PostgreSQL SECURITY DEFINER do `fet3d_ifc_upload_owner` sở hữu, trả `{code,status,result}`; runtime chỉ có EXECUTE. Migration `20261011090000`–`20261011150000` additive, dùng owner-role dance, không CREATE OR REPLACE hàm cũ, không ALTER TYPE; bảng mới có FK user/org phải grant SELECT và policy cho `fet3d_pending_cleanup_owner`.
@@ -34,7 +34,7 @@ Trạng thái source, chưa merge/deploy/áp Supabase. Chi tiết API ở `docs/
 
 ## Source #67–#69 — nhánh `feature/support-billing-catalog-contracts` (2026-10-11)
 
-Trạng thái source, chưa merge/deploy/áp Supabase.
+Nhóm source này đã có trên `main`; deployment và áp migration Supabase phải kiểm tra riêng.
 
 - Support trả nhãn `createdBy`/`organization`/`author`; email chỉ trên route Admin; receipt lưu bản không nhãn, nhãn tính lại theo caller khi replay.
 - Audit đọc tên lúc đọc (không ghi ngược); `reason` chỉ đọc từ writer có `supportAuditContract: 1`.
@@ -123,7 +123,7 @@ Khi có Docs bên cạnh, đối chiếu `fire_evacuation_schema.sql`, `fire_eva
 - `.NET` là authority cho Learn CMS/public API: `PlatformAdmin` tạo Draft, có thể publish ngay hoặc lưu nháp, rồi hide/show/delete/restore qua gate; Learn không có endpoint approve riêng. Trainee chỉ bookmark và hỏi AI. `OrganizationUser` không quản trị Learn.
 - PostgreSQL giữ `learn_posts`, immutable `learn_post_versions`, `learn_situations`, source links và `learn_bookmarks`. Public response/cache chỉ được lấy version Published của post Published; Hidden không public nhưng vẫn có thể RAG, còn Deleted phải bị loại dù Redis/index chưa invalidated.
 - Backend validate content schema, ETag/revision, source Common/Approved và provider allowlist YouTube/Facebook/TikTok; iframe/script tùy ý bị chặn. Publish/hide/show audit trong transaction rồi phát `PlatformCacheInvalidation` qua outbox hiện có.
-- API/EF/migration CMS, provider metadata check và RAG indexing còn là implementation work; không coi Learn prototype hoặc SQL thiết kế là đã triển khai.
+- Learn CMS/public/bookmark đã có API, persistence và migration trong source. Provider metadata, indexing và deployment/database acceptance phải đối chiếu từng đường thực thi; không suy toàn bộ production đã đạt.
 
 ## FET3D account and commercial billing boundary — 2026-09-19
 
@@ -190,7 +190,7 @@ Editor preview checks S3 HEAD and recorded size before signing; missing/mismatch
 
 ## IFC ingestion, hiển thị và tương tác — 2026-10-15
 
-Nguồn: [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md) (Docs PR #15/#16). Đây là **đề xuất thiết kế** có bằng chứng spike cục bộ trên 32 file IFC công khai; chưa có worker, API, migration hay code Unity tương ứng. Mục 4 (nhiều IFC cho một revision), ngân sách tam giác và preset vật liệu còn chờ team chốt.
+Nguồn: [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md) (Docs PR #15/#16). Tài liệu gồm thiết kế và bằng chứng spike cục bộ trên 32 file IFC công khai. Source hiện đã có IFC worker (`AI/ifc-worker`), API/gate xử lý ở BE và Unity build worker; nghiệm thu từng bước với IFC thật, QA và Android vẫn phải kiểm tra riêng. Mục 4 (nhiều IFC cho một revision), ngân sách tam giác và preset vật liệu còn chờ team chốt.
 
 Quy tắc chung đã chốt với nhóm: chỉ nhận IFC (RVT tự xuất IFC ở ngoài); **IFC có thiết bị PCCC/nguồn nước thì pipeline tự tạo, không có thì OrganizationUser đặt trong editor**; mô hình 3D thiết bị luôn lấy từ thư viện dùng chung (có thể tạo bằng công cụ AI như Tripo rồi dọn lưới), không lấy từ IFC; IFC hầu như không mang màu/texture dùng được nên vật liệu lấy từ thư viện PBR CC0 theo preset.
 
@@ -207,7 +207,7 @@ Phụ trách: Nguyễn Hoàng Nam (BE, IFC). Việc liên quan repo này:
 ## Unity runtime và pipeline bake — 2026-10-17
 
 Quyết định của trưởng nhóm, đã vào Docs (PR #21–#24) và issue:
-- Unity runtime đã chạy trong Editor 6000.6.6f1: mô phỏng lửa/khói/nhiệt + NPC bằng **Entities**, camera third-person, tương tác theo ngữ cảnh, HUD, telemetry, nạp AssetBundle. APK demo build được (IL2CPP/ARM64). Code đang ở nhánh `feature/third-person-player-camera` của repo Unity, chưa lên `develop`.
+- Unity runtime đã chạy trong Editor 6000.6.6f1: mô phỏng lửa/khói/nhiệt + NPC bằng **Entities**, camera third-person, tương tác theo ngữ cảnh, HUD, telemetry, nạp AssetBundle. APK demo build được (IL2CPP/ARM64). Runtime đã có trên `main` của Unity; phiên bản tích hợp Mobile hiện là `2.0.2`. Source/build không thay cho nghiệm thu gameplay trên thiết bị.
 - **Ưu tiên hình ảnh:** Unity build worker chạy batch trên **Azure VM Windows do BE vận hành** (BE#110). Worker import GLB, gán material theo `libraryKey`, bake lightmap + light/reflection probe cho 2 bộ ánh sáng (bình thường, mất điện), xuất AssetBundle theo tầng + `manifest.json` (`fet3d.package/1`, SHA-256 từng file). Không dùng Addressables.
 - Texture PBR chỉ nằm trong project Unity (bundle `fet3d-materials` cài sẵn trong app). GLB chỉ mang `libraryKey`; BE và worker không lưu file ảnh.
 - `IFC_EXIT_UNKNOWN` = phương án B, chỉ dùng `door.exit` (BE#100).
