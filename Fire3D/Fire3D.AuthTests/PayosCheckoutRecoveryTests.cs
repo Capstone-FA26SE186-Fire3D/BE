@@ -96,6 +96,25 @@ public sealed class PayosCheckoutRecoveryTests
     }
 
     [BillingPostgresFact]
+    public async Task Caller_cancellation_during_the_provider_call_propagates_and_leaves_the_reservation_for_recovery()
+    {
+        await using var db=await BillingDatabase.Create();var quote=await PayosCheckoutTests.Accepted(db);
+        var provider=new ScriptedPayos();using var factory=new BillingApiTests.Factory(db,provider);using var owner=factory.As(BillingDatabase.Owner);
+        using var aborted=new CancellationTokenSource();
+        provider.OnCreate=_=>{aborted.Cancel();throw new OperationCanceledException(aborted.Token);};
+        using(var scope=factory.Services.CreateScope())
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(()=>scope.ServiceProvider.GetRequiredService<IPayosPayments>().Create(BillingDatabase.Owner,BillingDatabase.Owner,new(quote),"aborted",aborted.Token));
+        // Nothing is classified as a provider failure: the leased reservation simply waits for its lease to lapse.
+        Assert.Equal("Creating/",(string?)await db.Scalar($"SELECT status||'/'||COALESCE(last_error,'') FROM billing_checkout_operations WHERE quotation_id='{quote}'"));
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM billing_service_reservations WHERE status='Reserved'"));
+        provider.OnCreate=null;
+        await db.Sql("UPDATE billing_checkout_operations SET lease_until=now()-interval '1 second',next_attempt_at=now()-interval '5 seconds'");
+        using(var scope=factory.Services.CreateScope())await scope.ServiceProvider.GetRequiredService<IPayosPayments>().Recover(default);
+        var ready=await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(quote,"aborted")));
+        Assert.Equal("Ready",ready.GetProperty("checkoutStatus").GetString());Assert.Equal(1,provider.Inner.Creates);
+    }
+
+    [BillingPostgresFact]
     public async Task Recovery_recreates_a_link_the_provider_never_stored_unless_cancel_was_requested()
     {
         await using var db=await BillingDatabase.Create();var buildings=await Buildings(db,1);
