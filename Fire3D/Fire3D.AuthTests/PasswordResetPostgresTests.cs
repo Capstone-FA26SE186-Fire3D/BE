@@ -523,4 +523,37 @@ public sealed class PasswordResetPostgresTests
         Assert.Equal(1,await new RefreshTokenCleanupStore(context).DeleteExpiredFamiliesAsync(7,20,default));
         Assert.Equal(2L,await database.Sql("SELECT count(*) FROM auth_refresh_tokens WHERE token_hash IN('retained','active')"));
     }
+
+    [ResetPostgresFact]
+    public async Task Verification_enqueue_skips_ineligible_accounts_and_failed_delivery_backs_off_then_dies()
+    {
+        await using var database = await Database.Create();
+        var (pending, verified) = (Guid.NewGuid(), Guid.NewGuid());
+        await database.Sql($"""
+            INSERT INTO users(id,email,role,registration_expires_at,email_verified_at) VALUES
+              ('{pending}','pending@example.com','Trainee',now()+interval '2 hours',NULL),
+              ('{verified}','verified@example.com','Trainee',now()+interval '2 hours',now())
+            """);
+        var settings = Options.Create(new AuthEmailOptions { FrontendUrl = "https://app.example.test" });
+        await using var context = database.Context();
+        var queue = new EmailVerificationQueue(context, settings);
+        await queue.EnqueueAsync("missing@example.com", default);
+        await queue.EnqueueAsync(verified, "verified@example.com", default);
+        await queue.EnqueueAsync(pending, "other@example.com", default); // Email no longer matches the account.
+        Assert.Equal(0L, await database.Sql("SELECT count(*) FROM email_verification_jobs"));
+
+        await queue.EnqueueAsync(pending, "pending@example.com", default);
+        var first = Assert.IsType<VerificationEmailJob>(await queue.ClaimAsync(default));
+        await queue.FailAsync(first, false, default);
+        Assert.Equal(true, await database.Sql($"SELECT status='Pending' AND lease_token IS NULL AND available_at>now()+interval '20 seconds' FROM email_verification_jobs WHERE id='{first.Id}'"));
+        Assert.Null(await queue.ClaimAsync(default));
+
+        await database.Sql("UPDATE email_verification_jobs SET available_at=now()-interval '1 second'");
+        var second = Assert.IsType<VerificationEmailJob>(await queue.ClaimAsync(default));
+        Assert.Equal((first.Id, 2), (second.Id, second.Attempt));
+        await queue.FailAsync(first, true, default); // Stale lease: ignored.
+        Assert.Equal("Leased", await database.Sql($"SELECT status FROM email_verification_jobs WHERE id='{first.Id}'"));
+        await queue.FailAsync(second, true, default);
+        Assert.Equal("Dead", await database.Sql($"SELECT status FROM email_verification_jobs WHERE id='{first.Id}'"));
+    }
 }
