@@ -57,6 +57,7 @@
     <EmbeddedResource Include="Persistence/Sql/RevisionStyle.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.RevisionStyle.sql" />
     <EmbeddedResource Include="Persistence/Sql/AlignProductionSchema.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.AlignProductionSchema.sql" />
     <EmbeddedResource Include="Persistence/Sql/DropLegacyConstraints.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.DropLegacyConstraints.sql" />
+    <EmbeddedResource Include="Persistence/Sql/NotificationPushChannel.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.NotificationPushChannel.sql" />
     <EmbeddedResource Include="Persistence/Sql/PackageContractGates.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PackageContractGates.sql" />
     <EmbeddedResource Include="Persistence/Sql/EditorWindRouting.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.EditorWindRouting.sql" />
     <EmbeddedResource Include="Persistence/Sql/PlaytestStateFlags.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PlaytestStateFlags.sql" />
