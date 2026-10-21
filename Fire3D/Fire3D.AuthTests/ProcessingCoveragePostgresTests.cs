@@ -225,6 +225,39 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(1, await ScalarAsync($"SELECT playtest_units_used FROM service_entitlements WHERE id='{f.Trial}'"));
     }
 
+    // Request-shape guards of IFC command controllers and the worker key check answer before any gate runs.
+    [PostgresFact]
+    public async Task Malformed_preconditions_package_kinds_and_wrong_worker_keys_are_refused_before_any_gate()
+    {
+        using var admin = await SignedIn(adminId);
+        var revision = Guid.NewGuid();
+        foreach (var (method, path, body) in new[]
+        {
+            (HttpMethod.Patch, $"/api/revisions/{revision}/equipment-decisions", (object)new { items = new[] { new { candidateId = "door-1", decision = "Confirmed" } } }),
+            (HttpMethod.Put, $"/api/revisions/{revision}/style", new { presetVersionId = Guid.NewGuid() })
+        })
+        {
+            using var request = new HttpRequestMessage(method, path) { Content = JsonContent.Create(body) };
+            request.Headers.TryAddWithoutValidation("If-Match", "W/\"3\"");
+            var response = await admin.SendAsync(request);
+            Assert.True(response.StatusCode == HttpStatusCode.BadRequest, path + " " + response.StatusCode);
+            Assert.Equal("VALIDATION_ERROR", await Code(response));
+        }
+        var build = await PostKeyed(admin, $"/api/scenario-versions/{Guid.NewGuid()}/package-builds", new { kind = "DesktopPackage", buildTarget = "Windows" }, "bad-kind");
+        Assert.Equal(HttpStatusCode.BadRequest, build.StatusCode);
+        Assert.True((await build.Content.ReadFromJsonAsync<JsonObject>())!["errors"]!.AsObject().ContainsKey("kind"));
+        Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM processing_jobs"));
+
+        var key = new string('k', 48);
+        using var host = factory!.WithWebHostBuilder(web => web
+            .ConfigureAppConfiguration((_, b) => b.AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:ProcessingExecutor"] = testConnection }))
+            .ConfigureServices(services => services.PostConfigure<ProcessingWorkerOptions>(o => { o.WorkerApiEnabled = true; o.MachineKey = key; o.AllowedToolchains = ["fake-v1"]; })));
+        using var worker = host.CreateClient();
+        worker.DefaultRequestHeaders.Add("X-Worker-Key", new string('x', 48));
+        var wrong = await worker.PostAsJsonAsync($"/internal/processing/jobs/{Guid.NewGuid()}/fail", new { attemptId = Guid.NewGuid(), leaseToken = Guid.NewGuid(), reason = "x" });
+        Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
+    }
+
     // A source already gone from S3 counts as cleaned; shutdown during delete leaves the lease to expire and retry.
     [PostgresFact]
     public async Task Ifc_cleanup_treats_a_missing_object_as_cleaned_and_shutdown_keeps_the_claim()

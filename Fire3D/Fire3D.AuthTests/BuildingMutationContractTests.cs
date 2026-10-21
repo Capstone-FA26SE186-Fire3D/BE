@@ -93,6 +93,41 @@ public sealed class BuildingMutationContractTests
         Assert.Equal(400, result.Error?.Status);
     }
 
+    // totalFloors=0 keeps every case a validation error, so only the geojson field decides whether it is reported.
+    [Theory]
+    [InlineData("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[105.8,21.0],[105.9,21.0],[105.9,21.1],[105.8,21.0]]]}}""", true)]
+    [InlineData("""{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"MultiPoint","coordinates":[[105.8,21.0]]}}]}""", true)]
+    [InlineData("""{"type":"GeometryCollection","geometries":[{"type":"LineString","coordinates":[[0,0],[1,1]]},{"type":"MultiLineString","coordinates":[[[0,0],[1,1]]]},{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[1,1],[0,0]]]]}]}""", true)]
+    [InlineData("""{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,1]]]}""", false)]
+    [InlineData("""{"type":"GeometryCollection","geometries":{}}""", false)]
+    [InlineData("""{"type":"LineString"}""", false)]
+    [InlineData("""{"type":"Circle","coordinates":[0,0]}""", false)]
+    [InlineData("""{"type":"MultiPolygon","coordinates":[]}""", false)]
+    [InlineData("{not json", false)]
+    public async Task Geojson_accepts_closed_wgs84_geometries_and_collections_only(string geojson, bool valid)
+    {
+        var org = Guid.NewGuid();
+        var owner = new User { Id = Guid.NewGuid(), OrganizationId = org, Role = UserRole.OrganizationUser, IsActive = true };
+        var location = new CreateBuildingLocationRequest("Address", "Hanoi", null, 21.0m, 105.8m, geojson);
+        var result = await Handler(Accounts(owner)).Handle(new(owner.Id, org, new("Office", null, 0, location, null), "key-1"), default);
+        Assert.Equal("VALIDATION_ERROR", result.Error?.Code);
+        Assert.Contains("totalFloors", result.Error!.Errors!.Keys);
+        Assert.Equal(!valid, result.Error.Errors.ContainsKey("location.geojson"));
+    }
+
+    [Fact]
+    public async Task Text_fields_report_length_and_control_characters_per_field()
+    {
+        var org = Guid.NewGuid();
+        var owner = new User { Id = Guid.NewGuid(), OrganizationId = org, Role = UserRole.OrganizationUser, IsActive = true };
+        var contact = new CreateBuildingContactRequest(" ", new string('r', 101), "090\u0007", null, true);
+        var location = new CreateBuildingLocationRequest(null, new string('c', 256), "Ba\tDinh", null, null, null);
+        var result = await Handler(Accounts(owner)).Handle(new(owner.Id, org, new("Off\u0001ice", new string('t', 101), 1, location, contact), "key-1"), default);
+        Assert.Equal(["buildingType", "contact.contactName", "contact.contactRole", "contact.phone", "location.city", "location.district", "name"],
+            result.Error!.Errors!.Keys.Order());
+        Assert.Equal("contact.contactName is required and must contain at most 255 characters without control characters.", result.Error.Errors["contact.contactName"].Single());
+    }
+
     [Fact]
     public void Create_hash_binds_the_resolved_organization_and_normalized_input()
     {

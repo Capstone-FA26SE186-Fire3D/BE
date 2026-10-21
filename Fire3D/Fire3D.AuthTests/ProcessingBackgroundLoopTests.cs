@@ -4,6 +4,7 @@ using Fire3D.Application.Content;
 using Fire3D.Application.Ifc;
 using Fire3D.Infrastructure.Content;
 using Fire3D.Infrastructure.Ifc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -269,6 +270,98 @@ public sealed class ProcessingBackgroundLoopTests
             Options.Create(new ProcessingWorkerOptions { DispatcherEnabled = true, WorkerUrl = "https://worker.example.test/jobs", MachineKey = new string('k', 32) }), new ListLogger<ProcessingDispatcher>());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => dispatcher.RunOnceAsync(dispatching.Token));
         Assert.Equal(["Recover", "Claim"], actions);
+    }
+
+    [Fact]
+    public async Task Redis_consumer_records_a_failure_when_the_worker_reply_is_not_confirmed()
+    {
+        var envelope = Envelope();
+        var actions = new List<string>();
+        var confirm = "RECEIPT_MISMATCH";
+        var gate = ResetProxy.For<IProcessingStreamConsumerGate>((_, args) =>
+        {
+            var action = (string)args[0]!;
+            actions.Add(action);
+            return Task.FromResult(Json(new { code = action == "Confirm" ? confirm : "OK" }));
+        });
+        var acknowledged = new List<string>();
+        var stream = ResetProxy.For<IProcessingStream>((method, args) => method switch
+        {
+            "get_StreamName" => "fet3d:test:processing",
+            nameof(IProcessingStream.AcknowledgeAsync) => Ack((string)args[0]!),
+            _ => throw new Exception("Unexpected: " + method)
+        });
+        Task Ack(string id) { acknowledged.Add(id); return Task.CompletedTask; }
+        object reply = new { eventKey = envelope.EventKey, payloadHash = envelope.PayloadHash, receiptId = Guid.NewGuid() };
+        var http = ResetProxy.For<IHttpClientFactory>((_, _) => new HttpClient(new FakeProcessingHttp(_ =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = JsonContent.Create(reply) }))));
+        var consumer = new RedisProcessingConsumer(Scopes(s => s.AddScoped(_ => gate)), stream, http,
+            Options.Create(new ProcessingWorkerOptions { WorkerUrl = "https://worker.example.test/deliver", MachineKey = new string('k', 32) }), new ListLogger<RedisProcessingConsumer>());
+        var message = new ProcessingStreamMessage("7-0", JsonSerializer.Serialize(envelope, Web));
+
+        // The gate refuses the receipt: the entry stays pending and the failure backs off the next delivery.
+        Assert.False(await consumer.HandleAsync(message, default));
+        Assert.Equal(["Inspect", "Confirm", "Inspect", "Failure"], actions);
+        // A reply for another payload is never confirmed.
+        actions.Clear();
+        reply = new { eventKey = envelope.EventKey, payloadHash = new string('d', 64), receiptId = Guid.NewGuid() };
+        Assert.False(await consumer.HandleAsync(message, default));
+        Assert.Equal(["Inspect", "Inspect", "Failure"], actions);
+        Assert.Empty(acknowledged);
+        // Confirmed by the gate: acknowledged once.
+        actions.Clear(); confirm = "CONSUMED";
+        reply = new { eventKey = envelope.EventKey, payloadHash = envelope.PayloadHash, receiptId = Guid.NewGuid() };
+        Assert.True(await consumer.HandleAsync(message, default));
+        Assert.Equal(["Inspect", "Confirm"], actions);
+        Assert.Equal(["7-0"], acknowledged);
+    }
+
+    /// <summary>A loopback socket that accepts PostgreSQL connections and never answers, so a run blocks until shutdown.</summary>
+    private sealed class SilentPostgres : IDisposable
+    {
+        private readonly System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
+        private readonly List<System.Net.Sockets.TcpClient> clients = [];
+        public TaskCompletionSource Connected { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public SilentPostgres()
+        {
+            listener.Start();
+            _ = Task.Run(async () =>
+            {
+                try { while (true) { var client = await listener.AcceptTcpClientAsync(); lock (clients) clients.Add(client); Connected.TrySetResult(); } }
+                catch (Exception) { }
+            });
+        }
+        public string ConnectionString => $"Host=127.0.0.1;Port={((System.Net.IPEndPoint)listener.LocalEndpoint).Port};Database=none;Username=none;Password=none;Timeout=60;Pooling=false";
+        public void Dispose() { listener.Stop(); lock (clients) foreach (var c in clients) c.Dispose(); }
+    }
+
+    [Fact]
+    public async Task Ifc_cleanup_loop_stops_cleanly_when_shutdown_interrupts_a_run()
+    {
+        using var postgres = new SilentPostgres();
+        var log = new ListLogger<IfcUploadCleanupWorker>();
+        var worker = new IfcUploadCleanupWorker(Scopes(s => s.AddScoped(_ => new Fire3D.Infrastructure.Persistence.Fire3DDbContext(
+            new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Fire3D.Infrastructure.Persistence.Fire3DDbContext>().UseNpgsql(postgres.ConnectionString).Options))),
+            Options.Create(new IfcUploadOptions { CleanupEnabled = true }), log);
+        await worker.StartAsync(default);
+        await postgres.Connected.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await worker.StopAsync(default);
+        Assert.True(worker.ExecuteTask!.IsCompletedSuccessfully);
+        Assert.DoesNotContain(log.Messages, m => m.Level >= LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task Platform_cache_loop_stops_cleanly_when_shutdown_interrupts_a_run()
+    {
+        using var postgres = new SilentPostgres();
+        var log = new ListLogger<PlatformCacheInvalidationWorker>();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:DefaultConnection"] = postgres.ConnectionString }).Build();
+        var worker = new PlatformCacheInvalidationWorker(configuration, Untouched<IPlatformCacheVersions>(), Options.Create(new PlatformCacheOptions()), log);
+        await worker.StartAsync(default);
+        await postgres.Connected.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await worker.StopAsync(default);
+        Assert.True(worker.ExecuteTask!.IsCompletedSuccessfully);
+        Assert.DoesNotContain(log.Messages, m => m.Level >= LogLevel.Warning);
     }
 
     private static async Task<string> Cancelled(CancellationTokenSource source, CancellationToken ct)

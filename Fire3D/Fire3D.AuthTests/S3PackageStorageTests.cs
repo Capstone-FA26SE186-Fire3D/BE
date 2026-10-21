@@ -86,6 +86,9 @@ public sealed class S3PackageStorageTests
         Assert.Equal(Bytes, await Storage(client).ReadAsync("manifest.json", Bytes.Length, default));
         Assert.Null(await Storage(client).ReadAsync("manifest.json", Bytes.Length - 1, default));
         Assert.Null(await Storage(client).ReadAsync("missing.json", 1024, default));
+        // A provider that understates Content-Length cannot push more than maxBytes through.
+        var understated = ResetProxy.For<IAmazonS3>((_, _) => Task.FromResult(new GetObjectResponse { ContentLength = 3, ResponseStream = new MemoryStream(Bytes) }));
+        Assert.Null(await Storage(understated).ReadAsync("manifest.json", 5, default));
     }
 
     [Fact]
