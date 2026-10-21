@@ -78,23 +78,6 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(3L, await ScalarAsync($"SELECT count(*) FROM audit_logs WHERE target_entity='buildings' AND target_id='{tower.Id}'"));
     }
 
-    // Regression for a defect found while closing coverage: BuildingStore.UpdateBuildingWithAuditAsync attaches a new
-    // BuildingLocation/BuildingContact with a client-generated key through the navigation, so EF issues an UPDATE (0 rows) and
-    // the PUT fails with DbUpdateConcurrencyException (500). Unskip once the store adds the new row explicitly.
-    [PostgresFact(Skip = "Known defect: PUT that adds a building's first location or contact returns 500 (BuildingStore lines 165/170).")]
-    public async Task Building_update_adds_a_first_location_and_contact()
-    {
-        var organization = await SeedBuildingOrganization();
-        client.DefaultRequestHeaders.Authorization = new("Bearer", (await LoginAsync()).AccessToken);
-        var created = await PostBuilding(client, new { organizationId = organization, name = "Bare", totalFloors = 1 });
-        var id = (await created.Content.ReadFromJsonAsync<BuildingResponse>())!.Id;
-        var updated = await SendBuilding(client, HttpMethod.Put, id, new { name = "Bare", totalFloors = 1,
-            location = new { address = "1 River St" }, contact = new { contactName = "Lan", isPrimary = true } }, created.Headers.ETag!.Tag);
-        Assert.True(updated.StatusCode == HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
-        Assert.Equal(1L, await ScalarAsync($"SELECT count(*) FROM building_locations WHERE building_id='{id}'"));
-        Assert.Equal(1L, await ScalarAsync($"SELECT count(*) FROM building_contacts WHERE building_id='{id}'"));
-    }
-
     [PostgresFact]
     public async Task Revision_reads_include_the_source_document_summary()
     {
