@@ -1,13 +1,15 @@
 name: Build and Deploy to Azure
 
 on:
+  pull_request:
+    branches: ["main", "develop"]
   push:
     branches: ["main"]
   workflow_dispatch:
 
 concurrency:
-  group: fire3d-api-production
-  cancel-in-progress: true
+  group: fire3d-api-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
@@ -15,8 +17,31 @@ env:
   APP_URL: https://fire3d-api-h3a5h2fgdvajfbcz.eastasia-01.azurewebsites.net
 
 jobs:
-  build-and-deploy:
+  processing-regression:
+    uses: ./.github/workflows/processing-tests.yml
+    permissions:
+      contents: read
+
+  deployment-tests:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test deployment preflight
+        run: python -m unittest discover -s tools/deployment -p 'test_*.py'
+
+  build-and-deploy:
+    if: github.event_name != 'pull_request'
+    needs: [deployment-tests, processing-regression]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: fire3d-api-production
+      cancel-in-progress: false
 
     permissions:
       contents: read
@@ -25,6 +50,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install preflight client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client jq
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -43,7 +75,11 @@ jobs:
             APP_VERSION=${{ github.sha }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Check candidate migrations before deployment
+        env:
+          DEPLOY_PREFLIGHT_CONNECTION: ${{ secrets.DEPLOY_PREFLIGHT_CONNECTION }}
+        run: python tools/deployment/migration_preflight.py
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
@@ -57,8 +93,8 @@ jobs:
         shell: bash
         run: |
           for attempt in {1..30}; do
-            response="$(curl --fail --silent --show-error --connect-timeout 10 "${APP_URL}/health/version" || true)"
-            if [[ "${response}" == *"${GITHUB_SHA}"* ]]; then
+            status="$(curl --silent --show-error --connect-timeout 10 --max-time 20 --output version.json --write-out '%{http_code}' "${APP_URL}/health/version")" || status=000
+            if [[ "${status}" == "200" ]] && jq --exit-status --arg version "${GITHUB_SHA}" '.version == $version' version.json >/dev/null 2>&1; then
               echo "Fire3D API is running ${GITHUB_SHA}."
               exit 0
             fi
@@ -71,19 +107,19 @@ jobs:
       - name: Smoke test deployed API
         shell: bash
         run: |
-          # Readiness fails with 503 MIGRATIONS_PENDING when the database lags this build.
-          status="$(curl --silent --output ready.json --connect-timeout 10 --write-out '%{http_code}' "${APP_URL}/health/ready" || true)"
+          # Post-deploy readiness supplements the pre-deploy migration gate.
+          status="$(curl --silent --show-error --output ready.json --connect-timeout 10 --max-time 20 --write-out '%{http_code}' "${APP_URL}/health/ready")" || status=000
           cat ready.json || true
           echo
           if [[ "${status}" != "200" ]]; then
-            echo "Readiness returned ${status}: apply pending migrations before using this deployment."
+            echo "Readiness returned ${status}: inspect dependency health before accepting this deployment."
             exit 1
           fi
-          # Anonymous reads that touch the database must not return 5xx.
+          # These anonymous endpoints must return 200; redirects, 401 and 404 also fail.
           for path in /api/learn/situations /api/learn/posts /openapi/v1.json; do
-            status="$(curl --silent --output /dev/null --connect-timeout 10 --write-out '%{http_code}' "${APP_URL}${path}")"
+            status="$(curl --silent --show-error --output /dev/null --connect-timeout 10 --max-time 20 --write-out '%{http_code}' "${APP_URL}${path}")" || status=000
             echo "${path} -> ${status}"
-            if [[ "${status}" -ge 500 ]]; then
+            if [[ "${status}" != "200" ]]; then
               echo "Smoke test failed on ${path}."
               exit 1
             fi

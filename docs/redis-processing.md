@@ -49,6 +49,16 @@ The bridge/reconciler use `DefaultConnection` for execute-only gates. Existing w
 
 Invalid messages remain pending with diagnostic codes; inspect event IDs and authoritative PostgreSQL envelope under operational access. Exhausted events require deliberate investigation/requeue through authorized gates, not direct edits of receipts/provenance. Redis stream length includes ACKed retention entries and is not the count of running jobs.
 
+## Recovery repair and explicit delivery retry
+
+Apply `20261020100000_RepairProcessingRedisRecovery` before deploying this repair. It excludes blocked/deferred deliveries before selecting the recovery batch, so twenty protected entries cannot indefinitely prevent later events from being replayed. The migration is additive; do not edit or rerun the historical Redis migration files.
+
+After fixing a Redis or HTTP worker outage, the existing processing-job retry API accepts a `Queued` job whose latest delivery exhausted publication or handoff retries. Supply a fresh `requestId` and reason through the existing authorized API. It resets that delivery's retry budget using the **same event key, payload and hash**, preserving publication history and worker deduplication. It stores the prior counters/error codes in `processing_stream_retry_receipts`, atomically with the reset and API audit. Replaying the same request returns `AlreadyRequeued`; changing its reason/job conflicts. A different request cannot reset an active delivery or a running/completed job. Ordinary failed-job retry retains its existing new-event behavior.
+
+Recovery emits a warning with `BlockedEvents` when queued jobs require this explicit intervention. A dependency becoming healthy does not automatically reset exhausted retries. Invalid/conflicting envelopes still require investigation and cannot be made valid by the retry API.
+
+`/health/ready` now checks enabled Redis processing dependencies and restricted gate permissions, while `/health` stays process-only. Redis PING/XLEN checks are read-only and do not prove XADD/consumer ACLs or successful HTTP worker execution. See [deployment readiness](deployment-readiness.md) for failure codes and the candidate-migration deployment preflight.
+
 ## Isolated tests
 
 Use a disposable loopback PostgreSQL server with CREATEDB and a separate password-protected Redis 7.4 container. The fixture creates/drops its own databases and restricted logins; never set these variables from User Secrets or production connections.

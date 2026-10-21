@@ -28,6 +28,8 @@ public sealed class RedisProcessingRecovery(IServiceScopeFactory scopes, IProces
         var gate = scope.ServiceProvider.GetRequiredService<IProcessingStreamRecoveryGate>();
         await gate.ExecuteAsync("RecoverAttempt", JsonSerializer.SerializeToElement(new { }), ct);
         var replay = await gate.ExecuteAsync("ReplayMissing", JsonSerializer.SerializeToElement(new { streamName = stream.StreamName, handoffTimeoutSeconds = redis.Value.HandoffTimeoutSeconds }, Json), ct);
+        if (replay.TryGetProperty("blocked", out var blocked) && blocked.GetInt64() > 0)
+            log.LogWarning("Processing Redis delivery retries exhausted: BlockedEvents={BlockedEvents}. Restore the dependency and retry the affected processing jobs.", blocked.GetInt64());
         var trimmed = await stream.TrimAsync(async (message, cancellation) =>
         {
             ProcessingEnvelope? envelope;

@@ -39,7 +39,9 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
     .AddOperationTransformer<AuthoringOperationTransformer>()
     .AddSchemaTransformer<ContractSchemaTransformer>()
     .AddOperationTransformer<SuccessResponseTransformer>());
+builder.Services.AddSingleton<IProcessingReadinessProbe, ProcessingReadinessProbe>();
 builder.Services.AddHealthChecks().AddCheck<DatabaseReadinessCheck>("database", tags: [DatabaseReadinessCheck.Tag])
+    .AddCheck<ProcessingReadinessCheck>("processing", tags: [DatabaseReadinessCheck.Tag])
     .AddCheck<ProcessingExecutorCheck>("processingExecutor", tags: [ProcessingExecutorCheck.Tag]);
 builder.Services.AddExceptionHandler<ProcessingExecutorExceptionHandler>();
 
@@ -131,7 +133,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Liveness stays process-only so a database outage never makes the host restart the app; readiness checks DB and migrations.
+// Liveness stays process-only; readiness checks DB, migrations and dependencies of enabled Redis processing loops.
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = check => !check.Tags.Contains(DatabaseReadinessCheck.Tag) && !check.Tags.Contains(ProcessingExecutorCheck.Tag) });
 app.MapHealthChecks("/health/ready", DatabaseReadinessCheck.Options).AllowAnonymous();
 // Machine key only: the codes describe the worker deployment, so they are not public.

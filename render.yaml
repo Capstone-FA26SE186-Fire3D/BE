@@ -2,9 +2,9 @@ services:
   - type: web
     name: fire3d-api
     runtime: docker
-    # Dockerfile nằm trong thư mục Fire3D/, context cũng là Fire3D/
+    # Build from BE/ so project references and database/ embedded resources are available.
     dockerfilePath: ./Fire3D/Dockerfile
-    dockerContext: ./Fire3D
+    dockerContext: .
     # Render gọi endpoint này để kiểm tra service đã sẵn sàng chưa
     healthCheckPath: /health
     envVars:
@@ -16,7 +16,8 @@ services:
         sync: false   # Điền thủ công trên Render Dashboard
 
       # ── JWT ─────────────────────────────────────────────────
-      - key: Jwt__Key
+      - key: Jwt__SigningKey
+        # Base64-encoded random key: at least 32 decoded bytes (openssl rand -base64 32).
         sync: false
       - key: Jwt__Issuer
         value: Fire3D.API
@@ -36,7 +37,7 @@ services:
         sync: false   # Set on Render Dashboard
 
       # ── Frontend URL (dùng trong link reset password) ───────
-      - key: Auth__FrontendUrl
+      - key: AuthEmail__FrontendUrl
         sync: false   # Điền thủ công: https://your-frontend.com
 
       # ── AWS S3 ──────────────────────────────────────────────
