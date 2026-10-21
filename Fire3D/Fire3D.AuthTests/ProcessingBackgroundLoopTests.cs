@@ -4,7 +4,6 @@ using Fire3D.Application.Content;
 using Fire3D.Application.Ifc;
 using Fire3D.Infrastructure.Content;
 using Fire3D.Infrastructure.Ifc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -316,36 +315,38 @@ public sealed class ProcessingBackgroundLoopTests
         Assert.Equal(["7-0"], acknowledged);
     }
 
-    /// <summary>A loopback socket that accepts PostgreSQL connections and never answers, so a run blocks until shutdown.</summary>
-    private sealed class SilentPostgres : IDisposable
+    /// <summary>
+    /// Holds a run inside a dependency until the host has signalled shutdown, then fails it the way a cancelled database or
+    /// storage call does. StopAsync cancels the stopping token before it waits, so the loop sees a cancelled run.
+    /// </summary>
+    private sealed class ShutdownDuringRun
     {
-        private readonly System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
-        private readonly List<System.Net.Sockets.TcpClient> clients = [];
-        public TaskCompletionSource Connected { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public SilentPostgres()
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly ManualResetEventSlim release = new();
+        public T Block<T>()
         {
-            listener.Start();
-            _ = Task.Run(async () =>
-            {
-                try { while (true) { var client = await listener.AcceptTcpClientAsync(); lock (clients) clients.Add(client); Connected.TrySetResult(); } }
-                catch (Exception) { }
-            });
+            Entered.TrySetResult();
+            release.Wait(TimeSpan.FromSeconds(30));
+            throw new OperationCanceledException("The host is stopping.");
         }
-        public string ConnectionString => $"Host=127.0.0.1;Port={((System.Net.IPEndPoint)listener.LocalEndpoint).Port};Database=none;Username=none;Password=none;Timeout=60;Pooling=false";
-        public void Dispose() { listener.Stop(); lock (clients) foreach (var c in clients) c.Dispose(); }
+        public async Task StopAsync(BackgroundService service)
+        {
+            await Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var stopping = service.StopAsync(default);
+            release.Set();
+            await stopping;
+        }
     }
 
     [Fact]
     public async Task Ifc_cleanup_loop_stops_cleanly_when_shutdown_interrupts_a_run()
     {
-        using var postgres = new SilentPostgres();
+        var run = new ShutdownDuringRun();
         var log = new ListLogger<IfcUploadCleanupWorker>();
-        var worker = new IfcUploadCleanupWorker(Scopes(s => s.AddScoped(_ => new Fire3D.Infrastructure.Persistence.Fire3DDbContext(
-            new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Fire3D.Infrastructure.Persistence.Fire3DDbContext>().UseNpgsql(postgres.ConnectionString).Options))),
+        var worker = new IfcUploadCleanupWorker(Scopes(s => s.AddScoped(_ => run.Block<Fire3D.Infrastructure.Persistence.Fire3DDbContext>())),
             Options.Create(new IfcUploadOptions { CleanupEnabled = true }), log);
         await worker.StartAsync(default);
-        await postgres.Connected.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        await worker.StopAsync(default);
+        await run.StopAsync(worker);
         Assert.True(worker.ExecuteTask!.IsCompletedSuccessfully);
         Assert.DoesNotContain(log.Messages, m => m.Level >= LogLevel.Warning);
     }
@@ -353,13 +354,14 @@ public sealed class ProcessingBackgroundLoopTests
     [Fact]
     public async Task Platform_cache_loop_stops_cleanly_when_shutdown_interrupts_a_run()
     {
-        using var postgres = new SilentPostgres();
+        var run = new ShutdownDuringRun();
         var log = new ListLogger<PlatformCacheInvalidationWorker>();
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:DefaultConnection"] = postgres.ConnectionString }).Build();
+        // The run blocks while reading its connection string, i.e. inside the first gate call.
+        var section = ResetProxy.For<IConfigurationSection>((method, _) => method == "get_Item" ? run.Block<string>() : throw new Exception("Unexpected: " + method));
+        var configuration = ResetProxy.For<IConfiguration>((method, args) => method == nameof(IConfiguration.GetSection) && (string)args[0]! == "ConnectionStrings" ? section : throw new Exception("Unexpected: " + method));
         var worker = new PlatformCacheInvalidationWorker(configuration, Untouched<IPlatformCacheVersions>(), Options.Create(new PlatformCacheOptions()), log);
         await worker.StartAsync(default);
-        await postgres.Connected.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        await worker.StopAsync(default);
+        await run.StopAsync(worker);
         Assert.True(worker.ExecuteTask!.IsCompletedSuccessfully);
         Assert.DoesNotContain(log.Messages, m => m.Level >= LogLevel.Warning);
     }
