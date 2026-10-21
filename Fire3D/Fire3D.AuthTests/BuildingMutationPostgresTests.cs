@@ -65,13 +65,35 @@ public sealed partial class AuthIntegrationTests
             await using (var db = BuildingContext(runtime))
             {
                 var replacement = NewBuilding(id, organization); replacement.Name = "Must rollback";
-                await Assert.ThrowsAsync<DbUpdateException>(() => new BuildingStore(db).UpdateBuildingWithAuditAsync(replacement,
+                var failure = await Assert.ThrowsAsync<DbUpdateException>(() => new BuildingStore(db).UpdateBuildingWithAuditAsync(replacement,
                     new BuildingLocation { Id = Guid.NewGuid(), BuildingId = id, Address = "Must rollback", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow }, null, adminId, DateTime.UtcNow, default));
+                // The audit constraint must be the cause, not a concurrency failure of the new location insert.
+                Assert.Equal(PostgresErrorCodes.CheckViolation, Assert.IsType<PostgresException>(failure.InnerException).SqlState);
             }
             Assert.Equal("Office", await ScalarAsync($"SELECT name FROM buildings WHERE id='{id}'"));
             Assert.Equal(0L, await ScalarAsync($"SELECT count(*) FROM building_locations WHERE building_id='{id}'"));
             Assert.Equal(1L, await ScalarAsync($"SELECT count(*) FROM audit_logs WHERE target_id='{id}'"));
         });
+    }
+
+    [PostgresFact]
+    public async Task Building_update_adds_a_first_location_and_contact()
+    {
+        var organization = await SeedBuildingOrganization();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", (await LoginAsync()).AccessToken);
+        var created = await PostBuilding(client, new { organizationId = organization, name = "Bare", totalFloors = 1 });
+        var id = (await created.Content.ReadFromJsonAsync<BuildingResponse>())!.Id;
+        var updated = await SendBuilding(client, HttpMethod.Put, id, new { name = "Bare", totalFloors = 1,
+            location = new { address = "1 River St" }, contact = new { contactName = "Lan", isPrimary = true } }, created.Headers.ETag!.Tag);
+        Assert.True(updated.StatusCode == HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
+        Assert.Equal(1L, await ScalarAsync($"SELECT count(*) FROM building_locations WHERE building_id='{id}'"));
+        Assert.Equal(1L, await ScalarAsync($"SELECT count(*) FROM building_contacts WHERE building_id='{id}' AND contact_name='Lan'"));
+        // A later update edits the same rows in place.
+        var again = await SendBuilding(client, HttpMethod.Put, id, new { name = "Bare", totalFloors = 1,
+            location = new { address = "2 River St" }, contact = new { contactName = "Mai", isPrimary = true } }, updated.Headers.ETag!.Tag);
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        Assert.Equal(1L, await ScalarAsync($"SELECT count(*) FROM building_contacts WHERE building_id='{id}' AND contact_name='Mai'"));
+        Assert.Equal(1L, await ScalarAsync($"SELECT count(*) FROM building_locations WHERE building_id='{id}' AND address='2 River St'"));
     }
 
     [PostgresFact]
