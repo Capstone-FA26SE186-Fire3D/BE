@@ -12,6 +12,8 @@ public sealed class RefreshTokenCleanupWorker(
     ILogger<RefreshTokenCleanupWorker> logger) : BackgroundService
 {
     private readonly AuthTokenCleanupOptions options = configured.Value;
+    // Test seam: the hosted service always waits 45 seconds after startup before the first run.
+    internal TimeSpan StartupDelay { get; init; } = TimeSpan.FromSeconds(45);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -21,7 +23,7 @@ public sealed class RefreshTokenCleanupWorker(
             return;
         }
 
-        try { await Task.Delay(TimeSpan.FromSeconds(45), stoppingToken); }
+        try { await Task.Delay(StartupDelay, stoppingToken); }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
 
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(options.IntervalMinutes));

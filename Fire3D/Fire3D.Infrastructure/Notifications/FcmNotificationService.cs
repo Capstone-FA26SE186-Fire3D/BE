@@ -9,6 +9,10 @@ namespace Fire3D.Infrastructure.Notifications;
 
 public sealed class FcmNotificationService(Fire3DDbContext db, ILogger<FcmNotificationService> logger) : INotificationService
 {
+    // Test seam: production sends through the process-wide Firebase app, resolved per message inside the try as before.
+    internal Func<Message, CancellationToken, Task<string>> SendMessage { get; init; } =
+        static (message, ct) => FirebaseMessaging.DefaultInstance.SendAsync(message, ct);
+
     public async Task<bool> SendPushAsync(string fcmToken, string title, string body, IDictionary<string, string>? data = null, CancellationToken ct = default)
         => (await SendCoreAsync(fcmToken, title, body, data, ct)).Delivered;
 
@@ -29,7 +33,7 @@ public sealed class FcmNotificationService(Fire3DDbContext db, ILogger<FcmNotifi
                 Data = data == null ? new Dictionary<string, string>() : new Dictionary<string, string>(data)
             };
 
-            var response = await FirebaseMessaging.DefaultInstance.SendAsync(message, ct);
+            var response = await SendMessage(message, ct);
             logger.LogInformation("Successfully sent message: {Response}", response);
             return new(true, false);
         }
