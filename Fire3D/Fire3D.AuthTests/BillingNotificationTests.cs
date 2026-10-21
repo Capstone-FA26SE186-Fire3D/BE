@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Text.Json;
 using Fire3D.Application.Email;
+using Fire3D.Application.Notifications;
 using Fire3D.Infrastructure.Billing;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -14,6 +15,13 @@ public sealed class BillingNotificationTests
     {
         public int Sent;public Func<Task>? During;public string? Subject,Html;
         public async Task SendAsync(string to,string subject,string html,CancellationToken ct){if(During is not null)await During();Subject=subject;Html=html;Interlocked.Increment(ref Sent);}
+    }
+    private sealed class CountingPush : INotificationService
+    {
+        public int Calls;public int Delivered=1;public Guid? User;public IDictionary<string,string>? Data;
+        public Task<bool> SendPushAsync(string fcmToken,string title,string body,IDictionary<string,string>? data=null,CancellationToken ct=default)=>Task.FromResult(true);
+        public Task<int> SendPushToUserAsync(Guid userId,string title,string body,IDictionary<string,string>? data=null,CancellationToken ct=default)
+        {Calls++;User=userId;Data=data;return Task.FromResult(Delivered);}
     }
     private static async Task<(BillingApiTests.Factory Factory,Guid Entitlement)> ExpiringEntitlement(BillingDatabase db)
     {
@@ -98,5 +106,33 @@ public sealed class BillingNotificationTests
             """);
         var after=JsonDocument.Parse(await owner.GetStringAsync("/api/organizations/me/notifications")).RootElement;
         Assert.Equal(1,after.GetProperty("total").GetInt32());Assert.False(after.GetProperty("items")[0].GetProperty("stillRelevant").GetBoolean());
+    }
+    [BillingPostgresFact]
+    public async Task Push_reminder_goes_to_live_devices_only_and_closes_without_one()
+    {
+        await using var db=await BillingDatabase.Create();var (seedFactory,entitlement)=await ExpiringEntitlement(db);using var __=seedFactory;
+        var options=Options.Create(new BillingReminderOptions{Enabled=true,LeadDays=5,MaxAttempts=3,LeaseSeconds=30});
+        var recipient=(Guid)(await db.Scalar($"SELECT u.id FROM users u JOIN service_entitlements e ON e.organization_id=u.organization_id WHERE e.id='{entitlement}' AND u.role='OrganizationUser' ORDER BY u.id LIMIT 1"))!;
+        await db.Sql($"INSERT INTO user_devices(user_id,device_uuid,fcm_token,notifications_enabled,fcm_token_generation) VALUES('{recipient}','device-1','fcm-live',true,1),('{recipient}','device-2','fcm-revoked',false,1)");
+        var email=new CountingEmail();var push=new CountingPush();
+        await using var context=db.Context();var reminders=new BillingReminders(context,email,options,NullLogger<BillingReminders>.Instance,push);
+        Assert.Equal(1,await reminders.ScheduleAsync(DateTime.UtcNow,default));
+        // Only the recipient with a live FCM binding gets a Push delivery next to Web and Email.
+        Assert.Equal(1L,await db.Scalar("SELECT count(*) FROM notification_deliveries WHERE channel='Push' AND status='Pending'"));
+        Assert.Equal(2,await reminders.DispatchAsync(default));
+        Assert.Equal(1,push.Calls);Assert.Equal(recipient,push.User);
+        Assert.Equal("BuildingServiceExpiring",push.Data!["type"]);
+        Assert.Equal("Sent",await db.Scalar("SELECT status FROM notification_deliveries WHERE channel='Push'"));
+        // The device was revoked (logout-all) before a retry: the push delivery closes instead of retrying.
+        await db.Sql("UPDATE user_devices SET notifications_enabled=false,fcm_token=NULL,revoked_at=now(); UPDATE notification_deliveries SET status='Pending',sent_at=NULL,next_attempt_at=now() WHERE channel='Push'");
+        Assert.Equal(0,await reminders.DispatchAsync(default));
+        Assert.Equal(1,push.Calls);
+        Assert.Equal("NO_ACTIVE_DEVICE",await db.Scalar("SELECT last_error FROM notification_deliveries WHERE channel='Push' AND status='Failed'"));
+        // A provider failure (no device reached) is retried with backoff like email.
+        await db.Sql($"UPDATE user_devices SET notifications_enabled=true,fcm_token='fcm-new',revoked_at=NULL WHERE device_uuid='device-1'; UPDATE notification_deliveries SET status='Pending',attempts=0,last_error=NULL,next_attempt_at=now() WHERE channel='Push'");
+        push.Delivered=0;
+        Assert.Equal(0,await reminders.DispatchAsync(default));
+        Assert.Equal("Pending",await db.Scalar("SELECT status FROM notification_deliveries WHERE channel='Push'"));
+        Assert.Equal("PUSH_UNAVAILABLE",await db.Scalar("SELECT last_error FROM notification_deliveries WHERE channel='Push'"));
     }
 }

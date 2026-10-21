@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using Fire3D.Application.Email;
+using Fire3D.Application.Notifications;
 using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,9 +21,11 @@ public sealed class BillingReminderOptions
 
 /// <summary>
 /// Building service expiry reminders. Scheduling writes one notification per recipient and entitlement period with Web and Email
-/// deliveries in the same transaction (the outbox). Dispatch rechecks renewal before sending; email is at-least-once.
+/// deliveries, plus Push when the recipient has a live FCM device, in the same transaction (the outbox). Dispatch rechecks
+/// renewal before sending; email and push are at-least-once.
 /// </summary>
-public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOptions<BillingReminderOptions> options,ILogger<BillingReminders> logger)
+public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOptions<BillingReminderOptions> options,ILogger<BillingReminders> logger,
+    INotificationService? push=null)
 {
     // Same layout as the other Vietnamese FET3D emails; title and body come from the stored notification.
     internal static string Html(string title,string body)=>$"""
@@ -32,7 +35,7 @@ public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOpt
         <p>{WebUtility.HtmlEncode(body)}</p>
         </body></html>
         """;
-    private sealed record PendingEmail(Guid DeliveryId,Guid EntitlementId,Guid BuildingId,string Recipient,string Title,string Body,DateTime ReferenceEndsAt);
+    private sealed record PendingEmail(Guid DeliveryId,Guid NotificationId,Guid UserId,Guid EntitlementId,Guid BuildingId,string Recipient,string Title,string Body,DateTime ReferenceEndsAt);
 
     /// <summary>Creates reminders for paid entitlements ending within the lead window that have no committed renewal.</summary>
     public async Task<int> ScheduleAsync(DateTime now,CancellationToken ct)
@@ -47,26 +50,33 @@ public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOpt
              WHERE e.status='Active' AND e.payment_transaction_id IS NOT NULL AND e.ends_at>{now} AND e.ends_at<={until}
               AND NOT EXISTS(SELECT 1 FROM service_entitlements r WHERE r.building_id=e.building_id AND r.id<>e.id AND r.payment_transaction_id IS NOT NULL
                AND r.status IN('Active','Suspended') AND r.starts_at>=e.ends_at)
-            ), inserted AS (
+            )
              INSERT INTO organization_notifications(id,organization_id,recipient_user_id,building_id,entitlement_id,notification_type,title,body,reference_ends_at,idempotency_key,created_at)
              SELECT gen_random_uuid(),d.organization_id,u.id,d.building_id,d.id,'BuildingServiceExpiring','Dịch vụ tòa nhà sắp hết hạn',
               'Dịch vụ của tòa nhà '||d.name||' hết hạn lúc '||to_char(d.ends_at AT TIME ZONE 'Asia/Ho_Chi_Minh','HH24:MI DD/MM/YYYY')||' (giờ Việt Nam). Hãy gia hạn trước thời điểm này để học viên tiếp tục luyện tập.',
               d.ends_at,'expiring:'||d.id||':'||u.id,clock_timestamp()
              FROM due d JOIN users u ON u.organization_id=d.organization_id AND u.role='OrganizationUser' AND u.is_active AND u.deleted_at IS NULL
               AND (u.registration_expires_at IS NULL OR u.email_verified_at IS NOT NULL)
-             ON CONFLICT (idempotency_key) DO NOTHING RETURNING id
-            )
+             ON CONFLICT (idempotency_key) DO NOTHING
+            """,ct);
+        // Deliveries for the reminders written above (a reminder never exists without them after commit).
+        // Push only for a recipient who has a live FCM binding now; dispatch rechecks the devices before sending.
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO notification_deliveries(id,notification_id,channel,status,attempts,sent_at,created_at,updated_at)
-            SELECT gen_random_uuid(),i.id,c.channel,CASE WHEN c.channel='Web' THEN 'Sent' ELSE 'Pending' END,0,
+            SELECT gen_random_uuid(),n.id,c.channel,CASE WHEN c.channel='Web' THEN 'Sent' ELSE 'Pending' END,0,
              CASE WHEN c.channel='Web' THEN clock_timestamp() END,clock_timestamp(),clock_timestamp()
-            FROM inserted i CROSS JOIN (VALUES('Web'),('Email')) c(channel)
+            FROM organization_notifications n CROSS JOIN (VALUES('Web'),('Email'),('Push')) c(channel)
+            WHERE n.notification_type='BuildingServiceExpiring' AND NOT EXISTS(SELECT 1 FROM notification_deliveries d WHERE d.notification_id=n.id)
+             AND (c.channel<>'Push' OR EXISTS(SELECT 1 FROM user_devices ud WHERE ud.user_id=n.recipient_user_id
+              AND ud.notifications_enabled AND ud.revoked_at IS NULL AND ud.fcm_token IS NOT NULL))
+            ON CONFLICT (notification_id,channel) DO NOTHING
             """,ct);
         await tx.CommitAsync(ct);
-        return created/2;
+        return created;
     }
 
     /// <summary>
-    /// Claims email deliveries with a lease (status Sending, token, expiry) in one committed statement, sends outside any
+    /// Claims email and push deliveries with a lease (status Sending, token, expiry) in one committed statement, sends outside any
     /// transaction and completes or retries only while that lease is still held. A worker that crashed after claiming leaves an
     /// expired lease that another worker reclaims; a crash after the provider accepted the email can send it twice
     /// (at-least-once). Recipient, tenant and renewal are rechecked just before sending.
@@ -75,21 +85,21 @@ public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOpt
     {
         var max=options.Value.MaxAttempts;var lease=Math.Clamp(options.Value.LeaseSeconds,30,3600);
         // A delivery that lost its lease on the last allowed attempt can never be claimed again: close it instead of leaving it Sending.
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notification_deliveries SET status='Failed',last_error='LEASE_EXPIRED_AFTER_MAX_ATTEMPTS',lease_token=NULL,lease_until=NULL,updated_at=clock_timestamp() WHERE channel='Email' AND status='Sending' AND lease_until<=clock_timestamp() AND attempts>={max}",ct);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notification_deliveries SET status='Failed',last_error='LEASE_EXPIRED_AFTER_MAX_ATTEMPTS',lease_token=NULL,lease_until=NULL,updated_at=clock_timestamp() WHERE channel IN('Email','Push') AND status='Sending' AND lease_until<=clock_timestamp() AND attempts>={max}",ct);
         var batch=await db.Database.SqlQuery<ClaimedEmail>($"""
             WITH due AS (
-             SELECT d.id FROM notification_deliveries d WHERE d.channel='Email' AND d.attempts<{max}
+             SELECT d.id FROM notification_deliveries d WHERE d.channel IN('Email','Push') AND d.attempts<{max}
               AND ((d.status='Pending' AND d.next_attempt_at<=clock_timestamp()) OR (d.status='Sending' AND d.lease_until<=clock_timestamp()))
              ORDER BY d.next_attempt_at,d.created_at,d.id LIMIT 20 FOR UPDATE SKIP LOCKED)
             UPDATE notification_deliveries d SET status='Sending',lease_token=gen_random_uuid(),lease_until=clock_timestamp()+make_interval(secs=>{lease}),
              attempts=d.attempts+1,updated_at=clock_timestamp() FROM due WHERE d.id=due.id
-            RETURNING d.id AS "DeliveryId",d.lease_token AS "LeaseToken",d.attempts AS "Attempts"
+            RETURNING d.id AS "DeliveryId",d.lease_token AS "LeaseToken",d.attempts AS "Attempts",d.channel AS "Channel"
             """).ToListAsync(ct);
         var sent=0;
         foreach(var claim in batch)
         {
             var item=await db.Database.SqlQuery<PendingEmail>($"""
-                SELECT d.id AS "DeliveryId",n.entitlement_id AS "EntitlementId",n.building_id AS "BuildingId",u.email AS "Recipient",n.title AS "Title",n.body AS "Body",n.reference_ends_at AS "ReferenceEndsAt"
+                SELECT d.id AS "DeliveryId",n.id AS "NotificationId",u.id AS "UserId",n.entitlement_id AS "EntitlementId",n.building_id AS "BuildingId",u.email AS "Recipient",n.title AS "Title",n.body AS "Body",n.reference_ends_at AS "ReferenceEndsAt"
                 FROM notification_deliveries d JOIN organization_notifications n ON n.id=d.notification_id
                 JOIN users u ON u.id=n.recipient_user_id AND u.organization_id=n.organization_id AND u.role='OrganizationUser' AND u.is_active AND u.deleted_at IS NULL
                  AND (u.registration_expires_at IS NULL OR u.email_verified_at IS NOT NULL)
@@ -108,6 +118,11 @@ public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOpt
             {await Finish(claim,"Failed","SUPPRESSED_ENTITLEMENT_ENDED",ct);continue;}
             // Renew the lease right before sending; if another worker already reclaimed it, leave the delivery to that worker.
             if(await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notification_deliveries SET lease_until=clock_timestamp()+make_interval(secs=>{lease}),updated_at=clock_timestamp() WHERE id={claim.DeliveryId} AND status='Sending' AND lease_token={claim.LeaseToken} AND lease_until>clock_timestamp()",ct)!=1)continue;
+            if(claim.Channel=="Push")
+            {
+                if(await SendPushAsync(claim,item,max,ct))sent++;
+                continue;
+            }
             try
             {
                 await email.SendAsync(item.Recipient,"[FET3D] "+item.Title,Html(item.Title,item.Body),ct);
@@ -123,7 +138,26 @@ public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOpt
         }
         return sent;
     }
-    private sealed record ClaimedEmail(Guid DeliveryId,Guid LeaseToken,int Attempts);
+    // Push goes to every live FCM device of the recipient; the push service revokes tokens FCM reports as unregistered.
+    // No live device left closes the delivery; a provider failure is retried like email.
+    private async Task<bool> SendPushAsync(ClaimedEmail claim,PendingEmail item,int max,CancellationToken ct)
+    {
+        var devices=await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM user_devices WHERE user_id={item.UserId} AND notifications_enabled AND revoked_at IS NULL AND fcm_token IS NOT NULL").SingleAsync(ct);
+        if(push is null||devices==0){await Finish(claim,"Failed",push is null?"PUSH_UNAVAILABLE":"NO_ACTIVE_DEVICE",ct);return false;}
+        var data=new Dictionary<string,string>{["type"]="BuildingServiceExpiring",["notificationId"]=item.NotificationId.ToString(),["buildingId"]=item.BuildingId.ToString()};
+        int delivered;
+        try{delivered=await push.SendPushToUserAsync(item.UserId,item.Title,item.Body,data,ct);}
+        catch(OperationCanceledException) when(ct.IsCancellationRequested){throw;}
+        catch(Exception ex)
+        {
+            logger.LogWarning("Billing reminder push {DeliveryId} failed with {ErrorType}",claim.DeliveryId,ex.GetType().Name);
+            delivered=0;
+        }
+        if(delivered>0)return await Finish(claim,"Sent",null,ct);
+        await Finish(claim,claim.Attempts>=max?"Failed":"Pending","PUSH_UNAVAILABLE",ct);
+        return false;
+    }
+    private sealed record ClaimedEmail(Guid DeliveryId,Guid LeaseToken,int Attempts,string Channel);
     // Completes only while this worker still holds the lease; a reclaimed delivery is left to its new owner.
     private async Task<bool> Finish(ClaimedEmail claim,string status,string? error,CancellationToken ct)=>
         await db.Database.ExecuteSqlInterpolatedAsync($"""
