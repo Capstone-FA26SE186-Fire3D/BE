@@ -128,7 +128,8 @@ public sealed partial class AuthIntegrationTests
             SELECT count(*) FROM scenario_versions WHERE id='{{version}}' AND scenario_hash=fet3d_jsonb_payload_hash(state_snapshot)
              AND jsonb_array_length(spawn_config)=1 AND jsonb_array_length(goal_config)=1 AND jsonb_array_length(fire_source_config)=1
              AND jsonb_array_length(npc_config)=1 AND jsonb_array_length(blocked_elements)=1 AND time_limit_seconds=600
-             AND routing_config='{"goalObjectIds":["goal-exit"]}'::jsonb AND random_seed=42 AND replan_interval_seconds=5
+             AND routing_config='{"goalObjectIds":["goal-exit"],"weights":{"hazardExposureWeight":8,"congestionWeight":2,"portalPenaltyWeight":1.5,"blockedWeight":1000} }'::jsonb
+             AND state_snapshot->'wind'='{"directionDegrees":90,"strength":0.4}'::jsonb AND random_seed=42 AND replan_interval_seconds=5
              AND mode_policy=state_snapshot->'modePolicy'
             """));
         var detail = (await client.GetFromJsonAsync<JsonObject>($"/api/scenario-versions/{version}"))!;
@@ -203,6 +204,41 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(HttpStatusCode.Created, snapshot.StatusCode);
         var version = (await snapshot.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
         Assert.Equal("[{\"x\": 1, \"y\": 2, \"z\": 3, \"rotation\": 0}]", await ScalarAsync($"SELECT spawn_config::text FROM scenario_versions WHERE id='{version}'"));
+    }
+
+    // BE#144: wind and routing weights are part of the snapshot and its hash, so changing them yields new content that needs a new
+    // review; without them the projection keeps only goalObjectIds. Incomplete or out-of-range values never reach a version.
+    [PostgresFact]
+    public async Task Editor_wind_and_routing_weights_are_hashed_projected_and_complete()
+    {
+        var g = await SeedEditorGeometry();
+        await SeedEditorCatalog();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", (await LoginAsync()).AccessToken);
+        var (draft, etag) = await CreateEditorDraft(g.Building, g.Revision);
+        async Task<(Guid Version, string Etag)> Snap(JsonObject state, string key)
+        {
+            var put = await PutDraft(draft, etag, state.ToJsonString());
+            Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
+            var created = await client.SendAsync(Snapshot(draft, put.Headers.ETag!.Tag, key));
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            return ((await created.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>(), put.Headers.ETag!.Tag);
+        }
+        var first = await Snap(PinnedState(g.Artifact), "wind-a"); etag = first.Etag;
+        var windier = PinnedState(g.Artifact); windier["wind"]!["strength"] = 0.9;
+        var second = await Snap(windier, "wind-b"); etag = second.Etag;
+        var none = PinnedState(g.Artifact); none.Remove("wind"); none.Remove("routingConfig");
+        var third = await Snap(none, "wind-none"); etag = third.Etag;
+        string Hash(Guid v) => $"(SELECT scenario_hash FROM scenario_versions WHERE id='{v}')";
+        Assert.Equal(3L, await ScalarAsync($"SELECT count(DISTINCT h) FROM (VALUES({Hash(first.Version)}),({Hash(second.Version)}),({Hash(third.Version)})) t(h)"));
+        Assert.Equal("{\"goalObjectIds\": [\"goal-exit\"]}", await ScalarAsync($"SELECT routing_config::text FROM scenario_versions WHERE id='{third.Version}'"));
+        var detail = (await client.GetFromJsonAsync<JsonObject>($"/api/scenario-versions/{second.Version}"))!;
+        Assert.Equal(0.9, (detail["stateSnapshot"] ?? detail["state"])!["wind"]!["strength"]!.GetValue<double>());
+
+        var incomplete = PinnedState(g.Artifact); incomplete["routingConfig"]!.AsObject().Remove("blockedWeight");
+        var rejected = await PutDraft(draft, etag, incomplete.ToJsonString());
+        Assert.Equal((HttpStatusCode)422, rejected.StatusCode);
+        Assert.Contains("$.routingConfig.blockedWeight", await rejected.Content.ReadAsStringAsync());
+        Assert.Equal(3L, await ScalarAsync($"SELECT count(*) FROM scenario_versions WHERE revision_id='{g.Revision}'"));
     }
 
     [PostgresFact]

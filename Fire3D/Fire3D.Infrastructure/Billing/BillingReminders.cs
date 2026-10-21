@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using Fire3D.Application.Email;
 using Fire3D.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +24,14 @@ public sealed class BillingReminderOptions
 /// </summary>
 public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOptions<BillingReminderOptions> options,ILogger<BillingReminders> logger)
 {
+    // Same layout as the other Vietnamese FET3D emails; title and body come from the stored notification.
+    internal static string Html(string title,string body)=>$"""
+        <!doctype html><html lang="vi"><body style="font-family:Arial,sans-serif;color:#222">
+        <h1 style="color:#d32f2f">FET3D</h1>
+        <h2>{WebUtility.HtmlEncode(title)}</h2>
+        <p>{WebUtility.HtmlEncode(body)}</p>
+        </body></html>
+        """;
     private sealed record PendingEmail(Guid DeliveryId,Guid EntitlementId,Guid BuildingId,string Recipient,string Title,string Body,DateTime ReferenceEndsAt);
 
     /// <summary>Creates reminders for paid entitlements ending within the lead window that have no committed renewal.</summary>
@@ -41,8 +49,8 @@ public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOpt
                AND r.status IN('Active','Suspended') AND r.starts_at>=e.ends_at)
             ), inserted AS (
              INSERT INTO organization_notifications(id,organization_id,recipient_user_id,building_id,entitlement_id,notification_type,title,body,reference_ends_at,idempotency_key,created_at)
-             SELECT gen_random_uuid(),d.organization_id,u.id,d.building_id,d.id,'BuildingServiceExpiring','Building service expires soon',
-              'Service for '||d.name||' ends at '||to_char(d.ends_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI')||' UTC. Renew before it ends to keep training available.',
+             SELECT gen_random_uuid(),d.organization_id,u.id,d.building_id,d.id,'BuildingServiceExpiring','Dịch vụ tòa nhà sắp hết hạn',
+              'Dịch vụ của tòa nhà '||d.name||' hết hạn lúc '||to_char(d.ends_at AT TIME ZONE 'Asia/Ho_Chi_Minh','HH24:MI DD/MM/YYYY')||' (giờ Việt Nam). Hãy gia hạn trước thời điểm này để học viên tiếp tục luyện tập.',
               d.ends_at,'expiring:'||d.id||':'||u.id,clock_timestamp()
              FROM due d JOIN users u ON u.organization_id=d.organization_id AND u.role='OrganizationUser' AND u.is_active AND u.deleted_at IS NULL
               AND (u.registration_expires_at IS NULL OR u.email_verified_at IS NOT NULL)
@@ -102,7 +110,7 @@ public sealed class BillingReminders(Fire3DDbContext db,IEmailService email,IOpt
             if(await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notification_deliveries SET lease_until=clock_timestamp()+make_interval(secs=>{lease}),updated_at=clock_timestamp() WHERE id={claim.DeliveryId} AND status='Sending' AND lease_token={claim.LeaseToken} AND lease_until>clock_timestamp()",ct)!=1)continue;
             try
             {
-                await email.SendAsync(item.Recipient,item.Title,$"<p>{WebUtility.HtmlEncode(item.Body)}</p>",ct);
+                await email.SendAsync(item.Recipient,"[FET3D] "+item.Title,Html(item.Title,item.Body),ct);
                 if(await Finish(claim,"Sent",null,ct))sent++;
             }
             catch(OperationCanceledException) when(ct.IsCancellationRequested){throw;}

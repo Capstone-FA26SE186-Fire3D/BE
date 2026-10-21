@@ -72,6 +72,32 @@ public sealed class EditorContractTests
         Assert.Contains("NUMBER_INVALID", Codes(GeometryMetadataValidator.Validate(g), "$.floors[1].elevationMeters"));
     }
 
+    // BE#144: wind and routing weights are optional, but a present object must be complete, known and within range.
+    [Fact]
+    public void Wind_and_routing_weights_are_optional_complete_and_bounded()
+    {
+        var none = EditorContractFixtures.State(); none.Remove("wind"); none.Remove("routingConfig");
+        Assert.Empty(ScenarioStateV1Validator.ValidateComplete(none, Contracts()));
+        var state = EditorContractFixtures.State();
+        state["wind"]!["directionDegrees"] = 360;
+        state["wind"]!["strength"] = 1.5;
+        state["wind"]!.AsObject()["gust"] = 0.2;
+        state["routingConfig"]!.AsObject().Remove("congestionWeight");
+        state["routingConfig"]!["hazardExposureWeight"] = -1;
+        state["routingConfig"]!["blockedWeight"] = "1000";
+        var issues = ScenarioStateV1Validator.ValidateShape(state);
+        Assert.Contains("NUMBER_OUT_OF_RANGE", Codes(issues, "$.wind.directionDegrees"));
+        Assert.Contains("NUMBER_OUT_OF_RANGE", Codes(issues, "$.wind.strength"));
+        Assert.Contains("FIELD_UNKNOWN", Codes(issues, "$.wind.gust"));
+        Assert.Contains("FIELD_REQUIRED", Codes(issues, "$.routingConfig.congestionWeight"));
+        Assert.Contains("NUMBER_OUT_OF_RANGE", Codes(issues, "$.routingConfig.hazardExposureWeight"));
+        Assert.Contains("NUMBER_INVALID", Codes(issues, "$.routingConfig.blockedWeight"));
+        var edge = EditorContractFixtures.State();
+        edge["wind"]!["directionDegrees"] = 359.99; edge["wind"]!["strength"] = 0;
+        edge["routingConfig"]!["portalPenaltyWeight"] = 0;
+        Assert.Empty(ScenarioStateV1Validator.ValidateShape(edge));
+    }
+
     [Fact]
     public void Put_shape_rejects_unknown_fields_duplicates_and_bad_enums_but_allows_partial_drafts()
     {

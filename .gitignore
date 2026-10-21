@@ -60,3 +60,7 @@ Fire3D/Fire3D.API/firebase-admin.json
 
 
 firebase-admin.json
+
+# Python deployment-tool caches
+__pycache__/
+*.py[cod]

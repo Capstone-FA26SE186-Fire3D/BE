@@ -50,6 +50,26 @@ Unity runtime `2.0.0` catalog (Docs IFC 6.1/6.3, 20 capabilities including `supp
 `POST /api/admin/runtime-catalog` (without `_comment`); it is data, not a seed. Timeline Hazards still need a placement in the editor;
 the runtime ignores it.
 
+## Wind and routing weights (BE#144)
+
+Both are optional scenario-wide fields of `fet3d.editor/1`; drafts without them stay valid. A present object must be complete:
+a missing, unknown, non-numeric or out-of-range field is a `422 EDITOR_SCHEMA_INVALID` issue, never a default.
+
+| Field | Range | Meaning |
+|---|---|---|
+| `wind.directionDegrees` | 0 ≤ θ < 360 | Direction the wind blows **towards**. GLB vector `(sin θ, 0, cos θ)`: 0 = +Z, 90 = +X. Unity mirrors X on load (`ContractFrame`), like every contract coordinate. |
+| `wind.strength` | 0–1 | Normalised strength: 0 calm, 1 the strongest wind the runtime models. Game model, not CFD (Docs README). |
+| `routingConfig.hazardExposureWeight` | 0–1000 | `wh` in `cost(edge) = distance + hazardExposure*wh + congestion*wc + portalPenalty*wp + blocked*wb` (Docs technology). |
+| `routingConfig.congestionWeight` | 0–1000 | `wc` |
+| `routingConfig.portalPenaltyWeight` | 0–1000 | `wp` |
+| `routingConfig.blockedWeight` | 0–1000 | `wb` |
+
+Without `wind` there is no wind. Without `routingConfig` the runtime uses the defaults it publishes for `runtimeVersion`. Both live in
+`state_snapshot`, so they are covered by `scenario_hash`: changing them creates new content that needs a new content review, and the
+package worker receives them in `scenarioSnapshot`. The `routing_config` projection of a version returns
+`{ goalObjectIds, weights? }` (migration `20261021090000_AddScenarioWindRouting`). Ranges are the BE proposal pending Docs D2
+(Docs#39); a change there is a new reviewed contract revision, not a silent reinterpretation.
+
 ## Rubric schema version (#69)
 
 `GET /api/scenario-rubrics/catalog` (OrganizationUser, PlatformAdmin) publishes the rubric contract: `supportedSchemaVersions`, `defaultSchemaVersion`, server-computed `metrics` with descriptions, `operators`, the criterion fields, ID pattern and limits, and `maxCriteria`. It suggests no pass threshold, weight or criterion.

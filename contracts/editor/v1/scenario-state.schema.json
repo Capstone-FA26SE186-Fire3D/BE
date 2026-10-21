@@ -64,6 +64,25 @@
         }
       }
     },
+    "wind": {
+      "description": "Optional scenario-wide wind (game model, not CFD; BE#144). Absent: no wind. When present every field is required; no field is defaulted.",
+      "type": "object", "additionalProperties": false, "required": ["directionDegrees", "strength"],
+      "properties": {
+        "directionDegrees": { "type": "number", "minimum": 0, "exclusiveMaximum": 360, "description": "Direction the wind blows towards. GLB vector (sin θ, 0, cos θ): 0 = +Z, 90 = +X. Unity mirrors X when loading (ContractFrame)." },
+        "strength": { "type": "number", "minimum": 0, "maximum": 1, "description": "Normalised strength: 0 calm, 1 the strongest wind the runtime models." }
+      }
+    },
+    "routingConfig": {
+      "description": "Optional A* edge weights (BE#144, Docs technology: cost = distance + hazardExposure*wh + congestion*wc + portalPenalty*wp + blocked*wb). Absent: the runtime's published defaults for runtimeVersion. When present every weight is required; no weight is defaulted.",
+      "type": "object", "additionalProperties": false,
+      "required": ["hazardExposureWeight", "congestionWeight", "portalPenaltyWeight", "blockedWeight"],
+      "properties": {
+        "hazardExposureWeight": { "type": "number", "minimum": 0, "maximum": 1000, "description": "wh" },
+        "congestionWeight": { "type": "number", "minimum": 0, "maximum": 1000, "description": "wc" },
+        "portalPenaltyWeight": { "type": "number", "minimum": 0, "maximum": 1000, "description": "wp" },
+        "blockedWeight": { "type": "number", "minimum": 0, "maximum": 1000, "description": "wb" }
+      }
+    },
     "objects": {
       "description": "Required for snapshot with at least one Spawn and one Goal. Object IDs are unique. Hazard, Npc and Equipment require a capability; BlockedElement requires anchorId.",
       "type": "array", "maxItems": 2000,
