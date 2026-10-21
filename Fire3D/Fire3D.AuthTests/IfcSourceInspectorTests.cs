@@ -53,6 +53,35 @@ public sealed class IfcSourceInspectorTests
         });
         await Assert.ThrowsAsync<IfcStorageFailure>(()=>Inspector(client).CopyAsync("source","inspected","candidate",default));
     }
+    [Fact]
+    public async Task Metadata_maps_provider_headers_and_treats_only_missing_objects_as_absent()
+    {
+        var client=ResetProxy.For<IAmazonS3>((method,args)=>
+        {
+            Assert.Equal("GetObjectMetadataAsync",method);
+            var request=Assert.IsType<GetObjectMetadataRequest>(args![0]);
+            Assert.Equal(("ifc-test-private","source"),(request.BucketName,request.Key));
+            var response=new GetObjectMetadataResponse { ContentLength=77,ETag="inspected" }; response.Headers.ContentType="application/octet-stream";
+            return Task.FromResult(response);
+        });
+        Assert.Equal(new Fire3D.Application.Storage.StorageObjectMetadata(77,"application/octet-stream","inspected"),await Inspector(client).MetadataAsync("source",default));
+        var missing=ResetProxy.For<IAmazonS3>((_,_)=>throw new AmazonS3Exception("fake") { StatusCode=HttpStatusCode.NotFound });
+        Assert.Null(await Inspector(missing).MetadataAsync("source",default));
+        var unavailable=ResetProxy.For<IAmazonS3>((_,_)=>throw new AmazonS3Exception("fake") { StatusCode=HttpStatusCode.ServiceUnavailable });
+        await Assert.ThrowsAsync<IfcStorageFailure>(()=>Inspector(unavailable).MetadataAsync("source",default));
+    }
+    [Fact]
+    public async Task Conditional_copy_reports_success_and_digest_wraps_unexpected_provider_failures()
+    {
+        var copied=ResetProxy.For<IAmazonS3>((_,args)=>
+        {
+            Assert.Equal("application/octet-stream",Assert.IsType<CopyObjectRequest>(args![0]).ContentType);
+            return Task.FromResult(new CopyObjectResponse());
+        });
+        Assert.True(await Inspector(copied).CopyAsync("source","inspected","candidate",default));
+        var failing=ResetProxy.For<IAmazonS3>((_,_)=>throw new AmazonS3Exception("fake") { StatusCode=HttpStatusCode.Forbidden });
+        await Assert.ThrowsAsync<IfcStorageFailure>(()=>Inspector(failing).InspectAsync("source","inspected",12,default));
+    }
     private sealed class Fragmented(byte[] data):MemoryStream(data)
     {
         public override ValueTask<int> ReadAsync(Memory<byte> buffer,CancellationToken ct=default) => base.ReadAsync(buffer[..Math.Min(buffer.Length,3)],ct);
