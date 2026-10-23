@@ -71,7 +71,7 @@ that another claim has taken over. Source state never depends on the cache: ever
 | GET | `/api/learn/bookmarks?kind=&search=&page=&pageSize=` | Trainee | Newest bookmark first (bookmarkedAt, postId). `kind` (repeat, Article/Tip/Video, OR, case-insensitive) and `search` (2–100 chars on title+summary, case- and Vietnamese-diacritic-insensitive) work as on `/api/learn/posts` and combine with AND; they run before paging and `total` counts the matches. A bookmark with `available:false` has no `kind` or content, so it is listed only when neither `kind` nor `search` is given ("Tất cả"). `counts: {Article, Tip, Video, unavailable}` covers every bookmark of the Trainee, whatever `kind`, `search` and page (Article/Tip/Video count available bookmarks; the sum is the unfiltered total). Invalid values → 400 `VALIDATION_ERROR` with `errors` (`search`, `kind`); page ≥ 1, pageSize 1–100. Migration `20261023100000_AddLearnBookmarkFilters` (`LearnBookmarkFilters.sql`). (#151) |
 | GET | `/api/learn/bookmarks/{postId}` | Trainee | `{postId, bookmarked}` for one post, without loading every bookmark (#86). |
 | PUT/DELETE | `/api/learn/bookmarks/{postId}` | Trainee | Idempotent. |
-| GET | `/api/admin/learn/posts?status=` | PlatformAdmin | All states. Each row adds `title`, `kind`, `latestVersionNumber`, `latestVersionStatus` (latest version, also for never-published posts), `draftVersionId`/`draftVersionNumber` (newest open Draft or null) and `versionCount` (#86). |
+| GET | `/api/admin/learn/posts?status=&page=&pageSize=` | PlatformAdmin | All states, ordered `updatedAt DESC, id`. Each row adds the latest version of any status: `title`, `kind`, `latestVersionId`, `latestVersionNumber`, `latestVersionStatus` (`Draft`/`Published`), so Unpublished, Hidden and Deleted posts are all named by a title; plus `draftVersionId`/`draftVersionNumber` (newest open Draft or null) and `versionCount` (#86, BE#154). The public title stays `publishedVersion.title` (null when never published); `title` differs from it while a newer Draft is open. |
 | GET | `/api/admin/learn/posts/{id}` | PlatformAdmin | `ETag` = post revision. |
 | POST | `/api/admin/learn/posts` | PlatformAdmin | `{slug, publish, version}` + Idempotency-Key → `201`. |
 | POST | `/api/admin/learn/posts/{id}/versions` | PlatformAdmin | New Draft + Idempotency-Key. |
@@ -94,6 +94,8 @@ that another claim has taken over. Source state never depends on the cache: ever
 - `GET /api/admin/learn/situations?search=&isActive=&page=&pageSize=` (PlatformAdmin): paged catalog ordered by name, searching slug and name. The public `GET /api/learn/situations` is unchanged. Inactive situations stay readable in stored versions but cannot be chosen for new content (`LEARN_SITUATION_INVALID`). Nothing is seeded.
 
 Migration: `20261012140000_AddCatalogLists` (read-only `catalog_list_gate`).
+
+Admin list rows (BE#154): migration `20261023130000_AddLearnAdminLatestVersion` adds `latestVersionId` to `learn_post_admin_summary`, so the CMS can open the latest version straight from the list (`GET /api/admin/learn/versions/{latestVersionId}`) even when no Draft is open. The situations catalog has no versions: every row already carries its `name`.
 
 ## Organization Library
 
@@ -127,6 +129,8 @@ items, maximum 100. Library changes enqueue `PlatformCacheInvalidation` with `sc
 - `Fire3D.IfcTests/ContentValidationTests.cs`: URL canonicalisation, markup and strict-field rules, library payloads.
 - `Fire3D.AuthTests/ContentPostgresTests.cs`: Learn lifecycle, public reads, bookmarks, RAG eligibility, immutability,
   outbox; library publish/deactivate visibility; HTTP ETag/If-Match, anonymous reads and validation errors.
+- `Fire3D.AuthTests/LearnAdminTitlesTests.cs`: admin list titles from the latest version for Unpublished, Published (with and
+  without an open Draft), Hidden and Deleted posts; public title unchanged; ordering, paging and status filter.
 - `Fire3D.AuthTests/LearnSearchTests.cs`: public post search/filters (#79) and bookmark kind/search filters with counts (#151).
 
 ## Idempotency on If-Match mutations (#57)

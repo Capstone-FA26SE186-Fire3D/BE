@@ -104,6 +104,8 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     public async Task<IActionResult> Unbookmark(Guid postId, CancellationToken ct) =>
         Reply(await gates.LearnPublicAsync("Unbookmark", User.GetActorId(), User.GetSessionFamilyId(), new { postId }, ct));
 
+    /// <summary>Every post, newest change first. Each row names the post by its latest version (title, kind, id, number, status), also for
+    /// Unpublished and Deleted posts; the public title is publishedVersion.title.</summary>
     [Authorize(Policy = AuthorizationPolicies.PlatformAdministration), HttpGet("api/admin/learn/posts")]
     [ProducesResponseType<LearnPostAdminPage>(200)]
     public async Task<IActionResult> AdminPosts([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
