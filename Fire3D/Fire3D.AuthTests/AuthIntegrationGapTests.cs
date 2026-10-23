@@ -34,9 +34,12 @@ public sealed partial class AuthIntegrationTests
             """));
         Assert.Equal(HttpStatusCode.OK, await PutDevice(token, registered, registerKey, "legacy-token-2"));
 
-        // Revoke accepts the legacy proof. Its in-memory hash upgrade is not saved (RevokeDeviceAsync has no
-        // SaveChanges), so the legacy key keeps working; this test pins only the observable revoke contract.
+        // Revoke accepts the legacy proof and persists the upgrade too; the key keeps working against the new hash.
         Assert.Equal(HttpStatusCode.NoContent, await DeleteDevice(token, revoked, revokeKey));
+        Assert.Equal(true, await ScalarAsync($"""
+            SELECT secret_hash='{DeviceInstallationProof.Create(revokeKey).CurrentHash}' AND secret_hash_scheme='{DeviceInstallationProof.CurrentHashScheme}'
+                   AND updated_at>created_at FROM device_installations WHERE device_uuid='{revoked}'
+            """));
         Assert.Equal(HttpStatusCode.NoContent, await DeleteDevice(token, revoked, revokeKey));
         Assert.Equal(HttpStatusCode.Forbidden, await DeleteDevice(token, revoked, registerKey));
     }

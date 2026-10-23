@@ -236,6 +236,8 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
             installation.SecretHash = installationProof.CurrentHash;
             installation.SecretHashScheme = DeviceInstallationProof.CurrentHashScheme;
             installation.UpdatedAt = now;
+            // Persist the upgrade like register does; ExecuteUpdate below does not save tracked changes.
+            await db.SaveChangesAsync(ct);
         }
         await db.UserDevices.Where(x => x.UserId == userId && x.DeviceUuid == deviceUuid && x.InstallationId == installation.Id)
             .ExecuteUpdateAsync(update => update
