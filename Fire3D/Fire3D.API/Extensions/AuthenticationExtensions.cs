@@ -26,6 +26,8 @@ public static class AuthenticationExtensions
             .ValidateOnStart();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IPasswordService, PasswordService>();
+        services.AddSingleton<ILoginAttemptLimiter>(new MemoryLoginAttemptLimiter(
+            configuration.GetSection("LoginAttempts").Get<LoginAttemptOptions>() ?? new LoginAttemptOptions()));
         services.AddSingleton<ITokenService, TokenService>();
         services.AddScoped<IAuthStore, AuthStore>();
         services.AddScoped<IGoogleOnboardingService, GoogleOnboardingService>();

@@ -6,7 +6,7 @@ namespace Fire3D.Application.Authentication.Commands.LoginWithPassword;
 public sealed record LoginWithPasswordCommand(string Email, string Password) : IRequest<AuthResult<LoginResponse>>;
 
 public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordService passwords,
-    ITokenService tokens, TimeProvider clock) : IRequestHandler<LoginWithPasswordCommand, AuthResult<LoginResponse>>
+    ITokenService tokens, TimeProvider clock, ILoginAttemptLimiter? attempts = null) : IRequestHandler<LoginWithPasswordCommand, AuthResult<LoginResponse>>
 {
     public async Task<AuthResult<LoginResponse>> Handle(LoginWithPasswordCommand command, CancellationToken ct)
     {
@@ -15,12 +15,16 @@ public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordS
 
         if (email is null || string.IsNullOrEmpty(command.Password) || command.Password.Length > 128)
             return AuthResult<LoginResponse>.Fail("VALIDATION_ERROR", "Email and password are required (password maximum 128 characters).", 400);
+        // Checked before any lookup or hashing, so a locked account costs no PBKDF2 work.
+        if (attempts?.RetryAfterSeconds(email, AuthSupport.UtcNow(clock)) is int retryAfter)
+            return AuthResult<LoginResponse>.Fail("AUTH_LOGIN_RATE_LIMITED", "Too many failed sign-in attempts. Try again after the indicated delay.", 429, retryAfterSeconds: retryAfter);
         Fire3D.Domain.Entities.User? user;
         using(AuthDiagnostics.Measure(LoginPhase.Lookup)) user=await store.FindUserByEmailAsync(email,ct);
 
         if (user is null)
         {
             passwords.VerifyDummy(command.Password);
+            attempts?.RecordFailure(email, AuthSupport.UtcNow(clock));
             return InvalidCredentials();
         }
         // PBKDF2 and an optional upgrade happen without holding a database lock.
@@ -33,7 +37,7 @@ public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordS
             verified=passwords.Verify(user,command.Password,out rehash);
             upgradedHash=verified && rehash ? passwords.Hash(user,command.Password) : null;
         }
-        if(!verified) return InvalidCredentials();
+        if(!verified) { attempts?.RecordFailure(email, AuthSupport.UtcNow(clock)); return InvalidCredentials(); }
         // Reset, password change and disable serialize on this same lifecycle/user lock.
         IAuthTransaction transaction;
         using(AuthDiagnostics.Measure(LoginPhase.LockWait)) transaction=await store.BeginUserTransactionAsync(user.Id,ct);
@@ -58,6 +62,7 @@ public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordS
         },now,ct);
         var access=tokens.CreateAccessToken(user,family,now);
         await tx.CommitAsync(ct);
+        attempts?.Reset(email);
         user.LastLoginAt=now;user.UpdatedAt=now;
         return AuthResult<LoginResponse>.Ok(new(access.Value,raw,AuthSupport.ToAccount(user)));
     }

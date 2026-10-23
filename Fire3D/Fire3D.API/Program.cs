@@ -9,6 +9,7 @@ using System.Net;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
 
 // Add services to the container.
 
@@ -100,6 +101,16 @@ if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
 
 app.UseExceptionHandler();
 app.UseForwardedHeaders();
+// Baseline security headers on every response (BE#141). HSTS is ignored by browsers over plain HTTP, and Azure terminates TLS.
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "no-referrer";
+    await next();
+});
 
 // Configure the HTTP request pipeline.
 app.Use(async (context, next) =>

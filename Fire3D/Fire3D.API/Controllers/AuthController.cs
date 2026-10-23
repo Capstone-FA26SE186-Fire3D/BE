@@ -18,10 +18,13 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     /// <summary>Đăng nhập email/password do BE quản lý. Không cần Bearer.</summary>
     /// <remarks>Body: email, password. BE kiểm tra hash trong PostgreSQL; không gọi Firebase.
     /// 200: accessToken, refreshToken, user; 400: dữ liệu sai; 401: sai email/mật khẩu;
-    /// 403: tài khoản/tổ chức bị vô hiệu hóa hoặc email chưa xác thực. Route này chưa có rate-limit policy riêng.</remarks>
+    /// 403: tài khoản/tổ chức bị vô hiệu hóa hoặc email chưa xác thực.
+    /// 429 AUTH_LOGIN_RATE_LIMITED + Retry-After: quá LoginAttempts:MaxFailures (mặc định 10) lần sai cho cùng email trong
+    /// LoginAttempts:WindowMinutes (mặc định 15) phút; đếm theo email, không theo IP; đăng nhập đúng xóa bộ đếm.</remarks>
     [HttpPost("login")]
     [AllowAnonymous]
     [ProducesResponseType<LoginResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(429)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]
