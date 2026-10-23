@@ -22,7 +22,7 @@ public sealed class SupportController(ISupportService service):ControllerBase
  [Authorize(Roles="Trainee,OrganizationUser")][HttpPost("api/support/tickets")][ProducesResponseType(typeof(TicketResponse),201)]
  public Task<IActionResult> CreateTicket(CreateTicketRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Run("CreateTicket",null,request,key,null,201,ct);
 
- [Authorize(Roles="Trainee,OrganizationUser")][HttpGet("api/support/tickets")][ProducesResponseType(typeof(SupportPage<TicketResponse>),200)]
+ [Authorize(Roles="Trainee,OrganizationUser")][HttpGet("api/support/tickets")][ProducesResponseType(typeof(SupportTicketPage),200)]
  public Task<IActionResult> ListTickets([FromQuery]SupportQuery query,CancellationToken ct)=>Run("ListTickets",null,query,null,null,200,ct);
 
  [Authorize(Roles="Trainee,OrganizationUser")][HttpGet("api/support/tickets/{id:guid}")][ProducesResponseType(typeof(TicketResponse),200)]
@@ -43,7 +43,7 @@ public sealed class SupportController(ISupportService service):ControllerBase
  [Fire3D.API.OpenApi.ResponseHeader("ETag")]
  public Task<IActionResult> AdminUpdateFeedback(Guid id,AdminFeedbackUpdateRequest request,[FromHeader(Name="If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader]string? match,CancellationToken ct)=>Patch("FeedbackStatus",id,request,match,ct);
 
- [Authorize(Roles="PlatformAdmin")][HttpGet("api/admin/support/tickets")][ProducesResponseType(typeof(SupportPage<TicketResponse>),200)]
+ [Authorize(Roles="PlatformAdmin")][HttpGet("api/admin/support/tickets")][ProducesResponseType(typeof(SupportTicketPage),200)]
  public Task<IActionResult> AdminTickets([FromQuery]SupportQuery query,CancellationToken ct)=>Run("AdminListTickets",null,query,null,null,200,ct);
 
  [Authorize(Roles="PlatformAdmin")][HttpGet("api/admin/support/tickets/{id:guid}")][ProducesResponseType(typeof(TicketResponse),200)]

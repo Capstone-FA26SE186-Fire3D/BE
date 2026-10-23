@@ -18,6 +18,15 @@ Ticket and feedback responses carry `createdBy {id,displayName,available,email?}
 
 Labels are joined once per page in the SQL gate (no per-row lookups, totals unchanged). Receipts store only the unlabelled representation; a replay first re-checks the caller and then adds labels for that caller, so an Admin email is never served from a receipt to a regular user. Migration: `20261012090000_AddSupportResponseLabels`.
 
+## Ticket status counts (#153)
+
+`GET /api/support/tickets` and `GET /api/admin/support/tickets` return `{items,total,page,pageSize,counts}` (`SupportTicketPage` in OpenAPI). `counts` is `{Open,InProgress,Resolved,Closed}`, the ticket status enum; every key is always present, `0` when there is none. Counts use the same scope and filters as the list except `status`, so the status chips keep their numbers while one is selected; `total` still follows the full filter including `status`.
+
+- Trainee/OrganizationUser: only the caller's own tickets (creator scope, as for the list), filtered by `priority`/`assignedTo`. `organizationId` is ignored on this route.
+- PlatformAdmin: every organization, or only `organizationId` when given, filtered by `priority`/`assignedTo`.
+
+Example: `GET /api/support/tickets?status=Open` → `{"items":[…],"total":3,"page":1,"pageSize":20,"counts":{"Open":3,"InProgress":1,"Resolved":2,"Closed":0}}`. Feedback lists are unchanged (no `counts`). Migration: `20261023120000_AddSupportTicketStatusCounts` (CREATE OR REPLACE of `support_command_gate`; owner and grants unchanged).
+
 ## Storage
 
 Migration 20261007110000_AddSupportCommandContracts adds revisions, receipts, paging indexes, constraints, append-only message protection and a restricted SQL gate. Preflight stops on invalid legacy content without changing it. Mutation/receipt/audit are atomic and audit tenant comes from the resource, including admin actions. API executor has gate EXECUTE, no direct mutation on support tables. Legacy history is preserved.
