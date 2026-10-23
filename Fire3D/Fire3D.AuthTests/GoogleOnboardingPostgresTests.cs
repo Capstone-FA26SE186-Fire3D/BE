@@ -199,4 +199,51 @@ public sealed class GoogleOnboardingPostgresTests
         await db.Sql("UPDATE auth_google_onboarding_sessions SET created_at=now()-interval '26 hours',expires_at=now()-interval '25 hours',completed_at=now()-interval '25 hours'");
         Assert.Equal("ONBOARDING_TOKEN_EXPIRED", (await service.CompleteAsync(Trainee(token), default)).Error?.Code);
     }
+
+    [BillingPostgresFact]
+    public async Task Begin_rejects_unusable_identities_and_identities_that_already_have_an_account()
+    {
+        await using var db = await BillingDatabase.Create(false); await Prepare(db);
+        await db.Sql($"UPDATE users SET firebase_uid='taken-google' WHERE id='{BillingDatabase.Other}'");
+        await using var context = db.Context();
+        var service = Service(context);
+        foreach (var identity in new VerifiedIdentity[] { new("", "fresh@example.test"), new(new string('u', 129), "fresh@example.test"), new("fresh-google", "not-an-email") })
+        {
+            var invalid = await service.BeginAsync(identity, default);
+            Assert.Equal(("INVALID_FIREBASE_TOKEN", 401), (invalid.Error?.Code, invalid.Error?.Status));
+        }
+        var linked = await service.BeginAsync(new("taken-google", "fresh@example.test"), default);
+        Assert.Equal(("ACCOUNT_CHANGED", 409), (linked.Error?.Code, linked.Error?.Status));
+        var local = await service.BeginAsync(new("fresh-google", " OWNER@example.test "), default);
+        Assert.Equal(("ACCOUNT_LINK_REQUIRED", 409), (local.Error?.Code, local.Error?.Status));
+        Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM auth_google_onboarding_sessions"));
+    }
+
+    [BillingPostgresFact]
+    public async Task Begin_returns_retry_when_the_uid_lock_is_held_past_the_bounded_wait()
+    {
+        await using var db = await BillingDatabase.Create(false); await Prepare(db);
+        await using var holder = new Npgsql.NpgsqlConnection(db.Connection);
+        await holder.OpenAsync();
+        await using var held = await holder.BeginTransactionAsync();
+        await new Npgsql.NpgsqlCommand("SELECT pg_advisory_xact_lock(hashtextextended('fire3d:google:busy-google',0))", holder, held).ExecuteNonQueryAsync();
+        await using var context = db.Context();
+        var result = await Service(context).BeginAsync(new("busy-google", "busy@example.test"), default);
+        Assert.Equal(("ONBOARDING_RETRY_REQUIRED", 503, 1), (result.Error?.Code, result.Error?.Status, result.Error?.RetryAfterSeconds));
+        await held.RollbackAsync();
+        Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM auth_google_onboarding_sessions"));
+    }
+
+    [BillingPostgresFact]
+    public async Task Completed_proof_replay_is_refused_once_the_created_account_is_disabled()
+    {
+        await using var db = await BillingDatabase.Create(false); await Prepare(db);
+        var token = await Begin(db);
+        await using var context = db.Context();
+        Assert.True((await Service(context).CompleteAsync(Trainee(token), default)).IsSuccess);
+        await db.Sql("UPDATE users SET is_active=false WHERE firebase_uid='new-google'");
+        await using var replay = db.Context();
+        var result = await Service(replay).CompleteAsync(Trainee(token), default);
+        Assert.Equal(("ACCOUNT_DISABLED", 403), (result.Error?.Code, result.Error?.Status));
+    }
 }

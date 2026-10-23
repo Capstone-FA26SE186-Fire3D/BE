@@ -152,4 +152,67 @@ public sealed class AvatarRecoveryPostgresTests
         await cleanup.FailAsync(current, default);
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM avatar_object_cleanups WHERE lease_token IS NULL"));
     }
+
+    [BillingPostgresFact]
+    public async Task Reservation_is_unavailable_after_completion_and_refuses_a_different_revision_or_source()
+    {
+        await using var db = await BillingDatabase.Create(false);
+        await BackendDatabasePermissionsTests.Apply(db, "AddAvatarCleanupGate");
+        var intent = await Intent(db);
+        await using var first = db.Context();
+        var candidate = (await new AvatarStore(first).ReserveCopyCandidateAsync(intent.Id, intent.UserId, 1, "etag", DateTime.UtcNow, default)).Candidate!;
+        foreach (var (revision, etag) in new[] { (2L, "etag"), (1L, "other-etag") })
+        {
+            await using var retry = db.Context();
+            var result = await new AvatarStore(retry).ReserveCopyCandidateAsync(intent.Id, intent.UserId, revision, etag, DateTime.UtcNow, default);
+            Assert.Equal(AvatarCandidateReservationStatus.PreconditionFailed, result.Status);
+            Assert.Null(result.Candidate);
+        }
+        await using var same = db.Context();
+        Assert.Equal(candidate, (await new AvatarStore(same).ReserveCopyCandidateAsync(intent.Id, intent.UserId, 1, "etag", DateTime.UtcNow, default)).Candidate);
+        await using var finish = db.Context();
+        Assert.True((await new AvatarStore(finish).FinalizeUploadAsync(intent.Id, intent.UserId, candidate.AttemptId, 1, candidate.ObjectKey, DateTime.UtcNow, default)).Finalized);
+        await using var after = db.Context();
+        Assert.Equal(AvatarCandidateReservationStatus.Unavailable,
+            (await new AvatarStore(after).ReserveCopyCandidateAsync(intent.Id, intent.UserId, 2, "etag", DateTime.UtcNow, default)).Status);
+    }
+
+    [BillingPostgresFact]
+    public async Task Finalize_rolls_back_the_intent_claim_when_the_profile_revision_moved()
+    {
+        await using var db = await BillingDatabase.Create(false);
+        await BackendDatabasePermissionsTests.Apply(db, "AddAvatarCleanupGate");
+        var intent = await Intent(db);
+        await using var reserve = db.Context();
+        var candidate = (await new AvatarStore(reserve).ReserveCopyCandidateAsync(intent.Id, intent.UserId, 1, "etag", DateTime.UtcNow, default)).Candidate!;
+        await db.Sql($"UPDATE users SET profile_revision_no=5 WHERE id='{intent.UserId}'");
+        await using var finish = db.Context();
+        var result = await new AvatarStore(finish).FinalizeUploadAsync(intent.Id, intent.UserId, candidate.AttemptId, 1, candidate.ObjectKey, DateTime.UtcNow, default);
+        Assert.Equal(AvatarFinalizeStatus.PreconditionFailed, result.Status);
+        Assert.Equal(1L, await db.Scalar($"SELECT count(*) FROM avatar_upload_intents WHERE id='{intent.Id}' AND completed_at IS NULL AND final_object_key IS NULL"));
+        Assert.Equal(5L, await db.Scalar($"SELECT profile_revision_no FROM users WHERE id='{intent.UserId}'"));
+        Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM audit_logs"));
+    }
+
+    [BillingPostgresFact]
+    public async Task Finalize_and_delete_are_unavailable_for_inactive_accounts_or_organizations()
+    {
+        await using var db = await BillingDatabase.Create(false);
+        await BackendDatabasePermissionsTests.Apply(db, "AddAvatarCleanupGate");
+        var intent = await Intent(db);
+        await using var reserve = db.Context();
+        var candidate = (await new AvatarStore(reserve).ReserveCopyCandidateAsync(intent.Id, intent.UserId, 1, "etag", DateTime.UtcNow, default)).Candidate!;
+        await db.Sql($"UPDATE users SET avatar_storage_key='avatars/users/kept' WHERE id='{intent.UserId}'; UPDATE organizations SET is_active=false WHERE id='{BillingDatabase.Org}'");
+        await using var finish = db.Context();
+        Assert.Equal(AvatarFinalizeStatus.Unavailable,
+            (await new AvatarStore(finish).FinalizeUploadAsync(intent.Id, intent.UserId, candidate.AttemptId, 1, candidate.ObjectKey, DateTime.UtcNow, default)).Status);
+        await using var delete = db.Context();
+        Assert.Equal(AvatarDeleteStatus.Unavailable, (await new AvatarStore(delete).DeleteAvatarAsync(intent.UserId, 1, DateTime.UtcNow, default)).Status);
+        await db.Sql($"UPDATE organizations SET is_active=true; UPDATE users SET is_active=false WHERE id='{intent.UserId}'");
+        await using var inactive = db.Context();
+        Assert.Equal(AvatarDeleteStatus.Unavailable, (await new AvatarStore(inactive).DeleteAvatarAsync(intent.UserId, 1, DateTime.UtcNow, default)).Status);
+        Assert.Equal("avatars/users/kept", await db.Scalar($"SELECT avatar_storage_key FROM users WHERE id='{intent.UserId}'"));
+        Assert.Equal(1L, await db.Scalar($"SELECT profile_revision_no FROM users WHERE id='{intent.UserId}'"));
+        Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM audit_logs"));
+    }
 }
