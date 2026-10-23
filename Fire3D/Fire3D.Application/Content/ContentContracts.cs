@@ -27,8 +27,10 @@ public sealed record LearnVersionSummary(Guid Id, int VersionNumber, string Stat
 /// <summary>PublicationStatus: Unpublished, Published, Hidden or Deleted. Public reads omit Versions; admin reads list every version.</summary>
 public sealed record LearnPostView(Guid Id, string Slug, string PublicationStatus, Guid? PublishedVersionId, long Revision, DateTime CreatedAt, DateTime UpdatedAt,
     LearnVersionView? PublishedVersion, IReadOnlyList<LearnVersionSummary>? Versions = null);
+/// <summary>Admin list row. Title, Kind and the LatestVersion* fields describe the newest version of any status (Draft or Published), so every post,
+/// including Unpublished and Deleted ones, has a title; the public title is PublishedVersion.Title. DraftVersionId is the newest open Draft or null.</summary>
 public sealed record LearnPostAdminRow(Guid Id, string Slug, string PublicationStatus, Guid? PublishedVersionId, long Revision, DateTime CreatedAt, DateTime UpdatedAt,
-    LearnVersionView? PublishedVersion, string? Title, string? Kind, int? LatestVersionNumber, string? LatestVersionStatus, Guid? DraftVersionId,
+    LearnVersionView? PublishedVersion, string? Title, string? Kind, Guid? LatestVersionId, int? LatestVersionNumber, string? LatestVersionStatus, Guid? DraftVersionId,
     int? DraftVersionNumber, int VersionCount);
 public sealed record LearnPostAdminPage(IReadOnlyList<LearnPostAdminRow> Items, int Total, int Page, int PageSize);
 public sealed record LearnPostSummary(Guid Id, string Slug, string Kind, string Title, string Summary, string? CoverImageUrl, DateTime PublishedAt);
