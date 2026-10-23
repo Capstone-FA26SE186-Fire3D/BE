@@ -154,7 +154,7 @@
 | GET | /api/buildings/{id}/trainings | Bearer | None | 200, 400, 404 |
 | GET | /api/feedback | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/feedback | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
-| GET | /api/learn/bookmarks | Bearer | None | 200 |
+| GET | /api/learn/bookmarks | Bearer | None | 200, 400 |
 | DELETE | /api/learn/bookmarks/{postId} | Bearer | None | 200 |
 | GET | /api/learn/bookmarks/{postId} | Bearer | None | 200, 401, 403 |
 | PUT | /api/learn/bookmarks/{postId} | Bearer | None | 200, 404 |
