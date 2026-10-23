@@ -145,6 +145,7 @@ Luồng và bằng chứng source chi tiết tại [authentication.md](authentic
 | GET | `/api/admin/audit-logs/{id}` | PlatformAdmin | 200 metadata như list, thêm `changes` (giá trị trước/sau đã lọc bí mật) và `reason` khi thao tác có lý do |
 | GET | `/api/admin/analytics/operations` | PlatformAdmin | 200 aggregate snapshot |
 | GET | `/api/organizations/me/analytics/operations` | OrganizationUser | 200 tenant aggregate snapshot |
+| GET | `/api/organizations/me/work-in-progress` | OrganizationUser | 200 OrganizationWorkInProgressResponse (bản nháp kịch bản lưu gần nhất, xem 7.1) |
 | POST | `/api/auth/forgot-password` | Public | 202 với message chung |
 | POST | `/api/auth/reset-password` | Public | 204 |
 | POST | `/api/auth/change-password` | User | 204 |
@@ -536,6 +537,7 @@ Tất cả cần Editor. Đây là luồng tác giả thiết kế/thử kịch 
 | GET | `/api/scenarios/{scenarioId}` | Không body | 200 ScenarioDetailResponse |
 | POST | `/api/scenarios/{scenarioId}/draft` | revisionId | 201 {id} |
 | GET | `/api/scenario-drafts/{draftId}` | Không body | 200 ScenarioDraftResponse + ETag |
+| GET | `/api/organizations/me/work-in-progress` | limit (1–5, mặc định 1); chỉ OrganizationUser | 200 `{ items: WorkInProgressItemResponse[] }`, bản nháp lưu gần nhất trước (#152) |
 | PUT | `/api/scenario-drafts/{draftId}` | State + If-Match; versioned `fet3d.editor/1` hoặc legacy | 204 + ETag; 422 `EDITOR_SCHEMA_INVALID`/`EDITOR_SCHEMA_VERSION_UNSUPPORTED`; 400 `EDITOR_JSON_MALFORMED` |
 | POST | `/api/scenario-drafts/{draftId}/validate` | Không body | 200 ScenarioDraftValidationResponse |
 | POST | `/api/scenario-drafts/{draftId}/snapshot` | Không body | 201 {id}; draft versioned không hợp lệ 422 `EDITOR_SCHEMA_INVALID` |
@@ -574,6 +576,15 @@ Tạo draft từ scenario:
 Revision phải cùng building với scenario; sai 400 VALIDATION_ERROR; scenario không thấy/ngoài phạm vi 404. Cả hai POST trả id và Location.
 
 Editor dùng GET building scenarios để mở danh sách, GET scenario để xem metadata, GET draft để lấy state đã lưu và ETag, và GET versions/version detail để xem lịch sử snapshot bất biến. OrganizationUser chỉ thấy tenant của mình; PlatformAdmin có scope toàn hệ thống; resource không thấy hoặc ngoài scope trả 404. List dùng `page` (mặc định 1) và `pageSize` (mặc định 20, tối đa 100).
+
+Thẻ "Tiếp tục soạn kịch bản" ở danh sách công trình dùng `GET /api/organizations/me/work-in-progress?limit=1` (#152) thay vì gọi chi tiết từng công trình. Trả các bản nháp kịch bản của tổ chức người gọi trên Building đang hoạt động, chưa xoá, sắp theo lần lưu cuối (`updatedAt`) mới nhất trước; có cả bản nháp của kịch bản đã có snapshot. `limit` 1–5, mặc định 1; giá trị khác 400 `VALIDATION_ERROR` với `errors.limit`. Tổ chức chưa có bản nháp trả `items: []`. Chỉ OrganizationUser; Trainee và PlatformAdmin 403 ("me" không có tenant cho admin), phiên đã thu hồi 401.
+
+```json
+{ "items": [ { "kind": "ScenarioDraft", "buildingId": "…", "buildingName": "Tòa A", "scenarioId": "…", "scenarioName": "Diễn tập tầng 3",
+  "draftId": "…", "revisionId": "…", "latestVersionNumber": 2, "latestVersionReviewStatus": "Approved", "updatedAt": "2026-10-23T08:15:00Z" } ] }
+```
+
+`latestVersionNumber`/`latestVersionReviewStatus` (NotSubmitted, Submitted, Approved, Rejected) mô tả snapshot mới nhất của kịch bản, null khi chưa có. Bản nháp sửa được, version thì bất biến, nên nút Tiếp tục mở bản nháp (`GET /api/scenario-drafts/{draftId}` lấy state và ETag) và không bao giờ sửa version đã duyệt.
 
 ### 7.2 Lưu draft và snapshot
 
