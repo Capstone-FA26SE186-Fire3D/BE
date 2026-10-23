@@ -93,6 +93,49 @@ Run helper regression tests locally without a database:
 python -m unittest discover -s tools/deployment -p 'test_*.py'
 ```
 
+## Backup, restore and recovery (BE#142)
+
+There is no Down migration. Recovery is either a restore from backup or a reviewed forward migration that repairs the problem.
+
+**Backup** before every production migration (about 45 s, ~1.7 MB on 23/10/2026): `pg_dump -n public -Fc -f backup_public_<UTC timestamp>.dump`
+with the migration login. Keep the file outside the repository; it contains personal data and password hashes.
+
+**Restore drill (verified 23/10/2026, production backup at 130 migrations).** Restore into a disposable database first, never over
+production without a decision to roll back:
+
+1. Use PostgreSQL 17 with pgvector, e.g. `docker run -d --name fet3d-restore-drill -e POSTGRES_PASSWORD=<random> -p 127.0.0.1::5432 pgvector/pgvector:pg17`.
+2. Create the roles the dump references (owners, RLS policies, grants), as NOLOGIN, before restoring:
+   `fire3d_api, fet3d_backend_executor, fet3d_ifc_upload_owner, fet3d_integration_owner, fet3d_payos_ledger_owner, fet3d_payos_local_api,
+   fet3d_payos_local_request, fet3d_payos_local_webhook, fet3d_payos_request_executor, fet3d_payos_webhook_executor, fet3d_processing_executor,
+   fet3d_dispatcher_executor, fet3d_processing_worker, fet3d_ai_indexer, fet3d_ai_service, fet3d_auth_maintenance_owner, fet3d_avatar_cleanup_owner,
+   fet3d_password_recovery_owner, fet3d_pending_cleanup_owner, fet3d_deploy_preflight, service_role, supabase_admin, anon, authenticated`.
+   Check the current list with `SELECT DISTINCT r FROM pg_policies, unnest(roles) r WHERE schemaname='public'` and the owners/grantees of `public`.
+3. Recreate the Supabase extensions in schema `extensions` and put it on the search path:
+   `CREATE SCHEMA extensions; CREATE EXTENSION vector SCHEMA extensions; CREATE EXTENSION pgcrypto SCHEMA extensions;
+   CREATE EXTENSION btree_gist SCHEMA extensions; ALTER DATABASE <db> SET search_path = public, extensions;`
+   (`knowledge_chunks` uses `vector`; exclusion constraints need `btree_gist`.)
+4. `pg_restore -d <db> --no-comments backup.dump`. The only expected error is `schema "public" already exists`.
+5. Compare `__EFMigrationsHistory` and the main table counts with production (`users`, `buildings`, `revisions`, `revision_artifacts`,
+   `processing_jobs`, `scenario_versions`, `releases`, `sessions`, `session_results`, `service_entitlements`, `payment_transactions`,
+   `billing_ai_quota_grants`, `audit_logs`).
+6. Run the API against it with a LOGIN that is a member of `fire3d_api` and `fet3d_backend_executor` (not a superuser; several gates
+   refuse superuser/BYPASSRLS logins), workers and PayOS disabled. `/health/ready` must be 200; log in and read a Building, entitlements,
+   AI quota, a job and a Trainee's session result.
+
+Result of the drill: restore in 2 s; 130 migrations and all counts above identical to production; the API read the restored state
+(login, Building, entitlements, 1100 AI credits, package job `Succeeded`, analytics 10 plays/8 completed, a `Passed` result).
+
+**S3.** Object storage is not part of the database backup. Every key referenced by `revision_artifacts`, `source_documents`
+(verified uploads), `release_packages` (package and manifest) and `users.avatar_storage_key` must exist with the stored SHA-256/size.
+Drill 23/10/2026: 34/34 objects present and matching (13.7 MB). Restoring a database older than the bucket is safe (extra objects are
+ignored or cleaned); restoring a bucket older than the database is not, so do not delete worker outputs or sources by hand.
+
+**Backlog checks** (read-only; run after incidents and before releases):
+`SELECT status, last_error, count(*) FROM integration_outbox_events GROUP BY 1,2`; `processing_jobs` still `Queued` after 30 minutes;
+`processing_job_attempts` `Running` with `lease_until < now()`; `payos_webhook_inbox` not `Applied`; `notification_deliveries` `Failed`;
+`ai_requests` `NeedsReconcile`. Known on 23/10/2026: one outbox/job `Failed` (Windows playtest job 2e3d04ba, failed on purpose on 19/10) and
+one PayOS inbox row `NeedsReconcile` with `PAYOS_UNKNOWN_ORDER` for order code 123, the test webhook PayOS sends when the webhook URL is saved.
+
 ## Render configuration
 
 The Azure workflow also calls `processing-tests.yml` and requires it to pass before the production deploy job. It exercises Redis/worker recovery and readiness against disposable PostgreSQL 17 and Redis 7.4 services. These tests do not use deployment credentials or production data.
