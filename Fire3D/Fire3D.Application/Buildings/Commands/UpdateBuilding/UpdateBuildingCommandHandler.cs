@@ -20,7 +20,7 @@ internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, IAuthSt
         if (errors.Count > 0)
             return AuthResult<BuildingResponse>.Fail("VALIDATION_ERROR", "Building validation failed.", 400, errors);
         var scope = await BuildingAuthorization.ResolveScopeAsync(accounts, command.ActorId, command.OrganizationId, ct);
-        if (!scope.IsSuccess) return AuthResult<BuildingResponse>.Fail(scope.Error!.Code, scope.Error.Message, scope.Error.Status);
+        if (!scope.IsSuccess) return AuthResult<BuildingResponse>.Fail(scope.Error!.Code, scope.Error.Message, scope.Error.Status, scope.Error.Errors);
         var building = await store.FindBuildingAsync(command.BuildingId, scope.Value, ct);
         // Archived Buildings stay readable in the console but are no longer editable (same 404 as revision/IFC routes).
         if (building == null || !building.IsActive)

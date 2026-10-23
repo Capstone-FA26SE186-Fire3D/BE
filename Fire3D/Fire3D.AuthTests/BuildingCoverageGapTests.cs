@@ -189,7 +189,12 @@ public sealed class BuildingCoverageGapTests
         var result = await List(NoWrites(), Accounts(actor, organizationActive: scenario != "admin-disabled-org"))
             .Handle(new(actor?.Id ?? Guid.NewGuid(), requested, new(1, 20, null, null)), default);
         Assert.Equal((code, status), (result.Error?.Code, result.Error?.Status));
-        if (scenario == "empty") Assert.Equal("organizationId cannot be empty.", result.Error!.Message);
+        if (scenario == "empty")
+        {
+            Assert.Equal("organizationId cannot be empty.", result.Error!.Message);
+            // The field error reaches the client instead of being dropped by the handler.
+            Assert.True(result.Error.Errors!.ContainsKey("organizationId"));
+        }
     }
 
     [Fact]
