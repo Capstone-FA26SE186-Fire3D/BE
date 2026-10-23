@@ -69,6 +69,7 @@
     <EmbeddedResource Include="Persistence/Sql/PackageDownloadAccessRecheck.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PackageDownloadAccessRecheck.sql" />
     <EmbeddedResource Include="Persistence/Sql/PackageDownloadMatchesStart.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PackageDownloadMatchesStart.sql" />
     <EmbeddedResource Include="Persistence/Sql/GeometryPull.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.GeometryPull.sql" />
+    <EmbeddedResource Include="Persistence/Sql/LearnBookmarkFilters.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.LearnBookmarkFilters.sql" />
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />
