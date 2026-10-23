@@ -27,7 +27,7 @@ public sealed record ScenarioVersionDetailResponse(Guid Id, Guid ScenarioId, Gui
     string ReviewStatus="NotSubmitted", Guid? ReviewId=null, string? RejectReason=null);
 
 /// <summary>One draft of the organization with its Building/scenario names and the scenario's newest snapshot (null when none).</summary>
-public sealed record ScenarioDraftWorkItem(Guid DraftId, Guid RevisionId, Guid BuildingId, string BuildingName, Guid ScenarioId,
+public sealed record ScenarioDraftWorkItem(Guid DraftId, int DraftNumber, Guid RevisionId, Guid BuildingId, string BuildingName, Guid ScenarioId,
     string ScenarioName, DateTime UpdatedAt, Guid? LatestVersionId, int? LatestVersionNumber);
 
 public interface IScenarioReadStore

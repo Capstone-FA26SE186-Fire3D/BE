@@ -31,8 +31,8 @@ public sealed class GetOrganizationWorkInProgressTests
     {
         var actor = RevisionAccessTests.Actor(UserRole.OrganizationUser); var family = Guid.NewGuid();
         var version = Guid.NewGuid(); var now = DateTime.UtcNow;
-        var withVersion = new ScenarioDraftWorkItem(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Tower A", Guid.NewGuid(), "Drill", now, version, 3);
-        var noVersion = new ScenarioDraftWorkItem(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Tower B", Guid.NewGuid(), "Evacuate", now.AddHours(-1), null, null);
+        var withVersion = new ScenarioDraftWorkItem(Guid.NewGuid(), 2, Guid.NewGuid(), Guid.NewGuid(), "Tower A", Guid.NewGuid(), "Drill", now, version, 3);
+        var noVersion = new ScenarioDraftWorkItem(Guid.NewGuid(), 1, Guid.NewGuid(), Guid.NewGuid(), "Tower B", Guid.NewGuid(), "Evacuate", now.AddHours(-1), null, null);
         var store = StubProxy.For<IScenarioReadStore>((m, args) =>
         {
             Assert.Equal(nameof(IScenarioReadStore.ListRecentDraftsAsync), m);
@@ -51,8 +51,8 @@ public sealed class GetOrganizationWorkInProgressTests
         Assert.True(result.IsSuccess, result.Error?.Code);
         Assert.Equal(new WorkInProgressItemResponse[]
         {
-            new("ScenarioDraft", withVersion.BuildingId, "Tower A", withVersion.ScenarioId, "Drill", withVersion.DraftId, withVersion.RevisionId, 3, "Approved", now),
-            new("ScenarioDraft", noVersion.BuildingId, "Tower B", noVersion.ScenarioId, "Evacuate", noVersion.DraftId, noVersion.RevisionId, null, null, now.AddHours(-1))
+            new("ScenarioDraft", withVersion.BuildingId, "Tower A", withVersion.ScenarioId, "Drill", withVersion.DraftId, 2, withVersion.RevisionId, 3, "Approved", now),
+            new("ScenarioDraft", noVersion.BuildingId, "Tower B", noVersion.ScenarioId, "Evacuate", noVersion.DraftId, 1, noVersion.RevisionId, null, null, now.AddHours(-1))
         }, result.Value!.Items);
     }
 
@@ -64,7 +64,7 @@ public sealed class GetOrganizationWorkInProgressTests
         var result = await new GetOrganizationWorkInProgressQueryHandler(RevisionAccessTests.Accounts(actor), empty, NoReviews()).Handle(new(actor.Id, actor.Id), default);
         Assert.Empty(result.Value!.Items);
 
-        var draft = new ScenarioDraftWorkItem(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "B", Guid.NewGuid(), "S", DateTime.UtcNow, Guid.NewGuid(), 1);
+        var draft = new ScenarioDraftWorkItem(Guid.NewGuid(), 1, Guid.NewGuid(), Guid.NewGuid(), "B", Guid.NewGuid(), "S", DateTime.UtcNow, Guid.NewGuid(), 1);
         var one = StubProxy.For<IScenarioReadStore>((_, _) => Task.FromResult<IReadOnlyList<ScenarioDraftWorkItem>>([draft]));
         var revoked = StubProxy.For<IScenarioReviewQueries>((_, _) => Task.FromResult(AuthResult<IReadOnlyList<ScenarioVersionReviewState>>.Fail("UNAUTHORIZED", "Session revoked.", 401)));
         var denied = await new GetOrganizationWorkInProgressQueryHandler(RevisionAccessTests.Accounts(actor), one, revoked).Handle(new(actor.Id, actor.Id), default);

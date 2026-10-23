@@ -581,10 +581,10 @@ Thẻ "Tiếp tục soạn kịch bản" ở danh sách công trình dùng `GET 
 
 ```json
 { "items": [ { "kind": "ScenarioDraft", "buildingId": "…", "buildingName": "Tòa A", "scenarioId": "…", "scenarioName": "Diễn tập tầng 3",
-  "draftId": "…", "revisionId": "…", "latestVersionNumber": 2, "latestVersionReviewStatus": "Approved", "updatedAt": "2026-10-23T08:15:00Z" } ] }
+  "draftId": "…", "draftNumber": 3, "revisionId": "…", "latestVersionNumber": 2, "latestVersionReviewStatus": "Approved", "updatedAt": "2026-10-23T08:15:00Z" } ] }
 ```
 
-`latestVersionNumber`/`latestVersionReviewStatus` (NotSubmitted, Submitted, Approved, Rejected) mô tả snapshot mới nhất của kịch bản, null khi chưa có. Bản nháp sửa được, version thì bất biến, nên nút Tiếp tục mở bản nháp (`GET /api/scenario-drafts/{draftId}` lấy state và ETag) và không bao giờ sửa version đã duyệt.
+`draftNumber` là số của chính bản nháp trong kịch bản (hiển thị "Bản nháp vN"). `latestVersionNumber`/`latestVersionReviewStatus` (NotSubmitted, Submitted, Approved, Rejected) mô tả snapshot mới nhất của kịch bản, null khi chưa có. Bản nháp sửa được, version thì bất biến, nên nút Tiếp tục mở bản nháp (`GET /api/scenario-drafts/{draftId}` lấy state và ETag) và không bao giờ sửa version đã duyệt.
 
 ### 7.2 Lưu draft và snapshot
 

@@ -72,11 +72,12 @@ public sealed partial class AuthIntegrationTests
 
         using var owner = await WorkInProgressClient(f.Owner);
         var top = Assert.Single(await WorkItems(owner));
-        Assert.Equal(["kind", "buildingId", "buildingName", "scenarioId", "scenarioName", "draftId", "revisionId", "latestVersionNumber", "latestVersionReviewStatus", "updatedAt"],
+        Assert.Equal(["kind", "buildingId", "buildingName", "scenarioId", "scenarioName", "draftId", "draftNumber", "revisionId", "latestVersionNumber", "latestVersionReviewStatus", "updatedAt"],
             top.EnumerateObject().Select(p => p.Name).ToArray());
         Assert.Equal(("ScenarioDraft", draft4, building2, "Annex", scenario4, "Annex drill", revision2), (top.GetProperty("kind").GetString(), top.GetProperty("draftId").GetGuid(),
             top.GetProperty("buildingId").GetGuid(), top.GetProperty("buildingName").GetString(), top.GetProperty("scenarioId").GetGuid(), top.GetProperty("scenarioName").GetString(),
             top.GetProperty("revisionId").GetGuid()));
+        Assert.Equal(1, top.GetProperty("draftNumber").GetInt32());
         Assert.Equal((JsonValueKind.Null, JsonValueKind.Null), (top.GetProperty("latestVersionNumber").ValueKind, top.GetProperty("latestVersionReviewStatus").ValueKind));
 
         var all = await WorkItems(owner, "?limit=5");
@@ -86,6 +87,8 @@ public sealed partial class AuthIntegrationTests
         foreach (var item in new[] { all[1], all[3] })
             Assert.Equal((1, "Submitted", scenario1), (item.GetProperty("latestVersionNumber").GetInt32(), item.GetProperty("latestVersionReviewStatus").GetString(), item.GetProperty("scenarioId").GetGuid()));
         Assert.Equal(JsonValueKind.Null, all[2].GetProperty("latestVersionReviewStatus").ValueKind);
+        // draftNumber is the draft's own number within its scenario: scenario 1 now has drafts 1 and 2.
+        Assert.Equal([1, 1, 1, 2], all.Select(x => x.GetProperty("draftNumber").GetInt32()).ToArray());
         Assert.DoesNotContain(otherDraft, all.Select(x => x.GetProperty("draftId").GetGuid()));
 
         // Archived or deleted Buildings drop out.
@@ -142,7 +145,7 @@ public sealed class OrganizationWorkInProgressOpenApiTests
         foreach (var status in new[] { "200", "400", "401", "403" }) Assert.True(operation.GetProperty("responses").TryGetProperty(status, out _), status);
         Assert.Contains("OrganizationWorkInProgressResponse", operation.GetProperty("responses").GetProperty("200").GetProperty("content").GetRawText());
         var item = root.GetProperty("components").GetProperty("schemas").GetProperty("WorkInProgressItemResponse").GetProperty("properties");
-        foreach (var field in new[] { "kind", "buildingId", "buildingName", "scenarioId", "scenarioName", "draftId", "revisionId", "latestVersionNumber", "latestVersionReviewStatus", "updatedAt" })
+        foreach (var field in new[] { "kind", "buildingId", "buildingName", "scenarioId", "scenarioName", "draftId", "draftNumber", "revisionId", "latestVersionNumber", "latestVersionReviewStatus", "updatedAt" })
             Assert.True(item.TryGetProperty(field, out _), field);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/organizations/me/work-in-progress")).StatusCode);
     }

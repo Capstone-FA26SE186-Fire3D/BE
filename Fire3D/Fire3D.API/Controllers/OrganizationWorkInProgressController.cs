@@ -14,7 +14,7 @@ public sealed class OrganizationWorkInProgressController(ISender sender) : Contr
     /// <summary>The OrganizationUser's organization's most recently saved scenario drafts, for the "continue authoring" shortcut on the Building list.</summary>
     /// <remarks>Items are scenario drafts (kind ScenarioDraft) on active, not deleted Buildings of the caller's organization, newest save first
     /// (updatedAt), including drafts whose scenario already has snapshots. limit 1–5, default 1; other values 400 VALIDATION_ERROR.
-    /// latestVersionNumber/latestVersionReviewStatus (NotSubmitted, Submitted, Approved, Rejected) describe the scenario's newest snapshot and
+    /// draftNumber is the draft's own number within its scenario. latestVersionNumber/latestVersionReviewStatus (NotSubmitted, Submitted, Approved, Rejected) describe the scenario's newest snapshot and
     /// are null without one. Drafts are mutable and versions immutable, so resuming a draft never edits an approved version.
     /// An organization without drafts returns items []. PlatformAdmin and Trainee are 403.</remarks>
     [HttpGet("api/organizations/me/work-in-progress")]

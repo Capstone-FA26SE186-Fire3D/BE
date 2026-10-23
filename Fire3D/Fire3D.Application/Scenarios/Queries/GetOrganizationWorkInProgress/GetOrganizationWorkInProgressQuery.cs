@@ -6,9 +6,9 @@ namespace Fire3D.Application.Scenarios.Queries.GetOrganizationWorkInProgress;
 
 /// <summary>Kind is ScenarioDraft. Drafts stay mutable (versions are immutable snapshots), so resuming never edits an approved version.
 /// LatestVersionNumber/LatestVersionReviewStatus describe the scenario's newest snapshot and are null when it has none.
-/// UpdatedAt is the draft's last save.</summary>
+/// DraftNumber is the draft's own number within its scenario ("Bản nháp vN"). UpdatedAt is the draft's last save.</summary>
 public sealed record WorkInProgressItemResponse(string Kind, Guid BuildingId, string BuildingName, Guid ScenarioId, string ScenarioName,
-    Guid DraftId, Guid RevisionId, int? LatestVersionNumber, string? LatestVersionReviewStatus, DateTime UpdatedAt);
+    Guid DraftId, int DraftNumber, Guid RevisionId, int? LatestVersionNumber, string? LatestVersionReviewStatus, DateTime UpdatedAt);
 public sealed record OrganizationWorkInProgressResponse(IReadOnlyList<WorkInProgressItemResponse> Items);
 
 public sealed record GetOrganizationWorkInProgressQuery(Guid ActorId, Guid? SessionFamilyId, int Limit = 1)
@@ -40,7 +40,7 @@ public sealed class GetOrganizationWorkInProgressQueryHandler(IAuthStore account
             foreach (var state in states.Value!) statuses[state.ScenarioVersionId] = state.ReviewStatus;
         }
         return AuthResult<OrganizationWorkInProgressResponse>.Ok(new(drafts.Select(d => new WorkInProgressItemResponse("ScenarioDraft",
-            d.BuildingId, d.BuildingName, d.ScenarioId, d.ScenarioName, d.DraftId, d.RevisionId, d.LatestVersionNumber,
+            d.BuildingId, d.BuildingName, d.ScenarioId, d.ScenarioName, d.DraftId, d.DraftNumber, d.RevisionId, d.LatestVersionNumber,
             d.LatestVersionId is Guid version ? statuses.GetValueOrDefault(version) : null, d.UpdatedAt)).ToList()));
     }
 }
