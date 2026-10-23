@@ -13,7 +13,7 @@ internal sealed class SetBuildingActiveCommandHandler(IBuildingStore store, IAut
                 ? AuthResult<BuildingSummaryResponse>.Fail("PRECONDITION_REQUIRED", "Send the Building ETag from GET in If-Match.", 428)
                 : AuthResult<BuildingSummaryResponse>.Fail("VALIDATION_ERROR", "If-Match must be the quoted Building ETag.", 400);
         var scope = await BuildingAuthorization.ResolveScopeAsync(accounts, command.ActorId, command.OrganizationId, ct);
-        if (!scope.IsSuccess) return AuthResult<BuildingSummaryResponse>.Fail(scope.Error!.Code, scope.Error.Message, scope.Error.Status);
+        if (!scope.IsSuccess) return AuthResult<BuildingSummaryResponse>.Fail(scope.Error!.Code, scope.Error.Message, scope.Error.Status, scope.Error.Errors);
         var building = await store.FindBuildingAsync(command.BuildingId, scope.Value, ct);
         if (building == null)
             return AuthResult<BuildingSummaryResponse>.Fail("NOT_FOUND", "Building not found.", 404);

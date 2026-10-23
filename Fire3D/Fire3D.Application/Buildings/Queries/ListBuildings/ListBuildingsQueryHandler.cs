@@ -13,7 +13,7 @@ internal sealed class ListBuildingsQueryHandler(IBuildingStore store, IAuthStore
             return AuthResult<PageResponse<BuildingSummaryResponse>>.Fail("VALIDATION_ERROR", "Invalid filters. Page 1-100000, pageSize 1-100, search max 200 chars.", 400);
 
         var scope = await BuildingAuthorization.ResolveScopeAsync(accounts, query.ActorId, query.OrganizationId, ct);
-        if (!scope.IsSuccess) return AuthResult<PageResponse<BuildingSummaryResponse>>.Fail(scope.Error!.Code, scope.Error.Message, scope.Error.Status);
+        if (!scope.IsSuccess) return AuthResult<PageResponse<BuildingSummaryResponse>>.Fail(scope.Error!.Code, scope.Error.Message, scope.Error.Status, scope.Error.Errors);
         var result = await store.ListBuildingsAsync(scope.Value, query.Filter, ct);
         return AuthResult<PageResponse<BuildingSummaryResponse>>.Ok(result);
     }
