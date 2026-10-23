@@ -35,22 +35,30 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     public async Task<IActionResult> Posts([FromQuery] string? search, [FromQuery] string[]? situation, [FromQuery] string[]? kind,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
+        var (errors, kinds) = LearnFilters(ref search, kind);
+        var situations = (situation ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct(StringComparer.Ordinal).ToArray();
+        if (situations.Length > 10 || situations.Any(x => x.Length > 120)) errors["situation"] = ["Use at most 10 situation slugs of up to 120 characters."];
+        return InvalidFilters(errors) ?? Paging(page, pageSize) ?? Reply(await gates.LearnPublicAsync("Posts", null, null, new { search, situations, kinds, page, pageSize }, ct));
+    }
+
+    private static readonly string[] LearnKinds = ["Article", "Tip", "Video"];
+
+    // search trimmed to 2-100 characters; kind values folded to Article, Tip or Video (case-insensitive, duplicates dropped).
+    private static (Dictionary<string, string[]> Errors, List<string> Kinds) LearnFilters(ref string? search, string[]? kind)
+    {
         var errors = new Dictionary<string, string[]>();
         search = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
         if (search is { Length: < 2 or > 100 }) errors["search"] = ["search must be 2-100 characters after trimming."];
-        var situations = (situation ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct(StringComparer.Ordinal).ToArray();
-        if (situations.Length > 10 || situations.Any(x => x.Length > 120)) errors["situation"] = ["Use at most 10 situation slugs of up to 120 characters."];
         var kinds = new List<string>();
         foreach (var value in (kind ?? []).Where(x => !string.IsNullOrWhiteSpace(x)))
             if (LearnKinds.FirstOrDefault(x => x.Equals(value.Trim(), StringComparison.OrdinalIgnoreCase)) is { } known) { if (!kinds.Contains(known)) kinds.Add(known); }
             else errors["kind"] = ["kind must be Article, Tip or Video."];
-        if (errors.Count > 0)
-            return Problem(statusCode: 400, title: "Learn filters are invalid.", detail: "Kiểm tra các trường được liệt kê.",
-                extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR", ["errors"] = errors });
-        return Paging(page, pageSize) ?? Reply(await gates.LearnPublicAsync("Posts", null, null, new { search, situations, kinds, page, pageSize }, ct));
+        return (errors, kinds);
     }
 
-    private static readonly string[] LearnKinds = ["Article", "Tip", "Video"];
+    private ObjectResult? InvalidFilters(Dictionary<string, string[]> errors) => errors.Count == 0 ? null
+        : Problem(statusCode: 400, title: "Learn filters are invalid.", detail: "Kiểm tra các trường được liệt kê.",
+            extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR", ["errors"] = errors });
 
     [AllowAnonymous, HttpGet("api/learn/posts/{slug}")]
     [ProducesResponseType<LearnPostView>(200)]
@@ -58,11 +66,24 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
     [ProducesResponseType<ProblemDetails>(410)]
     public async Task<IActionResult> Post(string slug, CancellationToken ct) => Reply(await gates.LearnPublicAsync("Post", null, null, new { slug }, ct));
 
-    /// <summary>Bookmarks of posts that are no longer public are listed as available=false without content.</summary>
+    /// <summary>Bookmarks of the signed-in Trainee, newest first (bookmarkedAt desc, then postId); filters apply before paging and to total.</summary>
+    /// <remarks>
+    /// kind (repeat for Article, Tip or Video, OR, case-insensitive) and search (2-100 characters after trimming, title or summary,
+    /// ignoring case and Vietnamese diacritics) work as on GET /api/learn/posts and combine with AND. Bookmarks of posts that are no
+    /// longer public are listed as available=false without kind or content, and only when neither kind nor search is given.
+    /// counts covers every bookmark of the Trainee whatever the filters and page: Article, Tip and Video count available
+    /// bookmarks, unavailable the rest. Invalid values return 400 VALIDATION_ERROR with field errors. page >= 1, pageSize 1-100 (default 20).
+    /// </remarks>
     [Authorize(Roles = "Trainee"), HttpGet("api/learn/bookmarks")]
     [ProducesResponseType<LearnBookmarkPage>(200)]
-    public async Task<IActionResult> Bookmarks([FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
-        Reply(await gates.LearnPublicAsync("Bookmarks", User.GetActorId(), User.GetSessionFamilyId(), new { page, pageSize }, ct));
+    [ProducesResponseType<ProblemDetails>(400)]
+    public async Task<IActionResult> Bookmarks([FromQuery] string[]? kind, [FromQuery] string? search,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        var (errors, kinds) = LearnFilters(ref search, kind);
+        return InvalidFilters(errors) ?? Paging(page, pageSize)
+            ?? Reply(await gates.LearnPublicAsync("Bookmarks", User.GetActorId(), User.GetSessionFamilyId(), new { search, kinds, page, pageSize }, ct));
+    }
 
     [Authorize(Roles = "Trainee"), HttpPut("api/learn/bookmarks/{postId:guid}")]
     [ProducesResponseType<LearnBookmarkState>(200)]

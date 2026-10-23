@@ -96,6 +96,16 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
             .SingleOrDefaultAsync(ct);
     }
 
+    public async Task<IReadOnlyList<ScenarioDraftWorkItem>> ListRecentDraftsAsync(Guid organizationId, int limit, CancellationToken ct) =>
+        await db.ScenarioDrafts.AsNoTracking()
+            .Where(d => d.OrganizationId == organizationId && d.Scenario.OrganizationId == organizationId && d.Building.OrganizationId == organizationId
+                && d.Building.IsActive && d.Building.DeletedAt == null)
+            .OrderByDescending(d => d.UpdatedAt).ThenByDescending(d => d.DraftNumber).ThenBy(d => d.Id).Take(limit)
+            .Select(d => new ScenarioDraftWorkItem(d.Id, d.DraftNumber, d.RevisionId, d.BuildingId, d.Building.Name, d.ScenarioId, d.Scenario.Name, d.UpdatedAt,
+                d.Scenario.ScenarioVersions.OrderByDescending(v => v.VersionNumber).Select(v => (Guid?)v.Id).FirstOrDefault(),
+                d.Scenario.ScenarioVersions.OrderByDescending(v => v.VersionNumber).Select(v => (int?)v.VersionNumber).FirstOrDefault()))
+            .ToListAsync(ct);
+
     private sealed record DraftRow(Guid Id, Guid ScenarioId, Guid RevisionId, int DraftNumber, string Source, string? SchemaVersion,
         long Version, Guid CreatedBy, DateTime CreatedAt, DateTime UpdatedAt, Guid? LastEditedById, string? LastEditedByName, string StateKind);
 

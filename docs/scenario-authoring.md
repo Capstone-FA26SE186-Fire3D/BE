@@ -23,6 +23,12 @@ Manual test: create a scenario/draft with distinct keys; GET ETag; PUT a complet
 
 Geometry acceptance: object anchors come only from the current Succeeded Geometry attempt with a matching Passed validation run and no Error/Critical issues. A Succeeded worker job can carry Failed validation; it is not sufficient for validate/snapshot. Missing, failed, blocked or stale geometry returns ANCHOR_NOT_FOUND by path; snapshot rejects without creating a version/receipt. Forward migration20261007140000_RequirePassedGeometryAnchors repairs this check without changing legacy data. Warning-only Passed geometry remains usable.
 
+## Organization work in progress (#152)
+
+`GET /api/organizations/me/work-in-progress?limit=1` feeds the "continue authoring" card on the Building list without per-Building calls. OrganizationUser only (Trainee and PlatformAdmin 403, revoked session 401). Items are the caller's organization's scenario drafts on active, not deleted Buildings, newest save first (`scenario_drafts.updated_at`, set by every PUT), including drafts whose scenario already has snapshots. `limit` 1–5, default 1; anything else is 400 `VALIDATION_ERROR` with `errors.limit`. No drafts: `items: []`.
+
+Item: `kind` (`ScenarioDraft`), `buildingId`, `buildingName`, `scenarioId`, `scenarioName`, `draftId`, `draftNumber` (the draft's own number within its scenario, shown as "Bản nháp vN"), `revisionId`, `latestVersionNumber` and `latestVersionReviewStatus` (NotSubmitted/Submitted/Approved/Rejected) of the scenario's newest snapshot or null, `updatedAt`. Drafts are mutable and versions immutable, so resuming opens the draft (`GET /api/scenario-drafts/{draftId}` for state and ETag) and never edits an approved version. Drafts, scenarios and Buildings are read with the API's existing SELECT grants; review status comes from `scenario_review_read_gate` (`States`), which rechecks the live session and tenant. No migration.
+
 ## Versioned editor contract `fet3d.editor/1` — 2026-10-11
 
 Contract, JSON Schemas and shared fixtures: [contracts/editor/v1](../contracts/editor/v1/README.md). The .NET validator is authoritative.

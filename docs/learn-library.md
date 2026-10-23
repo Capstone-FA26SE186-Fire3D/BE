@@ -45,7 +45,8 @@ Short links such as `fb.watch`, embed/iframe markup, credentials in the URL and 
 | Deleted | restore | Hidden (never straight back to public) |
 
 Public reads: Unpublished/Deleted → `404`, Hidden → `410 LEARN_POST_UNAVAILABLE`. Bookmarks of a non-Published post stay in the
-list as `{postId, available:false, bookmarkedAt}` without title or summary; new bookmarks need a Published post.
+list as `{postId, available:false, bookmarkedAt}` without kind, title or summary (only in the unfiltered list, counted as
+`counts.unavailable`); new bookmarks need a Published post.
 `learn_rag_eligible(post, version)` is true only for the current published version of a Published or Hidden post; #58 RAG uses it.
 Every state change enqueues a `PlatformCacheInvalidation` outbox event with `{scope:"learn", id, revision}`.
 
@@ -67,7 +68,7 @@ that another claim has taken over. Source state never depends on the cache: ever
 | GET | `/api/learn/situations` | anonymous | Active situations. |
 | GET | `/api/learn/posts?search=&situation=&kind=&page=&pageSize=` | anonymous | Published post with a Published version only, newest first (publishedAt, id). `search` 2–100 chars on title+summary, case- and Vietnamese-diacritic-insensitive (`chay` finds `Cháy`, `duong` finds `Đường`; folded in SQL, no `unaccent` extension). Repeat `situation` (≤10 active slugs) and `kind` (Article/Tip/Video): values of one filter are OR, filters are AND. Filters run before paging; `total` is exact. Invalid values → 400 `VALIDATION_ERROR` with `errors`. (#79) |
 | GET | `/api/learn/posts/{slug}` | anonymous | Published version only, no draft history. |
-| GET | `/api/learn/bookmarks` | Trainee | Paged. |
+| GET | `/api/learn/bookmarks?kind=&search=&page=&pageSize=` | Trainee | Newest bookmark first (bookmarkedAt, postId). `kind` (repeat, Article/Tip/Video, OR, case-insensitive) and `search` (2–100 chars on title+summary, case- and Vietnamese-diacritic-insensitive) work as on `/api/learn/posts` and combine with AND; they run before paging and `total` counts the matches. A bookmark with `available:false` has no `kind` or content, so it is listed only when neither `kind` nor `search` is given ("Tất cả"). `counts: {Article, Tip, Video, unavailable}` covers every bookmark of the Trainee, whatever `kind`, `search` and page (Article/Tip/Video count available bookmarks; the sum is the unfiltered total). Invalid values → 400 `VALIDATION_ERROR` with `errors` (`search`, `kind`); page ≥ 1, pageSize 1–100. Migration `20261023100000_AddLearnBookmarkFilters` (`LearnBookmarkFilters.sql`). (#151) |
 | GET | `/api/learn/bookmarks/{postId}` | Trainee | `{postId, bookmarked}` for one post, without loading every bookmark (#86). |
 | PUT/DELETE | `/api/learn/bookmarks/{postId}` | Trainee | Idempotent. |
 | GET | `/api/admin/learn/posts?status=&page=&pageSize=` | PlatformAdmin | All states, ordered `updatedAt DESC, id`. Each row adds the latest version of any status: `title`, `kind`, `latestVersionId`, `latestVersionNumber`, `latestVersionStatus` (`Draft`/`Published`), so Unpublished, Hidden and Deleted posts are all named by a title; plus `draftVersionId`/`draftVersionNumber` (newest open Draft or null) and `versionCount` (#86, BE#154). The public title stays `publishedVersion.title` (null when never published); `title` differs from it while a newer Draft is open. |
@@ -130,6 +131,7 @@ items, maximum 100. Library changes enqueue `PlatformCacheInvalidation` with `sc
   outbox; library publish/deactivate visibility; HTTP ETag/If-Match, anonymous reads and validation errors.
 - `Fire3D.AuthTests/LearnAdminTitlesTests.cs`: admin list titles from the latest version for Unpublished, Published (with and
   without an open Draft), Hidden and Deleted posts; public title unchanged; ordering, paging and status filter.
+- `Fire3D.AuthTests/LearnSearchTests.cs`: public post search/filters (#79) and bookmark kind/search filters with counts (#151).
 
 ## Idempotency on If-Match mutations (#57)
 

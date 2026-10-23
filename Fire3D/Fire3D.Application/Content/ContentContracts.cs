@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Fire3D.Application.Authentication;
 using Fire3D.Application.Editor;
@@ -37,7 +38,11 @@ public sealed record LearnPostSummary(Guid Id, string Slug, string Kind, string 
 public sealed record LearnPostPage(IReadOnlyList<LearnPostSummary> Items, int Total, int Page, int PageSize);
 /// <summary>Available=false when the post is no longer public: only PostId, Available and BookmarkedAt are returned then.</summary>
 public sealed record LearnBookmarkView(Guid PostId, bool Available, DateTime BookmarkedAt, string? Slug = null, string? Title = null, string? Summary = null, string? Kind = null);
-public sealed record LearnBookmarkPage(IReadOnlyList<LearnBookmarkView> Items, int Total, int Page, int PageSize);
+/// <summary>Every bookmark of the Trainee whatever the filters and page: available ones by kind (keys are the kind values), the rest as unavailable.</summary>
+public sealed record LearnBookmarkCounts([property: JsonPropertyName("Article")] int Article, [property: JsonPropertyName("Tip")] int Tip,
+    [property: JsonPropertyName("Video")] int Video, int Unavailable);
+/// <summary>Total counts the bookmarks matching kind and search; Counts ignores them.</summary>
+public sealed record LearnBookmarkPage(IReadOnlyList<LearnBookmarkView> Items, int Total, int Page, int PageSize, LearnBookmarkCounts Counts);
 public sealed record LearnBookmarkState(Guid PostId, bool Bookmarked);
 /// <summary>Knowledge source registry row. CanUseInDraft: a Learn draft may cite it; CanPublishReference: publish, Hidden and RAG accept it now.</summary>
 public sealed record KnowledgeSourceView(Guid Id, string Visibility, Guid? OrganizationId, string Title, string? SourceUri, string VersionLabel, string SourceHash,
