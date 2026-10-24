@@ -31,8 +31,6 @@ public partial class PaymentTransaction
 
     public DateTime? ProcessedAt { get; set; }
 
-    public virtual InvoiceMetadatum? InvoiceMetadatum { get; set; }
-
     public virtual PayosPaymentRequest PaymentRequest { get; set; } = null!;
 
     public virtual ICollection<PayosPaymentRequest> PayosPaymentRequests { get; set; } = new List<PayosPaymentRequest>();

@@ -42,8 +42,6 @@ public partial class Quotation
 
     public DateTime UpdatedAt { get; set; }
 
-    public virtual ICollection<InvoiceMetadatum> InvoiceMetadata { get; set; } = new List<InvoiceMetadatum>();
-
     public virtual User? IssuedByNavigation { get; set; }
 
     public virtual Organization Organization { get; set; } = null!;

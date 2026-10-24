@@ -58,19 +58,6 @@ public sealed class LoginAuditPermissionsPostgresTests
         Assert.Equal(true, await db.Scalar($"SELECT last_login_at IS NULL FROM users WHERE id='{BillingDatabase.Admin}'"));
     });
 
-    [BillingPostgresFact]
-    public Task Pending_password_reset_still_blocks_session_without_audit_read_permissions() => WithRestrictedApi(async (db, client) =>
-    {
-        await db.Sql($"INSERT INTO password_reset_operations(id,user_id,firebase_uid,code_hash,status) VALUES(gen_random_uuid(),'{BillingDatabase.Admin}','test',repeat('a',64),'Pending')");
-        var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest("admin@example.test", Password));
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("RESET_PENDING", problem.RootElement.GetProperty("code").GetString());
-        Assert.Equal(0L, await db.Scalar($"SELECT count(*) FROM auth_refresh_tokens WHERE user_id='{BillingDatabase.Admin}'"));
-        Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM audit_logs"));
-        Assert.Equal(true, await db.Scalar($"SELECT last_login_at IS NULL FROM users WHERE id='{BillingDatabase.Admin}'"));
-    });
-
     private static async Task WithRestrictedApi(Func<BillingDatabase, HttpClient, Task> test)
     {
         var role = "fet3d_login_test_" + Guid.NewGuid().ToString("N");
@@ -88,13 +75,12 @@ public sealed class LoginAuditPermissionsPostgresTests
             await db.Sql($"""
                 GRANT USAGE ON SCHEMA public TO {role};
                 GRANT SELECT,UPDATE ON users TO {role};
-                GRANT SELECT ON organizations,password_reset_operations TO {role};
+                GRANT SELECT ON organizations TO {role};
                 GRANT SELECT,INSERT,UPDATE ON auth_refresh_tokens TO {role};
                 REVOKE ALL ON audit_logs FROM PUBLIC;
                 GRANT INSERT ON audit_logs TO {role};
                 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
                 CREATE POLICY login_audit_insert ON audit_logs FOR INSERT TO {role} WITH CHECK(true);
-                CREATE POLICY login_reset_read ON password_reset_operations FOR SELECT TO {role} USING(true);
                 DELETE FROM auth_refresh_tokens WHERE user_id='{BillingDatabase.Admin}';
                 """);
             Assert.Equal(false, await db.Scalar($"SELECT has_column_privilege('{role}','public.audit_logs','id','SELECT')"));

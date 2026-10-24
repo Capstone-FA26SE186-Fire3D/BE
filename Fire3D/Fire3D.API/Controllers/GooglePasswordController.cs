@@ -18,7 +18,7 @@ public sealed class GooglePasswordController(IGooglePasswordService passwords) :
     /// and returns 204; sign in again with email/password or Google. GET /api/auth/me reports hasLocalLogin/googleLinked.
     /// 400 VALIDATION_ERROR (errors.idToken/newPassword) or GOOGLE_LINK_REQUIRED; 401 UNAUTHORIZED, INVALID_FIREBASE_TOKEN
     /// (invalid or another Google account) or RECENT_LOGIN_REQUIRED; 409 PASSWORD_ALREADY_SET (use change-password),
-    /// ACCOUNT_CHANGED or PASSWORD_RESET_PENDING; 503 GOOGLE_PROVIDER_UNAVAILABLE.</remarks>
+    /// ACCOUNT_CHANGED; 503 GOOGLE_PROVIDER_UNAVAILABLE.</remarks>
     [HttpPost]
     [ProducesResponseType(204)]
     [ProducesResponseType<ProblemDetails>(400)]

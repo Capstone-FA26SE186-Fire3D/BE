@@ -20,13 +20,6 @@ public sealed class PasswordResetException(string code, string message, int stat
     public static PasswordResetException InvalidCode() => new("INVALID_RESET_CODE", "The reset code is invalid, expired or already used.", 400, true);
 }
 
-public interface IPasswordResetStore
-{
-    // Commits revocation and a durable session fence before external password mutation.
-    Task<Guid?> BeginAsync(Guid userId, string firebaseUid, string codeHash, CancellationToken ct);
-    Task FinishAsync(Guid operationId, Guid userId, string outcome, CancellationToken ct);
-}
-
 public sealed record ResetEmailJob(Guid Id, string Email, Guid LeaseToken, int Attempt);
 public interface IPasswordResetQueue
 {

@@ -17,7 +17,6 @@ public partial class Organization
 
     public long ProfileRevision { get; set; } = 1;
 
-
     public bool IsActive { get; set; }
 
     public string Metadata { get; set; } = null!;
@@ -34,8 +33,6 @@ public partial class Organization
     public virtual ICollection<Building> Buildings { get; set; } = new List<Building>();
 
     public virtual ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();
-
-    public virtual ICollection<InvoiceMetadatum> InvoiceMetadata { get; set; } = new List<InvoiceMetadatum>();
 
     public virtual ICollection<PayosPaymentRequest> PayosPaymentRequests { get; set; } = new List<PayosPaymentRequest>();
 

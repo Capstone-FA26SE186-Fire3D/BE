@@ -45,7 +45,6 @@ public static class AuthenticationExtensions
                 "Configure AuthEmail:FrontendUrl and AuthEmail:VerificationUrl as HTTPS public base URLs. HTTP loopback URLs are allowed only in Development.")
             .ValidateOnStart();
         services.AddSingleton<IFirebaseResetAdmin, FirebaseResetAdmin>();
-        services.AddScoped<IPasswordResetStore, PasswordResetStore>();
         services.AddScoped<IPasswordResetQueue, PasswordResetQueue>();
         services.AddScoped<IEmailVerificationQueue, EmailVerificationQueue>();
         services.AddScoped<RegistrationOtpStore>();

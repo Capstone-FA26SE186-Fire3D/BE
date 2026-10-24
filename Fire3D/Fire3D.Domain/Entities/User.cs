@@ -31,7 +31,6 @@ public partial class User
 
     public string? PhoneNumber { get; set; }
 
-
     public DateTime? EmailVerifiedAt { get; set; }
 
     /// <summary>UTC deadline for a self-registration that has not yet verified its email.</summary>
@@ -64,8 +63,6 @@ public partial class User
     public virtual ICollection<Quotation> QuotationRequestedByNavigations { get; set; } = new List<Quotation>();
 
     public virtual ICollection<Release> ReleasePublishedByNavigations { get; set; } = new List<Release>();
-
-    public virtual ICollection<ReleaseQrCode> ReleaseQrCodes { get; set; } = new List<ReleaseQrCode>();
 
     public virtual ICollection<Release> ReleaseRevokedByNavigations { get; set; } = new List<Release>();
 

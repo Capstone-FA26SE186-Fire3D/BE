@@ -16,10 +16,6 @@ public sealed partial class AuthIntegrationTests
     public async Task Login_waiting_for_lock_rechecks_disabled_account()
         => await LoginRace("UPDATE users SET is_active=false",HttpStatusCode.Forbidden);
 
-    [PostgresFact]
-    public async Task Login_waiting_for_lock_cannot_bypass_a_pending_password_reset()
-        => await LoginRace($"INSERT INTO password_reset_operations(id,user_id,firebase_uid,code_hash,status) VALUES(gen_random_uuid(),'{adminId}','test',repeat('a',64),'Pending')",HttpStatusCode.ServiceUnavailable);
-
     private async Task LoginRace(string mutation,HttpStatusCode expected)
     {
         await using var writer=new NpgsqlConnection(testConnection);await writer.OpenAsync();

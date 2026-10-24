@@ -19,8 +19,6 @@ public partial class Session
 
     public Guid? DeviceId { get; set; }
 
-    public Guid? QrCodeId { get; set; }
-
     public Guid StartKey { get; set; }
 
     public string? AppVersion { get; set; }
@@ -42,10 +40,6 @@ public partial class Session
     public string? TerminalReason { get; set; }
 
     public virtual ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();
-
-    public virtual ReleaseQrCode ReleaseQrCode { get; set; } = null!;
-
-    public virtual ICollection<SessionCheckpoint> SessionCheckpoints { get; set; } = new List<SessionCheckpoint>();
 
     public virtual ICollection<SessionEvent> SessionEvents { get; set; } = new List<SessionEvent>();
 

@@ -23,8 +23,6 @@ public sealed class GoogleOnboardingPostgresTests
             GRANT SELECT,INSERT,UPDATE ON users,organizations TO fire3d_api;
             GRANT INSERT ON audit_logs TO fire3d_api;
             GRANT SELECT,INSERT ON auth_refresh_tokens TO fire3d_api;
-            GRANT SELECT ON password_reset_operations TO fire3d_api;
-            CREATE POLICY onboarding_reset_fence ON password_reset_operations TO fire3d_api USING (true);
             """);
         await BackendDatabasePermissionsTests.Apply(db, "AddSelfRegistration");
         await BackendDatabasePermissionsTests.Apply(db, "AddNormalizedRegistrationEmail");
