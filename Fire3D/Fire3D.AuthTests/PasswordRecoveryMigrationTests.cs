@@ -16,11 +16,17 @@ public sealed partial class AuthIntegrationTests
     [PostgresFact]
     public async Task Forgot_reset_and_change_password_work_on_a_database_built_only_from_migrations()
     {
-        foreach (var table in new[] { "local_password_reset_tokens", "password_reset_email_jobs", "password_reset_operations" })
+        foreach (var table in new[] { "local_password_reset_tokens", "password_reset_email_jobs" })
         {
             Assert.True((bool)(await ScalarAsync($"SELECT relrowsecurity FROM pg_class WHERE oid='public.{table}'::regclass"))!, table);
             Assert.False((bool)(await ScalarAsync($"SELECT has_table_privilege('fire3d_api','public.{table}','DELETE')"))!, table);
         }
+        // The Firebase-era reset tables and the other tables nothing read any more are dropped by DropUnusedTables.
+        foreach (var table in new[] { "password_reset_tokens", "password_reset_operations", "release_qr_codes", "revision_floors",
+            "building_floors", "session_checkpoints", "debrief_artifacts", "invoice_metadata" })
+            Assert.Equal(true, await ScalarAsync($"SELECT to_regclass('public.{table}') IS NULL"));
+        Assert.Equal(true, await ScalarAsync("SELECT to_regprocedure('public.invalidate_legacy_reset_tokens(uuid)') IS NULL"));
+        Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM information_schema.columns WHERE table_name='sessions' AND column_name='qr_code_id'"));
 
         var stale = await LoginAsync();
         Assert.Equal(HttpStatusCode.Accepted,
