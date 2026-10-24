@@ -20,15 +20,9 @@ public partial class Fire3DDbContext : DbContext
 
     public virtual DbSet<BuildingContact> BuildingContacts { get; set; }
 
-    public virtual DbSet<BuildingFloor> BuildingFloors { get; set; }
-
     public virtual DbSet<BuildingLocation> BuildingLocations { get; set; }
 
-    public virtual DbSet<DebriefArtifact> DebriefArtifacts { get; set; }
-
     public virtual DbSet<Feedback> Feedbacks { get; set; }
-
-    public virtual DbSet<InvoiceMetadatum> InvoiceMetadata { get; set; }
 
     public virtual DbSet<Organization> Organizations { get; set; }
 
@@ -44,13 +38,9 @@ public partial class Fire3DDbContext : DbContext
 
     public virtual DbSet<ReleasePackage> ReleasePackages { get; set; }
 
-    public virtual DbSet<ReleaseQrCode> ReleaseQrCodes { get; set; }
-
     public virtual DbSet<Revision> Revisions { get; set; }
 
     public virtual DbSet<RevisionArtifact> RevisionArtifacts { get; set; }
-
-    public virtual DbSet<RevisionFloor> RevisionFloors { get; set; }
 
     public virtual DbSet<RevisionIssue> RevisionIssues { get; set; }
 
@@ -73,8 +63,6 @@ public partial class Fire3DDbContext : DbContext
 
     public virtual DbSet<Session> Sessions { get; set; }
 
-    public virtual DbSet<SessionCheckpoint> SessionCheckpoints { get; set; }
-
     public virtual DbSet<SessionEvent> SessionEvents { get; set; }
 
     public virtual DbSet<SessionResult> SessionResults { get; set; }
@@ -95,8 +83,6 @@ public partial class Fire3DDbContext : DbContext
     public virtual DbSet<AvatarUploadIntent> AvatarUploadIntents { get; set; }
 
     public virtual DbSet<AvatarObjectCleanup> AvatarObjectCleanups { get; set; }
-
-    public virtual DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
     public virtual DbSet<ValidationRun> ValidationRuns { get; set; }
 
@@ -265,49 +251,6 @@ public partial class Fire3DDbContext : DbContext
                 .HasConstraintName("building_contacts_building_id_fkey");
         });
 
-        modelBuilder.Entity<BuildingFloor>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("building_floors_pkey");
-
-            entity.ToTable("building_floors");
-
-            entity.HasIndex(e => new { e.BuildingId, e.FloorNumber }, "building_floors_building_id_floor_number_key").IsUnique();
-
-            entity.HasIndex(e => new { e.Id, e.BuildingId }, "building_floors_id_building_id_key").IsUnique();
-
-            entity.Property(e => e.Id)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("id");
-            entity.Property(e => e.AreaSqm)
-                .HasPrecision(10, 2)
-                .HasColumnName("area_sqm");
-            entity.Property(e => e.BuildingId).HasColumnName("building_id");
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("now()")
-                .HasColumnName("created_at");
-            entity.Property(e => e.ElevationMeters)
-                .HasPrecision(10, 3)
-                .HasColumnName("elevation_meters");
-            entity.Property(e => e.FloorName).HasColumnName("floor_name");
-            entity.Property(e => e.FloorNumber).HasColumnName("floor_number");
-            entity.Property(e => e.FloorPlanUrl).HasColumnName("floor_plan_url");
-            entity.Property(e => e.IsBasement).HasColumnName("is_basement");
-            entity.Property(e => e.Metadata)
-                .HasDefaultValueSql("'{}'::jsonb")
-                .HasColumnType("jsonb")
-                .HasColumnName("metadata");
-            entity.Property(e => e.OrganizationId).HasColumnName("organization_id");
-            entity.Property(e => e.UpdatedAt)
-                .HasDefaultValueSql("now()")
-                .HasColumnName("updated_at");
-
-            entity.HasOne(d => d.Building).WithMany(p => p.BuildingFloors)
-                .HasPrincipalKey(p => new { p.Id, p.OrganizationId })
-                .HasForeignKey(d => new { d.BuildingId, d.OrganizationId })
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("building_floors_building_id_organization_id_fkey");
-        });
-
         modelBuilder.Entity<BuildingLocation>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("building_locations_pkey");
@@ -343,53 +286,6 @@ public partial class Fire3DDbContext : DbContext
                 .HasForeignKey<BuildingLocation>(d => d.BuildingId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("building_locations_building_id_fkey");
-        });
-
-        modelBuilder.Entity<DebriefArtifact>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("debrief_artifacts_pkey");
-
-            entity.ToTable("debrief_artifacts");
-
-            entity.HasIndex(e => e.SessionId, "debrief_artifacts_session_id_key").IsUnique();
-
-            entity.Property(e => e.Id)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("id");
-            entity.Property(e => e.GeneratedAt)
-                .HasDefaultValueSql("now()")
-                .HasColumnName("generated_at");
-            entity.Property(e => e.GeneratorVersion).HasColumnName("generator_version");
-            entity.Property(e => e.HazardTimeline)
-                .HasDefaultValueSql("'[]'::jsonb")
-                .HasColumnType("jsonb")
-                .HasColumnName("hazard_timeline");
-            entity.Property(e => e.IsVisibleToTrainee)
-                .HasDefaultValue(true)
-                .HasColumnName("is_visible_to_trainee");
-            entity.Property(e => e.NpcSummary)
-                .HasDefaultValueSql("'{}'::jsonb")
-                .HasColumnType("jsonb")
-                .HasColumnName("npc_summary");
-            entity.Property(e => e.OptimalPath)
-                .HasDefaultValueSql("'[]'::jsonb")
-                .HasColumnType("jsonb")
-                .HasColumnName("optimal_path");
-            entity.Property(e => e.SessionId).HasColumnName("session_id");
-            entity.Property(e => e.TrajectoryHeatmap)
-                .HasDefaultValueSql("'{}'::jsonb")
-                .HasColumnType("jsonb")
-                .HasColumnName("trajectory_heatmap");
-            entity.Property(e => e.WrongDecisions)
-                .HasDefaultValueSql("'[]'::jsonb")
-                .HasColumnType("jsonb")
-                .HasColumnName("wrong_decisions");
-
-            entity.HasOne(d => d.Session).WithOne(p => p.DebriefArtifact)
-                .HasPrincipalKey<SessionResult>(p => p.SessionId)
-                .HasForeignKey<DebriefArtifact>(d => d.SessionId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("debrief_artifacts_session_id_fkey");
         });
 
         modelBuilder.Entity<Feedback>(entity =>
@@ -445,72 +341,6 @@ public partial class Fire3DDbContext : DbContext
                 .HasForeignKey(d => d.SubmittedBy)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("feedback_submitted_by_fkey");
-        });
-
-        modelBuilder.Entity<InvoiceMetadatum>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("invoice_metadata_pkey");
-
-            entity.ToTable("invoice_metadata");
-
-            entity.HasIndex(e => e.OrganizationId, "idx_invoice_metadata_organization");
-
-            entity.HasIndex(e => e.QuotationId, "idx_invoice_metadata_quotation");
-
-            entity.HasIndex(e => e.InvoiceNumber, "invoice_metadata_invoice_number_key").IsUnique();
-
-            entity.HasIndex(e => e.PaymentTransactionId, "invoice_metadata_payment_transaction_id_key").IsUnique();
-
-            entity.Property(e => e.Id)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("id");
-            entity.Property(e => e.BillingAddress).HasColumnName("billing_address");
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("now()")
-                .HasColumnName("created_at");
-            entity.Property(e => e.Currency)
-                .HasMaxLength(3)
-                .HasDefaultValueSql("'VND'::character varying")
-                .HasColumnName("currency");
-            entity.Property(e => e.InvoiceNumber)
-                .HasMaxLength(100)
-                .HasColumnName("invoice_number");
-            entity.Property(e => e.InvoiceUrl).HasColumnName("invoice_url");
-            entity.Property(e => e.IssuedAt).HasColumnName("issued_at");
-            entity.Property(e => e.LegalName).HasColumnName("legal_name");
-            entity.Property(e => e.OrganizationId).HasColumnName("organization_id");
-            entity.Property(e => e.PaymentTransactionId).HasColumnName("payment_transaction_id");
-            entity.Property(e => e.QuotationId).HasColumnName("quotation_id");
-            entity.Property(e => e.SubtotalAmount)
-                .HasPrecision(14, 2)
-                .HasColumnName("subtotal_amount");
-            entity.Property(e => e.TaxAmount)
-                .HasPrecision(14, 2)
-                .HasColumnName("tax_amount");
-            entity.Property(e => e.TaxCode)
-                .HasMaxLength(50)
-                .HasColumnName("tax_code");
-            entity.Property(e => e.TotalAmount)
-                .HasPrecision(14, 2)
-                .HasColumnName("total_amount");
-            entity.Property(e => e.UpdatedAt)
-                .HasDefaultValueSql("now()")
-                .HasColumnName("updated_at");
-
-            entity.HasOne(d => d.Organization).WithMany(p => p.InvoiceMetadata)
-                .HasForeignKey(d => d.OrganizationId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("invoice_metadata_organization_id_fkey");
-
-            entity.HasOne(d => d.PaymentTransaction).WithOne(p => p.InvoiceMetadatum)
-                .HasForeignKey<InvoiceMetadatum>(d => d.PaymentTransactionId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("invoice_metadata_payment_transaction_id_fkey");
-
-            entity.HasOne(d => d.Quotation).WithMany(p => p.InvoiceMetadata)
-                .HasForeignKey(d => d.QuotationId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("invoice_metadata_quotation_id_fkey");
         });
 
         modelBuilder.Entity<Organization>(entity =>
@@ -897,59 +727,6 @@ public partial class Fire3DDbContext : DbContext
                 .HasConstraintName("release_packages_release_id_fkey");
         });
 
-        modelBuilder.Entity<ReleaseQrCode>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("release_qr_codes_pkey");
-
-            entity.ToTable("release_qr_codes");
-
-            entity.HasIndex(e => e.ReleaseId, "qr_release");
-
-            entity.HasIndex(e => e.TrainingId, "qr_training");
-
-            entity.HasIndex(e => new { e.Id, e.TrainingId, e.ReleaseId, e.OrganizationId }, "release_qr_codes_id_training_id_release_id_organization_id_key").IsUnique();
-
-            entity.HasIndex(e => e.QrHash, "release_qr_codes_qr_hash_key").IsUnique();
-
-            entity.Property(e => e.Id)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("id");
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("now()")
-                .HasColumnName("created_at");
-            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
-            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
-            entity.Property(e => e.IsActive)
-                .HasDefaultValue(true)
-                .HasColumnName("is_active");
-            entity.Property(e => e.Label).HasColumnName("label");
-            entity.Property(e => e.OrganizationId).HasColumnName("organization_id");
-            entity.Property(e => e.QrHash)
-                .HasMaxLength(64)
-                .HasComment("SHA-256 of a high-entropy opaque token. Original token returned once for printing; rotation creates a new row.")
-                .HasColumnName("qr_hash");
-            entity.Property(e => e.ReleaseId).HasColumnName("release_id");
-            entity.Property(e => e.RevisionFloorId)
-                .HasComment("Placement metadata only; does not override the immutable scenario spawn.")
-                .HasColumnName("revision_floor_id");
-            entity.Property(e => e.TrainingId).HasColumnName("training_id");
-
-            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.ReleaseQrCodes)
-                .HasForeignKey(d => d.CreatedBy)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("release_qr_codes_created_by_fkey");
-
-            entity.HasOne(d => d.RevisionFloor).WithMany(p => p.ReleaseQrCodes)
-                .HasForeignKey(d => d.RevisionFloorId)
-                .HasConstraintName("release_qr_codes_revision_floor_id_fkey");
-
-            entity.HasOne(d => d.Training).WithMany(p => p.ReleaseQrCodes)
-                .HasPrincipalKey(p => new { p.Id, p.ReleaseId, p.OrganizationId })
-                .HasForeignKey(d => new { d.TrainingId, d.ReleaseId, d.OrganizationId })
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("release_qr_codes_training_id_release_id_organization_id_fkey");
-        });
-
         modelBuilder.Entity<Revision>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("revisions_pkey");
@@ -1030,51 +807,6 @@ public partial class Fire3DDbContext : DbContext
                 .HasForeignKey(d => new { d.JobId, d.RevisionId })
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("revision_artifacts_job_id_revision_id_fkey");
-        });
-
-        modelBuilder.Entity<RevisionFloor>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("revision_floors_pkey");
-
-            entity.ToTable("revision_floors", tb => tb.HasComment("Immutable floor snapshot used by content, QR labels and historical replay; changes require a new revision."));
-
-            entity.HasIndex(e => new { e.Id, e.RevisionId }, "revision_floors_id_revision_id_key").IsUnique();
-
-            entity.HasIndex(e => new { e.RevisionId, e.BuildingFloorId }, "revision_floors_revision_id_building_floor_id_key").IsUnique();
-
-            entity.HasIndex(e => new { e.RevisionId, e.IfcGuid }, "revision_floors_revision_id_ifc_guid_key").IsUnique();
-
-            entity.Property(e => e.Id)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("id");
-            entity.Property(e => e.BuildingFloorId).HasColumnName("building_floor_id");
-            entity.Property(e => e.BuildingId).HasColumnName("building_id");
-            entity.Property(e => e.CoordinateTransform)
-                .HasColumnType("jsonb")
-                .HasColumnName("coordinate_transform");
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("now()")
-                .HasColumnName("created_at");
-            entity.Property(e => e.ElevationMeters)
-                .HasPrecision(10, 3)
-                .HasColumnName("elevation_meters");
-            entity.Property(e => e.FloorName).HasColumnName("floor_name");
-            entity.Property(e => e.FloorNumber).HasColumnName("floor_number");
-            entity.Property(e => e.IfcGuid).HasColumnName("ifc_guid");
-            entity.Property(e => e.OrganizationId).HasColumnName("organization_id");
-            entity.Property(e => e.RevisionId).HasColumnName("revision_id");
-
-            entity.HasOne(d => d.BuildingFloor).WithMany(p => p.RevisionFloors)
-                .HasPrincipalKey(p => new { p.Id, p.BuildingId })
-                .HasForeignKey(d => new { d.BuildingFloorId, d.BuildingId })
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("revision_floors_building_floor_id_building_id_fkey");
-
-            entity.HasOne(d => d.Revision).WithMany(p => p.RevisionFloors)
-                .HasPrincipalKey(p => new { p.Id, p.BuildingId, p.OrganizationId })
-                .HasForeignKey(d => new { d.RevisionId, d.BuildingId, d.OrganizationId })
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("revision_floors_revision_id_building_id_organization_id_fkey");
         });
 
         modelBuilder.Entity<RevisionIssue>(entity =>
@@ -1376,7 +1108,6 @@ public partial class Fire3DDbContext : DbContext
             entity.Property(e => e.ProtocolVersion)
                 .HasDefaultValueSql("'1.0'::text")
                 .HasColumnName("protocol_version");
-            entity.Property(e => e.QrCodeId).HasColumnName("qr_code_id");
             entity.Property(e => e.ReleaseHash)
                 .HasMaxLength(64)
                 .HasColumnName("release_hash");
@@ -1405,66 +1136,11 @@ public partial class Fire3DDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("sessions_device_id_trainee_user_id_fkey");
 
-            entity.HasOne(d => d.ReleaseQrCode).WithMany(p => p.Sessions)
-                .HasPrincipalKey(p => new { p.Id, p.TrainingId, p.ReleaseId, p.OrganizationId })
-                .HasForeignKey(d => new { d.QrCodeId, d.TrainingId, d.ReleaseId, d.OrganizationId })
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("sessions_qr_code_id_training_id_release_id_organization_id_fkey");
-
             entity.HasOne(d => d.Training).WithMany(p => p.Sessions)
                 .HasPrincipalKey(p => new { p.Id, p.ReleaseId, p.ScenarioVersionId, p.OrganizationId })
                 .HasForeignKey(d => new { d.TrainingId, d.ReleaseId, d.ScenarioVersionId, d.OrganizationId })
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("sessions_training_id_release_id_scenario_version_id_organi_fkey");
-        });
-
-        modelBuilder.Entity<SessionCheckpoint>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("session_checkpoints_pkey");
-
-            entity.ToTable("session_checkpoints");
-
-            entity.HasIndex(e => new { e.SessionId, e.SequenceNumber }, "session_checkpoints_session_id_sequence_number_key").IsUnique();
-
-            entity.Property(e => e.Id)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("id");
-            entity.Property(e => e.ActiveObjectives)
-                .HasDefaultValueSql("'[]'::jsonb")
-                .HasColumnType("jsonb")
-                .HasColumnName("active_objectives");
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("now()")
-                .HasColumnName("created_at");
-            entity.Property(e => e.HazardTimeStep).HasColumnName("hazard_time_step");
-            entity.Property(e => e.NpcStates)
-                .HasDefaultValueSql("'[]'::jsonb")
-                .HasColumnType("jsonb")
-                .HasColumnName("npc_states");
-            entity.Property(e => e.PlayerStatus)
-                .HasDefaultValueSql("'{}'::jsonb")
-                .HasColumnType("jsonb")
-                .HasColumnName("player_status");
-            entity.Property(e => e.PlayerTransform)
-                .HasColumnType("jsonb")
-                .HasColumnName("player_transform");
-            entity.Property(e => e.ReleaseHash)
-                .HasMaxLength(64)
-                .HasColumnName("release_hash");
-            entity.Property(e => e.ScenarioHash)
-                .HasMaxLength(64)
-                .HasColumnName("scenario_hash");
-            entity.Property(e => e.SequenceNumber).HasColumnName("sequence_number");
-            entity.Property(e => e.SessionId).HasColumnName("session_id");
-            entity.Property(e => e.WorldInteractiveStates)
-                .HasDefaultValueSql("'{}'::jsonb")
-                .HasColumnType("jsonb")
-                .HasColumnName("world_interactive_states");
-
-            entity.HasOne(d => d.Session).WithMany(p => p.SessionCheckpoints)
-                .HasForeignKey(d => d.SessionId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("session_checkpoints_session_id_fkey");
         });
 
         modelBuilder.Entity<SessionEvent>(entity =>
@@ -1869,31 +1545,6 @@ public partial class Fire3DDbContext : DbContext
                 .HasConstraintName("validation_runs_job_id_revision_id_fkey");
         });
 
-        modelBuilder.Entity<PasswordResetToken>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("password_reset_tokens_pkey");
-
-            entity.ToTable("password_reset_tokens");
-
-            entity.HasIndex(e => e.UserId).HasDatabaseName("ix_password_reset_tokens_user_id");
-
-            entity.Property(e => e.Id)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("id");
-            entity.Property(e => e.UserId).HasColumnName("user_id");
-            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
-            entity.Property(e => e.UsedAt).HasColumnName("used_at");
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("now()")
-                .HasColumnName("created_at");
-
-            entity.HasOne(d => d.User)
-                .WithMany()
-                .HasForeignKey(d => d.UserId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("password_reset_tokens_user_id_fkey");
-        });
-
                 modelBuilder.Entity<ScenarioDraft>(entity =>
         {
             entity.ToTable("scenario_drafts");
@@ -1966,7 +1617,4 @@ public partial class Fire3DDbContext : DbContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }
-
-
-
 

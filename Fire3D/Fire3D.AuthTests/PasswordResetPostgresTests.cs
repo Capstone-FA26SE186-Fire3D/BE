@@ -61,9 +61,6 @@ public sealed class PasswordResetPostgresTests
                   id uuid PRIMARY KEY,user_id uuid REFERENCES users(id),family_id uuid NOT NULL,
                   token_hash varchar(64) NOT NULL UNIQUE,created_at timestamptz NOT NULL,expires_at timestamptz NOT NULL,
                   consumed_at timestamptz,revoked_at timestamptz);
-                CREATE TABLE password_reset_tokens (
-                  id uuid PRIMARY KEY,user_id uuid NOT NULL REFERENCES users(id),
-                  expires_at timestamptz NOT NULL,created_at timestamptz NOT NULL DEFAULT now(),used_at timestamptz);
                 CREATE TABLE audit_logs (
                   id uuid PRIMARY KEY,user_id uuid,organization_id uuid,actor_type text,action audit_action_enum,
                   target_entity text,target_id uuid,correlation_id uuid,old_values jsonb,new_values jsonb,
@@ -74,8 +71,6 @@ public sealed class PasswordResetPostgresTests
             await db.Sql(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,"005_email_verification.sql")));
             await db.Sql("ALTER TABLE email_verification_jobs ADD COLUMN user_id uuid, ADD COLUMN generation integer NOT NULL DEFAULT 1;");
             foreach (var operation in new Fire3D.Infrastructure.Migrations.AddRefreshCleanupGate().UpOperations
-                .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>()) await db.Sql(operation.Sql);
-            foreach (var operation in new Fire3D.Infrastructure.Migrations.AddPasswordRecoveryGate().UpOperations
                 .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>()) await db.Sql(operation.Sql);
             await db.Sql("ALTER TABLE buildings ADD FOREIGN KEY(organization_id) REFERENCES organizations(id); ALTER TABLE sessions ADD FOREIGN KEY(trainee_user_id) REFERENCES users(id);");
             foreach (var operation in new Fire3D.Infrastructure.Migrations.AddPendingRegistrationCleanupGate().UpOperations
@@ -399,46 +394,6 @@ public sealed class PasswordResetPostgresTests
         await db.Sql("UPDATE password_reset_email_jobs SET lease_until=now()-interval '1 second'");
         Assert.Null(await queue.ClaimAsync(default));
         Assert.Equal("Dead",await db.Sql("SELECT status FROM password_reset_email_jobs"));
-    }
-    [ResetPostgresFact]
-    public async Task Reset_commit_revokes_all_sessions_and_blocks_stale_or_pending_login()
-    {
-        await using var db=await Database.Create();var user=Guid.NewGuid();
-        await db.Sql($"INSERT INTO users(id,email,firebase_uid,role) VALUES ('{user}','test@example.com','uid','Trainee')");
-        await using var c=db.Context();var auth=new AuthStore(c);var resets=new PasswordResetStore(c,auth);
-        await auth.AddRefreshTokenAsync(Token(user),default);
-        await auth.AddRefreshTokenAsync(Token(user),default);
-        // Issued well before the reset finishes: the fence compares the DB clock with the host clock, so a token minted
-        // milliseconds earlier on a host whose clock runs ahead of the database would look newer than the reset.
-        var stale=Token(user,DateTime.UtcNow.AddMinutes(-1));
-        var operation=await resets.BeginAsync(user,"uid",new string('a',64),default);
-        Assert.NotNull(operation);
-        Assert.Equal(2L,await db.Sql("SELECT count(*) FROM auth_refresh_tokens WHERE revoked_at IS NOT NULL"));
-        Assert.Null(await resets.BeginAsync(user,"uid",new string('b',64),default));
-        await Assert.ThrowsAsync<PasswordResetException>(()=>auth.AddRefreshTokenAsync(Token(user),default));
-        await resets.FinishAsync(operation.Value,user,"Completed",default);
-        await Assert.ThrowsAsync<PasswordResetException>(()=>auth.AddRefreshTokenAsync(stale,default));
-        await auth.AddRefreshTokenAsync(Token(user),default);
-        Assert.Equal(1L,await db.Sql("SELECT count(*) FROM auth_refresh_tokens WHERE revoked_at IS NULL"));
-        Assert.Equal(1L,await db.Sql("SELECT count(*) FROM audit_logs"));
-        Assert.Null(await resets.BeginAsync(user,"uid",new string('a',64),default));
-    }
-    [ResetPostgresFact]
-    public async Task Finalization_database_failure_keeps_durable_fence_and_revocations()
-    {
-        await using var db=await Database.Create();var user=Guid.NewGuid();
-        await db.Sql($"INSERT INTO users(id,email,firebase_uid,role) VALUES ('{user}','test@example.com','uid','Trainee')");
-        await using(var c=db.Context()) {
-            var auth=new AuthStore(c);await auth.AddRefreshTokenAsync(Token(user),default);
-            var resets=new PasswordResetStore(c,auth);
-            var op=await resets.BeginAsync(user,"uid",new string('c',64),default);
-            await db.Sql("ALTER TABLE audit_logs ADD CONSTRAINT simulate_unavailable_audit CHECK (actor_type='Impossible')");
-            await Assert.ThrowsAsync<DbUpdateException>(()=>resets.FinishAsync(op!.Value,user,"Completed",default));
-        }
-        Assert.Equal("Pending",await db.Sql("SELECT status FROM password_reset_operations"));
-        Assert.Equal(1L,await db.Sql("SELECT count(*) FROM auth_refresh_tokens WHERE revoked_at IS NOT NULL"));
-        await using var fresh=db.Context();
-        await Assert.ThrowsAsync<PasswordResetException>(()=>new AuthStore(fresh).AddRefreshTokenAsync(Token(user),default));
     }
 
     [ResetPostgresFact]

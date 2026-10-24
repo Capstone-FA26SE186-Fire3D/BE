@@ -18,7 +18,7 @@ public sealed class BackendDatabasePermissionsTests
               IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='fire3d_api') THEN CREATE ROLE fire3d_api NOLOGIN; END IF;
             END $$;
             GRANT USAGE ON SCHEMA public TO anon,authenticated,fire3d_api;
-            GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE avatar_upload_intents,avatar_object_cleanups,device_installations,password_reset_tokens,support_ticket_messages TO anon,authenticated,fire3d_api;
+            GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE avatar_upload_intents,avatar_object_cleanups,device_installations,support_ticket_messages TO anon,authenticated,fire3d_api;
             GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO anon,authenticated;
             ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon,authenticated;
             ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon,authenticated;
@@ -26,7 +26,7 @@ public sealed class BackendDatabasePermissionsTests
         await Apply(db, "HardenBackendObjectPermissions");
         Assert.Equal(0L, await db.Scalar("""
             SELECT count(*) FROM pg_class c WHERE c.relnamespace='public'::regnamespace
-              AND c.relname IN ('avatar_upload_intents','avatar_object_cleanups','device_installations','password_reset_tokens','support_ticket_messages')
+              AND c.relname IN ('avatar_upload_intents','avatar_object_cleanups','device_installations','support_ticket_messages')
               AND (NOT c.relrowsecurity OR has_table_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,DELETE')
                 OR has_table_privilege('authenticated',c.oid,'SELECT,INSERT,UPDATE,DELETE'))
             """));

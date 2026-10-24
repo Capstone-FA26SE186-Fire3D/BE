@@ -119,8 +119,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         await using var command=new NpgsqlCommand("""
             WITH updated AS (
               UPDATE public.users SET last_login_at=@now,updated_at=@now,password_hash=COALESCE(@password,password_hash)
-              WHERE id=@user AND NOT EXISTS(SELECT 1 FROM public.password_reset_operations
-                WHERE user_id=@user AND (status='Pending' OR finished_at>=@now)) RETURNING id
+              WHERE id=@user RETURNING id
             ), issued AS (
               INSERT INTO public.auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at)
               SELECT @token,id,@family,@hash,@now,@expires FROM updated RETURNING id
@@ -137,8 +136,7 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
         command.Parameters.AddWithValue("token",token.Id);command.Parameters.AddWithValue("family",token.FamilyId);
         command.Parameters.AddWithValue("hash",token.TokenHash);command.Parameters.AddWithValue("expires",token.ExpiresAt);
         command.Parameters.AddWithValue("audit",Guid.NewGuid());command.Parameters.AddWithValue("correlation",Guid.NewGuid());
-        if(await command.ExecuteScalarAsync(ct) is null)
-            throw new PasswordResetException("RESET_PENDING","Sign in again after password recovery completes.",503);
+        if(await command.ExecuteScalarAsync(ct) is null) throw PasswordResetException.Unavailable();
     }
 
     public async Task<DeviceRegistrationResult> RegisterDeviceAsync(Guid userId, string deviceUuid, DeviceInstallationProof installationProof,
@@ -263,11 +261,6 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
             ? await BeginUserTransactionAsync(token.UserId, ct) : null;
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"SELECT pg_advisory_xact_lock(hashtextextended({"fire3d:auth:" + token.UserId},0))",ct);
-        var fenced = await db.Database.SqlQuery<bool>($"""
-            SELECT EXISTS(SELECT 1 FROM public.password_reset_operations WHERE user_id={token.UserId}
-              AND (status='Pending' OR finished_at >= {token.CreatedAt})) AS "Value"
-            """).SingleAsync(ct);
-        if (fenced) throw new PasswordResetException("RESET_PENDING", "Sign in again after password recovery completes.", 503);
         db.Set<RefreshToken>().Add(token);
         await db.SaveChangesAsync(ct);
         if (owned is not null) await owned.CommitAsync(ct);
@@ -322,31 +315,6 @@ public sealed class AuthStore(Fire3DDbContext db) : IAuthStore
     {
         public Task CommitAsync(CancellationToken ct) => transaction.CommitAsync(ct);
         public ValueTask DisposeAsync() => transaction.DisposeAsync();
-    }
-
-    // Password reset
-    public async Task SavePasswordResetTokenAsync(PasswordResetToken token, CancellationToken ct)
-    {
-        db.Set<PasswordResetToken>().Add(token);
-        await db.SaveChangesAsync(ct);
-    }
-
-    public Task<PasswordResetToken?> FindValidResetTokenAsync(Guid tokenId, CancellationToken ct) =>
-        db.Set<PasswordResetToken>()
-          .AsNoTracking()
-          .SingleOrDefaultAsync(
-              x => x.Id == tokenId && x.UsedAt == null && x.ExpiresAt > DateTime.UtcNow, ct);
-
-    public async Task MarkResetTokenUsedAsync(Guid tokenId, DateTime now, CancellationToken ct) =>
-        await db.Set<PasswordResetToken>()
-                .Where(x => x.Id == tokenId)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.UsedAt, now), ct);
-
-    public async Task InvalidateUserResetTokensAsync(Guid userId, CancellationToken ct)
-    {
-        if (db.Database.CurrentTransaction is null)
-            throw new InvalidOperationException("Reset-token invalidation requires the user transaction.");
-        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT public.invalidate_legacy_reset_tokens({userId})", ct);
     }
 
     // Registration

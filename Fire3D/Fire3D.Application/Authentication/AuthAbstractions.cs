@@ -37,12 +37,6 @@ public interface IAuthStore
     Task<bool> SessionIsValidAsync(Guid userId,Guid familyId,string? role,string? organizationId,DateTime now,CancellationToken ct);
     Task WriteAuditAsync(User actor, string action, Guid targetId, DateTime now, CancellationToken ct, Guid? correlationId = null);
 
-    // --- Password Reset ---
-    Task SavePasswordResetTokenAsync(PasswordResetToken token, CancellationToken ct);
-    Task<PasswordResetToken?> FindValidResetTokenAsync(Guid tokenId, CancellationToken ct);
-    Task MarkResetTokenUsedAsync(Guid tokenId, DateTime now, CancellationToken ct);
-    Task InvalidateUserResetTokensAsync(Guid userId, CancellationToken ct);
-
     // --- Registration ---
     Task<RegisterConflict> TryCreateOrganizationWithUserAsync(Organization organization, User user, CancellationToken ct);
     Task EnqueuePasswordResetAsync(string email, CancellationToken ct);

@@ -52,10 +52,6 @@ public sealed class GoogleLinkService(Fire3DDbContext db, IAuthStore accounts, I
             return AuthResult<GoogleLinkResponse>.Fail("GOOGLE_ACCOUNT_REPLACEMENT_FORBIDDEN", "A different Google identity is already linked.", 409);
         if (user.FirebaseUid == identity.Uid)
             return AuthResult<GoogleLinkResponse>.Ok(new(GoogleAuthRules.ToAccount(user), true, false));
-        if (await db.Database.SqlQuery<bool>($"""
-            SELECT EXISTS(SELECT 1 FROM public.password_reset_operations WHERE user_id={actorId} AND status='Pending') AS "Value"
-            """).SingleAsync(ct))
-            return AuthResult<GoogleLinkResponse>.Fail("PASSWORD_RESET_PENDING", "Wait for password recovery to finish before linking Google.", 409);
         try
         {
             await db.Users.Where(x => x.Id == actorId).ExecuteUpdateAsync(setters => setters
@@ -65,7 +61,6 @@ public sealed class GoogleLinkService(Fire3DDbContext db, IAuthStore accounts, I
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation && ex.ConstraintName == "users_firebase_uid_key")
         { return AuthResult<GoogleLinkResponse>.Fail("GOOGLE_ALREADY_LINKED", "Google identity belongs to another account.", 409); }
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE public.local_password_reset_tokens SET used_at={now} WHERE user_id={actorId} AND used_at IS NULL", ct);
-        await accounts.InvalidateUserResetTokensAsync(actorId, ct);
         await accounts.RevokeAllUserSessionsAsync(actorId, now, ct);
         await accounts.WriteAuditAsync(user, "Update", actorId, now, ct);
         user.FirebaseUid = identity.Uid; user.ProfileRevision++; user.UpdatedAt = now;

@@ -615,81 +615,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.ToTable("building_contacts", (string)null);
                 });
 
-            modelBuilder.Entity("Fire3D.Domain.Entities.BuildingFloor", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<decimal?>("AreaSqm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("area_sqm");
-
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("building_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<decimal?>("ElevationMeters")
-                        .HasPrecision(10, 3)
-                        .HasColumnType("numeric(10,3)")
-                        .HasColumnName("elevation_meters");
-
-                    b.Property<string>("FloorName")
-                        .HasColumnType("text")
-                        .HasColumnName("floor_name");
-
-                    b.Property<int>("FloorNumber")
-                        .HasColumnType("integer")
-                        .HasColumnName("floor_number");
-
-                    b.Property<string>("FloorPlanUrl")
-                        .HasColumnType("text")
-                        .HasColumnName("floor_plan_url");
-
-                    b.Property<bool>("IsBasement")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_basement");
-
-                    b.Property<string>("Metadata")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("metadata")
-                        .HasDefaultValueSql("'{}'::jsonb");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("organization_id");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("Id")
-                        .HasName("building_floors_pkey");
-
-                    b.HasIndex("BuildingId", "OrganizationId");
-
-                    b.HasIndex(new[] { "BuildingId", "FloorNumber" }, "building_floors_building_id_floor_number_key")
-                        .IsUnique();
-
-                    b.HasIndex(new[] { "Id", "BuildingId" }, "building_floors_id_building_id_key")
-                        .IsUnique();
-
-                    b.ToTable("building_floors", (string)null);
-                });
-
             modelBuilder.Entity("Fire3D.Domain.Entities.BuildingLocation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -747,79 +672,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("building_locations", (string)null);
-                });
-
-            modelBuilder.Entity("Fire3D.Domain.Entities.DebriefArtifact", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTime>("GeneratedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("generated_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<string>("GeneratorVersion")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("generator_version");
-
-                    b.Property<string>("HazardTimeline")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("hazard_timeline")
-                        .HasDefaultValueSql("'[]'::jsonb");
-
-                    b.Property<bool>("IsVisibleToTrainee")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("is_visible_to_trainee");
-
-                    b.Property<string>("NpcSummary")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("npc_summary")
-                        .HasDefaultValueSql("'{}'::jsonb");
-
-                    b.Property<string>("OptimalPath")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("optimal_path")
-                        .HasDefaultValueSql("'[]'::jsonb");
-
-                    b.Property<Guid>("SessionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("session_id");
-
-                    b.Property<string>("TrajectoryHeatmap")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("trajectory_heatmap")
-                        .HasDefaultValueSql("'{}'::jsonb");
-
-                    b.Property<string>("WrongDecisions")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("wrong_decisions")
-                        .HasDefaultValueSql("'[]'::jsonb");
-
-                    b.HasKey("Id")
-                        .HasName("debrief_artifacts_pkey");
-
-                    b.HasIndex(new[] { "SessionId" }, "debrief_artifacts_session_id_key")
-                        .IsUnique();
-
-                    b.ToTable("debrief_artifacts", (string)null);
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.DeviceInstallation", b =>
@@ -1035,104 +887,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.ToTable("feedback", (string)null);
                 });
 
-            modelBuilder.Entity("Fire3D.Domain.Entities.InvoiceMetadatum", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<string>("BillingAddress")
-                        .HasColumnType("text")
-                        .HasColumnName("billing_address");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(3)
-                        .HasColumnType("character varying(3)")
-                        .HasColumnName("currency")
-                        .HasDefaultValueSql("'VND'::character varying");
-
-                    b.Property<string>("InvoiceNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("invoice_number");
-
-                    b.Property<string>("InvoiceUrl")
-                        .HasColumnType("text")
-                        .HasColumnName("invoice_url");
-
-                    b.Property<DateTime?>("IssuedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("issued_at");
-
-                    b.Property<string>("LegalName")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("legal_name");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("organization_id");
-
-                    b.Property<Guid>("PaymentTransactionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("payment_transaction_id");
-
-                    b.Property<Guid>("QuotationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("quotation_id");
-
-                    b.Property<decimal>("SubtotalAmount")
-                        .HasPrecision(14, 2)
-                        .HasColumnType("numeric(14,2)")
-                        .HasColumnName("subtotal_amount");
-
-                    b.Property<decimal>("TaxAmount")
-                        .HasPrecision(14, 2)
-                        .HasColumnType("numeric(14,2)")
-                        .HasColumnName("tax_amount");
-
-                    b.Property<string>("TaxCode")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("tax_code");
-
-                    b.Property<decimal>("TotalAmount")
-                        .HasPrecision(14, 2)
-                        .HasColumnType("numeric(14,2)")
-                        .HasColumnName("total_amount");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("Id")
-                        .HasName("invoice_metadata_pkey");
-
-                    b.HasIndex(new[] { "OrganizationId" }, "idx_invoice_metadata_organization");
-
-                    b.HasIndex(new[] { "QuotationId" }, "idx_invoice_metadata_quotation");
-
-                    b.HasIndex(new[] { "InvoiceNumber" }, "invoice_metadata_invoice_number_key")
-                        .IsUnique();
-
-                    b.HasIndex(new[] { "PaymentTransactionId" }, "invoice_metadata_payment_transaction_id_key")
-                        .IsUnique();
-
-                    b.ToTable("invoice_metadata", (string)null);
-                });
-
             modelBuilder.Entity("Fire3D.Domain.Entities.NotificationDelivery", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1326,41 +1080,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("organization_notifications");
-                });
-
-            modelBuilder.Entity("Fire3D.Domain.Entities.PasswordResetToken", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
-
-                    b.Property<DateTime?>("UsedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("used_at");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id")
-                        .HasName("password_reset_tokens_pkey");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_password_reset_tokens_user_id");
-
-                    b.ToTable("password_reset_tokens", (string)null);
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.PaymentProvisioningRecord", b =>
@@ -2516,84 +2235,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.ToTable("release_packages", (string)null);
                 });
 
-            modelBuilder.Entity("Fire3D.Domain.Entities.ReleaseQrCode", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<DateTime?>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("is_active");
-
-                    b.Property<string>("Label")
-                        .HasColumnType("text")
-                        .HasColumnName("label");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("organization_id");
-
-                    b.Property<string>("QrHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("qr_hash")
-                        .HasComment("SHA-256 of a high-entropy opaque token. Original token returned once for printing; rotation creates a new row.");
-
-                    b.Property<Guid>("ReleaseId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("release_id");
-
-                    b.Property<Guid?>("RevisionFloorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("revision_floor_id")
-                        .HasComment("Placement metadata only; does not override the immutable scenario spawn.");
-
-                    b.Property<Guid>("TrainingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("training_id");
-
-                    b.HasKey("Id")
-                        .HasName("release_qr_codes_pkey");
-
-                    b.HasIndex("CreatedBy");
-
-                    b.HasIndex("RevisionFloorId");
-
-                    b.HasIndex("TrainingId", "ReleaseId", "OrganizationId");
-
-                    b.HasIndex(new[] { "ReleaseId" }, "qr_release");
-
-                    b.HasIndex(new[] { "TrainingId" }, "qr_training");
-
-                    b.HasIndex(new[] { "Id", "TrainingId", "ReleaseId", "OrganizationId" }, "release_qr_codes_id_training_id_release_id_organization_id_key")
-                        .IsUnique();
-
-                    b.HasIndex(new[] { "QrHash" }, "release_qr_codes_qr_hash_key")
-                        .IsUnique();
-
-                    b.ToTable("release_qr_codes", (string)null);
-                });
-
             modelBuilder.Entity("Fire3D.Domain.Entities.Revision", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2726,82 +2367,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("revision_artifacts", (string)null);
-                });
-
-            modelBuilder.Entity("Fire3D.Domain.Entities.RevisionFloor", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid>("BuildingFloorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("building_floor_id");
-
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("building_id");
-
-                    b.Property<string>("CoordinateTransform")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("coordinate_transform");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<decimal>("ElevationMeters")
-                        .HasPrecision(10, 3)
-                        .HasColumnType("numeric(10,3)")
-                        .HasColumnName("elevation_meters");
-
-                    b.Property<string>("FloorName")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("floor_name");
-
-                    b.Property<int>("FloorNumber")
-                        .HasColumnType("integer")
-                        .HasColumnName("floor_number");
-
-                    b.Property<string>("IfcGuid")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ifc_guid");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("organization_id");
-
-                    b.Property<Guid>("RevisionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("revision_id");
-
-                    b.HasKey("Id")
-                        .HasName("revision_floors_pkey");
-
-                    b.HasIndex("BuildingFloorId", "BuildingId");
-
-                    b.HasIndex("RevisionId", "BuildingId", "OrganizationId");
-
-                    b.HasIndex(new[] { "Id", "RevisionId" }, "revision_floors_id_revision_id_key")
-                        .IsUnique();
-
-                    b.HasIndex(new[] { "RevisionId", "BuildingFloorId" }, "revision_floors_revision_id_building_floor_id_key")
-                        .IsUnique();
-
-                    b.HasIndex(new[] { "RevisionId", "IfcGuid" }, "revision_floors_revision_id_ifc_guid_key")
-                        .IsUnique();
-
-                    b.ToTable("revision_floors", null, t =>
-                        {
-                            t.HasComment("Immutable floor snapshot used by content, QR labels and historical replay; changes require a new revision.");
-                        });
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.RevisionIssue", b =>
@@ -3614,10 +3179,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnName("protocol_version")
                         .HasDefaultValueSql("'1.0'::text");
 
-                    b.Property<Guid?>("QrCodeId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("qr_code_id");
-
                     b.Property<string>("ReleaseHash")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -3673,8 +3234,6 @@ namespace Fire3D.Infrastructure.Migrations
 
                     b.HasIndex("DeviceId", "TraineeUserId");
 
-                    b.HasIndex("QrCodeId", "TrainingId", "ReleaseId", "OrganizationId");
-
                     b.HasIndex("TrainingId", "ReleaseId", "ScenarioVersionId", "OrganizationId");
 
                     b.HasIndex(new[] { "OrganizationId", "StartedAt" }, "sessions_org_history")
@@ -3689,86 +3248,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("sessions", (string)null);
-                });
-
-            modelBuilder.Entity("Fire3D.Domain.Entities.SessionCheckpoint", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<string>("ActiveObjectives")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("active_objectives")
-                        .HasDefaultValueSql("'[]'::jsonb");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<int>("HazardTimeStep")
-                        .HasColumnType("integer")
-                        .HasColumnName("hazard_time_step");
-
-                    b.Property<string>("NpcStates")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("npc_states")
-                        .HasDefaultValueSql("'[]'::jsonb");
-
-                    b.Property<string>("PlayerStatus")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("player_status")
-                        .HasDefaultValueSql("'{}'::jsonb");
-
-                    b.Property<string>("PlayerTransform")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("player_transform");
-
-                    b.Property<string>("ReleaseHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("release_hash");
-
-                    b.Property<string>("ScenarioHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("scenario_hash");
-
-                    b.Property<int>("SequenceNumber")
-                        .HasColumnType("integer")
-                        .HasColumnName("sequence_number");
-
-                    b.Property<Guid>("SessionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("session_id");
-
-                    b.Property<string>("WorldInteractiveStates")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("world_interactive_states")
-                        .HasDefaultValueSql("'{}'::jsonb");
-
-                    b.HasKey("Id")
-                        .HasName("session_checkpoints_pkey");
-
-                    b.HasIndex(new[] { "SessionId", "SequenceNumber" }, "session_checkpoints_session_id_sequence_number_key")
-                        .IsUnique();
-
-                    b.ToTable("session_checkpoints", (string)null);
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.SessionEvent", b =>
@@ -4571,18 +4050,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Navigation("Building");
                 });
 
-            modelBuilder.Entity("Fire3D.Domain.Entities.BuildingFloor", b =>
-                {
-                    b.HasOne("Fire3D.Domain.Entities.Building", "Building")
-                        .WithMany("BuildingFloors")
-                        .HasForeignKey("BuildingId", "OrganizationId")
-                        .HasPrincipalKey("Id", "OrganizationId")
-                        .IsRequired()
-                        .HasConstraintName("building_floors_building_id_organization_id_fkey");
-
-                    b.Navigation("Building");
-                });
-
             modelBuilder.Entity("Fire3D.Domain.Entities.BuildingLocation", b =>
                 {
                     b.HasOne("Fire3D.Domain.Entities.Building", "Building")
@@ -4592,18 +4059,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasConstraintName("building_locations_building_id_fkey");
 
                     b.Navigation("Building");
-                });
-
-            modelBuilder.Entity("Fire3D.Domain.Entities.DebriefArtifact", b =>
-                {
-                    b.HasOne("Fire3D.Domain.Entities.SessionResult", "Session")
-                        .WithOne("DebriefArtifact")
-                        .HasForeignKey("Fire3D.Domain.Entities.DebriefArtifact", "SessionId")
-                        .HasPrincipalKey("Fire3D.Domain.Entities.SessionResult", "SessionId")
-                        .IsRequired()
-                        .HasConstraintName("debrief_artifacts_session_id_fkey");
-
-                    b.Navigation("Session");
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.Feedback", b =>
@@ -4640,48 +4095,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Navigation("Session");
 
                     b.Navigation("SubmittedByNavigation");
-                });
-
-            modelBuilder.Entity("Fire3D.Domain.Entities.InvoiceMetadatum", b =>
-                {
-                    b.HasOne("Fire3D.Domain.Entities.Organization", "Organization")
-                        .WithMany("InvoiceMetadata")
-                        .HasForeignKey("OrganizationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("invoice_metadata_organization_id_fkey");
-
-                    b.HasOne("Fire3D.Domain.Entities.PaymentTransaction", "PaymentTransaction")
-                        .WithOne("InvoiceMetadatum")
-                        .HasForeignKey("Fire3D.Domain.Entities.InvoiceMetadatum", "PaymentTransactionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("invoice_metadata_payment_transaction_id_fkey");
-
-                    b.HasOne("Fire3D.Domain.Entities.Quotation", "Quotation")
-                        .WithMany("InvoiceMetadata")
-                        .HasForeignKey("QuotationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("invoice_metadata_quotation_id_fkey");
-
-                    b.Navigation("Organization");
-
-                    b.Navigation("PaymentTransaction");
-
-                    b.Navigation("Quotation");
-                });
-
-            modelBuilder.Entity("Fire3D.Domain.Entities.PasswordResetToken", b =>
-                {
-                    b.HasOne("Fire3D.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("password_reset_tokens_user_id_fkey");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.PaymentTransaction", b =>
@@ -4970,33 +4383,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Navigation("Release");
                 });
 
-            modelBuilder.Entity("Fire3D.Domain.Entities.ReleaseQrCode", b =>
-                {
-                    b.HasOne("Fire3D.Domain.Entities.User", "CreatedByNavigation")
-                        .WithMany("ReleaseQrCodes")
-                        .HasForeignKey("CreatedBy")
-                        .IsRequired()
-                        .HasConstraintName("release_qr_codes_created_by_fkey");
-
-                    b.HasOne("Fire3D.Domain.Entities.RevisionFloor", "RevisionFloor")
-                        .WithMany("ReleaseQrCodes")
-                        .HasForeignKey("RevisionFloorId")
-                        .HasConstraintName("release_qr_codes_revision_floor_id_fkey");
-
-                    b.HasOne("Fire3D.Domain.Entities.Training", "Training")
-                        .WithMany("ReleaseQrCodes")
-                        .HasForeignKey("TrainingId", "ReleaseId", "OrganizationId")
-                        .HasPrincipalKey("Id", "ReleaseId", "OrganizationId")
-                        .IsRequired()
-                        .HasConstraintName("release_qr_codes_training_id_release_id_organization_id_fkey");
-
-                    b.Navigation("CreatedByNavigation");
-
-                    b.Navigation("RevisionFloor");
-
-                    b.Navigation("Training");
-                });
-
             modelBuilder.Entity("Fire3D.Domain.Entities.Revision", b =>
                 {
                     b.HasOne("Fire3D.Domain.Entities.User", "UploadedByNavigation")
@@ -5033,27 +4419,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasConstraintName("revision_artifacts_job_id_revision_id_fkey");
 
                     b.Navigation("ProcessingJob");
-
-                    b.Navigation("Revision");
-                });
-
-            modelBuilder.Entity("Fire3D.Domain.Entities.RevisionFloor", b =>
-                {
-                    b.HasOne("Fire3D.Domain.Entities.BuildingFloor", "BuildingFloor")
-                        .WithMany("RevisionFloors")
-                        .HasForeignKey("BuildingFloorId", "BuildingId")
-                        .HasPrincipalKey("Id", "BuildingId")
-                        .IsRequired()
-                        .HasConstraintName("revision_floors_building_floor_id_building_id_fkey");
-
-                    b.HasOne("Fire3D.Domain.Entities.Revision", "Revision")
-                        .WithMany("RevisionFloors")
-                        .HasForeignKey("RevisionId", "BuildingId", "OrganizationId")
-                        .HasPrincipalKey("Id", "BuildingId", "OrganizationId")
-                        .IsRequired()
-                        .HasConstraintName("revision_floors_revision_id_building_id_organization_id_fkey");
-
-                    b.Navigation("BuildingFloor");
 
                     b.Navigation("Revision");
                 });
@@ -5250,12 +4615,6 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasPrincipalKey("Id", "UserId")
                         .HasConstraintName("sessions_device_id_trainee_user_id_fkey");
 
-                    b.HasOne("Fire3D.Domain.Entities.ReleaseQrCode", "ReleaseQrCode")
-                        .WithMany("Sessions")
-                        .HasForeignKey("QrCodeId", "TrainingId", "ReleaseId", "OrganizationId")
-                        .HasPrincipalKey("Id", "TrainingId", "ReleaseId", "OrganizationId")
-                        .HasConstraintName("sessions_qr_code_id_training_id_release_id_organization_id_fkey");
-
                     b.HasOne("Fire3D.Domain.Entities.Training", "Training")
                         .WithMany("Sessions")
                         .HasForeignKey("TrainingId", "ReleaseId", "ScenarioVersionId", "OrganizationId")
@@ -5263,24 +4622,11 @@ namespace Fire3D.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("sessions_training_id_release_id_scenario_version_id_organi_fkey");
 
-                    b.Navigation("ReleaseQrCode");
-
                     b.Navigation("TraineeUser");
 
                     b.Navigation("Training");
 
                     b.Navigation("UserDevice");
-                });
-
-            modelBuilder.Entity("Fire3D.Domain.Entities.SessionCheckpoint", b =>
-                {
-                    b.HasOne("Fire3D.Domain.Entities.Session", "Session")
-                        .WithMany("SessionCheckpoints")
-                        .HasForeignKey("SessionId")
-                        .IsRequired()
-                        .HasConstraintName("session_checkpoints_session_id_fkey");
-
-                    b.Navigation("Session");
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.SessionEvent", b =>
@@ -5473,18 +4819,11 @@ namespace Fire3D.Infrastructure.Migrations
                 {
                     b.Navigation("BuildingContact");
 
-                    b.Navigation("BuildingFloors");
-
                     b.Navigation("BuildingLocation");
 
                     b.Navigation("Revisions");
 
                     b.Navigation("Scenarios");
-                });
-
-            modelBuilder.Entity("Fire3D.Domain.Entities.BuildingFloor", b =>
-                {
-                    b.Navigation("RevisionFloors");
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.DeviceInstallation", b =>
@@ -5503,8 +4842,6 @@ namespace Fire3D.Infrastructure.Migrations
 
                     b.Navigation("Feedbacks");
 
-                    b.Navigation("InvoiceMetadata");
-
                     b.Navigation("PayosPaymentRequests");
 
                     b.Navigation("Quotations");
@@ -5516,7 +4853,6 @@ namespace Fire3D.Infrastructure.Migrations
 
             modelBuilder.Entity("Fire3D.Domain.Entities.PaymentTransaction", b =>
                 {
-                    b.Navigation("InvoiceMetadatum");
 
                     b.Navigation("PayosPaymentRequests");
                 });
@@ -5537,7 +4873,6 @@ namespace Fire3D.Infrastructure.Migrations
 
             modelBuilder.Entity("Fire3D.Domain.Entities.Quotation", b =>
                 {
-                    b.Navigation("InvoiceMetadata");
 
                     b.Navigation("PayosPaymentRequests");
                 });
@@ -5549,11 +4884,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Navigation("Training");
                 });
 
-            modelBuilder.Entity("Fire3D.Domain.Entities.ReleaseQrCode", b =>
-                {
-                    b.Navigation("Sessions");
-                });
-
             modelBuilder.Entity("Fire3D.Domain.Entities.Revision", b =>
                 {
                     b.Navigation("AnnotationSets");
@@ -5563,8 +4893,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Navigation("Releases");
 
                     b.Navigation("RevisionArtifacts");
-
-                    b.Navigation("RevisionFloors");
 
                     b.Navigation("RevisionProcessingLogs");
 
@@ -5582,11 +4910,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Navigation("ReleasePackages");
 
                     b.Navigation("ValidationRuns");
-                });
-
-            modelBuilder.Entity("Fire3D.Domain.Entities.RevisionFloor", b =>
-                {
-                    b.Navigation("ReleaseQrCodes");
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.RevisionReview", b =>
@@ -5619,18 +4942,11 @@ namespace Fire3D.Infrastructure.Migrations
                 {
                     b.Navigation("Feedbacks");
 
-                    b.Navigation("SessionCheckpoints");
-
                     b.Navigation("SessionEvents");
 
                     b.Navigation("SessionResult");
 
                     b.Navigation("SupportTickets");
-                });
-
-            modelBuilder.Entity("Fire3D.Domain.Entities.SessionResult", b =>
-                {
-                    b.Navigation("DebriefArtifact");
                 });
 
             modelBuilder.Entity("Fire3D.Domain.Entities.SourceDocument", b =>
@@ -5640,7 +4956,6 @@ namespace Fire3D.Infrastructure.Migrations
 
             modelBuilder.Entity("Fire3D.Domain.Entities.Training", b =>
                 {
-                    b.Navigation("ReleaseQrCodes");
 
                     b.Navigation("Sessions");
                 });
@@ -5662,8 +4977,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Navigation("QuotationRequestedByNavigations");
 
                     b.Navigation("ReleasePublishedByNavigations");
-
-                    b.Navigation("ReleaseQrCodes");
 
                     b.Navigation("ReleaseRevokedByNavigations");
 

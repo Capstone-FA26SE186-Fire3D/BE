@@ -47,14 +47,9 @@ public sealed class GooglePasswordService(Fire3DDbContext db, IAuthStore account
         if (!string.IsNullOrWhiteSpace(user.PasswordHash)) return AlreadySet();
         if (user.FirebaseUid != identity.Uid)
             return AuthResult<bool>.Fail("ACCOUNT_CHANGED", "The linked Google identity changed. Sign in again.", 409);
-        if (await db.Database.SqlQuery<bool>($"""
-            SELECT EXISTS(SELECT 1 FROM public.password_reset_operations WHERE user_id={actorId} AND status='Pending') AS "Value"
-            """).SingleAsync(ct))
-            return AuthResult<bool>.Fail("PASSWORD_RESET_PENDING", "Wait for password recovery to finish before setting a password.", 409);
         await db.Users.Where(x => x.Id == actorId).ExecuteUpdateAsync(setters => setters
             .SetProperty(x => x.PasswordHash, passwordHash).SetProperty(x => x.UpdatedAt, now), ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE public.local_password_reset_tokens SET used_at={now} WHERE user_id={actorId} AND used_at IS NULL", ct);
-        await accounts.InvalidateUserResetTokensAsync(actorId, ct);
         await accounts.RevokeAllUserSessionsAsync(actorId, now, ct);
         await accounts.WriteAuditAsync(user, "Update", actorId, now, ct);
         await tx.CommitAsync(ct);

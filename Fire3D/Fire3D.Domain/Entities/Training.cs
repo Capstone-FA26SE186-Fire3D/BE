@@ -38,7 +38,5 @@ public partial class Training
 
     public virtual Release Release { get; set; } = null!;
 
-    public virtual ICollection<ReleaseQrCode> ReleaseQrCodes { get; set; } = new List<ReleaseQrCode>();
-
     public virtual ICollection<Session> Sessions { get; set; } = new List<Session>();
 }

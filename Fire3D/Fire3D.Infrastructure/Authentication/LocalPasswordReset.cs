@@ -53,7 +53,6 @@ public sealed class LocalPasswordReset(Fire3DDbContext db, IAuthStore accounts,
             UPDATE public.local_password_reset_tokens SET used_at=clock_timestamp()
              WHERE user_id={userId} AND used_at IS NULL
             """,ct);
-        await accounts.InvalidateUserResetTokensAsync(userId, ct);
         await accounts.RevokeAllUserSessionsAsync(userId,DateTime.UtcNow,ct);
         await accounts.WriteAuditAsync(user!,"Update",userId,DateTime.UtcNow,ct);
         await tx.CommitAsync(ct);
@@ -83,7 +82,6 @@ public sealed class LocalPasswordReset(Fire3DDbContext db, IAuthStore accounts,
             UPDATE public.local_password_reset_tokens SET used_at=clock_timestamp()
              WHERE user_id={userId} AND used_at IS NULL
             """, ct);
-        await accounts.InvalidateUserResetTokensAsync(userId, ct);
         await accounts.RevokeAllUserSessionsAsync(userId, now, ct);
         await accounts.WriteAuditAsync(user!, "Update", userId, now, ct);
         await tx.CommitAsync(ct);

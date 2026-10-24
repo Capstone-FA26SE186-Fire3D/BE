@@ -46,7 +46,5 @@ public partial class SessionResult
 
     public DateTime CreatedAt { get; set; }
 
-    public virtual DebriefArtifact? DebriefArtifact { get; set; }
-
     public virtual Session Session { get; set; } = null!;
 }

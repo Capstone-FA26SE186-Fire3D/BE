@@ -190,14 +190,12 @@ public sealed partial class AuthIntegrationTests
     }
 
     [PostgresFact]
-    public async Task Auth_store_session_check_rejects_non_canonical_organization_claims_and_reset_invalidation_needs_a_transaction()
+    public async Task Auth_store_session_check_rejects_non_canonical_organization_claims()
     {
         using var scope = factory!.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAuthStore>();
         var organization = Guid.NewGuid();
         foreach (var claim in new[] { organization.ToString("N"), organization.ToString("D").ToUpperInvariant(), "not-a-guid" })
             Assert.False(await store.SessionIsValidAsync(adminId, adminId, "OrganizationUser", claim, DateTime.UtcNow, default));
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => store.InvalidateUserResetTokensAsync(adminId, default));
-        Assert.Contains("user transaction", error.Message);
     }
 }

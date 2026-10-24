@@ -27,8 +27,6 @@ public partial class Building
 
     public virtual BuildingContact? BuildingContact { get; set; }
 
-    public virtual ICollection<BuildingFloor> BuildingFloors { get; set; } = new List<BuildingFloor>();
-
     public virtual BuildingLocation? BuildingLocation { get; set; }
 
     public virtual User CreatedByNavigation { get; set; } = null!;

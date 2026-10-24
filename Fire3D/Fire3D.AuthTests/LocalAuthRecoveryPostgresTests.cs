@@ -27,20 +27,13 @@ public sealed class LocalAuthRecoveryPostgresTests
             CREATE TABLE local_password_reset_tokens (
               id uuid PRIMARY KEY,user_id uuid NOT NULL REFERENCES users(id),token_hash text UNIQUE NOT NULL,
               created_at timestamptz DEFAULT now(),expires_at timestamptz NOT NULL,used_at timestamptz);
-            INSERT INTO password_reset_tokens(id,user_id,expires_at)
-              VALUES (gen_random_uuid(),'10000000-0000-0000-0000-000000000002',now()+interval '1 hour');
             CREATE ROLE auth_recovery_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS;
             GRANT USAGE ON SCHEMA public TO auth_recovery_runtime;
             GRANT SELECT,UPDATE ON users,auth_refresh_tokens TO auth_recovery_runtime;
             GRANT SELECT ON organizations TO auth_recovery_runtime;
             GRANT SELECT,INSERT,UPDATE ON local_password_reset_tokens TO auth_recovery_runtime;
             GRANT INSERT ON audit_logs TO auth_recovery_runtime;
-            ALTER TABLE password_reset_tokens ENABLE ROW LEVEL SECURITY;
-            REVOKE ALL ON password_reset_tokens FROM PUBLIC,auth_recovery_runtime;
             """);
-        await BackendDatabasePermissionsTests.Apply(database, "AddPasswordRecoveryGate");
-        if (Equals(await database.Scalar("SELECT to_regprocedure('public.invalidate_legacy_reset_tokens(uuid)') IS NOT NULL"), true))
-            await database.Sql("GRANT EXECUTE ON FUNCTION public.invalidate_legacy_reset_tokens(uuid) TO auth_recovery_runtime");
     }
 
     // Each test uses a separate database, but a role is cluster-wide.
@@ -49,7 +42,7 @@ public sealed class LocalAuthRecoveryPostgresTests
         await database.Sql("DROP OWNED BY auth_recovery_runtime; DROP ROLE auth_recovery_runtime");
 
     [BillingPostgresFact]
-    public async Task Restricted_runtime_changes_password_without_deleting_legacy_tokens()
+    public async Task Restricted_runtime_changes_password_and_revokes_sessions()
     {
         await using var database = await BillingDatabase.Create(false);
         await Prepare(database);
@@ -58,10 +51,8 @@ public sealed class LocalAuthRecoveryPostgresTests
             await using var context = database.Context();
             await context.Database.OpenConnectionAsync();
             await context.Database.ExecuteSqlRawAsync("SET ROLE auth_recovery_runtime");
-            Assert.Equal(false, await database.Scalar("SELECT has_table_privilege('auth_recovery_runtime','password_reset_tokens','DELETE')"));
             var result = await Recovery(context).ChangeAsync(BillingDatabase.Owner, BillingDatabase.Owner, OldPassword, NewPassword, default);
             Assert.True(result.IsSuccess, result.Error?.Message);
-            Assert.Equal(1L, await database.Scalar("SELECT count(*) FROM password_reset_tokens WHERE used_at IS NOT NULL"));
             Assert.Equal(0L, await database.Scalar($"SELECT count(*) FROM auth_refresh_tokens WHERE user_id='{BillingDatabase.Owner}' AND revoked_at IS NULL"));
             Assert.Equal(1L, await database.Scalar("SELECT count(*) FROM audit_logs WHERE action='Update'"));
         }
@@ -75,7 +66,7 @@ public sealed class LocalAuthRecoveryPostgresTests
         await Prepare(database);
         try
         {
-            await database.Sql($"UPDATE users SET email=' OWNER@EXAMPLE.TEST ' WHERE id='{BillingDatabase.Owner}'; CREATE TABLE password_reset_operations(user_id uuid,status text,finished_at timestamptz)");
+            await database.Sql($"UPDATE users SET email=' OWNER@EXAMPLE.TEST ' WHERE id='{BillingDatabase.Owner}'");
             await using var context = database.Context();
             var store = new AuthStore(context);
             Assert.NotNull(await store.FindUserByEmailAsync("owner@example.test", default));
@@ -100,7 +91,6 @@ public sealed class LocalAuthRecoveryPostgresTests
         await Prepare(database);
         try
         {
-            await database.Sql($"INSERT INTO password_reset_tokens(id,user_id,expires_at) VALUES(gen_random_uuid(),'{BillingDatabase.Other}',now()+interval '1 hour')");
             await using var context = database.Context();
             await AssumeRuntime(context);
             var recovery = Recovery(context);
@@ -112,11 +102,7 @@ public sealed class LocalAuthRecoveryPostgresTests
             Assert.False(await recovery.ResetAsync(token, OldPassword, default));
             Assert.False(await recovery.ResetAsync(secondToken, OldPassword, default));
             Assert.Equal(2L, await database.Scalar("SELECT count(*) FROM local_password_reset_tokens WHERE used_at IS NOT NULL"));
-            Assert.Equal(1L, await database.Scalar($"SELECT count(*) FROM password_reset_tokens WHERE user_id='{BillingDatabase.Owner}' AND used_at IS NOT NULL"));
-            Assert.Equal(1L, await database.Scalar($"SELECT count(*) FROM password_reset_tokens WHERE user_id='{BillingDatabase.Other}' AND used_at IS NULL"));
             Assert.Equal(1L, await database.Scalar($"SELECT count(*) FROM auth_refresh_tokens WHERE user_id='{BillingDatabase.Other}' AND revoked_at IS NULL"));
-            Assert.Equal(false, await database.Scalar("SELECT has_table_privilege('auth_recovery_runtime','password_reset_tokens','UPDATE')"));
-            Assert.Equal(false, await database.Scalar("SELECT has_schema_privilege('fet3d_password_recovery_owner','public','CREATE')"));
         }
         finally { await DropRuntime(database); }
     }
@@ -138,7 +124,6 @@ public sealed class LocalAuthRecoveryPostgresTests
             await using var fresh = database.Context();
             Assert.True(Passwords.Verify((await new AuthStore(fresh).FindUserAsync(BillingDatabase.Owner, default))!, OldPassword, out _));
             Assert.Equal(1L, await database.Scalar("SELECT count(*) FROM local_password_reset_tokens WHERE used_at IS NULL"));
-            Assert.Equal(1L, await database.Scalar("SELECT count(*) FROM password_reset_tokens WHERE used_at IS NULL"));
             Assert.Equal(1L, await database.Scalar($"SELECT count(*) FROM auth_refresh_tokens WHERE user_id='{BillingDatabase.Owner}' AND revoked_at IS NULL"));
         }
         finally { await DropRuntime(database); }

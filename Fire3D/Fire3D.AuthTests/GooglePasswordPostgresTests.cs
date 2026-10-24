@@ -102,7 +102,7 @@ public sealed class GooglePasswordPostgresTests
     }
 
     [BillingPostgresFact]
-    public async Task Provider_outage_is_503_cancellation_propagates_and_pending_recovery_blocks_the_first_password()
+    public async Task Provider_outage_is_503_and_cancellation_propagates()
     {
         await using var db = await BillingDatabase.Create(false); await Prepare(db); await using var context = db.Context();
         foreach (var error in new Exception[] { new GoogleIdentityException(GoogleIdentityFailure.ProviderUnavailable), new HttpRequestException("network") })
@@ -116,11 +116,6 @@ public sealed class GooglePasswordPostgresTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new GooglePasswordService(context, new AuthStore(context), GoogleLinkPostgresTests.Passwords, cancelling, TimeProvider.System)
                 .SetAsync(BillingDatabase.Owner, BillingDatabase.Owner, new("fresh-google-id-token", NewPassword), cts.Token));
-
-        await db.Sql($"INSERT INTO password_reset_operations(id,user_id,firebase_uid,code_hash,status) VALUES(gen_random_uuid(),'{BillingDatabase.Owner}','{Uid}',repeat('a',64),'Pending')");
-        await using var pending = db.Context();
-        var blocked = await Set(pending);
-        Assert.Equal(("PASSWORD_RESET_PENDING", 409), (blocked.Error?.Code, blocked.Error?.Status));
         Assert.Null(await db.Scalar($"SELECT password_hash FROM users WHERE id='{BillingDatabase.Owner}'") as string);
         Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM audit_logs"));
     }

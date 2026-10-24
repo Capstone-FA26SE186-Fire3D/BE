@@ -24,13 +24,8 @@ public sealed class GoogleLinkPostgresTests
             CREATE TABLE local_password_reset_tokens(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id),token_hash text,
                 expires_at timestamptz,used_at timestamptz);
             INSERT INTO local_password_reset_tokens VALUES(gen_random_uuid(),'{{BillingDatabase.Owner}}','test-hash',now()+interval '1 hour',null);
-            INSERT INTO password_reset_tokens(id,user_id,expires_at) VALUES(gen_random_uuid(),'{{BillingDatabase.Owner}}',now()+interval '1 hour');
             GRANT SELECT,UPDATE ON local_password_reset_tokens,auth_refresh_tokens TO fire3d_api;
-            GRANT SELECT ON password_reset_operations TO fire3d_api;
-            REVOKE ALL ON password_reset_tokens FROM PUBLIC,fire3d_api;
-            ALTER TABLE password_reset_tokens ENABLE ROW LEVEL SECURITY;
             """);
-        await BackendDatabasePermissionsTests.Apply(db, "AddPasswordRecoveryGate");
     }
     internal static IIdentityProvider Provider(Func<Task<VerifiedIdentity>>? verify = null) => ResetProxy.For<IIdentityProvider>((_, _) =>
         verify is null ? Task.FromResult(new VerifiedIdentity("linked-google", "different-google@example.test")) : verify());
@@ -53,7 +48,6 @@ public sealed class GoogleLinkPostgresTests
         Assert.Equal(before.Email, result.Value.User.Email); Assert.Equal(before.ProfileRevision + 1, result.Value.User.ProfileRevision);
         Assert.Equal("linked-google", await db.Scalar($"SELECT firebase_uid FROM users WHERE id='{BillingDatabase.Owner}'"));
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM local_password_reset_tokens WHERE used_at IS NOT NULL"));
-        Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM password_reset_tokens WHERE used_at IS NOT NULL"));
         Assert.Equal(0L, await db.Scalar($"SELECT count(*) FROM auth_refresh_tokens WHERE user_id='{BillingDatabase.Owner}' AND revoked_at IS NULL"));
         Assert.Equal(1L, await db.Scalar($"SELECT count(*) FROM auth_refresh_tokens WHERE user_id='{BillingDatabase.Other}' AND revoked_at IS NULL"));
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM audit_logs WHERE action='Update'"));
@@ -162,7 +156,6 @@ public sealed class GoogleLinkPostgresTests
         Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM users WHERE firebase_uid IS NOT NULL"));
         Assert.Equal(before, await db.Scalar($"SELECT profile_revision_no FROM users WHERE id='{BillingDatabase.Owner}'"));
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM local_password_reset_tokens WHERE used_at IS NULL"));
-        Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM password_reset_tokens WHERE used_at IS NULL"));
         Assert.Equal(1L, await db.Scalar($"SELECT count(*) FROM auth_refresh_tokens WHERE user_id='{BillingDatabase.Owner}' AND revoked_at IS NULL"));
     }
 
@@ -179,15 +172,6 @@ public sealed class GoogleLinkPostgresTests
         Assert.Equal(first.Value!.User.ProfileRevision, replay.Value.User.ProfileRevision);
         Assert.Equal(1L, await db.Scalar("SELECT count(*) FROM audit_logs"));
         Assert.Equal(1L, await db.Scalar($"SELECT count(*) FROM auth_refresh_tokens WHERE family_id='{family}' AND revoked_at IS NULL"));
-    }
-
-    [BillingPostgresFact]
-    public async Task Pending_reset_blocks_new_binding()
-    {
-        await using var db = await BillingDatabase.Create(false); await Prepare(db); await using var context = db.Context();
-        await db.Sql($"INSERT INTO password_reset_operations(id,user_id,firebase_uid,code_hash,status) VALUES(gen_random_uuid(),'{BillingDatabase.Owner}','test',repeat('a',64),'Pending')");
-        Assert.Equal("PASSWORD_RESET_PENDING", (await Link(context)).Error?.Code);
-        Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM users WHERE firebase_uid IS NOT NULL"));
     }
 
     [BillingPostgresFact]

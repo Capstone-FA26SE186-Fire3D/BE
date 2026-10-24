@@ -530,10 +530,6 @@ public sealed class AvatarServiceTests
         public Task RevokeAllUserSessionsAsync(Guid userId, DateTime revokedAt, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> FamilyIsActiveAsync(Guid userId, Guid familyId, DateTime now, CancellationToken ct) => throw new NotSupportedException();
         public Task WriteAuditAsync(User actor, string action, Guid targetId, DateTime now, CancellationToken ct, Guid? correlationId = null) => throw new NotSupportedException();
-        public Task SavePasswordResetTokenAsync(PasswordResetToken token, CancellationToken ct) => throw new NotSupportedException();
-        public Task<PasswordResetToken?> FindValidResetTokenAsync(Guid tokenId, CancellationToken ct) => throw new NotSupportedException();
-        public Task MarkResetTokenUsedAsync(Guid tokenId, DateTime now, CancellationToken ct) => throw new NotSupportedException();
-        public Task InvalidateUserResetTokensAsync(Guid userId, CancellationToken ct) => throw new NotSupportedException();
         public Task<RegisterConflict> TryCreateOrganizationWithUserAsync(Organization organization, User user, CancellationToken ct) => throw new NotSupportedException();
         public Task EnqueuePasswordResetAsync(string email, CancellationToken ct) => throw new NotSupportedException();
     }
