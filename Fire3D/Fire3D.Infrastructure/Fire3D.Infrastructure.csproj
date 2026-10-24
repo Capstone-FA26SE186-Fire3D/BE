@@ -60,6 +60,7 @@
     <EmbeddedResource Include="Persistence/Sql/NotificationPushChannel.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.NotificationPushChannel.sql" />
     <EmbeddedResource Include="Persistence/Sql/LearnAdminLatestVersion.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.LearnAdminLatestVersion.sql" />
     <EmbeddedResource Include="Persistence/Sql/DropUnusedTables.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.DropUnusedTables.sql" />
+    <EmbeddedResource Include="Persistence/Sql/DropLegacyV7Functions.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.DropLegacyV7Functions.sql" />
     <EmbeddedResource Include="Persistence/Sql/SupportTicketStatusCounts.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.SupportTicketStatusCounts.sql" />
     <EmbeddedResource Include="Persistence/Sql/PackageContractGates.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PackageContractGates.sql" />
     <EmbeddedResource Include="Persistence/Sql/EditorWindRouting.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.EditorWindRouting.sql" />
