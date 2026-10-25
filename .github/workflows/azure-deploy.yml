@@ -14,7 +14,10 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: capstone-fa26se186-fire3d/fire3d-api
-  APP_URL: https://fire3d-api-h3a5h2fgdvajfbcz.eastasia-01.azurewebsites.net
+  # Repository variables AZURE_WEBAPP_NAME / AZURE_WEBAPP_URL pick the target App Service, so moving region
+  # (docs/azure-region-move.md) changes settings only. Without them the workflow keeps the East Asia app.
+  APP_URL: ${{ vars.AZURE_WEBAPP_URL || 'https://fire3d-api-h3a5h2fgdvajfbcz.eastasia-01.azurewebsites.net' }}
+  WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'fire3d-api' }}
 
 jobs:
   processing-regression:
@@ -84,7 +87,7 @@ jobs:
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: fire3d-api
+          app-name: ${{ env.WEBAPP_NAME }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           restart: true
