@@ -31,7 +31,7 @@ public sealed class SelectedGatePrivilegeMigrationTests
    // Supabase's migration identity is not a superuser. Owner membership used
    // for gate grants must be restored, not inherited by runtime logins.
    await Sql($"CREATE ROLE {migrationLogin} LOGIN NOSUPERUSER NOBYPASSRLS CREATEROLE PASSWORD '{(source.Password??"").Replace("'","''")}';GRANT USAGE,CREATE ON SCHEMA public TO {migrationLogin} WITH GRANT OPTION;GRANT fet3d_ifc_upload_owner TO {migrationLogin} WITH ADMIN TRUE,SET FALSE,INHERIT FALSE;");
-   foreach(var owner in new[]{"fet3d_pending_cleanup_owner","fet3d_avatar_cleanup_owner"})
+   foreach(var owner in new[]{"fet3d_pending_cleanup_owner","fet3d_avatar_cleanup_owner","fet3d_password_recovery_owner"})
     await Sql($"DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='{owner}') THEN CREATE ROLE {owner} NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE; END IF; END $$;GRANT {owner} TO {migrationLogin} WITH ADMIN TRUE,SET FALSE,INHERIT FALSE;");
    // Redis adds FK references, an RLS policy and trusted handoff backfill on these
    // existing tables. Its migration identity must own the affected schema objects;
@@ -50,7 +50,7 @@ public sealed class SelectedGatePrivilegeMigrationTests
    await using(var restricted=new Fire3DDbContext(new DbContextOptionsBuilder<Fire3DDbContext>().UseNpgsql(new NpgsqlConnectionStringBuilder(source.ConnectionString){Username=migrationLogin}.ConnectionString).Options)) await restricted.Database.MigrateAsync();
    Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','fet3d_ifc_upload_owner','USAGE')"));
    Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','fet3d_ifc_upload_owner','SET')"));
-   foreach(var owner in new[]{"fet3d_pending_cleanup_owner","fet3d_avatar_cleanup_owner"})
+   foreach(var owner in new[]{"fet3d_pending_cleanup_owner","fet3d_avatar_cleanup_owner","fet3d_password_recovery_owner"})
    {
     Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','{owner}','USAGE')"));
     Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','{owner}','SET')"));
