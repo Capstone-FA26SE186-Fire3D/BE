@@ -1,8 +1,12 @@
 -- #176: AI policies may be ended early, and only units the AI service accepts (tokens, requests) can be configured.
--- 1. A policy row stays immutable except for one change: setting or moving effective_until earlier, never into the past.
--- 2. Open policies with any other unit can never run (the service answers AI_QUOTA_UNIT_UNSUPPORTED), so they end now.
---    In production this ends TraineeAnswer ce279028-cdd0-49bf-ba09-094151e6551f (quota_unit 'luot-hoi').
--- 3. ai_admin_gate gains EndPolicy and rejects other units on CreatePolicy. Every other branch matches AiContractV2.sql.
+-- 1. A policy row stays immutable except for ending it: setting or moving effective_until earlier (never into the past),
+--    or deleting a policy that has not started yet (cancel).
+-- 2. Policies with any other unit can never run (the service answers AI_QUOTA_UNIT_UNSUPPORTED): started ones end now,
+--    scheduled ones are cancelled. In production this ends TraineeAnswer ce279028-cdd0-49bf-ba09-094151e6551f ('luot-hoi').
+--    Billing quota policies are not touched here: issued quotations pin them through payment and provisioning.
+-- 3. A Trainee's daily usage counts only requests in the unit of the active TraineeAnswer policy, so changing the unit
+--    mid-day neither locks the Trainee out nor lifts the limit.
+-- 4. ai_admin_gate gains EndPolicy and rejects other units on CreatePolicy. Every other branch matches AiContractV2.sql.
 -- Owner and grants of the gate are unchanged by OR REPLACE; the owner role is held only while the function is replaced.
 CREATE TEMP TABLE ai_policy_end_permissions(original_set boolean,original_inherit boolean,changed boolean,had_create boolean) ON COMMIT DROP;
 DO $$ DECLARE os boolean;oi boolean;c boolean;BEGIN
@@ -13,9 +17,10 @@ DO $$ DECLARE os boolean;oi boolean;c boolean;BEGIN
  GRANT CREATE ON SCHEMA public TO fet3d_ifc_upload_owner;
 END $$;
 
--- 1. Ending is the only allowed update; deletes stay forbidden.
+-- 1. Ending is the only allowed update; only policies that have not started may be deleted (no request can have pinned them).
 CREATE OR REPLACE FUNCTION immutable_ai_operation_policy() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN
+ IF TG_OP='DELETE' AND OLD.effective_from>now() THEN RETURN OLD;END IF;
  IF TG_OP='UPDATE' AND to_jsonb(NEW)-'effective_until'=to_jsonb(OLD)-'effective_until'
     AND NEW.effective_until IS NOT NULL AND NEW.effective_until>=now()
     AND (OLD.effective_until IS NULL OR (OLD.effective_until>now() AND NEW.effective_until<OLD.effective_until)) THEN
@@ -23,13 +28,26 @@ BEGIN
  END IF;
  RAISE EXCEPTION 'AI operation policies are immutable except for ending them' USING ERRCODE='23514';
 END $$;
-GRANT UPDATE(effective_until) ON ai_operation_policies TO fet3d_ifc_upload_owner;
+GRANT UPDATE(effective_until),DELETE ON ai_operation_policies TO fet3d_ifc_upload_owner;
 
--- 2. Policies that started with an unsupported unit end now. Policies that have not started yet cannot end before they start; none exist in production.
+-- 2. Unsupported units: started policies end now, scheduled ones are cancelled.
 UPDATE ai_operation_policies SET effective_until=now()
  WHERE quota_unit NOT IN('tokens','requests') AND effective_from<now() AND (effective_until IS NULL OR effective_until>now());
+DELETE FROM ai_operation_policies WHERE quota_unit NOT IN('tokens','requests') AND effective_from>now();
 
--- 3. Admin gate.
+-- 3. Daily Trainee usage in the active policy's unit (same signature, so owner and grants stay).
+CREATE OR REPLACE FUNCTION ai_trainee_units_today(p_actor uuid) RETURNS TABLE(used bigint,reserved bigint,day_start timestamptz)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+ WITH d AS (SELECT (date_trunc('day',clock_timestamp() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh') s),
+ p AS (SELECT quota_unit FROM ai_operation_policies WHERE operation='TraineeAnswer' AND effective_from<=clock_timestamp()
+   AND (effective_until IS NULL OR effective_until>clock_timestamp()))
+ SELECT COALESCE(sum(r.consumed_units) FILTER (WHERE r.status='Succeeded'),0),
+  COALESCE(sum(r.reserved_units) FILTER (WHERE r.status IN('Accepted','Processing','NeedsReconcile')),0),d.s
+ FROM d LEFT JOIN ai_requests r ON r.audience='trainee' AND r.actor_user_id=p_actor AND r.created_at>=d.s
+  AND r.quota_unit=(SELECT quota_unit FROM p) GROUP BY d.s
+$$;
+
+-- 4. Admin gate.
 CREATE OR REPLACE FUNCTION ai_admin_gate(p_action text,p_actor uuid,p_family uuid,p_resource uuid,p_input jsonb,p_key text,p_expected bigint) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
 DECLARE actor users;r ai_requests;k knowledge_sources;pol ai_operation_policies;receipt ai_command_receipts;h text;result jsonb;total integer;ends timestamptz;
@@ -102,19 +120,23 @@ BEGIN
     WHEN check_violation OR not_null_violation OR invalid_text_representation OR datetime_field_overflow OR numeric_value_out_of_range THEN RETURN jsonb_build_object('code','VALIDATION_ERROR','status',422);
    END;
   ELSE
-   -- Ends the period at effectiveUntil (default now): only earlier than the current end, never in the past, and after effectiveFrom.
-   -- Requests already accepted keep the policy they pinned.
+   -- Ends the period at effectiveUntil (default now): only earlier than the current end and never in the past. A policy that has
+   -- not started is cancelled (removed) when the end is at or before its start. Requests already accepted keep the policy they pinned.
    SELECT * INTO pol FROM ai_operation_policies WHERE id=p_resource FOR UPDATE;
    IF pol.id IS NULL THEN RETURN jsonb_build_object('code','NOT_FOUND','status',404);END IF;
    IF pol.effective_until IS NOT NULL AND pol.effective_until<=stamp THEN RETURN jsonb_build_object('code','AI_POLICY_ENDED','status',409);END IF;
    BEGIN ends:=COALESCE((p_input->>'effectiveUntil')::timestamptz,stamp);
    EXCEPTION WHEN invalid_text_representation OR invalid_datetime_format OR datetime_field_overflow THEN RETURN jsonb_build_object('code','VALIDATION_ERROR','status',422);
    END;
-   IF ends<now() OR ends<=pol.effective_from OR ends>=COALESCE(pol.effective_until,'infinity') THEN RETURN jsonb_build_object('code','AI_POLICY_END_INVALID','status',422);END IF;
-   UPDATE ai_operation_policies SET effective_until=ends WHERE id=pol.id RETURNING * INTO pol;
+   IF ends<now() OR ends>=COALESCE(pol.effective_until,'infinity') OR (ends<=pol.effective_from AND pol.effective_from<=stamp) THEN
+    RETURN jsonb_build_object('code','AI_POLICY_END_INVALID','status',422);END IF;
+   IF ends<=pol.effective_from THEN DELETE FROM ai_operation_policies WHERE id=pol.id;
+   ELSE UPDATE ai_operation_policies SET effective_until=ends WHERE id=pol.id RETURNING * INTO pol;
+   END IF;
   END IF;
   result:=jsonb_build_object('id',pol.id,'operation',pol.operation,'quotaUnit',pol.quota_unit,'reserveUnits',pol.reserve_units,'maxInputChars',pol.max_input_chars,'maxSources',pol.max_sources,
    'dailyUnits',pol.daily_units,'effectiveFrom',pol.effective_from,'effectiveUntil',pol.effective_until,'createdAt',pol.created_at);
+  IF p_action='EndPolicy' THEN result:=result||jsonb_build_object('cancelled',ends<=pol.effective_from);END IF;
  ELSIF p_action='CreateSource' THEN
   IF p_input->>'visibility'='Organization' AND NOT EXISTS(SELECT 1 FROM organizations WHERE id=(p_input->>'organizationId')::uuid AND deleted_at IS NULL) THEN RETURN jsonb_build_object('code','NOT_FOUND','status',404);END IF;
   BEGIN
@@ -144,9 +166,10 @@ BEGIN
  END IF;
  IF p_action IN('CreatePolicy','EndPolicy','CreateSource','Reconcile') THEN INSERT INTO ai_command_receipts VALUES(p_actor,'Admin'||p_action,p_key,h,result,stamp);END IF;
  INSERT INTO audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,new_values,created_at)
- VALUES(gen_random_uuid(),p_actor,NULL,'User',(CASE WHEN p_action LIKE 'Create%' THEN 'Create' ELSE 'Update' END)::audit_action_enum,CASE WHEN p_action='Reconcile' THEN 'AiRequest' WHEN p_action IN('CreatePolicy','EndPolicy') THEN 'AiOperationPolicy' ELSE 'KnowledgeSource' END,
+ VALUES(gen_random_uuid(),p_actor,NULL,'User',(CASE WHEN p_action LIKE 'Create%' THEN 'Create' WHEN (result->>'cancelled')::boolean THEN 'Delete' ELSE 'Update' END)::audit_action_enum,
+  CASE WHEN p_action='Reconcile' THEN 'AiRequest' WHEN p_action IN('CreatePolicy','EndPolicy') THEN 'AiOperationPolicy' ELSE 'KnowledgeSource' END,
   (result->>CASE WHEN p_action='Reconcile' THEN 'requestId' ELSE 'id' END)::uuid,gen_random_uuid(),
-  jsonb_build_object('operation',p_action)||CASE WHEN p_action='EndPolicy' THEN jsonb_build_object('effectiveUntil',result->'effectiveUntil') ELSE '{}'::jsonb END,now());
+  jsonb_build_object('operation',p_action)||CASE WHEN p_action='EndPolicy' THEN jsonb_build_object('effectiveUntil',result->'effectiveUntil','cancelled',result->'cancelled') ELSE '{}'::jsonb END,now());
  RETURN jsonb_build_object('code','OK','result',result);
 END $$;
 

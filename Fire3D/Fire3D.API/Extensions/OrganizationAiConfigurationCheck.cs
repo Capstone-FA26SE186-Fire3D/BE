@@ -5,8 +5,9 @@ using Microsoft.Extensions.Options;
 namespace Fire3D.API.Extensions;
 
 /// <summary>
-/// Reports AI settings that leave Organization AI off although it is enabled (#176). Degraded, not Unhealthy: readiness still
-/// answers 200 so the host keeps serving login, Learn and payments while AI submits return 503 AI_PROVIDER_UNAVAILABLE.
+/// Lists AI settings that leave Organization AI off although it is configured (#176). Always Healthy: AI is optional, so the
+/// host keeps serving login, Learn and payments (AI submits return 503 AI_PROVIDER_UNAVAILABLE); the code AI_CONFIGURATION_INVALID
+/// under checks.organizationAi is what the deploy smoke test warns on. Degraded/Unhealthy stay 503 for required dependencies.
 /// </summary>
 public sealed class OrganizationAiConfigurationCheck(IOptions<OrganizationAiOptions> options) : IHealthCheck
 {
@@ -15,7 +16,7 @@ public sealed class OrganizationAiConfigurationCheck(IOptions<OrganizationAiOpti
         var o = options.Value;
         // Only the reason is reported; the base URL and key never leave the process.
         return Task.FromResult(o.Problem is { } problem
-            ? HealthCheckResult.Degraded("AI_CONFIGURATION_INVALID", data: new Dictionary<string, object> { ["problem"] = problem })
+            ? HealthCheckResult.Healthy("AI_CONFIGURATION_INVALID", new Dictionary<string, object> { ["problem"] = problem })
             : HealthCheckResult.Healthy(o.Configured ? "OK" : "AI_DISABLED"));
     }
 }

@@ -27,8 +27,13 @@ public static class ApplicationExtensions
         services.AddSingleton<Fire3D.Application.Content.IPlatformCacheVersions,Fire3D.Infrastructure.Content.RedisPlatformCacheVersions>();
         services.AddHostedService<Fire3D.Infrastructure.Content.PlatformCacheInvalidationWorker>();
         // No ValidateOnStart (#176): invalid AI settings once took the whole API down. They now leave AI off (Configured=false),
-        // the worker logs the problem and /health/ready reports it (OrganizationAiConfigurationCheck).
-        services.AddOptions<Fire3D.Application.Ai.OrganizationAiOptions>().Bind(configuration.GetSection(Fire3D.Application.Ai.OrganizationAiOptions.Section));
+        // the worker logs the problem and /health/ready lists it (OrganizationAiConfigurationCheck). A value of the wrong type
+        // (TimeoutSeconds=abc) would throw on every read, so the binder failure is kept as Unreadable instead.
+        services.AddOptions<Fire3D.Application.Ai.OrganizationAiOptions>().Configure(options =>
+        {
+            try { configuration.GetSection(Fire3D.Application.Ai.OrganizationAiOptions.Section).Bind(options); }
+            catch (InvalidOperationException) { options.MarkUnreadable(); }
+        });
         services.AddScoped<Fire3D.Application.Ai.IOrganizationAiGates,Fire3D.Infrastructure.Ai.OrganizationAiGates>();
         services.AddScoped<Fire3D.Application.Ai.IAiProviderClient,Fire3D.Infrastructure.Ai.FastApiAiClient>();
         services.AddHttpClient(Fire3D.Infrastructure.Ai.FastApiAiClient.ClientName);

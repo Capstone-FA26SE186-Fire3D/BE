@@ -30,7 +30,7 @@ public sealed class OrganizationAiConfigurationTests
         new OrganizationAiConfigurationCheck(Options.Create(options)).CheckHealthAsync(new HealthCheckContext());
 
     [Fact]
-    public async Task Enabled_ai_without_a_usable_adapter_is_off_and_degraded()
+    public async Task Enabled_ai_without_a_usable_adapter_is_off_and_listed_without_failing_readiness()
     {
         var disabled = await Check(new OrganizationAiOptions());
         Assert.Equal((HealthStatus.Healthy, "AI_DISABLED"), (disabled.Status, disabled.Description));
@@ -46,12 +46,12 @@ public sealed class OrganizationAiConfigurationTests
         {
             Assert.False(broken.Configured);
             var result = await Check(broken);
-            Assert.Equal((HealthStatus.Degraded, "AI_CONFIGURATION_INVALID"), (result.Status, result.Description));
+            Assert.Equal((HealthStatus.Healthy, "AI_CONFIGURATION_INVALID"), (result.Status, result.Description));
             Assert.DoesNotContain("secret", result.Data["problem"].ToString());
         }
-        // Readiness keeps a degraded host in rotation; only Unhealthy dependencies answer 503.
+        // AI never changes the readiness status; Degraded stays 503 for required dependencies.
         var codes = DatabaseReadinessCheck.Options.ResultStatusCodes;
-        Assert.Equal((200, 503), (codes[HealthStatus.Degraded], codes[HealthStatus.Unhealthy]));
+        Assert.Equal((503, 503), (codes[HealthStatus.Degraded], codes[HealthStatus.Unhealthy]));
     }
 
     [Fact]
@@ -65,8 +65,10 @@ public sealed class OrganizationAiConfigurationTests
         Assert.Contains(log.Entries, x => x.Level == LogLevel.Error && x.Message.Contains("OrganizationAi:BaseUrl"));
     }
 
-    [Fact]
-    public async Task Api_starts_and_reports_ai_when_enabled_without_a_base_url()
+    [Theory]
+    [InlineData("Enabled", "true")]
+    [InlineData("TimeoutSeconds", "abc")]
+    public async Task Api_starts_and_reports_ai_when_its_settings_are_unusable(string key, string value)
     {
         await using var host = new WebApplicationFactory<Program>().WithWebHostBuilder(web =>
         {
@@ -77,8 +79,8 @@ public sealed class OrganizationAiConfigurationTests
                 ["Jwt:Issuer"] = "host-tests", ["Jwt:Audience"] = "host-tests", ["Mailgun:ApiKey"] = "test-key", ["Mailgun:Domain"] = "example.test",
                 ["Mailgun:From"] = "noreply@example.test", ["AuthEmail:FrontendUrl"] = "https://example.test", ["AuthEmail:VerificationUrl"] = "https://example.test/verify",
                 ["AuthEmail:WorkerEnabled"] = "false", ["PayOS:WorkerEnabled"] = "false", ["Redis:Enabled"] = "false", ["PlatformCache:WorkerEnabled"] = "false",
-                // The production incident on 2026-10-26: AI enabled before BaseUrl was set.
-                ["OrganizationAi:Enabled"] = "true"
+                // The production incident on 2026-10-26: AI enabled before BaseUrl was set; a value of the wrong type must not throw either.
+                ["OrganizationAi:Enabled"] = "true", [$"OrganizationAi:{key}"] = value
             }));
             web.ConfigureServices(services => services.RemoveAll<IHostedService>());
         });
@@ -86,6 +88,30 @@ public sealed class OrganizationAiConfigurationTests
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health/version")).StatusCode);
         Assert.False(host.Services.GetRequiredService<IOptions<OrganizationAiOptions>>().Value.Configured);
         var report = await host.Services.GetRequiredService<HealthCheckService>().CheckHealthAsync(x => x.Name == "organizationAi");
-        Assert.Equal("AI_CONFIGURATION_INVALID", report.Entries["organizationAi"].Description);
+        Assert.Equal((HealthStatus.Healthy, "AI_CONFIGURATION_INVALID"), (report.Entries["organizationAi"].Status, report.Entries["organizationAi"].Description));
+    }
+
+    [Fact]
+    public void Wrong_value_types_leave_ai_off_instead_of_throwing()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddApplication(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            { ["OrganizationAi:Enabled"] = "true", ["OrganizationAi:BaseUrl"] = "https://ai.fixture.test/", ["OrganizationAi:TimeoutSeconds"] = "abc" }).Build());
+        var options = services.BuildServiceProvider().GetRequiredService<IOptions<OrganizationAiOptions>>().Value;
+        Assert.True(options.Unreadable);
+        Assert.False(options.Configured);
+        Assert.Contains("wrong type", options.Problem);
+    }
+
+    [Fact]
+    public void Sql_lists_the_same_quota_units_as_the_api()
+    {
+        using var stream = typeof(OrganizationAiGates).Assembly.GetManifestResourceStream("Fire3D.Infrastructure.Persistence.Sql.AiPolicyEndAndUnits.sql")!;
+        var sql = new StreamReader(stream).ReadToEnd();
+        var lists = System.Text.RegularExpressions.Regex.Matches(sql, @"quota(?:_unit|Unit')\s+NOT IN\(([^)]*)\)");
+        Assert.NotEmpty(lists);
+        foreach (System.Text.RegularExpressions.Match list in lists)
+            Assert.Equal(OrganizationAiInput.QuotaUnits.Order(), list.Groups[1].Value.Split(',').Select(x => x.Trim().Trim('\'')).Order());
     }
 }

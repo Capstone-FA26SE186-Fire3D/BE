@@ -19,6 +19,14 @@ public sealed partial class BillingService(Fire3DDbContext db) : IBillingService
     {
         if(!valid) throw new BillingException(400,"BILLING_VALIDATION_FAILED",message,new() {[field]=[message]});
     }
+    // Every quota policy is organization AI quota: a package, quote or top-up may only grant units the AI service can spend (#176).
+    // Policies created earlier with another unit stay readable, and quotations already issued keep them through payment.
+    private const string AiQuotaUnitMessage="Use tokens or requests: the only quota units the AI service settles.";
+    private static BillingException AiQuotaUnitUnsupported(Dictionary<string,string[]> errors)=>new(422,"AI_QUOTA_UNIT_UNSUPPORTED",AiQuotaUnitMessage,errors);
+    private static void AiQuotaUnit(string? unit,string field)
+    {
+        if(!Fire3D.Application.Ai.OrganizationAiInput.SupportedQuotaUnit(unit)) throw AiQuotaUnitUnsupported(new() {[field]=[AiQuotaUnitMessage]});
+    }
     private static bool Money(decimal value)=>value>=0 && value<=MaxMoney && value==decimal.Truncate(value);
     private static bool Text(string? value,int max)=>!string.IsNullOrWhiteSpace(value) && value.Trim().Length<=max && !value.Any(c=>char.IsControl(c)&&c!='\n'&&c!='\r'&&c!='\t');
     private static string Hash<T>(T value)=>Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value))));
@@ -103,6 +111,7 @@ public sealed partial class BillingService(Fire3DDbContext db) : IBillingService
         if(await db.ServicePackages.AnyAsync(x=>x.Code==request.Code&&x.Id!=item.Id,ct)) throw new BillingException(409,"PACKAGE_CODE_EXISTS","The package code already exists.");
         if(request.AiPolicyVersionId.HasValue && !await db.BillingQuotaPolicies.AnyAsync(x=>x.Id==request.AiPolicyVersionId && x.EffectiveFrom<=DateTime.UtcNow && (x.EffectiveUntil==null || x.EffectiveUntil>DateTime.UtcNow),ct))
             throw new BillingException(400,"BILLING_POLICY_INVALID","Choose an effective quota policy.",new(){["aiPolicyVersionId"]=["Policy is absent or outside its effective interval."]});
+        if(request.AiPolicyVersionId.HasValue) AiQuotaUnit(await db.BillingQuotaPolicies.Where(x=>x.Id==request.AiPolicyVersionId).Select(x=>x.QuotaUnit).SingleAsync(ct),"aiPolicyVersionId");
         item.CommercialVersion=7;item.LearnerLimit=request.LearnerLimit;item.AiQuotaUnits=request.AiQuotaUnits;item.AiPolicyVersionId=request.AiPolicyVersionId;
         item.Code=request.Code;item.Name=request.Name;item.UnitPrice=request.UnitPrice;item.DurationMonths=request.DurationMonths;item.IsActive=request.IsActive;item.Description=request.Description;item.UpdatedAt=DateTime.UtcNow;
         if(id.HasValue)item.Revision++;else db.ServicePackages.Add(item);

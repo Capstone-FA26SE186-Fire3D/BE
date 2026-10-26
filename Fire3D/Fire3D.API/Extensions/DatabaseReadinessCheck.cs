@@ -58,7 +58,6 @@ public sealed class DatabaseReadinessCheck(IServiceScopeFactory scopes) : IHealt
     {
         Predicate = check => check.Tags.Contains(Tag),
         ResponseWriter = WriteResponse,
-        // Degraded is an optional feature turned off (organizationAi): the app still serves, so the host must keep it in rotation.
-        ResultStatusCodes = { [HealthStatus.Healthy] = 200, [HealthStatus.Degraded] = 200, [HealthStatus.Unhealthy] = 503 }
+        ResultStatusCodes = { [HealthStatus.Healthy] = 200, [HealthStatus.Degraded] = 503, [HealthStatus.Unhealthy] = 503 }
     };
 }

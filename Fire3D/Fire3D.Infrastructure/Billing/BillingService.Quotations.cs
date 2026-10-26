@@ -111,6 +111,7 @@ public sealed partial class BillingService
             {
                 policy=await db.BillingQuotaPolicies.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==package.AiPolicyVersionId&&x.EffectiveFrom<=now&&(x.EffectiveUntil==null||x.EffectiveUntil>now),ct);
                 if(policy is null)throw new BillingException(409,"BILLING_POLICY_INVALID","Package policy is no longer effective.");
+                if(package.AiQuotaUnits>0)AiQuotaUnit(policy.QuotaUnit,"items");
             }
             if(package.Currency!="VND"||package.DurationMonths is null or <=0||!Money(package.UnitPrice))throw Conflict("The package is not a valid VND Building subscription.");
             var line=existing.SingleOrDefault(x=>x.BuildingId==input.BuildingId)??new QuotationBuildingItem{Id=Guid.NewGuid(),QuotationId=quote.Id,BuildingId=input.BuildingId,CreatedAt=now};
