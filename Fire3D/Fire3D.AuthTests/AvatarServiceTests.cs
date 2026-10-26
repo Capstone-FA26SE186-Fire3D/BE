@@ -506,6 +506,7 @@ public sealed class AvatarServiceTests
     private sealed class AvatarAuthStoreFake(User user) : IAuthStore
     {
         public Task<User?> FindUserAsync(Guid id, CancellationToken ct) => Task.FromResult<User?>(id == user.Id ? user : null);
+        public User? ValidatedSessionActor(Guid userId) => null;
         public Task<bool> OrganizationIsActiveAsync(Guid id, CancellationToken ct) => Task.FromResult(true);
         public Task<IAuthTransaction> BeginUserTransactionAsync(Guid userId, CancellationToken ct) => throw new NotSupportedException();
         public Task<User?> FindUserByEmailAsync(string email, CancellationToken ct) => throw new NotSupportedException();

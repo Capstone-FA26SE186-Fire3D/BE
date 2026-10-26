@@ -65,6 +65,15 @@ internal static class AuthSupport
         return new(access.Value, raw, ToAccount(user));
     }
 
+    // Request authorization lookup: reuses the account the bearer session was just validated against (that check
+    // already covers everything IsActiveAsync does), otherwise reads and checks it. Only within one request.
+    internal static async Task<User?> FindActiveActorAsync(IAuthStore store, Guid actorId, CancellationToken ct)
+    {
+        if (store.ValidatedSessionActor(actorId) is { } validated) return validated;
+        var actor = await store.FindUserAsync(actorId, ct);
+        return actor is not null && await IsActiveAsync(store, actor, ct) ? actor : null;
+    }
+
     internal static Task<bool> IsActiveAsync(IAuthStore store, User user, CancellationToken ct) =>
         !user.IsActive || user.DeletedAt.HasValue || !Enum.IsDefined(user.Role)
         || ((user.Role == UserRole.OrganizationUser) != user.OrganizationId.HasValue)

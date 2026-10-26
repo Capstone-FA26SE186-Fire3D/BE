@@ -39,7 +39,12 @@ public sealed class SessionValidationPostgresTests
             Assert.InRange(commands.Count,0,1);
         }
         await Check(true);
+        // The validated account is kept for authorization later in the same request, and dropped by a failed check.
+        var store=scope.ServiceProvider.GetRequiredService<IAuthStore>();
+        Assert.Equal(BillingDatabase.Owner,store.ValidatedSessionActor(BillingDatabase.Owner)?.Id);
+        Assert.Null(store.ValidatedSessionActor(BillingDatabase.Other));
         await Check(false,tenant:BillingDatabase.OtherOrg.ToString());
+        Assert.Null(store.ValidatedSessionActor(BillingDatabase.Owner));
         await Check(false,role:"PlatformAdmin");await Check(false,role:"0");await Check(false,family:BillingDatabase.Other);
         await db.Sql($"UPDATE organizations SET is_active=false WHERE id='{BillingDatabase.Org}'");await Check(false);
         await db.Sql("UPDATE organizations SET is_active=true; UPDATE users SET registration_expires_at=now()+interval '1 hour',email_verified_at=NULL");await Check(false);

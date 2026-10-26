@@ -52,22 +52,23 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
     public async Task<PageResponse<ScenarioVersionSummaryResponse>?> ListScenarioVersionsAsync(
         Guid scenarioId, Guid? organizationId, int page, int pageSize, CancellationToken ct)
     {
-        var scenarioExists = await db.Scenarios.AsNoTracking().AnyAsync(s =>
-            s.Id == scenarioId && s.Building.IsActive && s.Building.DeletedAt == null
-            && (!organizationId.HasValue || s.OrganizationId == organizationId.Value), ct);
-        if (!scenarioExists) return null;
-
-        var query = db.ScenarioVersions.AsNoTracking().Where(v => v.ScenarioId == scenarioId);
-        if (organizationId.HasValue) query = query.Where(v => v.OrganizationId == organizationId.Value);
-
-        var totalCount = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(v => v.VersionNumber).ThenByDescending(v => v.CreatedAt).ThenBy(v => v.Id)
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(v => new ScenarioVersionSummaryResponse(v.Id, v.ScenarioId, v.RevisionId, v.BuildingId,
-                v.OrganizationId, v.VersionNumber, v.Name, v.SchemaVersion, v.AlgorithmVersion,
-                v.TimeLimitSeconds, v.ScenarioHash, v.CreatedAt))
-            .ToListAsync(ct);
-        return new PageResponse<ScenarioVersionSummaryResponse>(items, totalCount, page, pageSize);
+        // Existence, total and page in one round trip: no scenario row means 404.
+        var result = await db.Scenarios.AsNoTracking()
+            .Where(s => s.Id == scenarioId && s.Building.IsActive && s.Building.DeletedAt == null
+                && (!organizationId.HasValue || s.OrganizationId == organizationId.Value))
+            .Select(s => new
+            {
+                Total = s.ScenarioVersions.Count(v => !organizationId.HasValue || v.OrganizationId == organizationId.Value),
+                Items = s.ScenarioVersions.Where(v => !organizationId.HasValue || v.OrganizationId == organizationId.Value)
+                    .OrderByDescending(v => v.VersionNumber).ThenByDescending(v => v.CreatedAt).ThenBy(v => v.Id)
+                    .Skip((page - 1) * pageSize).Take(pageSize)
+                    .Select(v => new ScenarioVersionSummaryResponse(v.Id, v.ScenarioId, v.RevisionId, v.BuildingId,
+                        v.OrganizationId, v.VersionNumber, v.Name, v.SchemaVersion, v.AlgorithmVersion,
+                        v.TimeLimitSeconds, v.ScenarioHash, v.CreatedAt))
+                    .ToList()
+            })
+            .SingleOrDefaultAsync(ct);
+        return result is null ? null : new PageResponse<ScenarioVersionSummaryResponse>(result.Items, result.Total, page, pageSize);
     }
 
     public Task<ScenarioDraftResponse?> GetScenarioDraftAsync(Guid draftId, Guid? organizationId, CancellationToken ct)
@@ -136,19 +137,20 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
     public async Task<PageResponse<ScenarioSummaryResponse>?> ListBuildingScenariosAsync(
         Guid buildingId, Guid? organizationId, int page, int pageSize, CancellationToken ct)
     {
-        var buildingExists = await db.Buildings.AsNoTracking().AnyAsync(b =>
-            b.Id == buildingId && b.IsActive && b.DeletedAt == null
-            && (!organizationId.HasValue || b.OrganizationId == organizationId.Value), ct);
-        if (!buildingExists) return null;
-
-        var query = db.Scenarios.AsNoTracking().Where(s => s.BuildingId == buildingId);
-        if (organizationId.HasValue) query = query.Where(s => s.OrganizationId == organizationId.Value);
-
-        var totalCount = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(s => s.CreatedAt).ThenBy(s => s.Id)
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(s => new ScenarioSummaryResponse(s.Id, s.BuildingId, s.Name, s.CreatedAt))
-            .ToListAsync(ct);
-        return new PageResponse<ScenarioSummaryResponse>(items, totalCount, page, pageSize);
+        // Existence, total and page in one round trip: no building row means 404.
+        var result = await db.Buildings.AsNoTracking()
+            .Where(b => b.Id == buildingId && b.IsActive && b.DeletedAt == null
+                && (!organizationId.HasValue || b.OrganizationId == organizationId.Value))
+            .Select(b => new
+            {
+                Total = b.Scenarios.Count(s => !organizationId.HasValue || s.OrganizationId == organizationId.Value),
+                Items = b.Scenarios.Where(s => !organizationId.HasValue || s.OrganizationId == organizationId.Value)
+                    .OrderByDescending(s => s.CreatedAt).ThenBy(s => s.Id)
+                    .Skip((page - 1) * pageSize).Take(pageSize)
+                    .Select(s => new ScenarioSummaryResponse(s.Id, s.BuildingId, s.Name, s.CreatedAt))
+                    .ToList()
+            })
+            .SingleOrDefaultAsync(ct);
+        return result is null ? null : new PageResponse<ScenarioSummaryResponse>(result.Items, result.Total, page, pageSize);
     }
 }

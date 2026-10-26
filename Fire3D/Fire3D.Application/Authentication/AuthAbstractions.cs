@@ -12,6 +12,9 @@ public interface IAuthStore
 {
     Task<IAuthTransaction> BeginUserTransactionAsync(Guid userId, CancellationToken ct);
     Task<User?> FindUserAsync(Guid id, CancellationToken ct);
+    // The account this request's bearer session was validated against (active, organization active), or null.
+    // Read-only snapshot for request authorization; paths that lock the user re-read it with FindUserAsync.
+    User? ValidatedSessionActor(Guid userId);
     Task<User?> FindUserByEmailAsync(string email, CancellationToken ct);
     Task<User?> FindUserByFirebaseUidAsync(string uid, CancellationToken ct);
     Task<bool> HasAdminAsync(CancellationToken ct);

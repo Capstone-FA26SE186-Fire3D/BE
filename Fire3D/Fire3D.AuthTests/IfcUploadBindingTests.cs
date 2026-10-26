@@ -16,6 +16,7 @@ public sealed class IfcUploadBindingTests
     private static IAuthStore Accounts() => ResetProxy.For<IAuthStore>((method, _) => method switch
     {
         "FindUserAsync" => Task.FromResult<User?>(Actor), "OrganizationIsActiveAsync" => Task.FromResult(true),
+        "ValidatedSessionActor" => null,
         _ => throw new InvalidOperationException(method)
     });
     [Fact]

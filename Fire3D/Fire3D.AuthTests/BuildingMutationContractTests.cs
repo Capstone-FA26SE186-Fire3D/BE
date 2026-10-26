@@ -15,6 +15,7 @@ public sealed class BuildingMutationContractTests
     private static IAuthStore Accounts(User actor) => ResetProxy.For<IAuthStore>((method, _) => method switch
     {
         "FindUserAsync" => Task.FromResult<User?>(actor),
+        "ValidatedSessionActor" => null,
         "OrganizationIsActiveAsync" => Task.FromResult(true),
         _ => throw new InvalidOperationException(method)
     });

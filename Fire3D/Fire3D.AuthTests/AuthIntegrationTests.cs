@@ -61,6 +61,8 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
     private bool created;
     private FirebaseAdmin.FirebaseApp? ownedFirebaseApp;
     private Guid adminId;
+    // Counts database commands the API sends, for round-trip budgets (BE#168).
+    private readonly DatabaseCommandCounter databaseCommands = new();
 
     public async Task InitializeAsync()
     {
@@ -124,6 +126,7 @@ public sealed partial class AuthIntegrationTests : IAsyncLifetime
                 services.RemoveAll<DbContextOptions<Fire3DDbContext>>();
                 services.RemoveAll<IDbContextOptionsConfiguration<Fire3DDbContext>>();
                 services.AddDatabase(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
+                services.ConfigureDbContext<Fire3DDbContext>(options => options.AddInterceptors(databaseCommands));
                 services.AddDataProtection().UseEphemeralDataProtectionProvider();
                 services.RemoveAll<IHostedService>();
             });
