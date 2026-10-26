@@ -60,7 +60,8 @@ create the next one from that instant. Only `effectiveUntil` changes: it must no
 current end (`422 AI_POLICY_END_INVALID`); an ended policy is `409 AI_POLICY_ENDED`. A policy that has not started is cancelled
 (removed, `cancelled: true`) when the end is at or before its start. Accepted requests keep the policy they pinned. Migration
 `20261027090000_AddAiPolicyEndAndUnits` ended started policies with other units and cancelled scheduled ones (production:
-`TraineeAnswer` `ce279028-cdd0-49bf-ba09-094151e6551f`, `luot-hoi`).
+`TraineeAnswer` `ce279028-cdd0-49bf-ba09-094151e6551f`, `luot-hoi`). It was applied to production (Supabase Singapore) on
+2026-10-26 after a `pg_dump` backup; no AI policy is active there until an admin creates the `requests` policies above.
 
 - **Organization:** quota comes only from `billing_ai_quota_grants` (service, upgrade and top-up grants). A request reserves
   `reserveUnits` in `billing_ai_quota_allocations` across active grants of that unit, earliest expiry first, under one
