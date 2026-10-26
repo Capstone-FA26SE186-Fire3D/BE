@@ -28,13 +28,15 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
             query = query.Where(x => x.Name.ToLower().Contains(search) || (x.BuildingType != null && x.BuildingType.ToLower().Contains(search)));
         }
 
-        var count = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
+        // The uncorrelated COUNT runs once next to the page rows, so total and page share one round trip.
+        var rows = await query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
             .Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize)
-            .Select(x => new BuildingSummaryResponse(x.Id, x.Name, x.BuildingType, x.TotalFloors, x.IsActive, x.CreatedAt, x.UpdatedAt))
+            .Select(x => new { Item = new BuildingSummaryResponse(x.Id, x.Name, x.BuildingType, x.TotalFloors, x.IsActive, x.CreatedAt, x.UpdatedAt), Total = query.Count() })
             .ToListAsync(ct);
-            
-        return new PageResponse<BuildingSummaryResponse>(items, count, filter.Page, filter.PageSize);
+        // A page past the end has no rows to carry the total, so only then count separately.
+        var count = rows.Count > 0 ? rows[0].Total : filter.Page == 1 ? 0 : await query.CountAsync(ct);
+
+        return new PageResponse<BuildingSummaryResponse>(rows.Select(x => x.Item).ToList(), count, filter.Page, filter.PageSize);
     }
 
     public async Task<bool> TryCreateBuildingAsync(Building building, BuildingLocation? location, BuildingContact? contact, CancellationToken ct)

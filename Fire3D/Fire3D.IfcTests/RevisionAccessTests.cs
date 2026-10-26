@@ -105,6 +105,7 @@ public class RevisionAccessTests
         StubProxy.For<IAuthStore>((method, _) => method switch
         {
             nameof(IAuthStore.FindUserAsync) => Task.FromResult(actor),
+            nameof(IAuthStore.ValidatedSessionActor) => null,
             nameof(IAuthStore.OrganizationIsActiveAsync) => Task.FromResult(organizationActive),
             _ => throw new NotSupportedException(method)
         });

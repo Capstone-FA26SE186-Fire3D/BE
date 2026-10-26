@@ -7,8 +7,8 @@ public static class IfcAccess
 {
     public static async Task<AuthResult<IfcScope>> ResolveAsync(IAuthStore accounts, Guid actorId, CancellationToken ct)
     {
-        var actor = await accounts.FindUserAsync(actorId, ct);
-        if (actor is null || !await AuthSupport.IsActiveAsync(accounts, actor, ct))
+        var actor = await AuthSupport.FindActiveActorAsync(accounts, actorId, ct);
+        if (actor is null)
             return AuthResult<IfcScope>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
         if (actor.Role is not (UserRole.OrganizationUser or UserRole.PlatformAdmin))
             return AuthResult<IfcScope>.Fail("FORBIDDEN", "Organization management access is required.", 403);

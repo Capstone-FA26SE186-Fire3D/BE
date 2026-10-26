@@ -28,6 +28,7 @@ public sealed class BuildingCoverageGapTests
     private static IAuthStore Accounts(User? actor, bool organizationActive = true) => ResetProxy.For<IAuthStore>((method, _) => method switch
     {
         "FindUserAsync" => Task.FromResult(actor),
+        "ValidatedSessionActor" => null,
         "OrganizationIsActiveAsync" => Task.FromResult(organizationActive),
         _ => throw new InvalidOperationException(method)
     });

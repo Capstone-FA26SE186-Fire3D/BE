@@ -8,8 +8,8 @@ public sealed class GetRevisionQueryHandler(IBuildingStore store, IAuthStore acc
 {
     public async Task<AuthResult<RevisionResponse>> Handle(GetRevisionQuery query, CancellationToken ct)
     {
-        var actor = await accounts.FindUserAsync(query.ActorId, ct);
-        if (actor is null || !await AuthSupport.IsActiveAsync(accounts, actor, ct))
+        var actor = await AuthSupport.FindActiveActorAsync(accounts, query.ActorId, ct);
+        if (actor is null)
             return AuthResult<RevisionResponse>.Fail("UNAUTHORIZED", "Account is unavailable.", 401);
         if (actor.Role is not (UserRole.PlatformAdmin or UserRole.OrganizationUser))
             return AuthResult<RevisionResponse>.Fail("FORBIDDEN", "Organization management access is required.", 403);

@@ -42,11 +42,13 @@ public sealed class ReleaseWriteStore(Fire3DDbContext db, TimeProvider clock, IO
         if (filter.BuildingId.HasValue) query = query.Where(x => x.r.BuildingId == filter.BuildingId.Value);
         if (filter.ScenarioId.HasValue) query = query.Where(x => x.v.ScenarioId == filter.ScenarioId.Value);
         if (filter.Status is not null && Enum.TryParse<ReleaseStatus>(filter.Status, false, out var status)) query = query.Where(x => x.r.Status == status);
-        var total = await query.CountAsync(ct);
+        // The uncorrelated COUNT runs once next to the page rows, so total and page share one round trip.
         var rows = await query.OrderByDescending(x => x.r.CreatedAt).ThenBy(x => x.r.Id)
             .Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize)
-            .Select(x => new { x.r.Id, x.r.BuildingId, x.v.ScenarioId, x.r.ScenarioVersionId, x.v.VersionNumber, x.v.Name, x.r.Status, x.r.CreatedAt, x.r.PublishedAt, x.r.RevokedAt })
+            .Select(x => new { x.r.Id, x.r.BuildingId, x.v.ScenarioId, x.r.ScenarioVersionId, x.v.VersionNumber, x.v.Name, x.r.Status, x.r.CreatedAt, x.r.PublishedAt, x.r.RevokedAt, Total = query.Count() })
             .ToListAsync(ct);
+        // A page past the end has no rows to carry the total, so only then count separately.
+        var total = rows.Count > 0 ? rows[0].Total : filter.Page == 1 ? 0 : await query.CountAsync(ct);
         return new(rows.Select(x => new ReleaseSummaryResponse(x.Id, x.BuildingId, x.ScenarioId, x.ScenarioVersionId, x.VersionNumber, x.Name,
             x.Status.ToString(), x.CreatedAt, x.PublishedAt, x.RevokedAt)).ToList(), total, filter.Page, filter.PageSize);
     }

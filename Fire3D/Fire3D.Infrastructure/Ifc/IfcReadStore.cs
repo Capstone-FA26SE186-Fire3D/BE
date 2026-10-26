@@ -13,14 +13,18 @@ public sealed partial class IfcReadStore(Fire3DDbContext db) : IIfcReadStore
     public async Task<PageResponse<ProcessingJobResponse>?> ListJobsAsync(
         Guid revisionId, Guid? organizationId, int page, int pageSize, CancellationToken ct)
     {
-        var revisions = Revisions(organizationId).Where(r => r.Id == revisionId);
-        if (!await revisions.AnyAsync(ct)) return null;
-        var query = db.ProcessingJobs.AsNoTracking().Where(j => revisions.Any(r => r.Id == j.RevisionId));
-        var total = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(j => j.CreatedAt).ThenBy(j => j.Id)
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(j => new ProcessingJobResponse(j.Id, j.RevisionId, j.SourceDocumentId,
-                j.ScenarioVersionId, j.Kind, j.Status, j.CreatedAt)).ToListAsync(ct);
-        return new(items, total, page, pageSize);
+        // Existence, total and page in one round trip: no visible revision row means 404.
+        var result = await Revisions(organizationId).Where(r => r.Id == revisionId)
+            .Select(r => new
+            {
+                Total = db.ProcessingJobs.Count(j => j.RevisionId == r.Id),
+                Items = db.ProcessingJobs.Where(j => j.RevisionId == r.Id)
+                    .OrderByDescending(j => j.CreatedAt).ThenBy(j => j.Id)
+                    .Skip((page - 1) * pageSize).Take(pageSize)
+                    .Select(j => new ProcessingJobResponse(j.Id, j.RevisionId, j.SourceDocumentId,
+                        j.ScenarioVersionId, j.Kind, j.Status, j.CreatedAt)).ToList()
+            })
+            .SingleOrDefaultAsync(ct);
+        return result is null ? null : new(result.Items, result.Total, page, pageSize);
     }
 }

@@ -9,8 +9,8 @@ internal static class BuildingAuthorization
     // null is an explicit admin-wide read/resource lookup, never inferred from Guid.Empty.
     internal static async Task<AuthResult<Guid?>> ResolveScopeAsync(IAuthStore accounts, Guid actorId, Guid? requested, CancellationToken ct)
     {
-        var actor = await accounts.FindUserAsync(actorId, ct);
-        if (actor is null || !await AuthSupport.IsActiveAsync(accounts, actor, ct))
+        var actor = await AuthSupport.FindActiveActorAsync(accounts, actorId, ct);
+        if (actor is null)
             return AuthResult<Guid?>.Fail("FORBIDDEN", "An active account is required.", 403);
         if (requested == Guid.Empty) return AuthResult<Guid?>.Fail("VALIDATION_ERROR", "organizationId cannot be empty.", 400,
             new Dictionary<string, string[]> { ["organizationId"] = ["Choose a valid organizationId or omit it."] });
@@ -28,9 +28,10 @@ internal static class BuildingAuthorization
     internal static async Task<bool> CanMutateAsync(IAuthStore accounts, Guid actorId, Guid organizationId, CancellationToken ct)
     {
         if (organizationId == Guid.Empty) return false;
-        var actor = await accounts.FindUserAsync(actorId, ct);
-        if (actor is null || !await AuthSupport.IsActiveAsync(accounts, actor, ct)) return false;
+        var actor = await AuthSupport.FindActiveActorAsync(accounts, actorId, ct);
+        if (actor is null) return false;
         if (actor.Role == UserRole.PlatformAdmin) return await accounts.OrganizationIsActiveAsync(organizationId, ct);
-        return actor.Role == UserRole.OrganizationUser && actor.OrganizationId == organizationId && await accounts.OrganizationIsActiveAsync(organizationId, ct);
+        // An active OrganizationUser's own organization was already checked active by FindActiveActorAsync.
+        return actor.Role == UserRole.OrganizationUser && actor.OrganizationId == organizationId;
     }
 }
