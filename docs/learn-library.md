@@ -32,6 +32,29 @@ Kind `Video` needs at least one video block. Video URLs must be https on the all
 Short links such as `fb.watch`, embed/iframe markup, credentials in the URL and other hosts are `422 LEARN_MEDIA_INVALID`.
 `POST /api/admin/learn/media/validate {url}` returns `{provider, videoId, canonicalUrl}` for editors.
 
+### Uploaded images (#171)
+
+PlatformAdmin uploads cover and block images; the result is an https url used as `coverImageUrl` or an `image` block `url`, so the
+`fet3d.learn/1` schema is unchanged (pasting another https image URL still works).
+
+1. `POST /api/admin/learn/media/images/upload-intent` with `Idempotency-Key` and `{fileName, contentType, sizeBytes, sha256}`:
+   `image/jpeg`, `image/png` or `image/webp`, 1 byte to 5 MB, `sha256` the lowercase hex SHA-256 of the file. Returns
+   `{uploadId, uploadUrl, headers, expiresAt}`. The same key and input returns the same `uploadId`; other input under the key is
+   `409 IDEMPOTENCY_KEY_CONFLICT`; a key whose upload expired is `409 LEARN_UPLOAD_EXPIRED`.
+2. `PUT uploadUrl` with exactly `headers` (`Content-Type`) before `expiresAt` (15 minutes).
+3. `POST /api/admin/learn/media/images/{uploadId}/complete` checks the stored file and returns `{imageId, url, width, height,
+   contentType, sizeBytes}`. Completing again returns the same image. Errors: `400 VALIDATION_ERROR` (size or type differs from the
+   intent), `422 LEARN_IMAGE_INVALID` (not a decodable single-frame image of that type up to 4096x4096, or not the declared sha256),
+   `409 LEARN_UPLOAD_MISSING` / `LEARN_UPLOAD_CHANGED` / `LEARN_UPLOAD_EXPIRED`, `404` for an unknown upload or one another admin
+   created, `503 LEARN_MEDIA_UNAVAILABLE` when S3 is down.
+
+`url` is `https://{api host}/api/learn/media/images/{imageId}` (`LearnMedia:PublicBaseUrl` overrides the host). That address is public
+(no login, so the public reader and RAG citations can show it) and stable: it answers `302` to a signed S3 URL valid 10 minutes, cached
+by browsers for 5. Bytes stay in the private bucket (`learn/staging/{id}` until complete, then `learn/images/{id}`). The server checks
+images but does not resize or convert them. A completed image never changes (database trigger) and is never deleted by the API, so a
+published version keeps working. Images that are never completed leave only an expired staging object; an S3 lifecycle rule on
+`learn/staging/` can remove those. Completion is audited (`LearnMediaImage`, `Create`).
+
 ### Lifecycle
 
 | From | Action | To |

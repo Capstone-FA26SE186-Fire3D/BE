@@ -1,6 +1,5 @@
 using Fire3D.Application.Storage;
 using Fire3D.Domain.Entities;
-using SkiaSharp;
 
 namespace Fire3D.Application.Authentication.Avatar;
 
@@ -83,7 +82,7 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         var invalid = AvatarUploadRules.ValidateImageSignature(intent.ContentType, prefix ?? []);
         if (invalid is not null) return AuthResult<AvatarResponse>.Fail(invalid.Code, invalid.Message, 400);
         var imageBytes = await storage.ReadObjectAsync(intent.StagingObjectKey, AvatarUploadRules.MaxBytes, metadata.ETag, ct);
-        if (!IsSafeImage(imageBytes, intent.ContentType))
+        if (ImageInspection.Inspect(imageBytes, intent.ContentType, AvatarUploadRules.MaxBytes) is null)
             return AuthResult<AvatarResponse>.Fail("INVALID_AVATAR_CONTENT", "Avatar must be a valid, single-frame image no larger than 4096 by 4096 pixels.", 400);
         var reservation = await avatarStore.ReserveCopyCandidateAsync(intent.Id, userId, expectedProfileRevision, metadata.ETag, now, ct);
         if (reservation.Status == AvatarCandidateReservationStatus.PreconditionFailed)
@@ -148,59 +147,5 @@ public sealed class AvatarService(IAuthStore authStore, IAvatarStore avatarStore
         var now = UtcNow();
         var url = await storage.GeneratePresignedDownloadUrlAsync(intent.FinalObjectKey, UrlLifetime, ct);
         return AuthResult<AvatarResponse>.Ok(new(url, now.Add(UrlLifetime), user.ProfileRevision));
-    }
-
-    private static bool IsSafeImage(byte[]? bytes, string contentType)
-    {
-        if (bytes is null || bytes.Length == 0 || bytes.Length > AvatarUploadRules.MaxBytes) return false;
-        using var input = new MemoryStream(bytes, writable: false);
-        using var codec = SKCodec.Create(input);
-        if (codec is null) return false;
-        var mime = codec.EncodedFormat switch
-        {
-            SKEncodedImageFormat.Jpeg => "image/jpeg",
-            SKEncodedImageFormat.Png => "image/png",
-            SKEncodedImageFormat.Webp => "image/webp",
-            _ => null
-        };
-        if (mime is null || !string.Equals(mime, contentType, StringComparison.OrdinalIgnoreCase)
-            || codec.Info.Width is <= 0 or > 4096 || codec.Info.Height is <= 0 or > 4096
-            || codec.FrameCount > 1
-            || (codec.EncodedFormat == SKEncodedImageFormat.Png && !HasSinglePngFrame(bytes))) return false;
-
-        // Bound decoded memory before allocation. Success is required: a partially
-        // decoded/truncated image must not become a profile's immutable source.
-        using var pixels = new SKBitmap(new SKImageInfo(codec.Info.Width, codec.Info.Height,
-            SKColorType.Rgba8888, SKAlphaType.Premul));
-        return pixels.GetPixels() != IntPtr.Zero
-            && codec.GetPixels(pixels.Info, pixels.GetPixels()) == SKCodecResult.Success;
-    }
-
-    private static bool HasSinglePngFrame(ReadOnlySpan<byte> bytes)
-    {
-        // Skia may decode an APNG's default image as static PNG. Inspect its
-        // animation controls too, so unsupported animation cannot bypass FrameCount.
-        var animation = false;
-        var frames = 0;
-        for (var offset = 8; offset <= bytes.Length - 12;)
-        {
-            var length = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.Slice(offset, 4));
-            if (length > (uint)(bytes.Length - offset - 12)) return false;
-            var type = bytes.Slice(offset + 4, 4);
-            if (type.SequenceEqual("acTL"u8))
-            {
-                if (animation || length != 8
-                    || System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.Slice(offset + 8, 4)) != 1) return false;
-                animation = true;
-            }
-            else if (type.SequenceEqual("fcTL"u8))
-            {
-                if (!animation || length != 26 || ++frames > 1) return false;
-            }
-            else if (type.SequenceEqual("fdAT"u8)) return false; // An extra frame beyond the default image.
-            offset += (int)length + 12;
-            if (type.SequenceEqual("IEND"u8)) return length == 0 && offset == bytes.Length && (!animation || frames == 1);
-        }
-        return false;
     }
 }

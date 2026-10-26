@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-277 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+280 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -43,6 +43,8 @@
 | POST | /api/admin/knowledge-sources | Bearer | Idempotency-Key | 201, 409, 422 |
 | GET | /api/admin/knowledge-sources/{id} | Bearer | None | 200, 404 |
 | POST | /api/admin/knowledge-sources/{id}/{operation} | Bearer | If-Match | 200, 409, 412, 428 |
+| POST | /api/admin/learn/media/images/upload-intent | Bearer | Idempotency-Key | 200, 400, 409, 503 |
+| POST | /api/admin/learn/media/images/{uploadId}/complete | Bearer | None | 200, 400, 404, 409, 422, 503 |
 | POST | /api/admin/learn/media/validate | Bearer | None | 200, 422 |
 | GET | /api/admin/learn/posts | Bearer | None | 200 |
 | POST | /api/admin/learn/posts | Bearer | Idempotency-Key | 201, 409, 422 |
@@ -158,6 +160,7 @@
 | DELETE | /api/learn/bookmarks/{postId} | Bearer | None | 200 |
 | GET | /api/learn/bookmarks/{postId} | Bearer | None | 200, 401, 403 |
 | PUT | /api/learn/bookmarks/{postId} | Bearer | None | 200, 404 |
+| GET | /api/learn/media/images/{imageId} | Anonymous | None | 302, 404, 503 |
 | GET | /api/learn/posts | Anonymous | None | 200, 400 |
 | GET | /api/learn/posts/{slug} | Anonymous | None | 200, 404, 410 |
 | GET | /api/learn/situations | Anonymous | None | 200 |
