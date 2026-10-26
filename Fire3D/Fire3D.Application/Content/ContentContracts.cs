@@ -20,7 +20,8 @@ public sealed record LearnSituationAdminView(Guid Id, string Slug, string Name, 
 public sealed record LearnSituationPage(IReadOnlyList<LearnSituationAdminView> Items, int Total, int Page, int PageSize);
 public sealed record LearnSituationRef(Guid Id, string Slug, string Name);
 public sealed record LearnSourceRef(Guid SourceId, string Title, string VersionLabel, string Role, JsonElement Locator);
-/// <summary>Blocks are the normalized content: paragraph/heading/list/quote/image/video; video carries provider, videoId and canonical url.</summary>
+/// <summary>Blocks are the normalized content: heading/paragraph/list/callout/image/video/divider. Text blocks always carry plain text and
+/// add runs when formatted (lists add itemRuns); video carries provider, videoId and canonical url.</summary>
 public sealed record LearnVersionView(Guid Id, Guid PostId, int VersionNumber, string ContentSchemaVersion, string Kind, string Title, string Summary,
     string? CoverImageUrl, JsonElement Blocks, string ContentHash, string Status, DateTime? PublishedAt, long Revision, DateTime CreatedAt, DateTime UpdatedAt,
     IReadOnlyList<LearnSituationRef> Situations, IReadOnlyList<LearnSourceRef> Sources);
@@ -83,13 +84,18 @@ public interface IContentGates
 }
 
 /// <summary>
-/// Learn content fet3d.learn/1: plain-text blocks (heading, paragraph, list, callout, image, video). No HTML, iframe or script;
-/// videos are reduced to an allowlisted provider descriptor and never fetched or indexed by the backend.
+/// Learn content fet3d.learn/1: blocks heading, paragraph, list, callout, image, video and divider. Text is plain or a list of
+/// formatted runs (allowlisted marks, theme colour tokens, https links); never HTML, iframe or script. Videos are reduced to an
+/// allowlisted provider descriptor and never fetched or indexed by the backend.
 /// </summary>
 public static partial class LearnContent
 {
     public const string SchemaVersion = "fet3d.learn/1";
     public static readonly string[] Kinds = ["Article", "Tip", "Video"];
+    public static readonly string[] Marks = ["bold", "italic", "underline", "strike"];
+    /// <summary>Run colour and highlight are theme tokens, not colour codes, so text stays readable on light and dark backgrounds.</summary>
+    public static readonly string[] ColorTokens = ["default", "ember", "danger", "warning", "success", "info"];
+    public const int MaxRuns = 200;
     [GeneratedRegex(@"<\s*[a-zA-Z/!?]")] private static partial Regex Markup();
     [GeneratedRegex(@"^[A-Za-z0-9_-]{11}$")] private static partial Regex YouTubeId();
     [GeneratedRegex(@"^[0-9]{8,25}$")] private static partial Regex NumericId();
@@ -145,6 +151,77 @@ public static partial class LearnContent
             return Uri.TryCreate(value, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps && value.Length <= 2048 && string.IsNullOrEmpty(u.UserInfo) ? u.AbsoluteUri : Fail();
             string? Fail() { Add("URL_INVALID", path, "Use an absolute https URL without credentials."); return null; }
         }
+        (string Text, JsonArray? Runs)? Plain(JsonNode? node, string path, int max) =>
+            (node is JsonValue v && v.TryGetValue<string>(out var s) ? Text(s, path, max) : Text(null, path, max)) is { } t ? (t, null) : null;
+        // A formatted text is a list of runs. The stored block always keeps the joined plain text, which search, RAG, summaries and
+        // older readers use, and adds runs only when one is formatted; adjacent runs with equal formatting merge so equal content
+        // hashes equally (text is the same as one unformatted run).
+        (string Text, JsonArray? Runs)? Runs(JsonNode? node, string path, int max)
+        {
+            if (node is not JsonArray runs || runs.Count is 0 or > MaxRuns) { Add("RUNS_INVALID", path, $"Use 1-{MaxRuns} runs."); return null; }
+            var merged = new List<(string Text, string[] Marks, string? Color, string? Highlight, string? Link)>();
+            var ok = true;
+            for (var k = 0; k < runs.Count; k++)
+            {
+                var rp = $"{path}[{k}]";
+                if (runs[k] is not JsonObject run) { Add("TYPE_INVALID", rp, "Each run is an object with text."); ok = false; continue; }
+                foreach (var (name, _) in run)
+                    if (name is not ("text" or "marks" or "color" or "highlight" or "link")) { Add("FIELD_UNKNOWN", $"{rp}.{name}", "Field is not defined for a run."); ok = false; }
+                // Runs keep their spaces; only the joined text is trimmed.
+                var text = run["text"] is JsonValue rv && rv.TryGetValue<string>(out var rs) ? rs : null;
+                if (text is null || text.Length == 0 || text.Length > max) { Add("STRING_INVALID", $"{rp}.text", $"Use 1-{max} characters."); ok = false; text = null; }
+                else if (Markup().IsMatch(text)) { Add("MARKUP_NOT_ALLOWED", $"{rp}.text", "HTML, iframe and script are not accepted; use plain text."); ok = false; }
+                else if (text.Any(c => char.IsControl(c) && c is not ('\n' or '\r' or '\t'))) { Add("STRING_INVALID", $"{rp}.text", "Control characters are not allowed."); ok = false; }
+                var marks = new List<string>();
+                if (run["marks"] is { } markNode)
+                {
+                    if (markNode is not JsonArray markList) { Add("MARK_UNSUPPORTED", $"{rp}.marks", "Marks is an array of bold, italic, underline or strike."); ok = false; }
+                    else for (var m = 0; m < markList.Count; m++)
+                        if (markList[m] is JsonValue mv && mv.TryGetValue<string>(out var mark) && Marks.Contains(mark)) { if (!marks.Contains(mark)) marks.Add(mark); }
+                        else { Add("MARK_UNSUPPORTED", $"{rp}.marks[{m}]", "Use bold, italic, underline or strike."); ok = false; }
+                }
+                string? Token(string name)
+                {
+                    if (run[name] is null) return null;
+                    if (run[name] is JsonValue cv && cv.TryGetValue<string>(out var token) && ColorTokens.Contains(token)) return token == "default" ? null : token;
+                    Add("COLOR_UNSUPPORTED", $"{rp}.{name}", "Use default, ember, danger, warning, success or info."); ok = false; return null;
+                }
+                var color = Token("color"); var highlight = Token("highlight");
+                string? link = null;
+                if (run["link"] is { } linkNode && (link = linkNode is JsonValue lv && lv.TryGetValue<string>(out var ls) ? Https(ls, $"{rp}.link", true) : Https(null, $"{rp}.link", true)) is null) ok = false;
+                if (!ok || text is null) continue;
+                var ordered = Marks.Where(marks.Contains).ToArray();
+                if (merged.Count > 0 && merged[^1] is var last && last.Marks.SequenceEqual(ordered) && last.Color == color && last.Highlight == highlight && last.Link == link)
+                    merged[^1] = last with { Text = last.Text + text };
+                else merged.Add((text, ordered, color, highlight, link));
+            }
+            if (!ok) return null;
+            var joined = string.Concat(merged.Select(r => r.Text)).Trim();
+            if (joined.Length == 0 || joined.Length > max) { Add("STRING_INVALID", path, $"Use 1-{max} characters in total."); return null; }
+            if (merged.All(r => r.Marks.Length == 0 && r.Color is null && r.Highlight is null && r.Link is null)) return (joined, null);
+            var stored = new JsonArray();
+            foreach (var r in merged)
+            {
+                var o = new JsonObject { ["text"] = r.Text };
+                if (r.Marks.Length > 0) o["marks"] = new JsonArray(r.Marks.Select(x => (JsonNode)x).ToArray());
+                if (r.Color is not null) o["color"] = r.Color;
+                if (r.Highlight is not null) o["highlight"] = r.Highlight;
+                if (r.Link is not null) o["link"] = r.Link;
+                stored.Add(o);
+            }
+            return (joined, stored);
+        }
+        (string Text, JsonArray? Runs)? Body(JsonObject b, string path, int max)
+        {
+            if (b.ContainsKey("text") && b.ContainsKey("runs")) { Add("TEXT_OR_RUNS", path, "Send text or runs, not both."); return null; }
+            return b.ContainsKey("runs") ? Runs(b["runs"], $"{path}.runs", max) : Plain(b["text"], $"{path}.text", max);
+        }
+        JsonObject Rich(JsonObject block, (string Text, JsonArray? Runs) body)
+        {
+            block["text"] = body.Text;
+            if (body.Runs is not null) block["runs"] = body.Runs;
+            return block;
+        }
         if (!Kinds.Contains(input.Kind)) Add("VALUE_UNSUPPORTED", "$.kind", "Use Article, Tip or Video.");
         var title = Text(input.Title, "$.title", 255); var summary = Text(input.Summary, "$.summary", 2000);
         var cover = Https(input.CoverImageUrl, "$.coverImageUrl", false);
@@ -156,10 +233,10 @@ public static partial class LearnContent
             if (input.Blocks[i] is not JsonObject b || b["type"] is not JsonValue tv || !tv.TryGetValue<string>(out var type)) { Add("TYPE_INVALID", path, "Each block is an object with a type."); continue; }
             string[] allowed = type switch
             {
-                "heading" => ["type", "text", "level"], "paragraph" => ["type", "text"], "list" => ["type", "ordered", "items"],
-                "callout" => ["type", "tone", "text"], "image" => ["type", "url", "alt"], "video" => ["type", "url"], _ => []
+                "heading" => ["type", "text", "runs", "level"], "paragraph" => ["type", "text", "runs"], "list" => ["type", "ordered", "items"],
+                "callout" => ["type", "tone", "text", "runs"], "image" => ["type", "url", "alt"], "video" => ["type", "url"], "divider" => ["type"], _ => []
             };
-            if (allowed.Length == 0) { Add("VALUE_UNSUPPORTED", $"{path}.type", "Use heading, paragraph, list, callout, image or video."); continue; }
+            if (allowed.Length == 0) { Add("VALUE_UNSUPPORTED", $"{path}.type", "Use heading, paragraph, list, callout, image, video or divider."); continue; }
             foreach (var (name, _) in b) if (!allowed.Contains(name)) Add("FIELD_UNKNOWN", $"{path}.{name}", "Field is not defined for this block type.");
             string? S(string name, int max) => b[name] is JsonValue v && v.TryGetValue<string>(out var s) ? Text(s, $"{path}.{name}", max) : Text(null, $"{path}.{name}", max);
             switch (type)
@@ -167,23 +244,39 @@ public static partial class LearnContent
                 case "heading":
                     var level = b["level"] is JsonValue lv && lv.TryGetValue<int>(out var l) ? l : 0;
                     if (level is < 2 or > 4) Add("VALUE_UNSUPPORTED", $"{path}.level", "Heading level is 2, 3 or 4.");
-                    if (S("text", 200) is { } h) blocks.Add(new JsonObject { ["type"] = type, ["text"] = h, ["level"] = level });
+                    if (Body(b, path, 200) is { } h) { var heading = Rich(new JsonObject { ["type"] = type }, h); heading["level"] = level; blocks.Add(heading); }
                     break;
                 case "paragraph":
-                    if (S("text", 5000) is { } p) blocks.Add(new JsonObject { ["type"] = type, ["text"] = p });
+                    if (Body(b, path, 5000) is { } p) blocks.Add(Rich(new JsonObject { ["type"] = type }, p));
                     break;
                 case "callout":
                     var tone = b["tone"] is JsonValue cv && cv.TryGetValue<string>(out var c) ? c : null;
                     if (tone is not ("info" or "warning" or "danger")) Add("VALUE_UNSUPPORTED", $"{path}.tone", "Tone is info, warning or danger.");
-                    if (S("text", 2000) is { } ct && tone is not null) blocks.Add(new JsonObject { ["type"] = type, ["tone"] = tone, ["text"] = ct });
+                    if (Body(b, path, 2000) is { } ct && tone is not null) blocks.Add(Rich(new JsonObject { ["type"] = type, ["tone"] = tone }, ct));
                     break;
                 case "list":
                     var ordered = b["ordered"] is JsonValue ov && ov.TryGetValue<bool>(out var o) && o;
-                    var items = new JsonArray();
+                    // Items stay plain strings; when one item is formatted, itemRuns holds the runs of every item in the same order.
+                    var items = new JsonArray(); var itemRuns = new JsonArray(); var richItems = false;
                     if (b["items"] is not JsonArray list || list.Count is 0 or > 50) Add("FIELD_REQUIRED", $"{path}.items", "Use 1-50 items.");
                     else for (var j = 0; j < list.Count; j++)
-                        if ((list[j] is JsonValue iv && iv.TryGetValue<string>(out var item) ? Text(item, $"{path}.items[{j}]", 1000) : Text(null, $"{path}.items[{j}]", 1000)) is { } t) items.Add(t);
-                    blocks.Add(new JsonObject { ["type"] = type, ["ordered"] = ordered, ["items"] = items });
+                    {
+                        var ip = $"{path}.items[{j}]";
+                        (string Text, JsonArray? Runs)? entry;
+                        if (list[j] is JsonObject itemObject)
+                        {
+                            foreach (var (name, _) in itemObject) if (name != "runs") Add("FIELD_UNKNOWN", $"{ip}.{name}", "A list item is a string or an object with runs.");
+                            entry = Runs(itemObject["runs"], $"{ip}.runs", 1000);
+                        }
+                        else entry = Plain(list[j], ip, 1000);
+                        if (entry is not { } e) continue;
+                        items.Add(e.Text);
+                        richItems |= e.Runs is not null;
+                        itemRuns.Add(e.Runs ?? new JsonArray(new JsonObject { ["text"] = e.Text }));
+                    }
+                    var listBlock = new JsonObject { ["type"] = type, ["ordered"] = ordered, ["items"] = items };
+                    if (richItems) listBlock["itemRuns"] = itemRuns;
+                    blocks.Add(listBlock);
                     break;
                 case "image":
                     var url = b["url"] is JsonValue uv && uv.TryGetValue<string>(out var u) ? Https(u, $"{path}.url", true) : Https(null, $"{path}.url", true);
@@ -193,6 +286,9 @@ public static partial class LearnContent
                     var media = b["url"] is JsonValue vv && vv.TryGetValue<string>(out var vu) ? Canonicalize(vu) : null;
                     if (media is null) Add("LEARN_MEDIA_INVALID", $"{path}.url", "Use a YouTube, Facebook or TikTok video URL in its full form.");
                     else { videos++; blocks.Add(new JsonObject { ["type"] = type, ["provider"] = media.Provider, ["videoId"] = media.VideoId, ["url"] = media.CanonicalUrl }); }
+                    break;
+                case "divider":
+                    blocks.Add(new JsonObject { ["type"] = type });
                     break;
             }
         }

@@ -19,8 +19,27 @@ No content is seeded.
 
 ### Content rules (`fet3d.learn/1`)
 
-Blocks: `heading {text, level 2-4}`, `paragraph {text}`, `list {ordered, items[1-50]}`, `callout {tone, text}`, `video {url}`, `image {url, alt}`. Unknown fields or
-block types are `422`. Text is plain text: any HTML-like tag is `MARKUP_NOT_ALLOWED` (a bare `<` such as `1 < 2` is fine).
+Blocks: `heading {text|runs, level 2-4}`, `paragraph {text|runs}`, `list {ordered, items[1-50]}`, `callout {tone, text|runs}`, `video {url}`, `image {url, alt}`,
+`divider {}`. Unknown fields or block types are `422`. Text is plain text: any HTML-like tag is `MARKUP_NOT_ALLOWED` (a bare `<` such as `1 < 2` is fine).
+
+**Formatted text (#172).** `heading`, `paragraph` and `callout` take either `text` or `runs` (both is `TEXT_OR_RUNS`); a `list` item is a string or `{runs}`.
+A run is `{text, marks?, color?, highlight?, link?}`:
+
+| Field | Rule | Error code |
+|---|---|---|
+| `text` | Plain text, 1 to the block limit, spaces kept (only the joined text is trimmed) | `STRING_INVALID`, `MARKUP_NOT_ALLOWED` |
+| `marks` | Any of `bold`, `italic`, `underline`, `strike` | `MARK_UNSUPPORTED` |
+| `color`, `highlight` | Theme token `default`, `ember`, `danger`, `warning`, `success`, `info`; no colour codes | `COLOR_UNSUPPORTED` |
+| `link` | Absolute https URL without credentials, at most 2048 characters | `URL_INVALID` |
+
+1-200 runs per block or item (`RUNS_INVALID`); the joined text keeps the block limit (heading 200, paragraph 5000, callout 2000, list item 1000).
+Errors are `422 CONTENT_INVALID` with `issues[].code` and a JSON path such as `$.blocks[0].runs[2].color`.
+
+Stored form, the same for every reader: a text block always has `text` (the joined plain text that search, RAG, summaries and older
+readers use) and has `runs` only when one run is formatted. Unformatted runs collapse to `text`, `default` colours and duplicate marks are
+dropped, marks are ordered `bold, italic, underline, strike`, and adjacent runs with equal formatting merge, so the same content always
+hashes the same. A `list` keeps `items` as strings and adds `itemRuns` (one runs array per item, in order) when an item is formatted.
+`divider` is `{"type":"divider"}` with no other field. The schema version stays `fet3d.learn/1`: existing content is unchanged.
 Kind `Video` needs at least one video block. Video URLs must be https on the allowlist and are stored canonically:
 
 | Provider | Accepted | Canonical |
