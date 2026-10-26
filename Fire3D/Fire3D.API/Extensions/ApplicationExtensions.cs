@@ -20,6 +20,8 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Learning.IBuildingQrCodes,Fire3D.Infrastructure.Learning.BuildingQrCodes>();
         services.AddScoped<Fire3D.Application.Administration.IPlatformServiceAdmin,Fire3D.Infrastructure.Administration.PlatformServiceAdmin>();
         services.AddScoped<Fire3D.Application.Content.IContentGates,Fire3D.Infrastructure.Content.ContentGates>();
+        services.AddScoped<Fire3D.Application.Content.ILearnMediaStore,Fire3D.Infrastructure.Content.LearnMediaStore>();
+        services.AddScoped<Fire3D.Application.Content.ILearnMediaService,Fire3D.Application.Content.LearnMediaService>();
         services.AddOptions<Fire3D.Application.Content.PlatformCacheOptions>().Bind(configuration.GetSection(Fire3D.Application.Content.PlatformCacheOptions.Section))
             .Validate(o => o.PollSeconds is >= 1 and <= 300 && o.MaxEventsPerRun is >= 1 and <= 1000, "PlatformCache PollSeconds must be 1-300 and MaxEventsPerRun 1-1000.").ValidateOnStart();
         services.AddSingleton<Fire3D.Application.Content.IPlatformCacheVersions,Fire3D.Infrastructure.Content.RedisPlatformCacheVersions>();
