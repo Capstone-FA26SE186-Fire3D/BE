@@ -83,6 +83,13 @@ public sealed partial class PayosPayments(Fire3DDbContext db,IPayosProvider prov
             }
             else if(lines.Count==0||await db.Buildings.CountAsync(x=>lines.Select(l=>l.BuildingId).Contains(x.Id)&&x.OrganizationId==quote.OrganizationId&&x.IsActive&&x.DeletedAt==null,ct)!=lines.Count)
                 throw Conflict("BUILDING_UNAVAILABLE","Every quotation Building must remain active in the organization.");
+            // #176: a quotation issued before the unit rule may still pin a unit the AI service cannot settle. Refuse it before any
+            // link or reservation exists, so no payment can buy quota that is never spendable; reopening an earlier link is refused too.
+            var units=quote.BillingPurpose=="AIQuotaTopUp"
+                ?await db.Set<QuotationTopUpItem>().AsNoTracking().Where(x=>x.QuotationId==quote.Id).Select(x=>x.QuotaUnit).ToListAsync(ct)
+                :lines.Where(x=>x.AiQuotaUnits>0).Select(x=>x.AiQuotaUnit).ToList();
+            if(units.Any(x=>!Fire3D.Application.Ai.OrganizationAiInput.SupportedQuotaUnit(x)))
+                throw Conflict("AI_QUOTA_UNIT_UNSUPPORTED","The quotation grants an AI quota unit the AI service cannot settle. Ask for a new quotation.");
             op=(await db.Set<BillingCheckoutOperation>().AsNoTracking().SingleOrDefaultAsync(x=>x.QuotationId==quote.Id&&(x.Status=="Creating"||x.Status=="Ready"||x.Status=="NeedsReconcile"),ct))!;
             var isNew=op is null;
             if(isNew)

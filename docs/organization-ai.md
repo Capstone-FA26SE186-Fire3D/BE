@@ -49,8 +49,9 @@ one operation cannot overlap (`409 AI_POLICY_OVERLAP`). No active policy → `50
 
 `quotaUnit` is `tokens` or `requests`, the only units the AI service settles; anything else is `422` with issue code
 `AI_QUOTA_UNIT_UNSUPPORTED` (billing quota policies, which back package/top-up AI grants, answer `422 AI_QUOTA_UNIT_UNSUPPORTED`
-too, as do packages, quotations, upgrades and top-ups that would grant another unit; quotations already issued keep their pinned
-policy through payment). Agreed plan: `requests` (one question = one unit) for `TraineeAnswer` (20/day), `Answer` and `ScenarioDraft`.
+too, as do packages, quotations, upgrades and top-ups that would grant another unit). A quotation issued earlier that still pins
+another unit is refused at checkout (`POST /api/payments/payos/create` → `409 AI_QUOTA_UNIT_UNSUPPORTED`) before any link or
+reservation exists, so money never buys quota the AI service cannot spend; the admin cancels it and issues a new one. Agreed plan: `requests` (one question = one unit) for `TraineeAnswer` (20/day), `Answer` and `ScenarioDraft`.
 A Trainee's daily usage counts only requests in the unit of the active `TraineeAnswer` policy, so changing the unit mid-day
 neither locks the Trainee out nor lifts the limit.
 

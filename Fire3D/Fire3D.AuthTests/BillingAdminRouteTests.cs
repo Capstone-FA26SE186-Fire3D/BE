@@ -38,7 +38,7 @@ public sealed class BillingAdminRouteTests
         Assert.Equal("tokens",(await Body(await admin.GetAsync(created.Headers.Location))).GetProperty("quotaUnit").GetString());
         // A package may only grant units the AI service can spend (#176).
         var credit=await admin.PostAsJsonAsync("/api/admin/billing/quota-policies",new{quotaUnit="credit",effectiveFrom=DateTimeOffset.UtcNow,effectiveUntil=DateTimeOffset.UtcNow.AddDays(-1)});
-        Assert.Equal((HttpStatusCode)422,credit.StatusCode);var creditBody=await Body(credit);
+        Assert.Equal((HttpStatusCode)422,credit.StatusCode);var creditBody=JsonDocument.Parse(await credit.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal("AI_QUOTA_UNIT_UNSUPPORTED",creditBody.GetProperty("code").GetString());
         // Both findings come back together.
         Assert.True(creditBody.GetProperty("errors").TryGetProperty("quotaUnit",out _));Assert.True(creditBody.GetProperty("errors").TryGetProperty("effectiveUntil",out _));

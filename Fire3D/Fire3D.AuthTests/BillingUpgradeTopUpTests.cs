@@ -131,6 +131,37 @@ public sealed class BillingUpgradeTopUpTests
         return await billing.AcceptQuotation(BillingDatabase.Owner,BillingDatabase.Owner,quote.Id,ETag(quote),default);
     }
 
+    // #176: quotations issued before the unit rule may still pin another unit (production had 'credit'); checkout refuses them
+    // before any operation, receipt or reservation exists, so the same key works once the quotation is replaced or corrected.
+    [BillingPostgresFact]
+    public async Task Checkout_refuses_quotations_pinning_an_ai_unit_the_service_cannot_settle()
+    {
+        await using var db=await BillingDatabase.Create();
+        Guid policy;await using(var context=db.Context())
+            policy=(await new BillingService(context).CreateQuotaPolicy(BillingDatabase.Admin,BillingDatabase.Admin,new("tokens",DateTimeOffset.UtcNow.AddDays(-1)),default)).Id;
+        var building=await PayosCheckoutTests.Accepted(db);var topUp=await AcceptedTopUp(db,policy,50,20000);
+        // Fixture edit of pinned rows: triggers are bypassed, constraints still apply.
+        await db.Sql($"""
+            SET session_replication_role=replica;
+            UPDATE billing_quota_policy_versions SET quota_unit='credit' WHERE id='{policy}';
+            UPDATE quotation_topup_items SET quota_unit='credit' WHERE quotation_id='{topUp.Id}';
+            UPDATE quotation_building_items SET ai_quota_units=10,ai_policy_version_id='{policy}',ai_quota_unit='credit' WHERE quotation_id='{building}';
+            SET session_replication_role=origin;
+            """);
+        using var factory=new BillingApiTests.Factory(db,new FakePayos());using var owner=factory.As(BillingDatabase.Owner);
+        foreach(var quote in new[]{building,topUp.Id})
+        {
+            var refused=await owner.SendAsync(PayosCheckoutTests.Create(quote,"credit-"+quote));
+            Assert.Equal(HttpStatusCode.Conflict,refused.StatusCode);Assert.Contains("AI_QUOTA_UNIT_UNSUPPORTED",await refused.Content.ReadAsStringAsync());
+        }
+        Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM billing_checkout_operations"));
+        Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM billing_command_receipts WHERE operation='PayosCreate'"));
+        Assert.Equal(0L,await db.Scalar("SELECT count(*) FROM billing_service_reservations"));
+        // With the unit corrected the same key creates the checkout: the refusal stored nothing under it.
+        await db.Sql($"SET session_replication_role=replica;UPDATE quotation_building_items SET ai_quota_unit='tokens' WHERE quotation_id='{building}';SET session_replication_role=origin;");
+        Assert.Equal(building,(await PayosCheckoutTests.Json(await owner.SendAsync(PayosCheckoutTests.Create(building,"credit-"+building)))).GetProperty("quotationId").GetGuid());
+    }
+
     [BillingPostgresFact]
     public async Task Top_up_grants_quota_once_without_entitlement_or_service_extension_and_balance_is_per_unit()
     {
