@@ -64,6 +64,9 @@ public sealed class OrganizationAiGates(Fire3DDbContext db) : IOrganizationAiGat
             "AI_INPUT_TOO_LARGE" => "The prompt is longer than the active policy allows.",
             "AI_RECONCILE_NOT_ALLOWED" => "Only requests in NeedsReconcile can be reconciled.",
             "AI_POLICY_OVERLAP" => "Another policy for this operation overlaps the period.",
+            "AI_QUOTA_UNIT_UNSUPPORTED" => "The AI service accepts only the quota units tokens and requests.",
+            "AI_POLICY_ENDED" => "The policy has already ended.",
+            "AI_POLICY_END_INVALID" => "effectiveUntil must not be in the past, must be after effectiveFrom and earlier than the current end.",
             "KNOWLEDGE_SOURCE_EXISTS" => "This source version is already registered.",
             "KNOWLEDGE_SOURCE_STATE_CONFLICT" => "The source is not in a state that allows this action.",
             "AI_REVISION_NOT_READY" => "The Building has no revision with accepted geometry for a scenario draft.",
@@ -148,7 +151,11 @@ public sealed class OrganizationAiWorker(IServiceScopeFactory scopes, IOptions<O
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!options.Value.Configured) return;
+        if (!options.Value.Configured)
+        {
+            if (options.Value.Problem is { } problem) log.LogError("Organization AI is enabled but stays off: {Problem}", problem);
+            return;
+        }
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(options.Value.PollSeconds));
         do
         {

@@ -40,6 +40,7 @@ public sealed partial class BillingService
                 var policy=await db.BillingQuotaPolicies.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==line.AiPolicyVersionId,ct);
                 if(policy is null||policy.Audience!="organization"||policy.PolicyKind!="quota"||policy.QuotaUnit!=line.AiQuotaUnit||policy.EffectiveFrom>start||policy.EffectiveUntil<end)
                     throw new BillingException(409,"BILLING_POLICY_INTERVAL_INVALID","Quota policy must cover the complete service interval.");
+                AiQuotaUnit(policy.QuotaUnit,"items");
             }
             line.StartsAt=start;line.EndsAt=end;
             line.TermsSnapshot=System.Text.Json.JsonSerializer.Serialize(new{text=request.Terms!.Trim(),startsAt=start,endsAt=end,line.LearnerLimit,line.AiQuotaUnits,line.AiPolicyVersionId,line.AiQuotaUnit,rollover="None"});
@@ -65,6 +66,7 @@ public sealed partial class BillingService
             policy=await db.BillingQuotaPolicies.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==selected.AiPolicyVersionId,ct);
             if(policy is null||policy.Audience!="organization"||policy.PolicyKind!="quota"||policy.EffectiveFrom>start||policy.EffectiveUntil<entitlement.EndsAt)
                 throw new BillingException(409,"BILLING_POLICY_INTERVAL_INVALID","Quota policy must cover the upgrade effective time through the entitlement end.");
+            AiQuotaUnit(policy.QuotaUnit,"items");
         }
         else Field(selected.AiPolicyVersionId is null,"items","A quota policy applies only when additionalQuotaUnits is positive.");
         line.StartsAt=start;line.EndsAt=entitlement.EndsAt;line.LearnerLimit=limit;
@@ -89,6 +91,7 @@ public sealed partial class BillingService
         var start=topUp.StartsAt.UtcDateTime;var end=topUp.EndsAt.UtcDateTime;
         if(policy.Audience!="organization"||policy.PolicyKind!="quota"||policy.EffectiveFrom>start||policy.EffectiveUntil<end)
             throw new BillingException(409,"BILLING_POLICY_INTERVAL_INVALID","Quota policy must cover the complete top-up interval.");
+        AiQuotaUnit(policy.QuotaUnit,"topUp.policyVersionId");
         var item=await db.Set<QuotationTopUpItem>().SingleAsync(x=>x.QuotationId==quote.Id,ct);
         item.PolicyVersionId=policy.Id;item.QuotaUnit=policy.QuotaUnit;item.QuotaUnits=topUp.QuotaUnits;item.Amount=topUp.Amount;item.StartsAt=start;item.EndsAt=end;item.UpdatedAt=DateTime.UtcNow;
         quote.CommercialVersion=7;quote.Quantity=1;quote.UnitPrice=topUp.Amount;quote.SubtotalAmount=topUp.Amount;quote.DiscountAmount=0;quote.DiscountRuleId=null;quote.DiscountSnapshot="{}";

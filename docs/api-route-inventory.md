@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-280 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+281 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -10,6 +10,7 @@
 | PATCH | /api/accounts/{id}/status | Bearer | None | 200, 429 |
 | GET | /api/admin/ai/policies | Bearer | None | 200, 400 |
 | POST | /api/admin/ai/policies | Bearer | Idempotency-Key | 201, 409, 422 |
+| POST | /api/admin/ai/policies/{id}/end | Bearer | Idempotency-Key | 200, 404, 409, 422 |
 | GET | /api/admin/ai/requests | Bearer | None | 200, 400 |
 | GET | /api/admin/ai/requests/{requestId} | Bearer | None | 200, 404 |
 | POST | /api/admin/ai/requests/{requestId}/reconcile | Bearer | Idempotency-Key | 202, 409 |

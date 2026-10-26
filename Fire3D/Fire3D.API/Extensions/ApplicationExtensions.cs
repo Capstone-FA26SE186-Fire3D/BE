@@ -26,11 +26,14 @@ public static class ApplicationExtensions
             .Validate(o => o.PollSeconds is >= 1 and <= 300 && o.MaxEventsPerRun is >= 1 and <= 1000, "PlatformCache PollSeconds must be 1-300 and MaxEventsPerRun 1-1000.").ValidateOnStart();
         services.AddSingleton<Fire3D.Application.Content.IPlatformCacheVersions,Fire3D.Infrastructure.Content.RedisPlatformCacheVersions>();
         services.AddHostedService<Fire3D.Infrastructure.Content.PlatformCacheInvalidationWorker>();
-        services.AddOptions<Fire3D.Application.Ai.OrganizationAiOptions>().Bind(configuration.GetSection(Fire3D.Application.Ai.OrganizationAiOptions.Section))
-            .Validate(o => !o.Enabled || o.Configured, "OrganizationAi:BaseUrl must be an absolute HTTPS (or loopback) URL when enabled.")
-            .Validate(o => o.TimeoutSeconds is >= 5 and <= 600 && o.LeaseSeconds > o.TimeoutSeconds && o.LeaseSeconds <= 3600 && o.MaxAttempts is >= 1 and <= 10
-                && o.BackoffSeconds is >= 1 and <= 3600 && o.PollSeconds is >= 1 and <= 300, "OrganizationAi timing settings are out of range.")
-            .ValidateOnStart();
+        // No ValidateOnStart (#176): invalid AI settings once took the whole API down. They now leave AI off (Configured=false),
+        // the worker logs the problem and /health/ready lists it (OrganizationAiConfigurationCheck). A value of the wrong type
+        // (TimeoutSeconds=abc) would throw on every read, so the binder failure is kept as Unreadable instead.
+        services.AddOptions<Fire3D.Application.Ai.OrganizationAiOptions>().Configure(options =>
+        {
+            try { configuration.GetSection(Fire3D.Application.Ai.OrganizationAiOptions.Section).Bind(options); }
+            catch (InvalidOperationException) { options.MarkUnreadable(); }
+        });
         services.AddScoped<Fire3D.Application.Ai.IOrganizationAiGates,Fire3D.Infrastructure.Ai.OrganizationAiGates>();
         services.AddScoped<Fire3D.Application.Ai.IAiProviderClient,Fire3D.Infrastructure.Ai.FastApiAiClient>();
         services.AddHttpClient(Fire3D.Infrastructure.Ai.FastApiAiClient.ClientName);

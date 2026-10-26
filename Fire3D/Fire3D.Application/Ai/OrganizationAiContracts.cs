@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -13,6 +14,8 @@ public sealed record ScenarioDraftAiRequest(Guid BuildingId, string Prompt, IRea
 public sealed record AnswerAiRequest(string Question, IReadOnlyList<AiSourceRef>? Sources = null);
 /// <summary>DailyUnits is required for TraineeAnswer (units one Trainee may use per Vietnam calendar day) and absent otherwise.</summary>
 public sealed record CreateAiPolicyRequest(string Operation, string QuotaUnit, int ReserveUnits, int MaxInputChars, int MaxSources, DateTimeOffset? EffectiveFrom = null, DateTimeOffset? EffectiveUntil = null, int? DailyUnits = null);
+/// <summary>EffectiveUntil defaults to now; it must not be in the past, must be after effectiveFrom and earlier than the current end.</summary>
+public sealed record EndAiPolicyRequest(DateTimeOffset? EffectiveUntil = null);
 /// <summary>Kind Learn (PostId + VersionId of the published version), Training (TrainingId the Trainee may play) or Result (own SessionId).</summary>
 public sealed record TraineeAiContext(string Kind, Guid? PostId = null, Guid? VersionId = null, Guid? TrainingId = null, Guid? SessionId = null);
 public sealed record TraineeAiRequest(string Question, TraineeAiContext? Context = null, IReadOnlyList<AiSourceRef>? Sources = null);
@@ -49,8 +52,9 @@ public sealed record AdminAiRequestView(Guid RequestId, string Audience, string 
     Guid? OrganizationId, Guid ActorUserId, Guid PolicyId, int Attempts, string? ModelVersion, JsonElement? TechnicalUsage,
     DateTime? ReconcileRequestedAt, JsonElement? ProviderResult, DateTime UpdatedAt, IReadOnlyList<AiAllocationView>? Allocations);
 public sealed record AdminAiRequestPage(IReadOnlyList<AdminAiRequestView> Items, int Total, int Page, int PageSize);
+/// <summary>Cancelled (end only): the policy had not started and was removed instead of ended.</summary>
 public sealed record AiPolicyView(Guid Id, string Operation, string QuotaUnit, int ReserveUnits, int MaxInputChars, int MaxSources, int? DailyUnits,
-    DateTime EffectiveFrom, DateTime? EffectiveUntil, DateTime CreatedAt);
+    DateTime EffectiveFrom, DateTime? EffectiveUntil, DateTime CreatedAt, bool? Cancelled = null);
 public sealed record AiPolicyPage(IReadOnlyList<AiPolicyView> Items, int Total, int Page, int PageSize);
 /// <summary>Per operation: what one request reserves now and whether the organization balance covers it (estimatedReserve, #89).</summary>
 public sealed record AiOperationLimitView(string Operation, bool PolicyActive, string? QuotaUnit, int? EstimatedReserve, int? MaxInputChars, int? MaxSources,
@@ -62,7 +66,8 @@ public sealed record TraineeAiQuotaView(bool PolicyActive, string? QuotaUnit, in
 
 /// <summary>
 /// Organization AI through an external FastAPI adapter. Disabled by default; without a configured adapter submit returns
-/// 503 AI_PROVIDER_UNAVAILABLE and nothing is reserved.
+/// 503 AI_PROVIDER_UNAVAILABLE and nothing is reserved. Invalid settings, including values of the wrong type, never stop the API
+/// (#176): AI stays off, the worker logs an error and /health/ready lists AI_CONFIGURATION_INVALID without failing.
 /// </summary>
 public sealed class OrganizationAiOptions
 {
@@ -75,7 +80,16 @@ public sealed class OrganizationAiOptions
     public int MaxAttempts { get; init; } = 3;
     public int BackoffSeconds { get; init; } = 30;
     public int PollSeconds { get; init; } = 5;
-    public bool Configured => Enabled && Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.IsLoopback);
+    public bool BaseUrlValid => Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.IsLoopback);
+    public bool TimingValid => TimeoutSeconds is >= 5 and <= 600 && LeaseSeconds > TimeoutSeconds && LeaseSeconds <= 3600 && MaxAttempts is >= 1 and <= 10
+        && BackoffSeconds is >= 1 and <= 3600 && PollSeconds is >= 1 and <= 300;
+    /// <summary>A value of the section has the wrong type (e.g. TimeoutSeconds=abc); set by the binder wrapper, never bound from configuration.</summary>
+    public bool Unreadable { get; private set; }
+    public void MarkUnreadable() => Unreadable = true;
+    public bool Configured => !Unreadable && Enabled && BaseUrlValid && TimingValid;
+    /// <summary>Why AI is off although configured, without values (the URL may carry secrets); null when nothing is wrong.</summary>
+    public string? Problem => Unreadable ? "OrganizationAi settings could not be read: a value has the wrong type."
+        : !Enabled || Configured ? null : !BaseUrlValid ? "OrganizationAi:BaseUrl must be an absolute HTTPS (or loopback) URL when enabled." : "OrganizationAi timing settings are out of range.";
 }
 
 public interface IOrganizationAiGates
@@ -107,7 +121,10 @@ public static partial class OrganizationAiInput
     public const int MaxTextLength = 8000;
     [GeneratedRegex(@"<\s*[a-zA-Z/!?]")] private static partial Regex Markup();
     [GeneratedRegex("^[0-9a-f]{64}$")] public static partial Regex Sha256();
-    [GeneratedRegex("^[a-z][a-z0-9_-]{0,49}$")] public static partial Regex QuotaUnit();
+    /// <summary>Units the AI service settles usage in (AI_QUOTA_UNIT_UNSUPPORTED otherwise); AI policies and AI quota grants use only these.
+    /// AiPolicyEndAndUnits.sql repeats the list; a test keeps the two equal.</summary>
+    public static readonly FrozenSet<string> QuotaUnits = FrozenSet.ToFrozenSet(["tokens", "requests"], StringComparer.Ordinal);
+    public static bool SupportedQuotaUnit(string? unit) => unit is not null && QuotaUnits.Contains(unit);
 
     public static List<ScenarioDraftValidationIssue> Text(string? value, string path, int max = MaxTextLength)
     {

@@ -36,7 +36,13 @@ public sealed class BillingAdminRouteTests
         var policy=(await Body(created)).GetProperty("id").GetGuid();
         Assert.Equal($"/api/admin/billing/quota-policies/{policy}",created.Headers.Location!.OriginalString);
         Assert.Equal("tokens",(await Body(await admin.GetAsync(created.Headers.Location))).GetProperty("quotaUnit").GetString());
-        var expired=(await Body(await admin.PostAsJsonAsync("/api/admin/billing/quota-policies",new{quotaUnit="credits",effectiveFrom=DateTimeOffset.UtcNow.AddDays(-10),effectiveUntil=DateTimeOffset.UtcNow.AddDays(-1)}))).GetProperty("id").GetGuid();
+        // A package may only grant units the AI service can spend (#176).
+        var credit=await admin.PostAsJsonAsync("/api/admin/billing/quota-policies",new{quotaUnit="credit",effectiveFrom=DateTimeOffset.UtcNow,effectiveUntil=DateTimeOffset.UtcNow.AddDays(-1)});
+        Assert.Equal((HttpStatusCode)422,credit.StatusCode);var creditBody=JsonDocument.Parse(await credit.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal("AI_QUOTA_UNIT_UNSUPPORTED",creditBody.GetProperty("code").GetString());
+        // Both findings come back together.
+        Assert.True(creditBody.GetProperty("errors").TryGetProperty("quotaUnit",out _));Assert.True(creditBody.GetProperty("errors").TryGetProperty("effectiveUntil",out _));
+        var expired=(await Body(await admin.PostAsJsonAsync("/api/admin/billing/quota-policies",new{quotaUnit="requests",effectiveFrom=DateTimeOffset.UtcNow.AddDays(-10),effectiveUntil=DateTimeOffset.UtcNow.AddDays(-1)}))).GetProperty("id").GetGuid();
         var page=await Body(await admin.GetAsync("/api/admin/billing/quota-policies?page=2&pageSize=1"));
         Assert.Equal(2,page.GetProperty("total").GetInt32());Assert.Single(page.GetProperty("items").EnumerateArray());
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync("/api/admin/billing/quota-policies?pageSize=101")).StatusCode);

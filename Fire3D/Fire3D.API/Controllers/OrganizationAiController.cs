@@ -195,7 +195,7 @@ public sealed partial class AdminAiController(IOrganizationAiGates gates, Fire3D
         if (request.Operation == "TraineeAnswer" && (request.DailyUnits is not (>= 1 and <= 100_000_000) || request.DailyUnits < request.ReserveUnits))
             issues.Add(new("VALUE_OUT_OF_RANGE", "$.dailyUnits", "1-100000000 and at least reserveUnits."));
         if (request.Operation != "TraineeAnswer" && request.DailyUnits is not null) issues.Add(new("FIELD_INVALID", "$.dailyUnits", "Only TraineeAnswer has a daily allowance."));
-        if (!OrganizationAiInput.QuotaUnit().IsMatch(request.QuotaUnit ?? "")) issues.Add(new("VALUE_UNSUPPORTED", "$.quotaUnit", "Lower-case quota unit of the billing policy."));
+        if (!OrganizationAiInput.SupportedQuotaUnit(request.QuotaUnit)) issues.Add(new("AI_QUOTA_UNIT_UNSUPPORTED", "$.quotaUnit", "tokens or requests: the only units the AI service settles."));
         if (request.ReserveUnits is < 1 or > 100_000_000) issues.Add(new("VALUE_OUT_OF_RANGE", "$.reserveUnits", "1-100000000."));
         if (request.MaxInputChars is < 1 or > 20_000) issues.Add(new("VALUE_OUT_OF_RANGE", "$.maxInputChars", "1-20000."));
         if (request.MaxSources is < 1 or > 100) issues.Add(new("VALUE_OUT_OF_RANGE", "$.maxSources", "1-100."));
@@ -204,6 +204,19 @@ public sealed partial class AdminAiController(IOrganizationAiGates gates, Fire3D
         var result = await gates.AdminAsync("CreatePolicy", Actor, Family, Guid.Empty, request, key, null, ct);
         return result.IsSuccess ? Created("/api/admin/ai/policies", result.Value) : Problem(result.Error!);
     }
+
+    /// <summary>Ends a policy at effectiveUntil (default now) so a corrected one can follow; nothing else changes. Idempotency-Key required.</summary>
+    /// <remarks>effectiveUntil must not be in the past and must be earlier than the current end, else 422 AI_POLICY_END_INVALID. A policy that has
+    /// not started is cancelled (removed, cancelled=true) when effectiveUntil is at or before its start. Already ended: 409 AI_POLICY_ENDED.
+    /// Requests already accepted keep the policy they pinned.</remarks>
+    [HttpPost("api/admin/ai/policies/{id:guid}/end")]
+    [ProducesResponseType<AiPolicyView>(200)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(422)]
+    public async Task<IActionResult> EndPolicy(Guid id, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] EndAiPolicyRequest? request,
+        [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct) =>
+        Reply(await gates.AdminAsync("EndPolicy", Actor, Family, id, new { effectiveUntil = request?.EffectiveUntil }, key, null, ct));
 
     /// <summary>Knowledge source registry and editor catalog. Without visibility every source is listed (admin review); the Learn editor passes visibility=Common so tenant sources never enter its catalog. status Draft/Approved/Retired; search on title, version label and jurisdiction. canUseInDraft: a Learn draft may cite it; canPublishReference: publish/Hidden/RAG accept it now.</summary>
     [HttpGet("api/admin/knowledge-sources")]

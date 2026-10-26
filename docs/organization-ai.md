@@ -23,7 +23,10 @@ OrganizationAi__PollSeconds=5
 ```
 
 Without an enabled, valid adapter, submit (organization and Trainee) returns `503 AI_PROVIDER_UNAVAILABLE` before anything is
-reserved, and the worker does not start.
+reserved, and the worker does not start. Invalid settings never stop the API (#176): with `Enabled=true` and a missing/invalid
+`BaseUrl`, out-of-range timing, or any value of the wrong type (`TimeoutSeconds=abc`), AI stays off, the worker logs an error and
+`/health/ready` keeps its status (AI is optional) while listing `checks.organizationAi.code = AI_CONFIGURATION_INVALID` with the
+reason; the deploy smoke test prints a warning for it.
 
 ## Vocabulary (Docs v7)
 
@@ -40,9 +43,25 @@ with 400. Existing rows were mapped in place by the migration.
 
 ## Policies and units
 
-`ai_operation_policies` (Admin, immutable): `operation`, `quotaUnit`, `reserveUnits`, `maxInputChars`, `maxSources`,
+`ai_operation_policies` (Admin, immutable except for ending): `operation`, `quotaUnit`, `reserveUnits`, `maxInputChars`, `maxSources`,
 `effectiveFrom`/`effectiveUntil`, and `dailyUnits` for `TraineeAnswer` only (1–100000000, at least `reserveUnits`). Periods for
 one operation cannot overlap (`409 AI_POLICY_OVERLAP`). No active policy → `503 AI_POLICY_UNAVAILABLE`.
+
+`quotaUnit` is `tokens` or `requests`, the only units the AI service settles; anything else is `422` with issue code
+`AI_QUOTA_UNIT_UNSUPPORTED` (billing quota policies, which back package/top-up AI grants, answer `422 AI_QUOTA_UNIT_UNSUPPORTED`
+too, as do packages, quotations, upgrades and top-ups that would grant another unit). A quotation issued earlier that still pins
+another unit is refused at checkout (`POST /api/payments/payos/create` → `409 AI_QUOTA_UNIT_UNSUPPORTED`) before any link or
+reservation exists, so money never buys quota the AI service cannot spend; the admin cancels it and issues a new one. Agreed plan: `requests` (one question = one unit) for `TraineeAnswer` (20/day), `Answer` and `ScenarioDraft`.
+A Trainee's daily usage counts only requests in the unit of the active `TraineeAnswer` policy, so changing the unit mid-day
+neither locks the Trainee out nor lifts the limit.
+
+To replace a policy, end it with `POST /api/admin/ai/policies/{id}/end` (`{effectiveUntil?}`, default now; Idempotency-Key) and
+create the next one from that instant. Only `effectiveUntil` changes: it must not be in the past and must be earlier than the
+current end (`422 AI_POLICY_END_INVALID`); an ended policy is `409 AI_POLICY_ENDED`. A policy that has not started is cancelled
+(removed, `cancelled: true`) when the end is at or before its start. Accepted requests keep the policy they pinned. Migration
+`20261027090000_AddAiPolicyEndAndUnits` ended started policies with other units and cancelled scheduled ones (production:
+`TraineeAnswer` `ce279028-cdd0-49bf-ba09-094151e6551f`, `luot-hoi`). It was applied to production (Supabase Singapore) on
+2026-10-26 after a `pg_dump` backup; no AI policy is active there until an admin creates the `requests` policies above.
 
 - **Organization:** quota comes only from `billing_ai_quota_grants` (service, upgrade and top-up grants). A request reserves
   `reserveUnits` in `billing_ai_quota_allocations` across active grants of that unit, earliest expiry first, under one
@@ -234,7 +253,8 @@ delivered (retried); timeouts and other 5xx are unknown outcomes (reconciled, ne
 | GET | `/api/admin/ai/requests/{requestId}` | PlatformAdmin | |
 | POST | `/api/admin/ai/requests/{requestId}/reconcile` | PlatformAdmin | Idempotency-Key; NeedsReconcile only → `202`. |
 | GET | `/api/admin/ai/policies?operation=&page=&pageSize=` | PlatformAdmin | Paginated. |
-| POST | `/api/admin/ai/policies` | PlatformAdmin | Idempotency-Key → `201`; `dailyUnits` for TraineeAnswer. |
+| POST | `/api/admin/ai/policies` | PlatformAdmin | Idempotency-Key → `201`; `dailyUnits` for TraineeAnswer; `quotaUnit` tokens/requests. |
+| POST | `/api/admin/ai/policies/{id}/end` | PlatformAdmin | `{effectiveUntil?}` + Idempotency-Key → `200`; sets only `effectiveUntil`, or cancels a policy that has not started. |
 | GET/POST | `/api/admin/knowledge-sources` | PlatformAdmin | POST + Idempotency-Key → `201` Draft. |
 | GET | `/api/admin/knowledge-sources/{id}` | PlatformAdmin | `ETag` = revision. |
 | POST | `/api/admin/knowledge-sources/{id}/approve\|retire` | PlatformAdmin | If-Match. |
