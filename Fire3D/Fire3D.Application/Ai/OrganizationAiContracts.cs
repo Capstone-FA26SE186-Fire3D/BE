@@ -13,6 +13,8 @@ public sealed record ScenarioDraftAiRequest(Guid BuildingId, string Prompt, IRea
 public sealed record AnswerAiRequest(string Question, IReadOnlyList<AiSourceRef>? Sources = null);
 /// <summary>DailyUnits is required for TraineeAnswer (units one Trainee may use per Vietnam calendar day) and absent otherwise.</summary>
 public sealed record CreateAiPolicyRequest(string Operation, string QuotaUnit, int ReserveUnits, int MaxInputChars, int MaxSources, DateTimeOffset? EffectiveFrom = null, DateTimeOffset? EffectiveUntil = null, int? DailyUnits = null);
+/// <summary>EffectiveUntil defaults to now; it must not be in the past, must be after effectiveFrom and earlier than the current end.</summary>
+public sealed record EndAiPolicyRequest(DateTimeOffset? EffectiveUntil = null);
 /// <summary>Kind Learn (PostId + VersionId of the published version), Training (TrainingId the Trainee may play) or Result (own SessionId).</summary>
 public sealed record TraineeAiContext(string Kind, Guid? PostId = null, Guid? VersionId = null, Guid? TrainingId = null, Guid? SessionId = null);
 public sealed record TraineeAiRequest(string Question, TraineeAiContext? Context = null, IReadOnlyList<AiSourceRef>? Sources = null);
@@ -62,7 +64,8 @@ public sealed record TraineeAiQuotaView(bool PolicyActive, string? QuotaUnit, in
 
 /// <summary>
 /// Organization AI through an external FastAPI adapter. Disabled by default; without a configured adapter submit returns
-/// 503 AI_PROVIDER_UNAVAILABLE and nothing is reserved.
+/// 503 AI_PROVIDER_UNAVAILABLE and nothing is reserved. Invalid settings never stop the API from starting (#176): AI stays off,
+/// the worker logs an error and /health/ready reports AI_CONFIGURATION_INVALID.
 /// </summary>
 public sealed class OrganizationAiOptions
 {
@@ -75,7 +78,12 @@ public sealed class OrganizationAiOptions
     public int MaxAttempts { get; init; } = 3;
     public int BackoffSeconds { get; init; } = 30;
     public int PollSeconds { get; init; } = 5;
-    public bool Configured => Enabled && Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.IsLoopback);
+    public bool BaseUrlValid => Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.IsLoopback);
+    public bool TimingValid => TimeoutSeconds is >= 5 and <= 600 && LeaseSeconds > TimeoutSeconds && LeaseSeconds <= 3600 && MaxAttempts is >= 1 and <= 10
+        && BackoffSeconds is >= 1 and <= 3600 && PollSeconds is >= 1 and <= 300;
+    public bool Configured => Enabled && BaseUrlValid && TimingValid;
+    /// <summary>Enabled but unusable: what is wrong, without values (the URL may carry secrets).</summary>
+    public string? Problem => !Enabled || Configured ? null : !BaseUrlValid ? "OrganizationAi:BaseUrl must be an absolute HTTPS (or loopback) URL when enabled." : "OrganizationAi timing settings are out of range.";
 }
 
 public interface IOrganizationAiGates
@@ -107,7 +115,8 @@ public static partial class OrganizationAiInput
     public const int MaxTextLength = 8000;
     [GeneratedRegex(@"<\s*[a-zA-Z/!?]")] private static partial Regex Markup();
     [GeneratedRegex("^[0-9a-f]{64}$")] public static partial Regex Sha256();
-    [GeneratedRegex("^[a-z][a-z0-9_-]{0,49}$")] public static partial Regex QuotaUnit();
+    /// <summary>Units the AI service settles usage in (AI_QUOTA_UNIT_UNSUPPORTED otherwise); AI policies and AI quota grants use only these.</summary>
+    public static readonly string[] QuotaUnits = ["tokens", "requests"];
 
     public static List<ScenarioDraftValidationIssue> Text(string? value, string path, int max = MaxTextLength)
     {

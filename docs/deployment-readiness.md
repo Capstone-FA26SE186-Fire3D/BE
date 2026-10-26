@@ -7,7 +7,7 @@ The deployment of `b6a7d74` (and later `973c29f`) answered `500` on Building det
 | Endpoint | Meaning |
 | --- | --- |
 | `GET /health` | Liveness only (process is up). It never checks the database, so a DB outage does not make the host restart the app. |
-| `GET /health/ready` | Readiness: the database is reachable, every EF migration in this build is applied, and enabled Redis processing dependencies pass their read-only checks. `200 {"status":"Healthy"}` or `503` with dependency codes under `checks`. |
+| `GET /health/ready` | Readiness: the database is reachable, every EF migration in this build is applied, and enabled Redis processing dependencies pass their read-only checks. `200 {"status":"Healthy"}` or `503` with dependency codes under `checks`. `200 {"status":"Degraded"}` means an optional feature is off but the app serves, e.g. `organizationAi` `AI_CONFIGURATION_INVALID` (#176). |
 | `GET /health/version` | Commit of the running image. |
 
 `/health/ready` codes:

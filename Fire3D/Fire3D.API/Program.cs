@@ -43,6 +43,7 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
 builder.Services.AddSingleton<IProcessingReadinessProbe, ProcessingReadinessProbe>();
 builder.Services.AddHealthChecks().AddCheck<DatabaseReadinessCheck>("database", tags: [DatabaseReadinessCheck.Tag])
     .AddCheck<ProcessingReadinessCheck>("processing", tags: [DatabaseReadinessCheck.Tag])
+    .AddCheck<OrganizationAiConfigurationCheck>("organizationAi", tags: [DatabaseReadinessCheck.Tag])
     .AddCheck<ProcessingExecutorCheck>("processingExecutor", tags: [ProcessingExecutorCheck.Tag]);
 builder.Services.AddExceptionHandler<ProcessingExecutorExceptionHandler>();
 

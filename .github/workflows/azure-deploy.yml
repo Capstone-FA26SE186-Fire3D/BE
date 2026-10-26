@@ -118,6 +118,10 @@ jobs:
             echo "Readiness returned ${status}: inspect dependency health before accepting this deployment."
             exit 1
           fi
+          # Degraded still serves (e.g. AI_CONFIGURATION_INVALID leaves only AI off); surface it without failing the deploy.
+          if ! grep -q '"status":"Healthy"' ready.json; then
+            echo "::warning title=Readiness degraded::An optional dependency is off; see checks in the readiness output above."
+          fi
           # These anonymous endpoints must return 200; redirects, 401 and 404 also fail.
           for path in /api/learn/situations /api/learn/posts /openapi/v1.json; do
             # The OpenAPI document (about 280 operations) takes about 11 s to generate on the B1 plan, so it gets a longer budget.
