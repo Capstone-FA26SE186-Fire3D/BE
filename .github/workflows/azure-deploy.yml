@@ -120,7 +120,9 @@ jobs:
           fi
           # These anonymous endpoints must return 200; redirects, 401 and 404 also fail.
           for path in /api/learn/situations /api/learn/posts /openapi/v1.json; do
-            status="$(curl --silent --show-error --output /dev/null --connect-timeout 10 --max-time 20 --write-out '%{http_code}' "${APP_URL}${path}")" || status=000
+            # The OpenAPI document (about 280 operations) takes about 11 s to generate on the B1 plan, so it gets a longer budget.
+            limit=20; [[ "${path}" == /openapi/* ]] && limit=90
+            status="$(curl --silent --show-error --output /dev/null --connect-timeout 10 --max-time "${limit}" --write-out '%{http_code}' "${APP_URL}${path}")" || status=000
             echo "${path} -> ${status}"
             if [[ "${status}" != "200" ]]; then
               echo "Smoke test failed on ${path}."
