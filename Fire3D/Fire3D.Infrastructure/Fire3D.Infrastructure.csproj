@@ -65,6 +65,7 @@
     <EmbeddedResource Include="Persistence/Sql/AiPolicyEndAndUnits.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.AiPolicyEndAndUnits.sql" />
     <EmbeddedResource Include="Persistence/Sql/AiSourceRanking.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.AiSourceRanking.sql" />
     <EmbeddedResource Include="Persistence/Sql/KnowledgeSourceFiles.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.KnowledgeSourceFiles.sql" />
+    <EmbeddedResource Include="Persistence/Sql/DropDeadFunctions.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.DropDeadFunctions.sql" />
     <EmbeddedResource Include="Persistence/Sql/SupportTicketStatusCounts.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.SupportTicketStatusCounts.sql" />
     <EmbeddedResource Include="Persistence/Sql/PackageContractGates.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PackageContractGates.sql" />
     <EmbeddedResource Include="Persistence/Sql/EditorWindRouting.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.EditorWindRouting.sql" />

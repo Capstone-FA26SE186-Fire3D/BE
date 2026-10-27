@@ -83,17 +83,6 @@ public partial class Fire3DDbContext
                 .HasColumnType("quarantine_status_enum");
         });
 
-        modelBuilder.Entity<RevisionProcessingLog>(entity =>
-        {
-            entity.Property(x => x.Step)
-                .HasColumnName("step")
-                .HasColumnType("processing_step_enum");
-
-            entity.Property(x => x.Status)
-                .HasColumnName("status")
-                .HasColumnType("processing_step_status_enum");
-        });
-
         modelBuilder.Entity<RevisionReview>()
             .Property(x => x.Action)
             .HasColumnName("action")

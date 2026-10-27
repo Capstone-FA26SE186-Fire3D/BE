@@ -497,7 +497,7 @@ Tất cả cần Editor; list nhận page/pageSize. Sai filter/Guid.Empty 400, s
 
 | Method | Path | Thành công |
 | --- | --- | --- |
-| GET | `/api/revisions/{revisionId}/processing-logs` | 200 Page<RevisionProcessingLogResponse> |
+| GET | `/api/revisions/{revisionId}/processing-logs` | 200 Page<RevisionProcessingLogResponse>: one item per worker attempt (step = job kind, status = attempt status, message = attempt error) |
 | GET | `/api/revisions/{revisionId}/processing-jobs` | 200 Page<ProcessingJobResponse> |
 | GET | `/api/processing-jobs/{jobId}` | 200 ProcessingJobDetailResponse |
 | GET | `/api/validation-runs/{validationRunId}` | 200 ValidationRunResponse |

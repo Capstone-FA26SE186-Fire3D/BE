@@ -29,8 +29,6 @@ namespace Fire3D.Infrastructure.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "file_type_enum", new[] { "IFC" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "payment_request_status_enum", new[] { "Pending", "Paid", "Expired", "Cancelled", "Failed" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "payment_transaction_status_enum", new[] { "Received", "Verified", "Rejected", "Applied" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "processing_step_enum", new[] { "Quarantine", "Parse", "CleanGeometry", "Decimate", "GenNavMesh", "GenHazardGrid", "ExportGLB", "PackageBundle" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "processing_step_status_enum", new[] { "Started", "Success", "Failed" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "quarantine_status_enum", new[] { "Pending", "Accepted", "Rejected" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "quotation_status_enum", new[] { "Draft", "Issued", "Accepted", "Expired", "Cancelled" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "release_status_enum", new[] { "Built", "Published", "Superseded", "Revoked" });
@@ -2421,57 +2419,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.ToTable("revision_issues", (string)null);
                 });
 
-            modelBuilder.Entity("Fire3D.Domain.Entities.RevisionProcessingLog", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<int>("AttemptNumber")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("DurationMs")
-                        .HasColumnType("integer")
-                        .HasColumnName("duration_ms");
-
-                    b.Property<Guid>("JobId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("job_id");
-
-                    b.Property<DateTime>("LoggedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("logged_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<string>("Message")
-                        .HasColumnType("text")
-                        .HasColumnName("message");
-
-                    b.Property<Guid>("RevisionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("revision_id");
-
-                    b.Property<ProcessingStepStatus>("Status")
-                        .HasColumnType("processing_step_status_enum")
-                        .HasColumnName("status");
-
-                    b.Property<ProcessingStep>("Step")
-                        .HasColumnType("processing_step_enum")
-                        .HasColumnName("step");
-
-                    b.HasKey("Id")
-                        .HasName("revision_processing_logs_pkey");
-
-                    b.HasIndex("RevisionId");
-
-                    b.HasIndex("JobId", "RevisionId");
-
-                    b.ToTable("revision_processing_logs", (string)null);
-                });
-
             modelBuilder.Entity("Fire3D.Domain.Entities.RevisionReview", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4434,26 +4381,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Navigation("ValidationRun");
                 });
 
-            modelBuilder.Entity("Fire3D.Domain.Entities.RevisionProcessingLog", b =>
-                {
-                    b.HasOne("Fire3D.Domain.Entities.Revision", "Revision")
-                        .WithMany("RevisionProcessingLogs")
-                        .HasForeignKey("RevisionId")
-                        .IsRequired()
-                        .HasConstraintName("revision_processing_logs_revision_id_fkey");
-
-                    b.HasOne("Fire3D.Domain.Entities.ProcessingJob", "ProcessingJob")
-                        .WithMany("RevisionProcessingLogs")
-                        .HasForeignKey("JobId", "RevisionId")
-                        .HasPrincipalKey("Id", "RevisionId")
-                        .IsRequired()
-                        .HasConstraintName("revision_processing_logs_job_id_revision_id_fkey");
-
-                    b.Navigation("ProcessingJob");
-
-                    b.Navigation("Revision");
-                });
-
             modelBuilder.Entity("Fire3D.Domain.Entities.RevisionReview", b =>
                 {
                     b.HasOne("Fire3D.Domain.Entities.User", "ReviewedByNavigation")
@@ -4866,8 +4793,6 @@ namespace Fire3D.Infrastructure.Migrations
                 {
                     b.Navigation("RevisionArtifacts");
 
-                    b.Navigation("RevisionProcessingLogs");
-
                     b.Navigation("ValidationRuns");
                 });
 
@@ -4893,8 +4818,6 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Navigation("Releases");
 
                     b.Navigation("RevisionArtifacts");
-
-                    b.Navigation("RevisionProcessingLogs");
 
                     b.Navigation("RevisionReviews");
 

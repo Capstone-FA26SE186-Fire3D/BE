@@ -44,7 +44,6 @@ public partial class Fire3DDbContext : DbContext
 
     public virtual DbSet<RevisionIssue> RevisionIssues { get; set; }
 
-    public virtual DbSet<RevisionProcessingLog> RevisionProcessingLogs { get; set; }
 
     public virtual DbSet<RevisionReview> RevisionReviews { get; set; }
 
@@ -94,8 +93,6 @@ public partial class Fire3DDbContext : DbContext
             .HasPostgresEnum("file_type_enum", new[] { "IFC" })
             .HasPostgresEnum("payment_request_status_enum", new[] { "Pending", "Paid", "Expired", "Cancelled", "Failed" })
             .HasPostgresEnum("payment_transaction_status_enum", new[] { "Received", "Verified", "Rejected", "Applied" })
-            .HasPostgresEnum("processing_step_enum", new[] { "Quarantine", "Parse", "CleanGeometry", "Decimate", "GenNavMesh", "GenHazardGrid", "ExportGLB", "PackageBundle" })
-            .HasPostgresEnum("processing_step_status_enum", new[] { "Started", "Success", "Failed" })
             .HasPostgresEnum("quarantine_status_enum", new[] { "Pending", "Accepted", "Rejected" })
             .HasPostgresEnum("quotation_status_enum", new[] { "Draft", "Issued", "Accepted", "Expired", "Cancelled" })
             .HasPostgresEnum("release_status_enum", new[] { "Built", "Published", "Superseded", "Revoked" })
@@ -835,36 +832,6 @@ public partial class Fire3DDbContext : DbContext
                 .HasForeignKey(d => d.ValidationRunId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("revision_issues_validation_run_id_fkey");
-        });
-
-        modelBuilder.Entity<RevisionProcessingLog>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("revision_processing_logs_pkey");
-
-            entity.ToTable("revision_processing_logs");
-
-            entity.Property(e => e.Id)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("id");
-            
-            entity.Property(e => e.DurationMs).HasColumnName("duration_ms");
-            entity.Property(e => e.JobId).HasColumnName("job_id");
-            entity.Property(e => e.LoggedAt)
-                .HasDefaultValueSql("now()")
-                .HasColumnName("logged_at");
-            entity.Property(e => e.Message).HasColumnName("message");
-            entity.Property(e => e.RevisionId).HasColumnName("revision_id");
-
-            entity.HasOne(d => d.Revision).WithMany(p => p.RevisionProcessingLogs)
-                .HasForeignKey(d => d.RevisionId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("revision_processing_logs_revision_id_fkey");
-
-            entity.HasOne(d => d.ProcessingJob).WithMany(p => p.RevisionProcessingLogs)
-                .HasPrincipalKey(p => new { p.Id, p.RevisionId })
-                .HasForeignKey(d => new { d.JobId, d.RevisionId })
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("revision_processing_logs_job_id_revision_id_fkey");
         });
 
         modelBuilder.Entity<RevisionReview>(entity =>

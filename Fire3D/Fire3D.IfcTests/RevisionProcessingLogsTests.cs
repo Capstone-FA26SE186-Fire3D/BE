@@ -43,8 +43,9 @@ public class RevisionProcessingLogsTests
 
 public sealed partial class IfcReadSqlTests
 {
+    // One entry per worker attempt: step is the job kind, status the attempt status, message its error.
     [IfcPostgresFact]
-    public async Task Processing_logs_SQL_is_scoped_paged_and_sanitized()
+    public async Task Processing_logs_SQL_lists_worker_attempts_scoped_and_paged()
     {
         await using var db = database.Context();
         var store = new IfcReadStore(db);
@@ -52,12 +53,13 @@ public sealed partial class IfcReadSqlTests
         var result = await store.ListRevisionProcessingLogsAsync(database.Revision, database.Tenant, 1, 20, default);
 
         Assert.NotNull(result);
-        var item = Assert.Single(result.Items);
-        Assert.Equal(database.Log, item.Id);
-        Assert.Equal("Parse", item.Step);
-        Assert.Equal("Success", item.Status);
-        Assert.Equal("IFC parsed.", item.Message);
+        Assert.Equal(2, result.TotalCount);
+        Assert.Equal(new[] { database.Attempt, database.PreviousAttempt }.Order(), result.Items.Select(x => x.Id).Order());
+        var failed = result.Items.Single(x => x.Id == database.PreviousAttempt);
+        Assert.Equal((database.Revision, database.Job, "Geometry", "Failed", "IFC parse failed.", 0), (failed.RevisionId, failed.JobId, failed.Step, failed.Status, failed.Message, failed.AttemptNumber));
+        Assert.InRange(failed.DurationMs!.Value, 1400, 1600);
         Assert.Null(await store.ListRevisionProcessingLogsAsync(database.Revision, database.OtherTenant, 1, 20, default));
-        Assert.Empty((await store.ListRevisionProcessingLogsAsync(database.Revision, database.Tenant, 2, 1, default))!.Items);
+        Assert.Single((await store.ListRevisionProcessingLogsAsync(database.Revision, database.Tenant, 2, 1, default))!.Items);
+        Assert.Empty((await store.ListRevisionProcessingLogsAsync(database.Revision, database.Tenant, 3, 1, default))!.Items);
     }
 }

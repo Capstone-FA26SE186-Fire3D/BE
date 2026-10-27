@@ -106,6 +106,8 @@ public enum AuditAction
     Support
 }
 
+// Kept only because historical migrations (and their designers) name these types; revision_processing_logs, the one table
+// that used processing_step_enum and processing_step_status_enum, had no writer and is dropped, and nothing maps them now.
 public enum ProcessingStep
 {
     Quarantine,

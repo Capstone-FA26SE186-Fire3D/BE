@@ -26,12 +26,6 @@ public partial class SourceDocument
         global::Fire3D.Domain.Enums.QuarantineStatus.Pending;
 }
 
-public partial class RevisionProcessingLog
-{
-    public ProcessingStep Step { get; set; }
-    public ProcessingStepStatus Status { get; set; }
-}
-
 public partial class RevisionReview
 {
     public ReviewAction Action { get; set; }
