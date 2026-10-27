@@ -29,8 +29,6 @@ public partial class Revision
 
     public virtual ICollection<RevisionArtifact> RevisionArtifacts { get; set; } = new List<RevisionArtifact>();
 
-    public virtual ICollection<RevisionProcessingLog> RevisionProcessingLogs { get; set; } = new List<RevisionProcessingLog>();
-
     public virtual ICollection<RevisionReview> RevisionReviews { get; set; } = new List<RevisionReview>();
 
     public virtual ICollection<ScenarioVersion> ScenarioVersions { get; set; } = new List<ScenarioVersion>();

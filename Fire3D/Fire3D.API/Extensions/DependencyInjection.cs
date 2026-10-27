@@ -64,12 +64,6 @@ public static class DependencyInjection
                 postgres.MapEnum<AuditAction>(
                     "audit_action_enum", nameTranslator: names);
 
-                postgres.MapEnum<ProcessingStep>(
-                    "processing_step_enum", nameTranslator: names);
-
-                postgres.MapEnum<ProcessingStepStatus>(
-                    "processing_step_status_enum", nameTranslator: names);
-
                 postgres.MapEnum<QuotationStatus>(
                     "quotation_status_enum", nameTranslator: names);
 

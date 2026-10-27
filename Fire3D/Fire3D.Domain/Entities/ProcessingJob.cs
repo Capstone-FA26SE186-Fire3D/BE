@@ -39,8 +39,6 @@ public partial class ProcessingJob
 
     public virtual ICollection<RevisionArtifact> RevisionArtifacts { get; set; } = new List<RevisionArtifact>();
 
-    public virtual ICollection<RevisionProcessingLog> RevisionProcessingLogs { get; set; } = new List<RevisionProcessingLog>();
-
     public virtual ScenarioVersion? ScenarioVersion { get; set; }
 
     public virtual SourceDocument SourceDocument { get; set; } = null!;
