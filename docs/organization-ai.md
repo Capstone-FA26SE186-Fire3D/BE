@@ -82,8 +82,21 @@ current end (`422 AI_POLICY_END_INVALID`); an ended policy is `409 AI_POLICY_END
 | LearnPost | Current published version of a Published or Hidden post (`learn_rag_eligible`) | same |
 | TrainingSnapshot / SessionResult | — | the Trainee context below |
 
-The request pins the chosen sources (kind, id, versionId, title, versionLabel, contentHash, link). An empty list pins every
-eligible source up to `maxSources`; anything outside → `422 AI_SOURCE_NOT_ALLOWED`. Eligibility is checked again at settlement.
+The request pins the chosen sources (kind, id, versionId, title, versionLabel, contentHash, link). Anything outside the eligible
+set → `422 AI_SOURCE_NOT_ALLOWED`. Eligibility is checked again at settlement.
+
+An empty list pins the most useful eligible sources up to `maxSources` (#178, `ai_pick_sources`), in this order:
+1. TraineeAnswer in a Learn post: the post itself (not counted in `maxSources`), then the knowledge sources its published version
+   cites (`learn_post_version_sources`).
+2. ScenarioDraft: Library versions (scenario templates, rubric samples, equipment) before documents. BIM facts are pinned apart.
+3. Relevance of the question (plus the Learn post title) to each source: words folded like Learn search (case, Vietnamese
+   diacritics), Vietnamese/English function words dropped, each matching word weighted `ln(1 + N/df)` (rarer words count more),
+   doubled when it is in the title. A source is matched on its title and on: jurisdiction, label and the titles/summaries of the
+   published Learn posts that cite it (knowledge source); the summary (Learn post); kind and payload (Library version).
+4. Ties keep the former `kind, title, id` order.
+
+This is lexical ranking inside the BE. Vector retrieval over the whole index (the AI service choosing among all eligible
+sources) needs a contract change with the AI repo (AI#24).
 
 `link` lets the client open a citation: `learnSlug` + `learnPostId` (LearnPost), `libraryItemId` (LibraryVersion), `sourceUri`
 (KnowledgeSource). Every response field is present; the ones that do not apply are null.
@@ -91,6 +104,20 @@ eligible source up to `maxSources`; anything outside → `422 AI_SOURCE_NOT_ALLO
 Knowledge source registry (Admin): create as Draft (`visibility`, `title`, `versionLabel`, `sourceHash` = SHA-256 of the document,
 optional https `sourceUri`, `jurisdiction`, effective window), then approve (Draft → Approved) or retire (Approved → Retired)
 with If-Match. Each change enqueues `PlatformCacheInvalidation` with `scope:"knowledge"`.
+
+Uploading the document instead (BE#179): `POST /api/admin/knowledge-sources/upload-intent` `{fileName, contentType, sizeBytes}`
+(PDF, Markdown, plain text or HTML, at most 20 MB, Idempotency-Key) returns a presigned PUT valid 30 minutes; then
+`POST /api/admin/knowledge-sources/uploads/{uploadId}/complete` with the source details (`visibility`, `title`, `versionLabel`,
+`organizationId?`, `jurisdiction?`, effective window) checks the stored object (size and type as declared, a PDF starts with
+`%PDF-`, text is UTF-8 without NUL), computes its SHA-256, copies it to `knowledge/files/{id}` and registers a Draft source with
+`sourceHash` = that hash and `sourceUri` = `{LearnMedia:PublicBaseUrl}/api/knowledge-sources/files/{id}`. That address is anonymous
+and redirects (302, `Cache-Control: public, max-age=300`) to a signed S3 URL valid 10 minutes, so the AI service's fetch matches
+the pinned hash. Stored files are immutable (a new document version is a new upload) and stay readable after the source is retired;
+an upload that never registered a source is not served. Completing again with the same details returns the same source (the
+registration's Idempotency-Key is `source-file:{id}`); other details → `409 IDEMPOTENCY_KEY_CONFLICT`. Errors:
+`409 KNOWLEDGE_SOURCE_UPLOAD_MISSING | KNOWLEDGE_SOURCE_UPLOAD_CHANGED | KNOWLEDGE_SOURCE_UPLOAD_EXPIRED | KNOWLEDGE_SOURCE_EXISTS`,
+`422 KNOWLEDGE_SOURCE_FILE_INVALID`, `503 KNOWLEDGE_SOURCE_STORAGE_UNAVAILABLE`. The file address carries an unguessable id but no
+login, like Learn images; do not upload documents an organization must keep from anyone holding the link.
 
 ## Scenario draft BIM facts (#91)
 
@@ -258,6 +285,9 @@ delivered (retried); timeouts and other 5xx are unknown outcomes (reconciled, ne
 | GET/POST | `/api/admin/knowledge-sources` | PlatformAdmin | POST + Idempotency-Key → `201` Draft. |
 | GET | `/api/admin/knowledge-sources/{id}` | PlatformAdmin | `ETag` = revision. |
 | POST | `/api/admin/knowledge-sources/{id}/approve\|retire` | PlatformAdmin | If-Match. |
+| POST | `/api/admin/knowledge-sources/upload-intent` | PlatformAdmin | `{fileName, contentType, sizeBytes}` + Idempotency-Key → `200` presigned PUT. |
+| POST | `/api/admin/knowledge-sources/uploads/{uploadId}/complete` | PlatformAdmin | Source details → `201` Draft source with computed hash. |
+| GET | `/api/knowledge-sources/files/{fileId}` | Anonymous | `302` to a signed URL of a registered source file. |
 
 Every mutation recomputes the actor and family from the JWT inside the gate. Idempotency receipts are keyed by actor,
 operation and key, and hash the canonical input (not the family).
@@ -265,8 +295,8 @@ operation and key, and hash the canonical input (not the family).
 ## Not covered yet
 
 Acceptance used a fake in-process FastAPI service only. The real provider/model, retrieval quality, the embedding model and
-dimension, indexing and production prompts need their own acceptance (#92). Organization knowledge sources without `sourceUri`
-have no document the service can fetch yet.
+dimension, indexing and production prompts need their own acceptance (#92). Knowledge sources registered by hash without
+`sourceUri` have no document the service can fetch; upload the file instead (BE#179).
 
 ## Tests
 
@@ -277,3 +307,6 @@ have no document the service can fetch yet.
   Common-only sources, Learn/Training/Result contexts, learner-safe snapshot, access loss → `resultWithheld`, Assessment block,
   Trainee HTTP routes; `knowledge_chunks` and `fet3d_ai_indexer` privileges.
 - `OrganizationAiRequestListTests`: tenant list with v7 filters.
+- `AiSourcesPostgresTests`: pinning by citation, Library-first drafts and relevance (#178); uploaded files registering a source,
+  immutability, privileges and HTTP surface (BE#179). `KnowledgeSourceFileServiceTests`: intent, hashing, replay, failed
+  registration retry, content checks, missing/changed/expired/unavailable uploads.
