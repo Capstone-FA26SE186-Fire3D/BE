@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Fire3D.API.Authorization;
 using Fire3D.Application.Ai;
 using Fire3D.Application.Authentication;
@@ -149,10 +148,8 @@ public sealed class TraineeAiController(IOrganizationAiGates gates, IOptions<Org
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.PlatformAdministration)]
 [Produces("application/json")]
-public sealed partial class AdminAiController(IOrganizationAiGates gates, Fire3D.Application.Content.IContentGates content) : ContentControllerBase
+public sealed class AdminAiController(IOrganizationAiGates gates, Fire3D.Application.Content.IContentGates content) : ContentControllerBase
 {
-    [GeneratedRegex("^[A-Za-z0-9._-]{1,100}$")] private static partial Regex VersionLabel();
-
     /// <summary>All AI requests, newest first. Filters: status, operation (ScenarioDraft, Answer, TraineeAnswer), audience (organization, trainee), organizationId.</summary>
     [HttpGet("api/admin/ai/requests")]
     [ProducesResponseType<AdminAiRequestPage>(200)]
@@ -251,15 +248,11 @@ public sealed partial class AdminAiController(IOrganizationAiGates gates, Fire3D
     [ProducesResponseType<ProblemDetails>(422)]
     public async Task<IActionResult> CreateKnowledgeSource(CreateKnowledgeSourceRequest request, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
-        var issues = OrganizationAiInput.Text(request.Title, "$.title", 500);
-        if (request.Visibility is not ("Common" or "Organization")) issues.Add(new("VALUE_UNSUPPORTED", "$.visibility", "Common or Organization."));
-        if ((request.Visibility == "Organization") != (request.OrganizationId is not null)) issues.Add(new("FIELD_INVALID", "$.organizationId", "Required for Organization sources only."));
-        if (!VersionLabel().IsMatch(request.VersionLabel ?? "")) issues.Add(new("VALUE_UNSUPPORTED", "$.versionLabel", "1-100 of letters, digits, dot, dash or underscore."));
+        var issues = OrganizationAiInput.SourceRegistration(request.Visibility, request.Title, request.VersionLabel, request.OrganizationId,
+            request.Jurisdiction, request.EffectiveFrom, request.EffectiveUntil);
         if (!OrganizationAiInput.Sha256().IsMatch(request.SourceHash?.ToLowerInvariant() ?? "")) issues.Add(new("VALUE_UNSUPPORTED", "$.sourceHash", "Lower-case SHA-256 hex of the source document."));
         if (request.SourceUri is not null && (!Uri.TryCreate(request.SourceUri, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(uri.UserInfo)))
             issues.Add(new("URL_INVALID", "$.sourceUri", "Absolute https URL without credentials."));
-        if (request.Jurisdiction is not null) issues.AddRange(OrganizationAiInput.Text(request.Jurisdiction, "$.jurisdiction", 100));
-        if (request.EffectiveFrom is not null && request.EffectiveUntil <= request.EffectiveFrom) issues.Add(new("VALUE_OUT_OF_RANGE", "$.effectiveUntil", "Must be after effectiveFrom."));
         if (issues.Count > 0) return Invalid(issues);
         var result = await gates.AdminAsync("CreateSource", Actor, Family, Guid.Empty, request, key, null, ct);
         return result.IsSuccess ? Created($"/api/admin/knowledge-sources/{result.Value.GetProperty("id").GetGuid()}", result.Value) : Problem(result.Error!);
