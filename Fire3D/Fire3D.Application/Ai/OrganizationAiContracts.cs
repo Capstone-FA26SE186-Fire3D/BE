@@ -121,6 +121,7 @@ public static partial class OrganizationAiInput
     public const int MaxTextLength = 8000;
     [GeneratedRegex(@"<\s*[a-zA-Z/!?]")] private static partial Regex Markup();
     [GeneratedRegex("^[0-9a-f]{64}$")] public static partial Regex Sha256();
+    [GeneratedRegex("^[A-Za-z0-9._-]{1,100}$")] private static partial Regex VersionLabel();
     /// <summary>Units the AI service settles usage in (AI_QUOTA_UNIT_UNSUPPORTED otherwise); AI policies and AI quota grants use only these.
     /// AiPolicyEndAndUnits.sql repeats the list; a test keeps the two equal.</summary>
     public static readonly FrozenSet<string> QuotaUnits = FrozenSet.ToFrozenSet(["tokens", "requests"], StringComparer.Ordinal);
@@ -132,6 +133,19 @@ public static partial class OrganizationAiInput
         if (string.IsNullOrWhiteSpace(value)) issues.Add(new("FIELD_REQUIRED", path, "Required."));
         else if (value.Length > max) issues.Add(new("VALUE_TOO_LONG", path, $"At most {max} characters."));
         else if (Markup().IsMatch(value) || value.Any(c => char.IsControl(c) && c is not '\n' and not '\t' and not '\r')) issues.Add(new("MARKUP_NOT_ALLOWED", path, "Plain text only."));
+        return issues;
+    }
+
+    /// <summary>What a knowledge source version is registered with, whether by URL and hash or by uploading the file (BE#179).</summary>
+    public static List<ScenarioDraftValidationIssue> SourceRegistration(string? visibility, string? title, string? versionLabel, Guid? organizationId,
+        string? jurisdiction, DateTimeOffset? effectiveFrom, DateTimeOffset? effectiveUntil)
+    {
+        var issues = Text(title, "$.title", 500);
+        if (visibility is not ("Common" or "Organization")) issues.Add(new("VALUE_UNSUPPORTED", "$.visibility", "Common or Organization."));
+        if ((visibility == "Organization") != (organizationId is not null)) issues.Add(new("FIELD_INVALID", "$.organizationId", "Required for Organization sources only."));
+        if (!VersionLabel().IsMatch(versionLabel ?? "")) issues.Add(new("VALUE_UNSUPPORTED", "$.versionLabel", "1-100 of letters, digits, dot, dash or underscore."));
+        if (jurisdiction is not null) issues.AddRange(Text(jurisdiction, "$.jurisdiction", 100));
+        if (effectiveFrom is not null && effectiveUntil <= effectiveFrom) issues.Add(new("VALUE_OUT_OF_RANGE", "$.effectiveUntil", "Must be after effectiveFrom."));
         return issues;
     }
 
