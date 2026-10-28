@@ -22,7 +22,12 @@
         "properties": {
           "type": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]{0,99}$", "not": { "enum": ["ExitReached", "WrongExit", "HazardExposure", "Moved"] } },
           "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
-          "payload": { "$ref": "#/$defs/parameterSchema", "description": "Absent means the event carries an empty payload." }
+          "payload": { "$ref": "#/$defs/parameterSchema", "description": "Absent means the event carries an empty payload." },
+          "metric": {
+            "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "maxLength": 64,
+            "not": { "enum": ["reached_exit", "completion_time_seconds", "wrong_exits", "hazard_exposure", "distance_meters"] },
+            "description": "Rubric metric counting the accepted events of this type (BE#183). Absent: the runtime 2.0.x metric for AlarmRaised, ExtinguisherUsed, ExtinguishAttemptLargeFire, ItemWetted, NoseCoveredInSmoke, CheckedDoorHeat, ClosedDoor, UsedElevator, WentBackForBelongings and NpcGuided, otherwise not scored. Capabilities may repeat a metric only for the same type; a metric naming another type, a different metric for one type, or a 2.0.x metric on another type is METRIC_CONFLICT."
+          }
         }
       }
     },

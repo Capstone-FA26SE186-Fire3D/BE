@@ -24,6 +24,20 @@ public static class RuntimeCatalogContracts
     public static IReadOnlyDictionary<string, CapabilityContract> For(RuntimeCatalogDto? runtime) =>
         runtime is null ? new Dictionary<string, CapabilityContract>() : CapabilityContracts.Parse(runtime.Capabilities, runtime.CapabilityContracts);
 
+    /// <summary>
+    /// Union of the scorable metrics of active runtimes (BE#183), for callers that have no runtime yet (rubric catalog without
+    /// runtimeVersion, Library rubric samples). Uses the latest row per version; a draft is still checked against its own runtime.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string?> Metrics(IEnumerable<RuntimeCatalogDto> runtimes)
+    {
+        var events = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var runtime in runtimes.DistinctBy(x => x.RuntimeVersion))
+            foreach (var (metric, type) in EditorContract.RuntimeMetrics(For(runtime))) events.TryAdd(metric, type);
+        var result = EditorContract.CoreMetrics.ToDictionary(x => x, string? (_) => null, StringComparer.Ordinal);
+        foreach (var (metric, type) in events.Where(x => x.Value is not null).OrderBy(x => x.Key, StringComparer.Ordinal)) result.TryAdd(metric, type);
+        return result;
+    }
+
     public static RuntimeCatalogDto PublishedView(RuntimeCatalogDto runtime)
     {
         var valid = For(runtime);

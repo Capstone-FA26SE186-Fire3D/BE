@@ -20,7 +20,8 @@ public sealed partial class AuthIntegrationTests
              {"id":"no-elevator","metric":"used_elevator","mandatory":true,"weight":1,"operator":"eq","threshold":0}]}
             """)!.AsObject();
         Assert.Empty(ScenarioStateV1Validator.ValidateRubricDocument(rubric));
-        Assert.Equal(EditorContract.LearnerMetrics, ((string[])(await ScalarAsync("SELECT learner_rubric_metrics()"))!));
+        // A runtime without a catalog row still offers the core and 2.0.x metrics (BE#183 keeps them for every runtime).
+        Assert.Equal(EditorContract.LearnerMetrics.Order(StringComparer.Ordinal), ((string[])(await ScalarAsync("SELECT learner_rubric_metrics('0.0.0')"))!).Order(StringComparer.Ordinal));
         var f = await PublishedTraining(rubric);
         var trainee = await SeedTrainee();
         await DeclareAlarmEvent();

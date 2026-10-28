@@ -105,14 +105,38 @@ Metrics are computed only from received events:
 | `wrong_exits` | count of `WrongExit` |
 | `hazard_exposure` | sum of `HazardExposure.payload.amount` (finite, ≥ 0) |
 | `distance_meters` | sum of `Moved.payload.distanceMeters` (finite, ≥ 0) |
-| `alarm_raised`, `extinguisher_used`, `extinguish_attempt_large_fire`, `item_wetted`, `nose_covered_in_smoke`, `checked_door_heat`, `closed_door`, `used_elevator`, `went_back_for_belongings`, `npc_guided` | count of accepted events of the matching API type (`AlarmRaised`, `ExtinguisherUsed`, … see the batch 1 table); rejected events are not counted |
+| player-action metrics of the session's runtime | count of accepted events of the API type the metric is declared on; rejected events are not counted |
 
 The player-action metrics (migration `20261017110000_AddEventRubricMetrics`, BE#101) are named after the Docs IFC 6.1 events, so a
 criterion is tied to an event as Docs requires: for example `{"metric":"used_elevator","operator":"eq","threshold":0,"mandatory":true}`
 (never took the elevator) or `{"metric":"alarm_raised","operator":"gte","threshold":1}`. `DetectorTriggered` and `SprinklerActivated`
 are sent by the simulation, not the player, and have no metric. An event the session's runtime does not declare is rejected and counts 0.
 
-Criteria compare a metric with `gte`/`lte`/`eq`; a missing metric fails the criterion. Score = passed weight / total weight (stored as percent). Assessment: `Passed` when every mandatory criterion passes and the ratio reaches `pass_threshold`, otherwise `NotPassed`; `Abandoned` gives `Incomplete`. Learn and Guided give `NotAssessed`. Completion never implies Passed and the client never sends a score. Versioned editor drafts reject criteria on other metrics (`RUBRIC_METRIC_UNSUPPORTED`), and Assessment prepare rejects legacy versions with unsupported metrics (`RUBRIC_NOT_SUPPORTED`).
+Since BE#183 (migration `20261028120000_RuntimeRubricMetrics`) the player-action metrics come from the runtime catalog, not a fixed
+list. An item of `capability_contracts[*].events` may declare `metric` (`^[a-z][a-z0-9_]*$`, at most 64 characters): the count of
+accepted events of that type. The ten runtime 2.0.x metrics (`AlarmRaised` → `alarm_raised` … `NpcGuided` → `npc_guided`) stay
+available for every runtime (0 when the runtime does not declare the event), so the 2.0.x catalogs, rubrics and results are unchanged;
+any other event without `metric` is not scored.
+Capabilities may repeat a metric only for the same event type; naming a different metric for one type, one metric for two types, a
+core metric or a 2.0.x metric on another type is rejected at registration with `METRIC_CONFLICT`.
+
+| Where | Metric list used |
+|---|---|
+| Complete draft validation (`RUBRIC_METRIC_UNSUPPORTED`) | the draft's `runtimeVersion` (active catalog row) |
+| `GET /api/scenario-rubrics/catalog?runtimeVersion=` | that active runtime; 404 `RUNTIME_NOT_FOUND` otherwise |
+| `GET /api/scenario-rubrics/catalog` (no parameter) | union of the active runtimes |
+| Library `RubricSample` | union of the active runtimes |
+| Assessment prepare (`RUBRIC_NOT_SUPPORTED`) | `learner_rubric_metrics(runtimeVersion)` of the request |
+| Finalize | `runtime_event_metrics(runtime_version)` pinned by the session (the row `training_event_rejection` uses) |
+
+Runtime 2.1.0 (batch 2, Unity) declares: `HoseReelUsed` → `hose_reel_used`, `FireBlanketUsed` → `fire_blanket_used`, `BlanketCovered` →
+`blanket_covered`, `PowerCutOff` → `power_cut_off`, `GasValveClosed` → `gas_valve_closed`, `WedgeRemoved` → `wedge_removed`,
+`LockedExitTried` → `locked_exit_tried`, `EmergencyCalled` → `emergency_called`, `SignaledForHelp` → `signaled_for_help`,
+`EscapeHoodWorn` → `escape_hood_worn`, `FirstAidUsed` → `first_aid_used`, `InjuredHelped` → `injured_helped`, `WheelchairToRefuge` →
+`wheelchair_to_refuge`, `AssemblyPointReached` → `assembly_point_reached`, `WindowOpened` → `window_opened`. Registering that catalog
+is enough; no backend change is needed for a new event metric.
+
+Criteria compare a metric with `gte`/`lte`/`eq`; a missing metric fails the criterion. Score = passed weight / total weight (stored as percent). Assessment: `Passed` when every mandatory criterion passes and the ratio reaches `pass_threshold`, otherwise `NotPassed`; `Abandoned` gives `Incomplete`. Learn and Guided give `NotAssessed`. Completion never implies Passed and the client never sends a score. Versioned editor drafts reject criteria on metrics their runtime does not offer (`RUBRIC_METRIC_UNSUPPORTED`), and Assessment prepare rejects versions with metrics the requested runtime does not offer (`RUBRIC_NOT_SUPPORTED`).
 
 ### Result fields
 

@@ -20,10 +20,13 @@ public static partial class EditorContract
     // Behaviour objects must name a runtime capability; Unity behaviour is never inferred from the kind alone.
     public static readonly string[] CapabilityRequiredKinds = ["Hazard", "Npc", "Equipment"];
     public const int MaxFloors = 500, MaxMappings = 100_000, MaxObjects = 2_000;
+    /// <summary>Metrics computed from the core events (ExitReached, WrongExit, HazardExposure.amount, Moved.distanceMeters) for every runtime.</summary>
+    public static readonly string[] CoreMetrics = ["reached_exit", "completion_time_seconds", "wrong_exits", "hazard_exposure", "distance_meters"];
     /// <summary>
-    /// Player-action metrics (Docs IFC 6.1 "event cho rubric"): the metric id is the Docs event name and its value is the number of
-    /// accepted events of that API type. Simulation events (DetectorTriggered, SprinklerActivated) are not player actions and are not scored.
-    /// Keep in sync with learner_session_finalize and learner_rubric_metrics() (RubricEventMetrics.sql).
+    /// Player-action metrics of runtime 2.0.x (Docs IFC 6.1 "event cho rubric"), available for every runtime next to the metrics its
+    /// catalog declares (BE#183). The value is the number of accepted events of that API type, 0 when the runtime does not declare the
+    /// event. Simulation events (DetectorTriggered, SprinklerActivated) are not player actions and are not scored. Keep in sync with
+    /// runtime_event_metrics (RuntimeRubricMetrics.sql).
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> EventCountMetrics = new Dictionary<string, string>
     {
@@ -39,13 +42,30 @@ public static partial class EditorContract
         ["npc_guided"] = "NpcGuided"
     };
     /// <summary>
-    /// Rubric metrics the server can compute from learner telemetry: the core metrics (ExitReached, WrongExit, HazardExposure.amount,
-    /// Moved.distanceMeters) and the player-action counts above. A criterion on any other metric is rejected before release; scores are
-    /// never taken from the client.
+    /// Rubric metrics of a runtime 2.0.x catalog: the core metrics and the player-action counts above. Used where no runtime is known;
+    /// a draft is checked against <see cref="RuntimeMetrics"/> of its runtime. Scores are never taken from the client.
     /// </summary>
-    public static readonly string[] LearnerMetrics = ["reached_exit", "completion_time_seconds", "wrong_exits", "hazard_exposure", "distance_meters", .. EventCountMetrics.Keys];
+    public static readonly string[] LearnerMetrics = [.. CoreMetrics, .. EventCountMetrics.Keys];
+
     /// <summary>
-    /// Learner/playtest events every runtime may send; the metrics above are computed from them. Any other event type must be
+    /// Scorable metrics of one runtime (BE#183), mapped to the event type they count (null for the core metrics): the core metrics, then
+    /// the 2.0.x metrics and each catalog event's declared <c>metric</c> (the first capability by id that declares one) in ordinal order.
+    /// Same list and order as learner_rubric_metrics(runtime) in SQL.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string?> RuntimeMetrics(IReadOnlyDictionary<string, CapabilityContract> contracts)
+    {
+        var declared = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var contract in contracts.Values.OrderBy(x => x.Id, StringComparer.Ordinal))
+            foreach (var ev in contract.Events ?? [])
+                if (ev.Metric is not null) declared.TryAdd(ev.Type, ev.Metric);
+        var result = CoreMetrics.ToDictionary(x => x, string? (_) => null, StringComparer.Ordinal);
+        foreach (var (metric, type) in declared.Select(x => (x.Value, x.Key)).Concat(EventCountMetrics.Select(x => (x.Key, x.Value))).OrderBy(x => x.Item1, StringComparer.Ordinal))
+            result.TryAdd(metric, type);
+        return result;
+    }
+
+    /// <summary>
+    /// Learner/playtest events every runtime may send; the core metrics are computed from them. Any other event type must be
     /// declared in <c>events</c> of a capability of the session's pinned runtime, otherwise it is rejected (EVENT_TYPE_UNSUPPORTED).
     /// </summary>
     public static readonly string[] CoreEvents = ["ExitReached", "WrongExit", "HazardExposure", "Moved"];
@@ -67,6 +87,8 @@ public static partial class EditorContract
     [GeneratedRegex("^[0-9]+\\.[0-9]+\\.[0-9]+$")] internal static partial Regex SemverPattern();
     [GeneratedRegex("^[0-9a-f]{64}$")] internal static partial Regex HashPattern();
     [GeneratedRegex("^[A-Z][A-Za-z0-9]{0,99}$")] internal static partial Regex EventTypePattern();
+    [GeneratedRegex("^[a-z][a-z0-9_]*$")] internal static partial Regex MetricPattern();
+    public const int MetricMaxLength = 64;
 }
 
 /// <summary>Strict JSON reader that records every deviation as a JSONPath issue instead of throwing.</summary>
@@ -230,13 +252,16 @@ public static class GeometryMetadataValidator
 public sealed record CapabilityContract(string Id, string Version, IReadOnlyList<string> ObjectKinds, JsonObject? Parameters,
     IReadOnlyList<CapabilityEvent>? Events = null);
 
-/// <summary>An event the runtime may send for a capability; Payload is the closed parameter-schema subset (null: empty payload only).</summary>
-public sealed record CapabilityEvent(string Type, JsonObject? Payload);
+/// <summary>
+/// An event the runtime may send for a capability; Payload is the closed parameter-schema subset (null: empty payload only).
+/// Metric, when declared, makes the count of accepted events of this type a rubric metric (BE#183).
+/// </summary>
+public sealed record CapabilityEvent(string Type, JsonObject? Payload, string? Metric = null);
 
 public static class CapabilityContracts
 {
     private static readonly string[] Contract = ["version", "objectKinds", "parameters", "description", "events", "actions"];
-    private static readonly string[] Event = ["type", "description", "payload"];
+    private static readonly string[] Event = ["type", "description", "payload", "metric"];
 
     /// <summary>
     /// Reads the catalog contract map. A capability without a valid contract is omitted so editor objects cannot use it;
@@ -288,10 +313,31 @@ public static class CapabilityContracts
                     $"Event {ev.Type} is declared by {first.Id} with a different payload schema."));
                 result.Remove(contract.Id);
             }
+        // One metric counts one event type: capabilities may repeat the same metric for the same type, never name it differently or reuse
+        // a metric of another type. Core and 2.0.x metric names stay bound to their own events.
+        var metricEvents = new Dictionary<string, (string Id, string Type)>(StringComparer.Ordinal);
+        var eventMetrics = new Dictionary<string, (string Id, string Metric)>(StringComparer.Ordinal);
+        foreach (var contract in result.Values.OrderBy(x => x.Id, StringComparer.Ordinal).ToList())
+            foreach (var ev in contract.Events ?? [])
+            {
+                if (ev.Metric is not { } metric) continue;
+                var conflict = EditorContract.CoreMetrics.Contains(metric) ? "is a core metric"
+                    : EditorContract.EventCountMetrics.TryGetValue(metric, out var reserved) && reserved != ev.Type ? $"counts {reserved} events"
+                    : metricEvents.TryGetValue(metric, out var m) && m.Type != ev.Type ? $"is declared by {m.Id} for {m.Type}"
+                    : eventMetrics.TryGetValue(ev.Type, out var e) && e.Metric != metric ? $"differs from {e.Metric} declared by {e.Id}" : null;
+                if (conflict is not null)
+                {
+                    (issues ?? []).Add(new("METRIC_CONFLICT", $"$.capabilityContracts.{contract.Id}.events", $"Metric {metric} of {ev.Type} {conflict}."));
+                    result.Remove(contract.Id);
+                    break;
+                }
+                metricEvents.TryAdd(metric, (contract.Id, ev.Type));
+                eventMetrics.TryAdd(ev.Type, (contract.Id, metric));
+            }
         return result;
     }
 
-    /// <summary>events: [{type, description?, payload?}]. Types are PascalCase; core events belong to the backend.</summary>
+    /// <summary>events: [{type, description?, payload?, metric?}]. Types are PascalCase; core events belong to the backend.</summary>
     private static List<CapabilityEvent> Events(JsonNode? node, string path, StrictReader r)
     {
         var events = new List<CapabilityEvent>();
@@ -304,10 +350,11 @@ public static class CapabilityContracts
             if (ev["description"] is not null) r.Text(ev["description"], $"{ep}.description", 1000);
             JsonObject? payload = null;
             if (ev["payload"] is not null && ParameterSchema.ValidateSchema(ev["payload"], $"{ep}.payload", r)) payload = (JsonObject)ev["payload"]!;
+            var metric = ev["metric"] is null ? null : r.Text(ev["metric"], $"{ep}.metric", EditorContract.MetricMaxLength, pattern: EditorContract.MetricPattern());
             if (type is null) continue;
             if (EditorContract.CoreEvents.Contains(type)) r.Add("EVENT_TYPE_RESERVED", $"{ep}.type", "Core learner events are defined by the backend.");
             else if (events.Any(x => x.Type == type)) r.Add("ID_DUPLICATE", $"{ep}.type", "Event types must be unique within a capability.");
-            else events.Add(new(type, payload));
+            else events.Add(new(type, payload, metric));
         }
         return events;
     }
@@ -469,7 +516,8 @@ public static class ScenarioStateV1Validator
                 r.OneOf(libraryRef["kind"], path + ".kind", LibraryKinds);
                 if (libraryRef["code"] is not null) r.Text(libraryRef["code"], path + ".code", 80);
             }
-        ValidateRubric(r, root["rubric"], complete);
+        // Metrics come from the draft's runtime catalog; without one (shape checks) the 2.0.x list applies.
+        ValidateRubric(r, root["rubric"], complete, contracts is null ? EditorContract.LearnerMetrics : EditorContract.RuntimeMetrics(contracts).Keys.ToArray());
         // BE#144: optional, but complete when present. A missing field is an error, never a default that changes the scenario.
         if (r.Object(root["wind"], "$.wind", Wind, required: false) is { } wind)
         {
@@ -535,11 +583,14 @@ public static class ScenarioStateV1Validator
         return r.Issues;
     }
 
-    /// <summary>Complete rubric validation (shape and server-computed metrics) for Library rubric samples.</summary>
-    public static IReadOnlyList<ScenarioDraftValidationIssue> ValidateRubricDocument(JsonNode? rubric)
+    /// <summary>
+    /// Complete rubric validation (shape and server-computed metrics) for Library rubric samples. Metrics default to the 2.0.x list;
+    /// callers pass the metrics of the active runtimes.
+    /// </summary>
+    public static IReadOnlyList<ScenarioDraftValidationIssue> ValidateRubricDocument(JsonNode? rubric, IReadOnlyCollection<string>? metrics = null)
     {
         var r = new StrictReader([]);
-        ValidateRubric(r, rubric, complete: true);
+        ValidateRubric(r, rubric, complete: true, metrics ?? EditorContract.LearnerMetrics);
         return r.Issues;
     }
 
@@ -553,7 +604,7 @@ public static class ScenarioStateV1Validator
             if (read((array[i], $"{path}[{i}]")) is { } value && !seen.Add(value)) r.Add("ID_DUPLICATE", $"{path}[{i}]", "Values must be unique.");
     }
 
-    private static void ValidateRubric(StrictReader r, JsonNode? node, bool complete)
+    private static void ValidateRubric(StrictReader r, JsonNode? node, bool complete, IReadOnlyCollection<string> metrics)
     {
         var rubric = r.Object(node, "$.rubric", Rubric, complete);
         if (rubric is null) return;
@@ -573,8 +624,8 @@ public static class ScenarioStateV1Validator
             if (c is null) continue;
             if (r.Text(c["id"], $"{path}.id", RubricContract.CriterionIdMaxLength, pattern: EditorContract.IdPattern()) is { } id && !ids.Add(id))
                 r.Add("ID_DUPLICATE", $"{path}.id", "Criterion IDs must be unique.");
-            if (r.Text(c["metric"], $"{path}.metric", 128, pattern: EditorContract.IdPattern()) is { } metric && complete && !EditorContract.LearnerMetrics.Contains(metric))
-                r.Add("RUBRIC_METRIC_UNSUPPORTED", $"{path}.metric", $"Use a server-computed metric: {string.Join(", ", EditorContract.LearnerMetrics)}.");
+            if (r.Text(c["metric"], $"{path}.metric", 128, pattern: EditorContract.IdPattern()) is { } metric && complete && !metrics.Contains(metric))
+                r.Add("RUBRIC_METRIC_UNSUPPORTED", $"{path}.metric", $"Use a metric of the selected runtime: {string.Join(", ", metrics)}.");
             r.Boolean(c["mandatory"], $"{path}.mandatory");
             r.Number(c["weight"], $"{path}.weight", min: 0);
             r.Number(c["threshold"], $"{path}.threshold");

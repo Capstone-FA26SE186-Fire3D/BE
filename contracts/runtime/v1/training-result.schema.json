@@ -14,7 +14,7 @@
     "scorePercent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
     "rubricHash": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
     "criteria": { "type": ["array", "null"], "items": { "$ref": "#/$defs/criterion" }, "description": "Assessment only; null for Learn and Guided." },
-    "metrics": { "type": "object", "description": "Server metrics by name (reached_exit, completion_time_seconds, wrong_exits, hazard_exposure, distance_meters, player-action counts); see GET /api/scenario-rubrics/catalog." },
+    "metrics": { "type": "object", "description": "Server metrics by name (reached_exit, completion_time_seconds, wrong_exits, hazard_exposure, distance_meters, player-action counts declared by the session's runtime); see GET /api/scenario-rubrics/catalog?runtimeVersion=." },
     "lastEventSequence": { "type": "integer", "minimum": 0 },
     "createdAt": { "type": "string", "format": "date-time" },
     "passThresholdPercent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 }
