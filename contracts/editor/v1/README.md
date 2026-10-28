@@ -36,7 +36,7 @@ A document without `schemaVersion` is legacy: drafts keep the historical typed s
 saved. Legacy Geometry metadata is never reported as satisfying this contract: editor preview and floors return
 `ReprocessRequired` without coordinates or a download URL.
 
-Training modes use the database vocabulary `Learn`, `Guided`, `Assessment`. Rubric criteria must use a server-computed metric: the core metrics (`reached_exit`, `completion_time_seconds`, `wrong_exits`, `hazard_exposure`, `distance_meters`) or a player-action count named after the Docs event (`alarm_raised`, `used_elevator`, …); `GET /api/scenario-rubrics/catalog` lists them all. See [learner sessions](../../../docs/learner-sessions.md).
+Training modes use the database vocabulary `Learn`, `Guided`, `Assessment`. Rubric criteria must use a server-computed metric of the draft's runtime: the core metrics (`reached_exit`, `completion_time_seconds`, `wrong_exits`, `hazard_exposure`, `distance_meters`) or a player-action count declared as `metric` on an event of that runtime's capability contracts (events of runtime 2.0.x without `metric` keep `alarm_raised`, `used_elevator`, …); `GET /api/scenario-rubrics/catalog?runtimeVersion=` lists them. See [learner sessions](../../../docs/learner-sessions.md).
 
 Structural validation is not geometry QA and not Unity acceptance. Object kinds are placement categories; behaviour
 comes only from capabilities published in the runtime catalog. No Unity behaviour is inferred or seeded here.

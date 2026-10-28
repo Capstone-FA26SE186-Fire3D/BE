@@ -37,9 +37,12 @@ public static class RubricContract
         ["hazard_exposure"]="Sum of HazardExposure amounts.",
         ["distance_meters"]="Sum of Moved distances in metres."
     };
-    public static RubricCatalog Catalog { get; }=new(SupportedSchemaVersions,DefaultSchemaVersion,
-        EditorContract.LearnerMetrics.Select(x=>new RubricMetric(x,MetricDescriptions.GetValueOrDefault(x)??
-            $"Number of accepted {EditorContract.EventCountMetrics[x]} events (rejected events are not counted).")).ToArray(),Operators,
+    /// <summary>Catalog of the runtime 2.0.x metrics (EditorContract.LearnerMetrics).</summary>
+    public static RubricCatalog Catalog { get; }=CatalogFor(EditorContract.LearnerMetrics.ToDictionary(x=>x,x=>EditorContract.EventCountMetrics.GetValueOrDefault(x)));
+    /// <summary>Catalog for a metric map (metric -> counted event type, null for core metrics), e.g. EditorContract.RuntimeMetrics.</summary>
+    public static RubricCatalog CatalogFor(IReadOnlyDictionary<string,string?> metrics)=>new(SupportedSchemaVersions,DefaultSchemaVersion,
+        metrics.Select(x=>new RubricMetric(x.Key,MetricDescriptions.GetValueOrDefault(x.Key)??
+            $"Number of accepted {x.Value} events (rejected events are not counted).")).ToArray(),Operators,
         new(CriterionRequiredFields,CriterionOptionalFields,EditorContract.IdPattern().ToString(),CriterionIdMaxLength,DescriptionMaxLength,0m,LabelMaxLength),
         MaxCriteria,RubricFields);
 }

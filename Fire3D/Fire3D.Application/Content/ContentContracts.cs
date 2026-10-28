@@ -313,7 +313,8 @@ public static partial class LearnContent
 /// <summary>Library payloads per kind. Equipment metadata never enables a runtime capability.</summary>
 public static class LibraryContent
 {
-    public static IReadOnlyList<ScenarioDraftValidationIssue> Validate(string kind, LibraryVersionInput input)
+    /// <summary>rubricMetrics: metrics a RubricSample may use (the active runtimes' union); null keeps the runtime 2.0.x list.</summary>
+    public static IReadOnlyList<ScenarioDraftValidationIssue> Validate(string kind, LibraryVersionInput input, IReadOnlyCollection<string>? rubricMetrics = null)
     {
         var issues = new List<ScenarioDraftValidationIssue>();
         if (string.IsNullOrWhiteSpace(input.Name) || input.Name.Trim().Length > 255) issues.Add(new("STRING_INVALID", "$.name", "Name is 1-255 characters."));
@@ -339,7 +340,7 @@ public static class LibraryContent
                 else issues.AddRange(ScenarioStateV1Validator.ValidateShape(state).Select(x => x with { Path = "$.payload.state" + x.Path[1..] }));
                 break;
             case "RubricSample":
-                issues.AddRange(ScenarioStateV1Validator.ValidateRubricDocument(input.Payload["rubric"]).Select(x => x with { Path = "$.payload" + x.Path[1..] }));
+                issues.AddRange(ScenarioStateV1Validator.ValidateRubricDocument(input.Payload["rubric"], rubricMetrics).Select(x => x with { Path = "$.payload" + x.Path[1..] }));
                 break;
             case "StylePreset":
                 Fire3D.Application.Ifc.StyleRules.ValidatePreset(input.Payload, issues);

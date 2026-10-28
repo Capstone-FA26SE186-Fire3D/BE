@@ -3,6 +3,7 @@ using System.Text.Json;
 using Fire3D.API.Authorization;
 using Fire3D.Application.Authentication;
 using Fire3D.Application.Content;
+using Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -299,11 +300,12 @@ public sealed class LibraryController(IContentGates gates) : ContentControllerBa
     [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(422)]
-    public async Task<IActionResult> CreateLibraryVersion(Guid id, LibraryVersionInput request, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
+    public async Task<IActionResult> CreateLibraryVersion(Guid id, LibraryVersionInput request, [FromHeader(Name = "Idempotency-Key"), OpenApi.RequiredRequestHeader] string? key,
+        [FromServices] IRuntimeCatalogReadStore runtimes, CancellationToken ct)
     {
         var item = await gates.LibraryAsync("Get", Actor, Family, id, new { admin = true }, null, null, ct);
         if (!item.IsSuccess) return Problem(item.Error!);
-        var issues = LibraryContent.Validate(item.Value.GetProperty("kind").GetString()!, request);
+        var issues = await ValidateLibraryAsync(item.Value.GetProperty("kind").GetString()!, request, runtimes, ct);
         if (issues.Count > 0) return Invalid(issues);
         var result = await gates.LibraryAsync("CreateVersion", Actor, Family, id, new { name = request.Name.Trim(), payload = request.Payload, requiredCapabilities = request.RequiredCapabilities ?? [] }, key, null, ct);
         return result.IsSuccess ? Created($"/api/admin/library/versions/{result.Value.GetProperty("id").GetGuid()}", result.Value) : Problem(result.Error!);
@@ -325,12 +327,13 @@ public sealed class LibraryController(IContentGates gates) : ContentControllerBa
     [ProducesResponseType<ProblemDetails>(422)]
     [ProducesResponseType<ProblemDetails>(428)]
     [OpenApi.ResponseHeader("ETag")]
-    public async Task<IActionResult> UpdateLibraryVersion(Guid id, LibraryVersionInput request, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key"), OpenApi.OptionalRequestHeader] string? key = null)
+    public async Task<IActionResult> UpdateLibraryVersion(Guid id, LibraryVersionInput request, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch,
+        [FromServices] IRuntimeCatalogReadStore runtimes, CancellationToken ct, [FromHeader(Name = "Idempotency-Key"), OpenApi.OptionalRequestHeader] string? key = null)
     {
         if (Precondition(ifMatch, out var expected) is { } bad) return bad;
         var version = await gates.LibraryAsync("GetVersion", Actor, Family, id, new { admin = true }, null, null, ct);
         if (!version.IsSuccess) return Problem(version.Error!);
-        var issues = LibraryContent.Validate(version.Value.GetProperty("kind").GetString()!, request);
+        var issues = await ValidateLibraryAsync(version.Value.GetProperty("kind").GetString()!, request, runtimes, ct);
         if (issues.Count > 0) return Invalid(issues);
         return WithETag(await gates.LifecycleAsync("library", "UpdateVersion", Actor, Family, id, new { name = request.Name.Trim(), payload = request.Payload, requiredCapabilities = request.RequiredCapabilities ?? [] }, key, expected, ct));
     }
@@ -347,6 +350,11 @@ public sealed class LibraryController(IContentGates gates) : ContentControllerBa
     [OpenApi.ResponseHeader("ETag")]
     public async Task<IActionResult> PublishLibraryVersion(Guid id, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct, [FromHeader(Name = "Idempotency-Key"), OpenApi.OptionalRequestHeader] string? key = null) =>
         Precondition(ifMatch, out var expected) ?? WithETag(await gates.LifecycleAsync("library", "PublishVersion", Actor, Family, id, new { }, key, expected, ct));
+
+    // A rubric sample may use the metrics of any active runtime (BE#183); a draft that copies it is checked against its own runtime.
+    private static async Task<IReadOnlyList<Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ScenarioDraftValidationIssue>> ValidateLibraryAsync(string kind, LibraryVersionInput request,
+        IRuntimeCatalogReadStore runtimes, CancellationToken ct) =>
+        LibraryContent.Validate(kind, request, kind == "RubricSample" ? RuntimeCatalogContracts.Metrics(await runtimes.GetActiveCatalogAsync(ct)).Keys.ToArray() : null);
 }
 
 public abstract class ContentControllerBase : ControllerBase
