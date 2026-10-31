@@ -168,11 +168,11 @@ public sealed class OrganizationAiAdapterTests
             : Gate(new { code = "OK", result = new { status = "Failed" } })), provider);
         Assert.True(await worker.RunOnceAsync(default));
         Assert.Equal(["Claim", "Reject"], calls.Select(x => x.Action));
-        Assert.Equal("""{"code":"AI_SOURCE_UNAVAILABLE"}""", calls[1].Input);
+        Assert.Equal("""{"code":"AI_SOURCE_UNAVAILABLE","message":null,"documentId":null,"httpStatus":"422"}""", calls[1].Input);
         var withoutCode = ResetProxy.For<IAiProviderClient>((_, _) => Task.FromResult(new AiCallResult(AiCallStatus.Rejected, null, "400")));
         (worker, calls) = Worker((action, _, _) => Task.FromResult(action == "Claim" ? Gate(new { code = "OK", result = Claim(id, "Answer") }) : Gate(new { code = "AI_LEASE_LOST" })), withoutCode);
         Assert.True(await worker.RunOnceAsync(default));
-        Assert.Equal("""{"code":null}""", calls[1].Input);
+        Assert.Equal("""{"code":null,"message":null,"documentId":null,"httpStatus":"400"}""", calls[1].Input);
     }
 
     [Fact]

@@ -182,7 +182,7 @@ public sealed class OrganizationAiWorker(IServiceScopeFactory scopes, IOptions<O
         {
             AiCallStatus.Completed => ("Complete", (object)OrganizationAiInput.Completion(claim.GetProperty("operation").GetString()!, id, call.Body!).Completion),
             AiCallStatus.NotDelivered when dispatch => ("Retry", new { maxAttempts = o.MaxAttempts, backoffSeconds = o.BackoffSeconds, reason = "AI_PROVIDER_NOT_DELIVERED" }),
-            AiCallStatus.Rejected when dispatch => ("Reject", new { code = call.Body?["code"] is JsonValue c && c.TryGetValue<string>(out var code) ? code : null }),
+            AiCallStatus.Rejected when dispatch => ("Reject", AiRefusal.Input(call.Body, call.Reason)),
             AiCallStatus.NotFound when !dispatch => ("NotFound", new { }),
             _ => ("Unknown", (object)new { })
         };
