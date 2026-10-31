@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-284 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+285 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -45,6 +45,7 @@
 | POST | /api/admin/knowledge-sources/upload-intent | Bearer | Idempotency-Key | 200, 400, 409, 503 |
 | POST | /api/admin/knowledge-sources/uploads/{uploadId}/complete | Bearer | None | 201, 400, 404, 409, 422, 503 |
 | GET | /api/admin/knowledge-sources/{id} | Bearer | None | 200, 404 |
+| POST | /api/admin/knowledge-sources/{id}/verify | Bearer | None | 200, 404 |
 | POST | /api/admin/knowledge-sources/{id}/{operation} | Bearer | If-Match | 200, 409, 412, 428 |
 | POST | /api/admin/learn/media/images/upload-intent | Bearer | Idempotency-Key | 200, 400, 409, 503 |
 | POST | /api/admin/learn/media/images/{uploadId}/complete | Bearer | None | 200, 400, 404, 409, 422, 503 |

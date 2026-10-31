@@ -258,6 +258,26 @@ public sealed class AdminAiController(IOrganizationAiGates gates, Fire3D.Applica
         return result.IsSuccess ? Created($"/api/admin/knowledge-sources/{result.Value.GetProperty("id").GetGuid()}", result.Value) : Problem(result.Error!);
     }
 
+    /// <summary>Downloads the source address and compares its SHA-256 with the registered sourceHash (BE#188). Read-only: nothing about the source changes.</summary>
+    /// <remarks>outcome is Match, HashMismatch (actualHash is what the address serves now) or Unavailable (reason: NO_SOURCE_URI, URI_INVALID,
+    /// ADDRESS_NOT_PUBLIC, FETCH_FAILED, TIMEOUT, TOO_LARGE, TOO_MANY_REDIRECTS, REDIRECT_INVALID, HTTP_STATUS_nnn). The check follows the AI
+    /// service's rules (https, status 200, at most 20 MB, 3 redirects) from this API's own network, with its own User-Agent, so a site that
+    /// treats clients differently can still answer the AI service another way. Verify before approving: a source that does not match makes
+    /// every AI request that pins it fail with AI_SOURCE_HASH_MISMATCH.</remarks>
+    [HttpPost("api/admin/knowledge-sources/{id:guid}/verify")]
+    [ProducesResponseType<KnowledgeSourceVerification>(200)]
+    [ProducesResponseType<ProblemDetails>(404)]
+    public async Task<IActionResult> VerifyKnowledgeSource(Guid id, [FromServices] IKnowledgeSourceVerifier verifier, CancellationToken ct)
+    {
+        var result = await content.CatalogAsync("KnowledgeSources", Actor, Family, new { id, page = 1, pageSize = 1 }, ct);
+        if (!result.IsSuccess) return Problem(result.Error!);
+        var items = result.Value.GetProperty("items");
+        if (items.GetArrayLength() == 0) return Problem(new AuthError("NOT_FOUND", "The knowledge source was not found.", 404));
+        var source = items[0];
+        var uri = source.TryGetProperty("sourceUri", out var u) && u.ValueKind == JsonValueKind.String ? u.GetString() : null;
+        return Ok(await verifier.VerifyAsync(id, uri, source.GetProperty("sourceHash").GetString()!, ct));
+    }
+
     [HttpPost("api/admin/knowledge-sources/{id:guid}/{operation:regex(^(approve|retire)$)}")]
     [ProducesResponseType<JsonElement>(200)]
     [ProducesResponseType<ProblemDetails>(409)]

@@ -105,6 +105,19 @@ Knowledge source registry (Admin): create as Draft (`visibility`, `title`, `vers
 optional https `sourceUri`, `jurisdiction`, effective window), then approve (Draft → Approved) or retire (Approved → Retired)
 with If-Match. Each change enqueues `PlatformCacheInvalidation` with `scope:"knowledge"`.
 
+Verifying a source before approving it (BE#188): `POST /api/admin/knowledge-sources/{id}/verify` (no body, Admin) downloads `sourceUri` and
+compares its SHA-256 with `sourceHash`. A source whose address no longer serves the registered document makes every AI request that pins it
+fail with `AI_SOURCE_HASH_MISMATCH` (or `AI_SOURCE_UNAVAILABLE`), and with many sources pinned one bad document fails the whole request.
+Response `{sourceId, outcome, sourceHash, actualHash, sizeBytes, httpStatus, contentType, reason, checkedAt}`: `outcome` is `Match`,
+`HashMismatch` (`actualHash` is what the address serves now) or `Unavailable` with `reason` = `NO_SOURCE_URI`, `URI_INVALID`,
+`ADDRESS_NOT_PUBLIC`, `FETCH_FAILED`, `TIMEOUT`, `TOO_LARGE`, `TOO_MANY_REDIRECTS`, `REDIRECT_INVALID` or `HTTP_STATUS_nnn`. It follows the AI
+service's rules (https without credentials, status 200 only, at most 20 MB, 3 redirects, SHA-256 of the decoded body) and changes nothing:
+not the source, not its approval. The request is made from this API's network with its own User-Agent, so a site that treats clients
+differently can still answer the AI service another way; the connection only goes to public addresses (loopback, private, link-local,
+cloud metadata and reserved ranges are refused on the address actually connected, also after a redirect). Sources registered by upload
+(BE#179) point at this API and verify like any other. A `Match` is strong evidence, not a promise: a page can change later. A web page
+that changes between fetches, or a site that blocks download clients, cannot be pinned by hash; upload a stored copy instead.
+
 Uploading the document instead (BE#179): `POST /api/admin/knowledge-sources/upload-intent` `{fileName, contentType, sizeBytes}`
 (PDF, Markdown, plain text or HTML, at most 20 MB, Idempotency-Key) returns a presigned PUT valid 30 minutes; then
 `POST /api/admin/knowledge-sources/uploads/{uploadId}/complete` with the source details (`visibility`, `title`, `versionLabel`,
@@ -310,3 +323,5 @@ dimension, indexing and production prompts need their own acceptance (#92). Know
 - `AiSourcesPostgresTests`: pinning by citation, Library-first drafts and relevance (#178); uploaded files registering a source,
   immutability, privileges and HTTP surface (BE#179). `KnowledgeSourceFileServiceTests`: intent, hashing, replay, failed
   registration retry, content checks, missing/changed/expired/unavailable uploads.
+- `KnowledgeSourceVerifierTests`, `PublicAddressGuardTests` (BE#188): match, mismatch, every `Unavailable` reason, redirects (3 allowed, http refused),
+  size limit, cancellation; internal, private, link-local, metadata and reserved addresses refused, also through the real handler. No database.

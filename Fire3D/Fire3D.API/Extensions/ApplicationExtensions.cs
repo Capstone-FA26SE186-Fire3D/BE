@@ -39,6 +39,8 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Ai.IOrganizationAiGates,Fire3D.Infrastructure.Ai.OrganizationAiGates>();
         services.AddScoped<Fire3D.Application.Ai.IAiProviderClient,Fire3D.Infrastructure.Ai.FastApiAiClient>();
         services.AddHttpClient(Fire3D.Infrastructure.Ai.FastApiAiClient.ClientName);
+        services.AddScoped<Fire3D.Application.Ai.IKnowledgeSourceVerifier,Fire3D.Infrastructure.Ai.KnowledgeSourceVerifier>();
+        services.AddHttpClient(Fire3D.Infrastructure.Ai.KnowledgeSourceVerifier.ClientName).ConfigurePrimaryHttpMessageHandler(Fire3D.Infrastructure.Ai.KnowledgeSourceVerifier.CreateHandler);
         services.AddSingleton<Fire3D.Infrastructure.Ai.OrganizationAiWorker>();
         services.AddHostedService(sp => sp.GetRequiredService<Fire3D.Infrastructure.Ai.OrganizationAiWorker>());
         services.AddExceptionHandler<BillingExceptionHandler>();
