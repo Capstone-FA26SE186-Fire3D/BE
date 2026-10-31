@@ -12,14 +12,25 @@ internal static class AiRefusal
 {
     public const int MessageMaxLength = 500;
     public const int DocumentIdMaxLength = 64;
+    /// <summary>The AI service sends no Retry-After for sources still being prepared; embedding a large PDF takes minutes.</summary>
+    public const int DefaultPreparingRetrySeconds = 120;
+    public const string SourcesPreparing = "AI_SOURCES_PREPARING";
 
-    public static object Input(JsonObject? body, string? httpStatus) => new
+    public static object Input(JsonObject? body, string? httpStatus, int? retryAfterSeconds = null) => new
     {
         code = Text(body, "code"),
         message = Plain(Text(body, "message"), MessageMaxLength),
         documentId = Plain(Text(body, "document_id") ?? Text(body, "documentId"), DocumentIdMaxLength),
-        httpStatus
+        httpStatus,
+        retryAfterSeconds
     };
+
+    /// <summary>Retry-After as whole seconds between 1 and 3600, from either its delay or its date form; null when absent.</summary>
+    public static int? RetryAfter(System.Net.Http.Headers.RetryConditionHeaderValue? header)
+    {
+        var seconds = header?.Delta?.TotalSeconds ?? (header?.Date is { } date ? (date - DateTimeOffset.UtcNow).TotalSeconds : (double?)null);
+        return seconds is null ? null : (int)Math.Clamp(Math.Ceiling(seconds.Value), 1, 3600);
+    }
 
     private static string? Text(JsonObject? body, string name) =>
         body?[name] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;

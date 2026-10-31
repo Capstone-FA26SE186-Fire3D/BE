@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-285 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+286 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -44,6 +44,7 @@
 | POST | /api/admin/knowledge-sources | Bearer | Idempotency-Key | 201, 409, 422 |
 | POST | /api/admin/knowledge-sources/upload-intent | Bearer | Idempotency-Key | 200, 400, 409, 503 |
 | POST | /api/admin/knowledge-sources/uploads/{uploadId}/complete | Bearer | None | 201, 400, 404, 409, 422, 503 |
+| POST | /api/admin/knowledge-sources/warm | Bearer | None | 200, 503 |
 | GET | /api/admin/knowledge-sources/{id} | Bearer | None | 200, 404 |
 | POST | /api/admin/knowledge-sources/{id}/verify | Bearer | None | 200, 404 |
 | POST | /api/admin/knowledge-sources/{id}/{operation} | Bearer | If-Match | 200, 409, 412, 428 |

@@ -135,9 +135,19 @@ public sealed class FastApiAiClient(IHttpClientFactory clients, IOptions<Organiz
                 try { refusal = await response.Content.ReadFromJsonAsync<JsonObject>(timeout.Token); } catch (JsonException) { } catch (NotSupportedException) { }
                 return new(AiCallStatus.Rejected, refusal, ((int)response.StatusCode).ToString());
             }
+            if ((int)response.StatusCode is 503 or 409)
+            {
+                // Sources still being embedded (AI#28): the question cannot be answered yet, and asking again at once only repeats the wait.
+                // Reject it with its own code instead of retrying as an undelivered call.
+                JsonObject? busy = null;
+                try { busy = await response.Content.ReadFromJsonAsync<JsonObject>(timeout.Token); } catch (JsonException) { } catch (NotSupportedException) { }
+                if (busy?["code"] is JsonValue marker && marker.TryGetValue<string>(out var busyCode) && busyCode == AiRefusal.SourcesPreparing)
+                    return new(AiCallStatus.Rejected, busy, ((int)response.StatusCode).ToString(), AiRefusal.RetryAfter(response.Headers.RetryAfter) ?? AiRefusal.DefaultPreparingRetrySeconds);
+            }
             return (int)response.StatusCode switch
             {
-                401 or 403 or 404 or 429 or 503 => new(AiCallStatus.NotDelivered, Reason: ((int)response.StatusCode).ToString()),
+                429 => new(AiCallStatus.NotDelivered, Reason: "429", RetryAfterSeconds: AiRefusal.RetryAfter(response.Headers.RetryAfter)),
+                401 or 403 or 404 or 503 => new(AiCallStatus.NotDelivered, Reason: ((int)response.StatusCode).ToString()),
                 _ => new(AiCallStatus.Unknown, Reason: ((int)response.StatusCode).ToString())
             };
         }
@@ -181,8 +191,8 @@ public sealed class OrganizationAiWorker(IServiceScopeFactory scopes, IOptions<O
         var (action, input) = call.Status switch
         {
             AiCallStatus.Completed => ("Complete", (object)OrganizationAiInput.Completion(claim.GetProperty("operation").GetString()!, id, call.Body!).Completion),
-            AiCallStatus.NotDelivered when dispatch => ("Retry", new { maxAttempts = o.MaxAttempts, backoffSeconds = o.BackoffSeconds, reason = "AI_PROVIDER_NOT_DELIVERED" }),
-            AiCallStatus.Rejected when dispatch => ("Reject", AiRefusal.Input(call.Body, call.Reason)),
+            AiCallStatus.NotDelivered when dispatch => ("Retry", new { maxAttempts = o.MaxAttempts, backoffSeconds = Math.Max(o.BackoffSeconds, call.RetryAfterSeconds ?? 0), reason = "AI_PROVIDER_NOT_DELIVERED" }),
+            AiCallStatus.Rejected when dispatch => ("Reject", AiRefusal.Input(call.Body, call.Reason, call.RetryAfterSeconds)),
             AiCallStatus.NotFound when !dispatch => ("NotFound", new { }),
             _ => ("Unknown", (object)new { })
         };

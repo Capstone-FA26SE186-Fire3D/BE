@@ -48,7 +48,7 @@ public sealed record LearnBookmarkState(Guid PostId, bool Bookmarked);
 /// <summary>Knowledge source registry row. CanUseInDraft: a Learn draft may cite it; CanPublishReference: publish, Hidden and RAG accept it now.</summary>
 public sealed record KnowledgeSourceView(Guid Id, string Visibility, Guid? OrganizationId, string Title, string? SourceUri, string VersionLabel, string SourceHash,
     string? Jurisdiction, DateTime? EffectiveFrom, DateTime? EffectiveUntil, string ApprovalStatus, DateTime? ApprovedAt, DateTime CreatedAt, long Revision,
-    bool CanUseInDraft, bool CanPublishReference);
+    bool CanUseInDraft, bool CanPublishReference, string? AiIndexStatus = null, string? AiIndexError = null);
 public sealed record KnowledgeSourcePage(IReadOnlyList<KnowledgeSourceView> Items, int Total, int Page, int PageSize);
 /// <summary>Send at least one field. Name 1-255 characters; an empty Description clears it; IsActive=false hides the situation from public filters and new publishes. The slug never changes.</summary>
 public sealed record UpdateLearnSituationRequest(string? Name = null, string? Description = null, bool? IsActive = null);

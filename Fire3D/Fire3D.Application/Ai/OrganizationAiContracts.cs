@@ -42,7 +42,8 @@ public sealed record AiRequestInputView(string Text, string InputHash, Guid? Bui
     IReadOnlyList<AiSourceRef> RequestedSources, JsonElement? Context);
 public sealed record AiRequestView(Guid RequestId, string Audience, string Operation, string Status, string? ResultType, string QuotaUnit,
     int ReservedUnits, int? ConsumedUnits, AiRequestInputView Input, IReadOnlyList<AiPinnedSourceView> Sources, AiRequestResultView? Result,
-    IReadOnlyList<AiCitationView> Citations, string? FailureCode, bool? ResultWithheld, DateTime CreatedAt, DateTime? CompletedAt, long Revision);
+    IReadOnlyList<AiCitationView> Citations, string? FailureCode, bool? ResultWithheld, DateTime CreatedAt, DateTime? CompletedAt, long Revision,
+    int? RetryAfterSeconds = null);
 public sealed record AiRequestPage(IReadOnlyList<AiRequestView> Items, int Total, int Page, int PageSize);
 public sealed record AiAllocationView(Guid GrantId, int ReservedUnits, int? ConsumedUnits, string Status);
 /// <summary>Admin detail: the tenant view plus owner, policy, attempts, allocations and the withheld provider payload.</summary>
@@ -50,7 +51,7 @@ public sealed record AdminAiRequestView(Guid RequestId, string Audience, string 
     int ReservedUnits, int? ConsumedUnits, AiRequestInputView Input, IReadOnlyList<AiPinnedSourceView> Sources, AiRequestResultView? Result,
     IReadOnlyList<AiCitationView> Citations, string? FailureCode, DateTime CreatedAt, DateTime? CompletedAt, long Revision,
     Guid? OrganizationId, Guid ActorUserId, Guid PolicyId, int Attempts, string? ModelVersion, JsonElement? TechnicalUsage,
-    DateTime? ReconcileRequestedAt, JsonElement? ProviderResult, DateTime UpdatedAt, IReadOnlyList<AiAllocationView>? Allocations);
+    DateTime? ReconcileRequestedAt, JsonElement? ProviderResult, DateTime UpdatedAt, IReadOnlyList<AiAllocationView>? Allocations, int? RetryAfterSeconds = null);
 public sealed record AdminAiRequestPage(IReadOnlyList<AdminAiRequestView> Items, int Total, int Page, int PageSize);
 /// <summary>Cancelled (end only): the policy had not started and was removed instead of ended.</summary>
 public sealed record AiPolicyView(Guid Id, string Operation, string QuotaUnit, int ReserveUnits, int MaxInputChars, int MaxSources, int? DailyUnits,
@@ -105,7 +106,8 @@ public interface IOrganizationAiGates
 
 /// <summary>Outcome of one adapter call. Delivered=false only when the request provably never reached the service.</summary>
 public enum AiCallStatus { Completed, NotDelivered, Unknown, Rejected, NotFound }
-public sealed record AiCallResult(AiCallStatus Status, JsonObject? Body = null, string? Reason = null);
+/// <summary>RetryAfterSeconds is what the service asked for (Retry-After on 429, or the wait for sources still being prepared), when it said.</summary>
+public sealed record AiCallResult(AiCallStatus Status, JsonObject? Body = null, string? Reason = null, int? RetryAfterSeconds = null);
 
 public interface IAiProviderClient
 {
