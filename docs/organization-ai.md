@@ -186,7 +186,7 @@ completedAt, revision`. `input` lets a client that lost the submit response find
 
 Citations are resolved against the pins: kind, title, version and link come from the backend, never from the provider. Admin
 views add `organizationId, actorUserId, policyId, attempts, modelVersion, technicalUsage, reconcileRequestedAt, providerResult,
-updatedAt, bim, allocations`. Invalid provider output is kept in `providerResult` for Admin only.
+updatedAt, bim, allocations`. Invalid provider output is kept in `providerResult` for Admin only. A refused request (below) keeps what the service said in `providerResult.refusal` (`httpStatus`, `code`, `message`, `documentId`; absent fields are omitted), also for Admin only (BE#188).
 
 Validation failures of these routes return `422 CONTENT_INVALID` with both `issues` (code/path/message) and `errors` (field →
 messages, the same map as `VALIDATION_ERROR` elsewhere).
@@ -257,7 +257,9 @@ one citation and every citation names a pinned `document_id` + `document_version
 ScenarioDraft; `provider_units` is in the pinned quota unit and at most `max_units`.
 
 Refusal: `400`/`422` with `{ "code": "AI_SOURCE_HASH_MISMATCH | AI_SOURCE_UNAVAILABLE | AI_REVISION_NOT_PINNED" }` names why the
-pinned input could not be used; any other refusal is recorded as `AI_PROVIDER_REJECTED`. `401/403/404/429/503` count as not
+pinned input could not be used; any other refusal is recorded as `AI_PROVIDER_REJECTED`. The body may also carry `message` (plain text, kept up to 500 characters) and `document_id` (or `documentId`,
+up to 64 characters): the pinned `document_id` the service could not use. With up to 100 pinned sources this is what tells Admin which one to fix. Both are
+optional; the gate stores them as `providerResult.refusal` and the failure code stays the stable one. `401/403/404/429/503` count as not
 delivered (retried); timeouts and other 5xx are unknown outcomes (reconciled, never re-sent).
 
 ## Index storage (#91)
@@ -316,6 +318,8 @@ dimension, indexing and production prompts need their own acceptance (#92). Know
 - `OrganizationAiPostgresTests`: policy pinning, reservation, replay, cross-tenant reads, revoked family, last-quota race, unknown
   outcome → reconcile lookup, crashed lease, lookup 404, foreign citation, usage beyond reservation, markup, safety gate, retries,
   HTTP 503/422 (`errors`), limits.
+- `AiRefusalTests`, `Organization_ai_keeps_what_the_provider_said_when_it_refuses_the_pinned_input` (BE#188): the refusal reaches Admin as
+  `providerResult.refusal` with the named document, never reaches the organization, a bare 400 is recorded with its status only.
 - `AiContractV2Tests`: BIM pin and draft anchoring (`AI_BIM_ANCHOR_INVALID`, wrong response type); Trainee daily quota, replay,
   Common-only sources, Learn/Training/Result contexts, learner-safe snapshot, access loss → `resultWithheld`, Assessment block,
   Trainee HTTP routes; `knowledge_chunks` and `fet3d_ai_indexer` privileges.
