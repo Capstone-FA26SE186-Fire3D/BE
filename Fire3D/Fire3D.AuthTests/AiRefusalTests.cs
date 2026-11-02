@@ -14,7 +14,7 @@ public sealed class AiRefusalTests
     public void The_code_message_and_named_document_are_passed_on_with_the_http_status()
     {
         var body = new JsonObject { ["code"] = "AI_SOURCE_HASH_MISMATCH", ["message"] = "Source content hash does not match the pinned hash", ["document_id"] = "0f8fad5b-d9cb-469f-a165-70867728950e" };
-        Assert.Equal("""{"code":"AI_SOURCE_HASH_MISMATCH","message":"Source content hash does not match the pinned hash","documentId":"0f8fad5b-d9cb-469f-a165-70867728950e","httpStatus":"422"}""",
+        Assert.Equal("""{"code":"AI_SOURCE_HASH_MISMATCH","message":"Source content hash does not match the pinned hash","documentId":"0f8fad5b-d9cb-469f-a165-70867728950e","httpStatus":"422","retryAfterSeconds":null}""",
             Json(body, "422"));
     }
 
@@ -28,15 +28,15 @@ public sealed class AiRefusalTests
     [Fact]
     public void A_refusal_without_a_readable_body_keeps_only_the_status()
     {
-        Assert.Equal("""{"code":null,"message":null,"documentId":null,"httpStatus":"400"}""", Json(null, "400"));
-        Assert.Equal("""{"code":null,"message":null,"documentId":null,"httpStatus":"422"}""", Json(new JsonObject(), "422"));
+        Assert.Equal("""{"code":null,"message":null,"documentId":null,"httpStatus":"400","retryAfterSeconds":null}""", Json(null, "400"));
+        Assert.Equal("""{"code":null,"message":null,"documentId":null,"httpStatus":"422","retryAfterSeconds":null}""", Json(new JsonObject(), "422"));
     }
 
     [Fact]
     public void Values_that_are_not_text_are_ignored()
     {
         var body = new JsonObject { ["code"] = 422, ["message"] = new JsonObject { ["x"] = 1 }, ["document_id"] = true };
-        Assert.Equal("""{"code":null,"message":null,"documentId":null,"httpStatus":"422"}""", Json(body, "422"));
+        Assert.Equal("""{"code":null,"message":null,"documentId":null,"httpStatus":"422","retryAfterSeconds":null}""", Json(body, "422"));
     }
 
     [Theory]

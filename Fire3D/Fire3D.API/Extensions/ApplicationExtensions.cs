@@ -43,6 +43,10 @@ public static class ApplicationExtensions
         services.AddHttpClient(Fire3D.Infrastructure.Ai.KnowledgeSourceVerifier.ClientName).ConfigurePrimaryHttpMessageHandler(Fire3D.Infrastructure.Ai.KnowledgeSourceVerifier.CreateHandler);
         services.AddSingleton<Fire3D.Infrastructure.Ai.OrganizationAiWorker>();
         services.AddHostedService(sp => sp.GetRequiredService<Fire3D.Infrastructure.Ai.OrganizationAiWorker>());
+        services.AddSingleton<Fire3D.Infrastructure.Ai.AiSourceIndex>();
+        services.AddSingleton<Fire3D.Application.Ai.IAiSourceIndex>(sp => sp.GetRequiredService<Fire3D.Infrastructure.Ai.AiSourceIndex>());
+        services.AddSingleton<Fire3D.Application.Ai.IAiSourceWarmer, Fire3D.Infrastructure.Ai.FastApiSourceWarmer>();
+        services.AddHostedService<Fire3D.Infrastructure.Ai.KnowledgeSourceWarmWorker>();
         services.AddExceptionHandler<BillingExceptionHandler>();
         services.AddOptions<Fire3D.Application.Billing.PayosOptions>()
             .Bind(configuration.GetSection(Fire3D.Application.Billing.PayosOptions.Section))

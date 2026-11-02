@@ -259,8 +259,30 @@ ScenarioDraft; `provider_units` is in the pinned quota unit and at most `max_uni
 Refusal: `400`/`422` with `{ "code": "AI_SOURCE_HASH_MISMATCH | AI_SOURCE_UNAVAILABLE | AI_REVISION_NOT_PINNED" }` names why the
 pinned input could not be used; any other refusal is recorded as `AI_PROVIDER_REJECTED`. The body may also carry `message` (plain text, kept up to 500 characters) and `document_id` (or `documentId`,
 up to 64 characters): the pinned `document_id` the service could not use. With up to 100 pinned sources this is what tells Admin which one to fix. Both are
-optional; the gate stores them as `providerResult.refusal` and the failure code stays the stable one. `401/403/404/429/503` count as not
+optional; the gate stores them as `providerResult.refusal` and the failure code stays the stable one. `AI_SOURCES_PREPARING` is a fourth code (BE#187). `401/403/404/429/503` count as not
 delivered (retried); timeouts and other 5xx are unknown outcomes (reconciled, never re-sent).
+
+## Preparing sources before the first question (BE#187)
+
+The AI service embeds a knowledge source in the background (AI#28), so a question never waits for a large PDF. A source that is not ready yet is
+skipped for that question (the answer lists it under `limitations`) and queued; the question fails only when no pinned source is usable.
+
+- **Warm on approval.** When Admin approves a source, the API asks the service to prepare it (`POST /v2/sources/warm` with the same pin a dispatch
+  carries) from a background worker with 3 retries (5 s, 30 s, 120 s). A busy or absent service never fails the approval. The queue is in memory
+  (per API instance); what a restart or an outage loses is recovered by warm-all.
+- **Warm all.** `POST /api/admin/knowledge-sources/warm` (Admin, no body) warms every Approved source and returns `{requested, ready, preparing,
+  failed, sources:[{id,title,status,error}]}`. Use it once after deploying, after changing the embedding model, or to see which sources the service
+  cannot read (`Failed` with `AI_SOURCE_UNAVAILABLE`, `AI_SOURCE_HASH_MISMATCH`). It is safe to repeat. `503 AI_PROVIDER_UNAVAILABLE` when the AI
+  adapter is off or does not answer.
+- **Index status.** `GET /api/admin/knowledge-sources` and `/{id}` add `aiIndexStatus` (`Ready`, `Preparing`, `Failed`, `Unknown`) and `aiIndexError`
+  (the code of a failed source) to each Approved source. The service has no status endpoint, so the value is what it last answered to a warm request
+  on this API instance: `Unknown` until the source is approved or warm-all runs after a restart. Asking for status through warm-all also queues the
+  embedding, which is what Admin wants anyway.
+- **`AI_SOURCES_PREPARING`.** The service answers `503` (a `409` is accepted too) with `{"code":"AI_SOURCES_PREPARING"}` when no pinned source is
+  ready. The request ends `Failed` with that code at once: it is not retried like an undelivered call, the reservation is returned, and the request
+  view carries `retryAfterSeconds` (the `Retry-After` header when the service sends one, else 120). The client should show "the AI is preparing the
+  documents, try again in N minutes".
+- **429.** Stays an undelivered call, retried with the usual backoff, but never sooner than its `Retry-After` (1 to 3600 s) when the service sends one.
 
 ## Index storage (#91)
 
@@ -300,6 +322,7 @@ delivered (retried); timeouts and other 5xx are unknown outcomes (reconciled, ne
 | GET/POST | `/api/admin/knowledge-sources` | PlatformAdmin | POST + Idempotency-Key → `201` Draft. |
 | GET | `/api/admin/knowledge-sources/{id}` | PlatformAdmin | `ETag` = revision. |
 | POST | `/api/admin/knowledge-sources/{id}/approve\|retire` | PlatformAdmin | If-Match. |
+| POST | `/api/admin/knowledge-sources/warm` | PlatformAdmin | Prepares every Approved source in the AI service → `200` with the state of each; `503 AI_PROVIDER_UNAVAILABLE`. |
 | POST | `/api/admin/knowledge-sources/upload-intent` | PlatformAdmin | `{fileName, contentType, sizeBytes}` + Idempotency-Key → `200` presigned PUT. |
 | POST | `/api/admin/knowledge-sources/uploads/{uploadId}/complete` | PlatformAdmin | Source details → `201` Draft source with computed hash. |
 | GET | `/api/knowledge-sources/files/{fileId}` | Anonymous | `302` to a signed URL of a registered source file. |
@@ -318,6 +341,9 @@ dimension, indexing and production prompts need their own acceptance (#92). Know
 - `OrganizationAiPostgresTests`: policy pinning, reservation, replay, cross-tenant reads, revoked family, last-quota race, unknown
   outcome → reconcile lookup, crashed lease, lookup 404, foreign citation, usage beyond reservation, markup, safety gate, retries,
   HTTP 503/422 (`errors`), limits.
+- `AiSourcesPreparingTests`, `Organization_ai_fails_a_question_asked_while_sources_are_being_prepared_once_and_says_how_long_to_wait`,
+  `Admin_approval_warms_the_source_and_the_list_shows_what_the_ai_service_reported` (BE#187): `AI_SOURCES_PREPARING` and `Retry-After`, warming
+  with retries, warm-all, the index status in the source list.
 - `AiRefusalTests`, `Organization_ai_keeps_what_the_provider_said_when_it_refuses_the_pinned_input` (BE#188): the refusal reaches Admin as
   `providerResult.refusal` with the named document, never reaches the organization, a bare 400 is recorded with its status only.
 - `AiContractV2Tests`: BIM pin and draft anchoring (`AI_BIM_ANCHOR_INVALID`, wrong response type); Trainee daily quota, replay,

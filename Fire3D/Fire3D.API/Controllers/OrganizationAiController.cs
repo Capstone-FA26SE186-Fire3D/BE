@@ -148,7 +148,7 @@ public sealed class TraineeAiController(IOrganizationAiGates gates, IOptions<Org
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.PlatformAdministration)]
 [Produces("application/json")]
-public sealed class AdminAiController(IOrganizationAiGates gates, Fire3D.Application.Content.IContentGates content) : ContentControllerBase
+public sealed class AdminAiController(IOrganizationAiGates gates, Fire3D.Application.Content.IContentGates content, IAiSourceIndex aiIndex) : ContentControllerBase
 {
     /// <summary>All AI requests, newest first. Filters: status, operation (ScenarioDraft, Answer, TraineeAnswer), audience (organization, trainee), organizationId.</summary>
     [HttpGet("api/admin/ai/requests")]
@@ -224,7 +224,7 @@ public sealed class AdminAiController(IOrganizationAiGates gates, Fire3D.Applica
         if (Paging(page, pageSize) is { } paging) return paging;
         if (visibility is not (null or "Common" or "Organization") || status is not (null or "Draft" or "Approved" or "Retired") || search is { Length: > 200 })
             return Problem(statusCode: 400, title: "Use visibility Common/Organization, status Draft/Approved/Retired and search up to 200 characters.", extensions: new Dictionary<string, object?> { ["code"] = "VALIDATION_ERROR" });
-        return Reply(await content.CatalogAsync("KnowledgeSources", Actor, Family, new { visibility, status, search, page, pageSize }, ct));
+        return Reply(KnowledgeSourceIndexView.Page(await content.CatalogAsync("KnowledgeSources", Actor, Family, new { visibility, status, search, page, pageSize }, ct), aiIndex));
     }
 
     [HttpGet("api/admin/knowledge-sources/{id:guid}")]
@@ -238,7 +238,7 @@ public sealed class AdminAiController(IOrganizationAiGates gates, Fire3D.Applica
         if (!result.IsSuccess) return Problem(result.Error!);
         var items = result.Value.GetProperty("items");
         if (items.GetArrayLength() == 0) return Problem(new AuthError("NOT_FOUND", "The knowledge source was not found.", 404));
-        return WithETag(AuthResult<JsonElement>.Ok(items[0].Clone()));
+        return WithETag(AuthResult<JsonElement>.Ok(KnowledgeSourceIndexView.Item(items[0], aiIndex)));
     }
 
     /// <summary>Registers one source version as Draft. Common sources have no organization; Organization sources belong to one tenant. Idempotency-Key required.</summary>
@@ -284,6 +284,42 @@ public sealed class AdminAiController(IOrganizationAiGates gates, Fire3D.Applica
     [ProducesResponseType<ProblemDetails>(412)]
     [ProducesResponseType<ProblemDetails>(428)]
     [OpenApi.ResponseHeader("ETag")]
-    public async Task<IActionResult> ChangeKnowledgeSource(Guid id, string operation, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct) =>
-        Precondition(ifMatch, out var expected) ?? WithETag(await gates.AdminAsync(LifecycleAction(operation), Actor, Family, id, new { }, null, expected, ct));
+    public async Task<IActionResult> ChangeKnowledgeSource(Guid id, string operation, [FromHeader(Name = "If-Match"), OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
+    {
+        if (Precondition(ifMatch, out var expected) is { } failed) return failed;
+        var result = await gates.AdminAsync(LifecycleAction(operation), Actor, Family, id, new { }, null, expected, ct);
+        // The AI service prepares (embeds) a source in the background; ask it to start now instead of at the first question (BE#187).
+        // A busy or absent AI service never fails the approval: the worker retries and Admin can warm everything again.
+        if (result.IsSuccess && operation == "approve" && KnowledgeSourceIndexView.Pin(result.Value) is { } pin) aiIndex.Enqueue(pin);
+        return WithETag(result);
+    }
+
+    /// <summary>Asks the AI service to prepare (embed) every Approved source now and returns what it reports for each (BE#187).</summary>
+    /// <remarks>Use it once after deploying, after changing the embedding model, or to see which sources the AI service cannot read: a
+    /// Failed source carries the code (for example AI_SOURCE_UNAVAILABLE or AI_SOURCE_HASH_MISMATCH). It is safe to repeat; the AI
+    /// service ignores sources that are already ready. 503 AI_PROVIDER_UNAVAILABLE when the AI service is off or does not answer.</remarks>
+    [HttpPost("api/admin/knowledge-sources/warm")]
+    [ProducesResponseType<KnowledgeSourceWarmResult>(200)]
+    [ProducesResponseType<ProblemDetails>(503)]
+    public async Task<IActionResult> WarmKnowledgeSources([FromServices] IAiSourceWarmer warmer, [FromServices] IOptions<OrganizationAiOptions> aiOptions, CancellationToken ct)
+    {
+        if (!aiOptions.Value.Configured) return Problem(new AuthError("AI_PROVIDER_UNAVAILABLE", "The AI service is not enabled.", 503));
+        var titles = new Dictionary<Guid, string>();
+        var pins = new List<AiSourcePin>();
+        for (var page = 1; page <= 50; page++)
+        {
+            var listed = await content.CatalogAsync("KnowledgeSources", Actor, Family, new { status = "Approved", page, pageSize = 100 }, ct);
+            if (!listed.IsSuccess) return Problem(listed.Error!);
+            var items = listed.Value.GetProperty("items");
+            foreach (var item in items.EnumerateArray())
+                if (KnowledgeSourceIndexView.Pin(item) is { } pin) { pins.Add(pin); titles[pin.SourceId] = pin.Title; }
+            if (items.GetArrayLength() < 100) break;
+        }
+        var states = pins.Count == 0 ? [] : await warmer.WarmAsync(pins, ct);
+        if (states is null) return Problem(new AuthError("AI_PROVIDER_UNAVAILABLE", "The AI service did not answer.", 503));
+        aiIndex.Record(states);
+        var rows = pins.Select(p => { var info = aiIndex.Of(p.SourceId); return new KnowledgeSourceWarmItem(p.SourceId, p.Title, info.Status, info.Error); }).ToList();
+        return Ok(new KnowledgeSourceWarmResult(rows.Count, rows.Count(r => r.Status == AiIndexStatus.Ready), rows.Count(r => r.Status == AiIndexStatus.Preparing),
+            rows.Count(r => r.Status == AiIndexStatus.Failed), rows));
+    }
 }
