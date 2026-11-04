@@ -120,6 +120,25 @@ public sealed class EditorContractTests
         Assert.Contains(normalized.Error!.Issues!, x => x.Path == "$.legacyField" && x.Message.Length > 0);
     }
 
+    // Issue #193: an elevator is a property of the building, so a scenario draft cannot place one however it is sent.
+    [Fact]
+    public void Complete_validation_rejects_a_scenario_placed_elevator_but_leaves_other_equipment_alone()
+    {
+        const string elevator = """{"id":"lift-1","kind":"Equipment","capability":{"id":"transport.elevator","version":"1.0.0"},"placement":{"floorId":"L1","position":{"x":0,"y":0,"z":0},"rotation":{"x":0,"y":0,"z":0,"w":1}}}""";
+        var clean = EditorContractFixtures.State();
+        Assert.DoesNotContain(ScenarioStateV1Validator.ValidateComplete(clean, Contracts()), x => x.Code == "CAPABILITY_BUILDING_ONLY");
+
+        var state = EditorContractFixtures.State();
+        var index = state["objects"]!.AsArray().Count;
+        state["objects"]!.AsArray().Add(JsonNode.Parse(elevator));
+        var issues = ScenarioStateV1Validator.ValidateComplete(state, Contracts());
+        Assert.Contains("CAPABILITY_BUILDING_ONLY", Codes(issues, $"$.objects[{index}].capability.id"));
+        Assert.Single(issues, x => x.Code == "CAPABILITY_BUILDING_ONLY");
+
+        // Saving the draft stays possible, so an author can open it and remove the elevator; only validation and review block it.
+        Assert.DoesNotContain(ScenarioStateV1Validator.ValidateShape(state), x => x.Code == "CAPABILITY_BUILDING_ONLY");
+    }
+
     [Fact]
     public void Complete_validation_checks_capability_contract_parameters_and_required_objects()
     {
