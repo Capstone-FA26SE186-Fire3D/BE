@@ -190,7 +190,7 @@ Editor preview checks S3 HEAD and recorded size before signing; missing/mismatch
 
 ## IFC ingestion, hiển thị và tương tác — 2026-10-15
 
-Nguồn: [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md) (Docs PR #15/#16). Tài liệu gồm thiết kế và bằng chứng spike cục bộ trên 32 file IFC công khai. Source hiện đã có IFC worker (`AI/ifc-worker`), API/gate xử lý ở BE và Unity build worker; nghiệm thu từng bước với IFC thật, QA và Android vẫn phải kiểm tra riêng. Mục 4 (nhiều IFC cho một revision), ngân sách tam giác và preset vật liệu còn chờ team chốt.
+Nguồn: [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md) (Docs PR #15/#16). Tài liệu gồm thiết kế và bằng chứng spike cục bộ trên 32 file IFC công khai. Source hiện đã có IFC/Geometry worker (`Unity/Tools/GeometryWorker`, chạy cùng VM với Unity build worker; `AI/ifc-worker` không dùng), API/gate xử lý ở BE; nghiệm thu từng bước với IFC thật, QA và Android vẫn phải kiểm tra riêng. Mục 4 (nhiều IFC cho một revision), ngân sách tam giác và preset vật liệu còn chờ team chốt.
 
 Quy tắc chung đã chốt với nhóm: chỉ nhận IFC (RVT tự xuất IFC ở ngoài); **IFC có thiết bị PCCC/nguồn nước thì pipeline tự tạo, không có thì OrganizationUser đặt trong editor**; mô hình 3D thiết bị luôn lấy từ thư viện dùng chung (có thể tạo bằng công cụ AI như Tripo rồi dọn lưới), không lấy từ IFC; IFC hầu như không mang màu/texture dùng được nên vật liệu lấy từ thư viện PBR CC0 theo preset.
 
