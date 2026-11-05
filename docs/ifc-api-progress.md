@@ -26,7 +26,7 @@ No migration or production data changes were made. Existing Firebase onboarding/
 
 ## Thiết kế tiếp theo — 2026-10-15
 
-Spike trên 32 file IFC công khai đã được ghi thành đề xuất tại [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md). Các việc BE tương ứng nằm ở checklist [IFC-03, IFC-04, SCENARIO-02, STYLE-01](api-implementation-checklist.md). Lưu ý cho endpoint hiện có: `bim-facts` nên mang cả `IfcSpace.LongName` (Revit để tên phòng ở đây, `Name` thường là số phòng). Mục này là thiết kế, không phải tiến độ code.
+Spike trên 32 file IFC công khai đã được ghi thành đề xuất tại [IFC ingestion, hiển thị và tương tác](../../Docs/ifc_ingestion_visual_interaction.md). Các việc BE tương ứng nằm ở checklist [IFC-03, IFC-04, SCENARIO-02, STYLE-01](api-implementation-checklist.md). Lưu ý cho endpoint hiện có: `bim-facts` nên mang cả `IfcSpace.LongName` (Revit để tên phòng ở đây, `Name` thường là số phòng). Mục này ghi thiết kế lúc 15/10; tiến độ code của các mục đó xem trạng thái trong checklist (IFC-03, IFC-04, SCENARIO-02 đã vào `main`; STYLE-01 sẽ gỡ theo BE#194).
 
 ## Editor APIs — 2026-09-23
 
