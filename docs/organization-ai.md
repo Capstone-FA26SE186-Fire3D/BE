@@ -28,6 +28,12 @@ reserved, and the worker does not start. Invalid settings never stop the API (#1
 `/health/ready` keeps its status (AI is optional) while listing `checks.organizationAi.code = AI_CONFIGURATION_INVALID` with the
 reason; the deploy smoke test prints a warning for it.
 
+When AI is configured, the same check asks the AI service `GET {BaseUrl}/ready` (with the API key, 5 s timeout, at most once
+every 30 s) so an outage shows before trainees hit it (#185). `checks.organizationAi.code` is then `OK`,
+`AI_PROVIDER_UNREACHABLE` (no answer: connection, DNS, TLS or timeout) or `AI_PROVIDER_NOT_READY` (any other status, in
+`data.providerStatus`). The readiness status still stays 200: Degraded/Unhealthy are 503 here, which would take the whole API out of
+rotation for an optional dependency.
+
 ## Vocabulary (Docs v7)
 
 | Field | Values |

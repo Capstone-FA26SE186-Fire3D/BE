@@ -26,8 +26,84 @@ public sealed class OrganizationAiConfigurationTests
         public void Log<TState>(LogLevel level, EventId id, TState state, Exception? error, Func<TState, Exception?, string> format) { lock (Entries) Entries.Add((level, format(state, error))); }
     }
 
-    private static Task<HealthCheckResult> Check(OrganizationAiOptions options) =>
-        new OrganizationAiConfigurationCheck(Options.Create(options)).CheckHealthAsync(new HealthCheckContext());
+    private sealed class FixedProbe(AiProbeResult result) : IAiProviderProbe
+    {
+        public int Calls;
+        public Task<AiProbeResult> ProbeAsync(CancellationToken ct) { Calls++; return Task.FromResult(result); }
+    }
+
+    private static Task<HealthCheckResult> Check(OrganizationAiOptions options, AiProbeResult? provider = null) =>
+        new OrganizationAiConfigurationCheck(Options.Create(options), new FixedProbe(provider ?? new(AiProbeResult.Ok))).CheckHealthAsync(new HealthCheckContext());
+
+    private sealed class StubHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> answer) : HttpMessageHandler
+    {
+        public readonly List<HttpRequestMessage> Requests = [];
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) { Requests.Add(request); return answer(request, ct); }
+    }
+
+    private sealed class StubClients(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+    }
+
+    private sealed class ManualClock : TimeProvider
+    {
+        public DateTimeOffset Now = new(2026, 11, 6, 0, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    private static readonly OrganizationAiOptions Usable = new() { Enabled = true, BaseUrl = "https://ai.fixture.test/base/", ApiKey = "probe-key" };
+
+    // #185: readiness said OK from the settings alone while every question failed; the code now says whether the AI service answers.
+    [Fact]
+    public async Task Readiness_reports_whether_the_ai_service_answers_without_failing_the_api()
+    {
+        foreach (var (provider, code) in new[]
+        {
+            (new AiProbeResult(AiProbeResult.Ok), "OK"),
+            (new AiProbeResult(AiProbeResult.Unreachable), "AI_PROVIDER_UNREACHABLE"),
+            (new AiProbeResult(AiProbeResult.NotReady, 503), "AI_PROVIDER_NOT_READY")
+        })
+        {
+            var result = await Check(Usable, provider);
+            Assert.Equal((HealthStatus.Healthy, code), (result.Status, result.Description));
+            Assert.Equal(provider.HttpStatus, result.Data.TryGetValue("providerStatus", out var status) ? (int?)status : null);
+        }
+        // AI off or misconfigured: the service is not called at all.
+        var probe = new FixedProbe(new(AiProbeResult.Unreachable));
+        Assert.Equal("AI_DISABLED", (await new OrganizationAiConfigurationCheck(Options.Create(new OrganizationAiOptions()), probe).CheckHealthAsync(new HealthCheckContext())).Description);
+        Assert.Equal("AI_CONFIGURATION_INVALID", (await new OrganizationAiConfigurationCheck(Options.Create(new OrganizationAiOptions { Enabled = true }), probe).CheckHealthAsync(new HealthCheckContext())).Description);
+        Assert.Equal(0, probe.Calls);
+    }
+
+    [Fact]
+    public async Task Probe_calls_ready_with_the_key_and_maps_answers_and_failures()
+    {
+        var status = HttpStatusCode.OK;
+        var handler = new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(status)));
+        var clock = new ManualClock();
+        var probe = new FastApiProviderProbe(new StubClients(handler), Options.Create(Usable), clock);
+        Assert.Equal(AiProbeResult.Ok, (await probe.ProbeAsync(default)).Code);
+        var sent = Assert.Single(handler.Requests);
+        Assert.Equal((HttpMethod.Get, "https://ai.fixture.test/base/ready"), (sent.Method, sent.RequestUri!.ToString()));
+        Assert.Equal(("Bearer", "probe-key"), (sent.Headers.Authorization!.Scheme, sent.Headers.Authorization.Parameter));
+
+        // One call per cache window, however often readiness is probed.
+        status = HttpStatusCode.ServiceUnavailable;
+        Assert.Equal(AiProbeResult.Ok, (await probe.ProbeAsync(default)).Code);
+        Assert.Single(handler.Requests);
+        clock.Now += FastApiProviderProbe.CacheFor;
+        Assert.Equal(new AiProbeResult(AiProbeResult.NotReady, 503), await probe.ProbeAsync(default));
+        Assert.Equal(2, handler.Requests.Count);
+
+        var refused = new FastApiProviderProbe(new StubClients(new StubHandler((_, _) => throw new HttpRequestException(HttpRequestError.ConnectionError))), Options.Create(Usable));
+        Assert.Equal(new AiProbeResult(AiProbeResult.Unreachable), await refused.ProbeAsync(default));
+        // A service that never answers costs at most the probe timeout.
+        var hanging = new FastApiProviderProbe(new StubClients(new StubHandler(async (_, ct) => { await Task.Delay(Timeout.Infinite, ct); return new HttpResponseMessage(HttpStatusCode.OK); })), Options.Create(Usable));
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Equal(new AiProbeResult(AiProbeResult.Unreachable), await hanging.ProbeAsync(default));
+        Assert.True(watch.Elapsed < FastApiProviderProbe.Timeout + TimeSpan.FromSeconds(5), watch.Elapsed.ToString());
+    }
 
     [Fact]
     public async Task Enabled_ai_without_a_usable_adapter_is_off_and_listed_without_failing_readiness()
