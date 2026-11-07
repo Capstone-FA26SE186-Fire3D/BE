@@ -141,4 +141,45 @@ public sealed partial class AuthIntegrationTests
         }
         Assert.Equal(HttpStatusCode.BadRequest, (await learner.GetAsync("/api/learn/bookmarks?pageSize=101")).StatusCode);
     }
+
+    // Issue #186: an available bookmark carries the cover of the Published version (null without one); an unavailable one carries none.
+    [PostgresFact]
+    public async Task Learn_bookmarks_return_the_cover_image_of_the_published_version()
+    {
+        var admin = await AdminFamily(); var source = await SeedKnowledgeSource("Approved"); var trainee = await SeedTrainee();
+        const string cover = "https://cdn.example.com/covers/thoat-hiem.png";
+        await WithContentRuntime(async runtime =>
+        {
+            await using var db = BuildingContext(runtime);
+            var gates = new ContentGates(db);
+            async Task<JsonElement> Post(string slug, string title, string? coverImageUrl)
+            {
+                var block = """{"type":"paragraph","text":"Use the nearest safe exit."}""";
+                var input = new LearnVersionInput("Article", title, "Tóm tắt " + title, coverImageUrl, new JsonArray(JsonNode.Parse(block)), [], [new(source, "Primary")]);
+                var created = await gates.LearnAdminAsync("CreatePost", adminId, admin, Guid.Empty, new { slug, version = LearnContent.Normalize(input).Content!, publish = true }, slug, null, default);
+                Assert.True(created.IsSuccess, created.Error?.Code);
+                Assert.True((await gates.LearnPublicAsync("Bookmark", trainee.Id, trainee.Family, new { postId = created.Value.GetProperty("id").GetGuid() }, default)).IsSuccess);
+                return created.Value;
+            }
+            await Post("co-anh-bia", "Có ảnh bìa", cover);
+            await Post("khong-anh-bia", "Không ảnh bìa", null);
+            var hidden = await Post("bi-an", "Bị ẩn", cover);
+            Assert.True((await gates.LearnAdminAsync("Hide", adminId, admin, hidden.GetProperty("id").GetGuid(), new { }, null, hidden.GetProperty("revision").GetInt64(), default)).IsSuccess);
+
+            var items = (await gates.LearnPublicAsync("Bookmarks", trainee.Id, trainee.Family, new { }, default)).Value.GetProperty("items").EnumerateArray().ToList();
+            Assert.Equal(3, items.Count);
+            var withCover = items.Single(x => x.TryGetProperty("slug", out var s) && s.GetString() == "co-anh-bia");
+            Assert.Equal(cover, withCover.GetProperty("coverImageUrl").GetString());
+            // The key is always present on an available bookmark, null when the version has no cover, so a client can rely on it.
+            var withoutCover = items.Single(x => x.TryGetProperty("slug", out var s) && s.GetString() == "khong-anh-bia");
+            Assert.True(withoutCover.TryGetProperty("coverImageUrl", out var none)); Assert.Equal(JsonValueKind.Null, none.ValueKind);
+            var unavailable = items.Single(x => !x.GetProperty("available").GetBoolean());
+            Assert.False(unavailable.TryGetProperty("coverImageUrl", out _));
+
+            // Filters, counts and paging are as before.
+            var filtered = (await gates.LearnPublicAsync("Bookmarks", trainee.Id, trainee.Family, new { search = "anh bia" }, default)).Value;
+            Assert.Equal(2, filtered.GetProperty("total").GetInt32());
+            Assert.All(filtered.GetProperty("items").EnumerateArray(), x => Assert.True(x.GetProperty("available").GetBoolean() && x.TryGetProperty("coverImageUrl", out _)));
+        });
+    }
 }
