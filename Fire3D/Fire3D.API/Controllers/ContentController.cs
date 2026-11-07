@@ -230,7 +230,7 @@ public sealed class LearnController(IContentGates gates) : ContentControllerBase
 }
 
 /// <summary>Organization Library: PlatformAdmin maintains versioned templates, rubric samples, equipment metadata, style presets and colour schemes
-/// (kinds ScenarioTemplate, RubricSample, Equipment, StylePreset, ColorScheme); OrganizationUsers read published versions of active items.</summary>
+/// (kinds ScenarioTemplate, RubricSample, Equipment); OrganizationUsers read published versions of active items.</summary>
 [ApiController]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class LibraryController(IContentGates gates) : ContentControllerBase
