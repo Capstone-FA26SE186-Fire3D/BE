@@ -122,6 +122,11 @@ jobs:
           if jq -e '.checks.organizationAi.code == "AI_CONFIGURATION_INVALID"' ready.json > /dev/null; then
             echo "::warning title=AI configuration invalid::$(jq -r '.checks.organizationAi.data.problem' ready.json) AI submits answer 503 until fixed."
           fi
+          # The AI service itself not answering /ready (#185) also leaves only AI down.
+          ai_code="$(jq -r '.checks.organizationAi.code // empty' ready.json)"
+          if [[ "${ai_code}" == AI_PROVIDER_UNREACHABLE || "${ai_code}" == AI_PROVIDER_NOT_READY ]]; then
+            echo "::warning title=AI service not ready::${ai_code} $(jq -r '.checks.organizationAi.data.providerStatus // empty' ready.json) - AI questions fail until the AI service answers /ready."
+          fi
           # These anonymous endpoints must return 200; redirects, 401 and 404 also fail.
           for path in /api/learn/situations /api/learn/posts /openapi/v1.json; do
             # The OpenAPI document (about 280 operations) takes about 11 s to generate on the B1 plan, so it gets a longer budget.

@@ -5,18 +5,22 @@ using Microsoft.Extensions.Options;
 namespace Fire3D.API.Extensions;
 
 /// <summary>
-/// Lists AI settings that leave Organization AI off although it is configured (#176). Always Healthy: AI is optional, so the
-/// host keeps serving login, Learn and payments (AI submits return 503 AI_PROVIDER_UNAVAILABLE); the code AI_CONFIGURATION_INVALID
-/// under checks.organizationAi is what the deploy smoke test warns on. Degraded/Unhealthy stay 503 for required dependencies.
+/// Lists AI settings that leave Organization AI off although it is configured (#176), and whether the AI service answers its own
+/// /ready (#185). Always Healthy: AI is optional, so the host keeps serving login, Learn and payments while AI is down; the code
+/// under checks.organizationAi (AI_CONFIGURATION_INVALID, AI_PROVIDER_UNREACHABLE, AI_PROVIDER_NOT_READY) is what the deploy
+/// smoke test and operators watch. Degraded/Unhealthy stay 503 for required dependencies, which would take the API out of rotation.
 /// </summary>
-public sealed class OrganizationAiConfigurationCheck(IOptions<OrganizationAiOptions> options) : IHealthCheck
+public sealed class OrganizationAiConfigurationCheck(IOptions<OrganizationAiOptions> options, IAiProviderProbe probe) : IHealthCheck
 {
-    public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken ct = default)
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken ct = default)
     {
         var o = options.Value;
         // Only the reason is reported; the base URL and key never leave the process.
-        return Task.FromResult(o.Problem is { } problem
-            ? HealthCheckResult.Healthy("AI_CONFIGURATION_INVALID", new Dictionary<string, object> { ["problem"] = problem })
-            : HealthCheckResult.Healthy(o.Configured ? "OK" : "AI_DISABLED"));
+        if (o.Problem is { } problem) return HealthCheckResult.Healthy("AI_CONFIGURATION_INVALID", new Dictionary<string, object> { ["problem"] = problem });
+        if (!o.Configured) return HealthCheckResult.Healthy("AI_DISABLED");
+        var result = await probe.ProbeAsync(ct);
+        return result.HttpStatus is { } status
+            ? HealthCheckResult.Healthy(result.Code, new Dictionary<string, object> { ["providerStatus"] = status })
+            : HealthCheckResult.Healthy(result.Code);
     }
 }
