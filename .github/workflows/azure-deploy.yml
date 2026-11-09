@@ -1,4 +1,4 @@
-name: Build and Deploy to Azure
+name: Build and Deploy to AWS
 
 on:
   pull_request:
@@ -14,10 +14,9 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: capstone-fa26se186-fire3d/fire3d-api
-  # Repository variables AZURE_WEBAPP_NAME / AZURE_WEBAPP_URL pick the target App Service, so moving region
-  # (docs/azure-region-move.md) changes settings only. Without them the workflow keeps the East Asia app.
-  APP_URL: ${{ vars.AZURE_WEBAPP_URL || 'https://fire3d-api-h3a5h2fgdvajfbcz.eastasia-01.azurewebsites.net' }}
-  WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'fire3d-api' }}
+  # The API runs as a Docker container on an AWS EC2 host (docs/aws-ec2-deployment.md). Repository variable
+  # AWS_BE_URL is its public HTTPS address; AWS_BE_HOST and AWS_BE_KNOWN_HOSTS with secret AWS_BE_SSH_KEY reach it.
+  APP_URL: ${{ vars.AWS_BE_URL || 'https://52-221-57-57.sslip.io' }}
 
 jobs:
   processing-regression:
@@ -84,13 +83,26 @@ jobs:
           DEPLOY_PREFLIGHT_CONNECTION: ${{ secrets.DEPLOY_PREFLIGHT_CONNECTION }}
         run: python tools/deployment/migration_preflight.py
 
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          restart: true
+      - name: Deploy to AWS EC2
+        env:
+          SSH_KEY: ${{ secrets.AWS_BE_SSH_KEY }}
+          KNOWN_HOSTS: ${{ vars.AWS_BE_KNOWN_HOSTS }}
+          HOST: ${{ vars.AWS_BE_HOST }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        shell: bash
+        run: |
+          if [[ -z "${SSH_KEY}" || -z "${HOST}" || -z "${KNOWN_HOSTS}" ]]; then
+            echo "Set secret AWS_BE_SSH_KEY and variables AWS_BE_HOST, AWS_BE_KNOWN_HOSTS (docs/aws-ec2-deployment.md)."
+            exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${SSH_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host key: never trust whatever answers on first connect.
+          printf '%s\n' "${KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          # The host pulls the image with its own read:packages login and restarts the container (fire3d-be-deploy).
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=30 "ubuntu@${HOST}" \
+            "sudo /usr/local/bin/fire3d-be-deploy '${IMAGE}' '${GITHUB_SHA::7}'"
 
       - name: Verify deployed version
         shell: bash
@@ -104,7 +116,7 @@ jobs:
             echo "Waiting for ${GITHUB_SHA}; attempt ${attempt}/30."
             sleep 10
           done
-          echo "Azure did not start the requested image version."
+          echo "The server did not start the requested image version."
           exit 1
 
       - name: Smoke test deployed API
@@ -119,17 +131,17 @@ jobs:
             exit 1
           fi
           # Invalid AI settings leave only AI off (readiness stays 200); surface them without failing the deploy.
-          if jq -e '.checks.organizationAi.code == "AI_CONFIGURATION_INVALID"' ready.json > /dev/null; then
+          if jq -e '.checks.organizationAi.code == "AI_CONFIGURATION_INVALID"' ready.json > /dev/null 2>&1; then
             echo "::warning title=AI configuration invalid::$(jq -r '.checks.organizationAi.data.problem' ready.json) AI submits answer 503 until fixed."
           fi
           # The AI service itself not answering /ready (#185) also leaves only AI down.
-          ai_code="$(jq -r '.checks.organizationAi.code // empty' ready.json)"
+          ai_code="$(jq -r '.checks.organizationAi.code // empty' ready.json 2>/dev/null || true)"
           if [[ "${ai_code}" == AI_PROVIDER_UNREACHABLE || "${ai_code}" == AI_PROVIDER_NOT_READY ]]; then
             echo "::warning title=AI service not ready::${ai_code} $(jq -r '.checks.organizationAi.data.providerStatus // empty' ready.json) - AI questions fail until the AI service answers /ready."
           fi
           # These anonymous endpoints must return 200; redirects, 401 and 404 also fail.
           for path in /api/learn/situations /api/learn/posts /openapi/v1.json; do
-            # The OpenAPI document (about 280 operations) takes about 11 s to generate on the B1 plan, so it gets a longer budget.
+            # The OpenAPI document (about 280 operations) can take about 11 s to generate, so it gets a longer budget.
             limit=20; [[ "${path}" == /openapi/* ]] && limit=90
             status="$(curl --silent --show-error --output /dev/null --connect-timeout 10 --max-time "${limit}" --write-out '%{http_code}' "${APP_URL}${path}")" || status=000
             echo "${path} -> ${status}"
