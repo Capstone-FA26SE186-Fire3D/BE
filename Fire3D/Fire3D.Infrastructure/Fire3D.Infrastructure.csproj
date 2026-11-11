@@ -124,12 +124,12 @@
         <EmbeddedResource Include="Billing/PayosCheckout.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosCheckout.sql" />
         <EmbeddedResource Include="Billing/PayosWebhook.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosWebhook.sql" />
         <EmbeddedResource Include="Billing/PayosProvisioning.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosProvisioning.sql" />
-		<PackageReference Include="AWSSDK.Core" Version="*" />
-		<PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="*" />
-		<PackageReference Include="AWSSDK.S3" Version="*" />
-		<PackageReference Include="EFCore.NamingConventions" Version="10.*" />
-		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
-		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.*" />
+		<PackageReference Include="AWSSDK.Core" Version="4.0.102.11" />
+		<PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.102.4" />
+		<PackageReference Include="AWSSDK.S3" Version="4.0.104.4" />
+		<PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.13" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
 		  <PrivateAssets>all</PrivateAssets>
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -138,12 +138,12 @@
 		  <PrivateAssets>all</PrivateAssets>
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="MiniExcel" Version="*" />
+		<PackageReference Include="MiniExcel" Version="1.46.0" />
 		<PackageReference Include="payOS" Version="2.1.0" />
         <PackageReference Include="StackExchange.Redis" Version="3.3.1" />
-		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="*" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
 		<PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.12" />
-		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
+		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
 		
 	</ItemGroup>
 
