@@ -10,18 +10,18 @@
   </PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.101.4" />
+		<PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.102.4" />
 		<PackageReference Include="FirebaseAdmin" Version="3.6.0" />
-		<PackageReference Include="prometheus-net.AspNetCore" Version="*" />
-		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />
-		<PackageReference Include="Serilog.AspNetCore" Version="*" />
-		<PackageReference Include="Serilog.Sinks.Console" Version="*" />
-		<PackageReference Include="Serilog.Sinks.Debug" Version="*" />
-		<PackageReference Include="Serilog.Sinks.Grafana.Loki" Version="*" />
-		<PackageReference Include="Swashbuckle.AspNetCore" Version="*" />
-		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="*" />
+		<PackageReference Include="prometheus-net.AspNetCore" Version="8.2.1" />
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
+		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+		<PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+		<PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
+		<PackageReference Include="Serilog.Sinks.Grafana.Loki" Version="9.0.2" />
+		<PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
 
-		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
 
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
 			<PrivateAssets>all</PrivateAssets>
