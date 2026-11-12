@@ -173,9 +173,12 @@ revision lost its accepted geometry meanwhile: `NeedsReconcile AI_REVISION_STALE
 - `Training` + `trainingId`: Active Training, Published release with approved content review, inside its dates, on an active Building
   that is Public or where the Trainee holds a participation grant of the current access revision. A learner-safe snapshot is pinned as
   `TrainingSnapshot` (training name/description, Building, scenario name, learning objectives, learner instructions, allowed modes,
-  time limit) — never rubric, scoring, scenario state, drafts or IFC.
+  time limit, and `criteria`: label, description and metric of each rubric criterion so the assistant can say how to complete it)
+  — never the grading (threshold, operator, weight, mandatory flag, pass threshold), scenario state, drafts or IFC
+  (migration `20261112090000_AiTraineeCriteria`).
 - `Result` + `sessionId`: the Trainee's own learner session with a saved result; pinned as `SessionResult` (mode, outcome, reason,
-  score, criteria, metrics). It stays usable after Building access is lost.
+  score, `passThreshold`, criteria with the label/description the result screen shows, metrics; criteria are null for Learn/Guided).
+  It stays usable after Building access is lost.
 
 Unavailable context → `404 AI_CONTEXT_NOT_FOUND`. While the Trainee has an Assessment session in Created/Launching/Running, submit
 returns `409 AI_BLOCKED_DURING_ASSESSMENT`. A Trainee sees only their own requests; when a Training context is no longer

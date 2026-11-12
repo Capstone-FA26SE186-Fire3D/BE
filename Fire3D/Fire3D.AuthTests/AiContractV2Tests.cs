@@ -147,7 +147,8 @@ public sealed partial class AuthIntegrationTests
             Assert.False(answered.GetProperty("resultWithheld").GetBoolean());
             Assert.Equal(30, (await gates.TraineeAsync("Quota", trainee, traineeFamily, Guid.Empty, new { }, null, default)).Value.GetProperty("usedUnits").GetInt32());
 
-            // Training context: a learner-safe snapshot (no rubric) pinned as a citable source; hidden again once access is lost.
+            // Training context: a learner-safe snapshot pinned as a citable source; hidden again once access is lost. It names each
+            // criterion (label, description, metric) but never the grading: no threshold, operator, weight, mandatory flag or pass mark.
             var training = await Ask("training", new { kind = "Training", trainingId = f.Training });
             Assert.True(training.IsSuccess, training.Error?.Code);
             var trainingId = training.Value.GetProperty("requestId").GetGuid();
@@ -158,6 +159,10 @@ public sealed partial class AuthIntegrationTests
             var sent = fake.Calls.Last().Body!["sources"]!.AsArray().Single(x => x!["kind"]!.GetValue<string>() == "TrainingSnapshot")!["content"]!.ToJsonString();
             Assert.Contains("trainingName", sent);
             Assert.DoesNotContain("rubric", sent, StringComparison.OrdinalIgnoreCase);
+            var criteria = fake.Calls.Last().Body!["sources"]!.AsArray().Single(x => x!["kind"]!.GetValue<string>() == "TrainingSnapshot")!["content"]!["criteria"]!.AsArray();
+            Assert.Equal("exit", criteria.Single()!["metric"]!.GetValue<string>());
+            foreach (var hidden in new[] { "threshold", "operator", "weight", "mandatory", "pass_threshold", "passThreshold" })
+                Assert.DoesNotContain(hidden, sent, StringComparison.OrdinalIgnoreCase);
             Assert.Equal("TrainingSnapshot", (await gates.TraineeAsync("Get", trainee, traineeFamily, trainingId, new { }, null, default)).Value.GetProperty("citations")[0].GetProperty("kind").GetString());
             await ExecuteAsync($"UPDATE buildings SET visibility='Private' WHERE id='{f.Building}'");
             var withheld = (await gates.TraineeAsync("Get", trainee, traineeFamily, trainingId, new { }, null, default)).Value;
