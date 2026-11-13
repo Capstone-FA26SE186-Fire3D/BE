@@ -90,7 +90,6 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Ifc.IPreviewDownloadSigner, Fire3D.Infrastructure.Storage.S3PreviewDownloadSigner>();
         services.AddScoped<Fire3D.Application.Ifc.IAnnotationStore, Fire3D.Infrastructure.Ifc.AnnotationStore>();
         services.AddScoped<Fire3D.Application.Ifc.IEquipmentCandidates, Fire3D.Infrastructure.Ifc.EquipmentCandidates>();
-        services.AddScoped<Fire3D.Application.Ifc.IRevisionStyles, Fire3D.Infrastructure.Ifc.RevisionStyles>();
         services.AddScoped<Fire3D.Application.Ifc.IPackageStorage, Fire3D.Infrastructure.Storage.S3PackageStorage>();
         services.AddScoped<Fire3D.Application.Ifc.IRuntimePackageFiles, Fire3D.Infrastructure.Ifc.RuntimePackageFilesStore>();
         services.AddOptions<Fire3D.Application.Ifc.RedisProcessingOptions>().Bind(configuration.GetSection("Redis"))
