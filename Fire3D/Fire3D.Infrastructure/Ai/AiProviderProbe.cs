@@ -14,7 +14,9 @@ public sealed class FastApiProviderProbe(IHttpClientFactory clients, IOptions<Or
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
     private readonly TimeProvider time = clock ?? TimeProvider.System;
     private readonly SemaphoreSlim gate = new(1, 1);
-    private (AiProbeResult Result, DateTimeOffset At)? last;
+    private sealed record Cached(AiProbeResult Result, DateTimeOffset At);
+    // One immutable reference: Fresh() reads it outside the semaphore, and a multi-word tuple could be read half written.
+    private volatile Cached? last;
 
     public async Task<AiProbeResult> ProbeAsync(CancellationToken ct)
     {
@@ -24,7 +26,7 @@ public sealed class FastApiProviderProbe(IHttpClientFactory clients, IOptions<Or
         {
             if (Fresh() is { } again) return again;
             var result = await Call(ct);
-            last = (result, time.GetUtcNow());
+            last = new Cached(result, time.GetUtcNow());
             return result;
         }
         finally { gate.Release(); }

@@ -42,6 +42,7 @@ public sealed class FcmNotificationService(Fire3DDbContext db, ILogger<FcmNotifi
             logger.LogWarning("FCM rejected an unregistered token.");
             return new(false, true);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             logger.LogError(ex, "FCM delivery failed.");

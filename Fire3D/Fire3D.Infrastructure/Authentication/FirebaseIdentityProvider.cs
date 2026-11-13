@@ -50,7 +50,7 @@ public class FirebaseIdentityProvider(
     {
         var request = new { email, password, returnSecureToken = true };
         var url = $"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={_apiKey}";
-        var response = await httpClient.PostAsJsonAsync(url, request, ct);
+        using var response = await httpClient.PostAsJsonAsync(url, request, ct);
 
         if (!response.IsSuccessStatusCode)
         {

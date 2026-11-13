@@ -68,7 +68,8 @@ public sealed partial class BillingService
                 x.CommercialVersion,x.PackageRevision,x.LearnerLimit,x.AiQuotaUnits,x.AiPolicyVersionId,x.AiQuotaUnit,x.StartsAt,x.EndsAt,
                 x.PricingBasis,x.UpgradeEntitlementId,x.UpgradeBaseCapacityRevision,x.UpgradePreviousLearnerLimit);
         }).ToArray();
-        var terms=JsonDocument.Parse(quote.TermsSnapshot).RootElement;
+        using var termsDocument=JsonDocument.Parse(quote.TermsSnapshot);
+        var terms=termsDocument.RootElement;
         var topUp=quote.BillingPurpose==TopUpPurpose?await db.Set<QuotationTopUpItem>().AsNoTracking().Where(x=>x.QuotationId==quote.Id)
             .Select(x=>new TopUpLineResponse(x.Id,x.RequestedQuotaUnits,x.PolicyVersionId,x.QuotaUnit,x.QuotaUnits,x.Amount,x.StartsAt,x.EndsAt)).SingleOrDefaultAsync(ct):null;
         var pricing=PricingStatus(quote.Status,quote.IssuedAt,quote.CommercialVersion);

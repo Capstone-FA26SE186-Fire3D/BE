@@ -35,14 +35,16 @@ public sealed class LearnerAnalytics(Fire3DDbContext db,IOptions<LearnerAnalytic
         Query("SELECT analytics_organization_gate(@actor,@family,@organization,@from,@to,@active)::text",command=>command.Parameters.AddWithValue("organization",NpgsqlDbType.Uuid,organizationId),actor,family,from,to,ct);
     public Task<AuthResult<JsonElement>> ReadTraining(Guid actor,Guid family,TrainingAnalyticsQuery query,CancellationToken ct)=>Training(actor,family,query,false,ct);
 
+    private static readonly JsonSerializerOptions WebJson=new(JsonSerializerDefaults.Web);
+
     public async Task<AuthResult<TrainingAnalyticsExport>> ExportTraining(Guid actor,Guid family,TrainingAnalyticsQuery query,CancellationToken ct)
     {
         var result=await Training(actor,family,query,true,ct);
         if(!result.IsSuccess)return new(default,result.Error);
-        var report=result.Value.Deserialize<TrainingAnalyticsReport>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        var report=result.Value.Deserialize<TrainingAnalyticsReport>(WebJson)!;
         var groupBy=query.GroupBy??"day";
         var rows=report.Cohorts??[];
-        var name=$"training-{query.Scope.ToLowerInvariant()}-{groupBy}-{report.From:yyyyMMdd}-{report.To:yyyyMMdd}.csv";
+        var name=string.Create(System.Globalization.CultureInfo.InvariantCulture,$"training-{query.Scope.ToLowerInvariant()}-{groupBy}-{report.From:yyyyMMdd}-{report.To:yyyyMMdd}.csv");
         return AuthResult<TrainingAnalyticsExport>.Ok(new(name,TrainingAnalyticsCsv.Build(groupBy,rows),rows.Count));
     }
 

@@ -61,7 +61,8 @@ internal static class PublicAddressGuard
                 await socket.ConnectAsync(new IPEndPoint(address, endpoint.Port), ct);
                 return new NetworkStream(socket, ownsSocket: true);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException) { socket.Dispose(); last = ex; }
+            catch (OperationCanceledException) { socket.Dispose(); throw; }
+            catch (Exception ex) { socket.Dispose(); last = ex; }
         }
         throw new HttpRequestException("Could not connect to the source address.", last);
     }
