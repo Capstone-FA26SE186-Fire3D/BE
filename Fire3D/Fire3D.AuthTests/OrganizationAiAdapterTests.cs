@@ -104,6 +104,17 @@ public sealed class OrganizationAiAdapterTests
         Assert.Equal((AiCallStatus.Unknown, "timeout"), ((await capped.DispatchAsync(Claim(Guid.NewGuid(), "ScenarioDraft"), default)) is var c ? (c.Status, c.Reason) : default));
     }
 
+    [Fact]
+    public void The_registered_adapter_client_leaves_the_wait_to_each_call()
+    {
+        // #204 review: the named client kept HttpClient's 100 s default, so a 150 s draft wait was still cut at 100 s.
+        var services = new ServiceCollection();
+        Fire3D.API.Extensions.ApplicationExtensions.AddApplication(services, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        using var provider = services.BuildServiceProvider();
+        var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient(FastApiAiClient.ClientName);
+        Assert.Equal(Timeout.InfiniteTimeSpan, client.Timeout);
+    }
+
     [Theory]
     [InlineData(60, 180, null, 150)]   // defaults: lease 180 minus the 30 s margin
     [InlineData(180, 240, null, 210)]  // a longer answer timeout and lease
