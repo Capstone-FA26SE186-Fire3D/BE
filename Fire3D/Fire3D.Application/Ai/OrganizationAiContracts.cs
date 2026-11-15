@@ -77,13 +77,24 @@ public sealed class OrganizationAiOptions
     public string? BaseUrl { get; init; }
     public string? ApiKey { get; init; }
     public int TimeoutSeconds { get; init; } = 60;
+    /// <summary>
+    /// Wait for a scenario draft call (#204). A draft places many objects and reads many sources, so it can outlast the answer
+    /// timeout; a call cut off by the backend ends as Unknown and parks in NeedsReconcile. Unset: the lease minus a 30 s settle
+    /// margin, never below TimeoutSeconds. When set: 5-600 and below LeaseSeconds.
+    /// </summary>
+    public int? ScenarioDraftTimeoutSeconds { get; init; }
     public int LeaseSeconds { get; init; } = 180;
+    /// <summary>The wait the adapter call of this operation gets; lookups and answers use TimeoutSeconds.</summary>
+    public int TimeoutFor(string? operation) => operation == "ScenarioDraft"
+        ? ScenarioDraftTimeoutSeconds ?? Math.Min(600, Math.Max(TimeoutSeconds, LeaseSeconds - 30))
+        : TimeoutSeconds;
     public int MaxAttempts { get; init; } = 3;
     public int BackoffSeconds { get; init; } = 30;
     public int PollSeconds { get; init; } = 5;
     public bool BaseUrlValid => Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.IsLoopback);
     public bool TimingValid => TimeoutSeconds is >= 5 and <= 600 && LeaseSeconds > TimeoutSeconds && LeaseSeconds <= 3600 && MaxAttempts is >= 1 and <= 10
-        && BackoffSeconds is >= 1 and <= 3600 && PollSeconds is >= 1 and <= 300;
+        && BackoffSeconds is >= 1 and <= 3600 && PollSeconds is >= 1 and <= 300
+        && (ScenarioDraftTimeoutSeconds is null || ScenarioDraftTimeoutSeconds is >= 5 and <= 600 && LeaseSeconds > ScenarioDraftTimeoutSeconds);
     /// <summary>A value of the section has the wrong type (e.g. TimeoutSeconds=abc); set by the binder wrapper, never bound from configuration.</summary>
     public bool Unreadable { get; private set; }
     public void MarkUnreadable() => Unreadable = true;

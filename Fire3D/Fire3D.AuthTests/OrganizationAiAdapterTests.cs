@@ -89,6 +89,53 @@ public sealed class OrganizationAiAdapterTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Client(hanging).LookupAsync(id, cancelled.Token));
     }
 
+    [Fact]
+    public async Task A_scenario_draft_slower_than_the_answer_timeout_still_completes()
+    {
+        // #204: drafts ran past the 60 s answer timeout, ended Unknown and parked in NeedsReconcile. A draft now waits up to the
+        // lease minus the settle margin; answers and lookups keep TimeoutSeconds (0 here, so they time out at once).
+        var slow = new Stub(async (_, ct) => { await Task.Delay(200, ct); return Status(200, """{"request_id":"x"}"""); });
+        var client = Client(slow, timeout: 0);
+        Assert.Equal(AiCallStatus.Completed, (await client.DispatchAsync(Claim(Guid.NewGuid(), "ScenarioDraft"), default)).Status);
+        Assert.Equal((AiCallStatus.Unknown, "timeout"), ((await client.DispatchAsync(Claim(Guid.NewGuid(), "Answer"), default)) is var a ? (a.Status, a.Reason) : default));
+        Assert.Equal((AiCallStatus.Unknown, "timeout"), ((await client.LookupAsync(Guid.NewGuid(), default)) is var l ? (l.Status, l.Reason) : default));
+        // An explicit draft timeout is honoured as well.
+        var capped = new FastApiAiClient(slow, Options.Create(new OrganizationAiOptions { Enabled = true, BaseUrl = "https://ai.fixture.test/adapter", ScenarioDraftTimeoutSeconds = 0 }));
+        Assert.Equal((AiCallStatus.Unknown, "timeout"), ((await capped.DispatchAsync(Claim(Guid.NewGuid(), "ScenarioDraft"), default)) is var c ? (c.Status, c.Reason) : default));
+    }
+
+    [Fact]
+    public void The_registered_adapter_client_leaves_the_wait_to_each_call()
+    {
+        // #204 review: the named client kept HttpClient's 100 s default, so a 150 s draft wait was still cut at 100 s.
+        var services = new ServiceCollection();
+        Fire3D.API.Extensions.ApplicationExtensions.AddApplication(services, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        using var provider = services.BuildServiceProvider();
+        var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient(FastApiAiClient.ClientName);
+        Assert.Equal(Timeout.InfiniteTimeSpan, client.Timeout);
+    }
+
+    [Theory]
+    [InlineData(60, 180, null, 150)]   // defaults: lease 180 minus the 30 s margin
+    [InlineData(180, 240, null, 210)]  // a longer answer timeout and lease
+    [InlineData(60, 70, null, 60)]     // never below the answer timeout
+    [InlineData(60, 900, null, 600)]   // capped at 600
+    [InlineData(60, 180, 120, 120)]    // explicit value wins
+    public void Scenario_draft_timeout_follows_the_lease_unless_set(int timeout, int lease, int? draft, int expected)
+    {
+        var o = new OrganizationAiOptions { Enabled = true, BaseUrl = "https://ai.fixture.test/", TimeoutSeconds = timeout, LeaseSeconds = lease, ScenarioDraftTimeoutSeconds = draft };
+        Assert.True(o.Configured);
+        Assert.Equal((expected, timeout, timeout), (o.TimeoutFor("ScenarioDraft"), o.TimeoutFor("Answer"), o.TimeoutFor("TraineeAnswer")));
+        Assert.True(o.TimeoutFor("ScenarioDraft") < o.LeaseSeconds);
+    }
+
+    [Theory]
+    [InlineData(4)]
+    [InlineData(601)]
+    [InlineData(180)] // not below the 180 s lease: another worker could claim the request while the call still runs
+    public void An_out_of_range_scenario_draft_timeout_turns_ai_off(int draft) =>
+        Assert.False(new OrganizationAiOptions { Enabled = true, BaseUrl = "https://ai.fixture.test/", ScenarioDraftTimeoutSeconds = draft }.Configured);
+
     private static JsonObject Answer(Guid id, Action<JsonObject>? change = null)
     {
         var body = new JsonObject { ["request_id"] = id.ToString(), ["response_type"] = "KnowledgeAnswer", ["status"] = "Answered", ["recommendation"] = "Use stair B.",

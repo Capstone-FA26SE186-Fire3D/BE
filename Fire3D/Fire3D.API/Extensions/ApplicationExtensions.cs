@@ -38,7 +38,9 @@ public static class ApplicationExtensions
         });
         services.AddScoped<Fire3D.Application.Ai.IOrganizationAiGates,Fire3D.Infrastructure.Ai.OrganizationAiGates>();
         services.AddScoped<Fire3D.Application.Ai.IAiProviderClient,Fire3D.Infrastructure.Ai.FastApiAiClient>();
-        services.AddHttpClient(Fire3D.Infrastructure.Ai.FastApiAiClient.ClientName);
+        // No HttpClient timeout (default 100 s): every caller cancels on its own wait (adapter calls via TimeoutFor, the /ready probe
+        // after 5 s, source warming after TimeoutSeconds). Otherwise a scenario draft allowed 150 s would still be cut at 100 s (#204).
+        services.AddHttpClient(Fire3D.Infrastructure.Ai.FastApiAiClient.ClientName, client => client.Timeout = System.Threading.Timeout.InfiniteTimeSpan);
         services.AddSingleton<Fire3D.Application.Ai.IAiProviderProbe,Fire3D.Infrastructure.Ai.FastApiProviderProbe>();
         services.AddScoped<Fire3D.Application.Ai.IKnowledgeSourceVerifier,Fire3D.Infrastructure.Ai.KnowledgeSourceVerifier>();
         services.AddHttpClient(Fire3D.Infrastructure.Ai.KnowledgeSourceVerifier.ClientName).ConfigurePrimaryHttpMessageHandler(Fire3D.Infrastructure.Ai.KnowledgeSourceVerifier.CreateHandler);
