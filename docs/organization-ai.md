@@ -15,12 +15,18 @@ normal editor contract.
 OrganizationAi__Enabled=false        # default
 OrganizationAi__BaseUrl=https://ai.internal.example/   # https, or loopback for local testing
 OrganizationAi__ApiKey=<sent as Bearer, optional>
-OrganizationAi__TimeoutSeconds=60    # 5-600
+OrganizationAi__TimeoutSeconds=60    # 5-600; answers, Trainee answers and lookups
+OrganizationAi__ScenarioDraftTimeoutSeconds=   # optional, 5-600 and < lease; unset = lease - 30 s, never below TimeoutSeconds
 OrganizationAi__LeaseSeconds=180     # > timeout, <= 3600
 OrganizationAi__MaxAttempts=3        # only for provably undelivered calls
 OrganizationAi__BackoffSeconds=30
 OrganizationAi__PollSeconds=5
 ```
+
+A scenario draft places many objects and reads many sources, so it gets its own, longer wait (#204): with the defaults it waits
+150 s instead of 60 s. A call the backend cuts off ends as `Unknown` and parks in `NeedsReconcile` (`AI_OUTCOME_UNKNOWN`) with its
+reservation held, because the service may still have finished it; an admin then reconciles it (`POST /api/admin/ai/requests/{id}/reconcile`
+looks the result up). The draft wait always stays below `LeaseSeconds`, so no second worker can claim the request while the call runs.
 
 Without an enabled, valid adapter, submit (organization and Trainee) returns `503 AI_PROVIDER_UNAVAILABLE` before anything is
 reserved, and the worker does not start. Invalid settings never stop the API (#176): with `Enabled=true` and a missing/invalid
