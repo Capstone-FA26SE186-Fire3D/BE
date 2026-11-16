@@ -15,18 +15,30 @@ normal editor contract.
 OrganizationAi__Enabled=false        # default
 OrganizationAi__BaseUrl=https://ai.internal.example/   # https, or loopback for local testing
 OrganizationAi__ApiKey=<sent as Bearer, optional>
-OrganizationAi__TimeoutSeconds=60    # 5-600
+OrganizationAi__TimeoutSeconds=60    # 5-600; answers, Trainee answers and lookups
+OrganizationAi__ScenarioDraftTimeoutSeconds=   # optional, 5-600 and < lease; unset = lease - 30 s, never below TimeoutSeconds
 OrganizationAi__LeaseSeconds=180     # > timeout, <= 3600
 OrganizationAi__MaxAttempts=3        # only for provably undelivered calls
 OrganizationAi__BackoffSeconds=30
 OrganizationAi__PollSeconds=5
 ```
 
+A scenario draft places many objects and reads many sources, so it gets its own, longer wait (#204): with the defaults it waits
+150 s instead of 60 s. A call the backend cuts off ends as `Unknown` and parks in `NeedsReconcile` (`AI_OUTCOME_UNKNOWN`) with its
+reservation held, because the service may still have finished it; an admin then reconciles it (`POST /api/admin/ai/requests/{id}/reconcile`
+looks the result up). The draft wait always stays below `LeaseSeconds`, so no second worker can claim the request while the call runs.
+
 Without an enabled, valid adapter, submit (organization and Trainee) returns `503 AI_PROVIDER_UNAVAILABLE` before anything is
 reserved, and the worker does not start. Invalid settings never stop the API (#176): with `Enabled=true` and a missing/invalid
 `BaseUrl`, out-of-range timing, or any value of the wrong type (`TimeoutSeconds=abc`), AI stays off, the worker logs an error and
 `/health/ready` keeps its status (AI is optional) while listing `checks.organizationAi.code = AI_CONFIGURATION_INVALID` with the
 reason; the deploy smoke test prints a warning for it.
+
+When AI is configured, the same check asks the AI service `GET {BaseUrl}/ready` (with the API key, 5 s timeout, at most once
+every 30 s) so an outage shows before trainees hit it (#185). `checks.organizationAi.code` is then `OK`,
+`AI_PROVIDER_UNREACHABLE` (no answer: connection, DNS, TLS or timeout) or `AI_PROVIDER_NOT_READY` (any other status, in
+`data.providerStatus`). The readiness status still stays 200: Degraded/Unhealthy are 503 here, which would take the whole API out of
+rotation for an optional dependency.
 
 ## Vocabulary (Docs v7)
 
@@ -167,9 +179,12 @@ revision lost its accepted geometry meanwhile: `NeedsReconcile AI_REVISION_STALE
 - `Training` + `trainingId`: Active Training, Published release with approved content review, inside its dates, on an active Building
   that is Public or where the Trainee holds a participation grant of the current access revision. A learner-safe snapshot is pinned as
   `TrainingSnapshot` (training name/description, Building, scenario name, learning objectives, learner instructions, allowed modes,
-  time limit) — never rubric, scoring, scenario state, drafts or IFC.
+  time limit, and `criteria`: label, description and metric of each rubric criterion so the assistant can say how to complete it)
+  — never the grading (threshold, operator, weight, mandatory flag, pass threshold), scenario state, drafts or IFC
+  (migration `20261112090000_AiTraineeCriteria`).
 - `Result` + `sessionId`: the Trainee's own learner session with a saved result; pinned as `SessionResult` (mode, outcome, reason,
-  score, criteria, metrics). It stays usable after Building access is lost.
+  score, `passThreshold`, criteria with the label/description the result screen shows, metrics; criteria are null for Learn/Guided).
+  It stays usable after Building access is lost.
 
 Unavailable context → `404 AI_CONTEXT_NOT_FOUND`. While the Trainee has an Assessment session in Created/Launching/Running, submit
 returns `409 AI_BLOCKED_DURING_ASSESSMENT`. A Trainee sees only their own requests; when a Training context is no longer

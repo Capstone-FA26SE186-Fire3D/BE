@@ -100,7 +100,7 @@ public sealed class TraineeAiController(IOrganizationAiGates gates, IOptions<Org
     /// (Public Building or valid participation grant, Active Training, Published release); Result needs the Trainee's own sessionId with a saved result.
     /// Unavailable context: 404 AI_CONTEXT_NOT_FOUND. Sources: approved Common knowledge sources and Learn posts only (Hidden posts are used
     /// for retrieval without being listed). Blocked while an Assessment attempt is open: 409 AI_BLOCKED_DURING_ASSESSMENT. Today's allowance used
-    /// up: 409 AI_DAILY_QUOTA_EXHAUSTED; a retry with the same key never reserves twice. Rubric, scoring, drafts and private IFC never reach the AI.</remarks>
+    /// up: 409 AI_DAILY_QUOTA_EXHAUSTED; a retry with the same key never reserves twice. Training sends criterion labels/descriptions/metrics only; the grading (thresholds, weights, pass mark), drafts and private IFC never reach the AI.</remarks>
     [HttpPost("api/ai/trainee/answer")]
     [ProducesResponseType<AiRequestView>(202)]
     [ProducesResponseType<ProblemDetails>(404)]

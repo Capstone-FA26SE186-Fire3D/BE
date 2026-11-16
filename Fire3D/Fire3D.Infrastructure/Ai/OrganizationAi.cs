@@ -97,16 +97,19 @@ public sealed class FastApiAiClient(IHttpClientFactory clients, IOptions<Organiz
             "TraineeAnswer" => "v2/trainee/answer",
             _ => "v2/organization/answer"
         };
-        return await Send(HttpMethod.Post, path, id, JsonNode.Parse(claim.GetProperty("payload").GetRawText())!.AsObject(), lookup: false, ct);
+        var operation = claim.GetProperty("operation").GetString();
+        return await Send(HttpMethod.Post, path, id, JsonNode.Parse(claim.GetProperty("payload").GetRawText())!.AsObject(), lookup: false,
+            options.Value.TimeoutFor(operation), ct);
     }
 
-    public Task<AiCallResult> LookupAsync(Guid requestId, CancellationToken ct) => Send(HttpMethod.Get, $"v2/requests/{requestId}", requestId, null, lookup: true, ct);
+    public Task<AiCallResult> LookupAsync(Guid requestId, CancellationToken ct) =>
+        Send(HttpMethod.Get, $"v2/requests/{requestId}", requestId, null, lookup: true, options.Value.TimeoutSeconds, ct);
 
-    private async Task<AiCallResult> Send(HttpMethod method, string path, Guid id, JsonObject? body, bool lookup, CancellationToken ct)
+    private async Task<AiCallResult> Send(HttpMethod method, string path, Guid id, JsonObject? body, bool lookup, int timeoutSeconds, CancellationToken ct)
     {
         var o = options.Value;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(o.TimeoutSeconds));
+        timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
         using var request = new HttpRequestMessage(method, new Uri(new Uri(o.BaseUrl!.TrimEnd('/') + "/"), path));
         request.Headers.Add("X-Request-Id", id.ToString());
         if (!string.IsNullOrEmpty(o.ApiKey)) request.Headers.Authorization = new("Bearer", o.ApiKey);

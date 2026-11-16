@@ -7,7 +7,7 @@ The deployment of `b6a7d74` (and later `973c29f`) answered `500` on Building det
 | Endpoint | Meaning |
 | --- | --- |
 | `GET /health` | Liveness only (process is up). It never checks the database, so a DB outage does not make the host restart the app. |
-| `GET /health/ready` | Readiness: the database is reachable, every EF migration in this build is applied, and enabled Redis processing dependencies pass their read-only checks. `200 {"status":"Healthy"}` or `503` with dependency codes under `checks`. Optional AI never changes the status: `checks.organizationAi.code` is `AI_CONFIGURATION_INVALID` when its settings are unusable (#176). |
+| `GET /health/ready` | Readiness: the database is reachable, every EF migration in this build is applied, and enabled Redis processing dependencies pass their read-only checks. `200 {"status":"Healthy"}` or `503` with dependency codes under `checks`. Optional AI never changes the status: `checks.organizationAi.code` is `AI_CONFIGURATION_INVALID` when its settings are unusable (#176), `AI_PROVIDER_UNREACHABLE` or `AI_PROVIDER_NOT_READY` (`data.providerStatus`) when the AI service does not answer `GET {BaseUrl}/ready` with 200 (#185, checked at most every 30 s). |
 | `GET /health/version` | Commit of the running image. |
 
 `/health/ready` codes:

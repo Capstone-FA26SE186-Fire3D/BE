@@ -19,6 +19,8 @@ public static partial class EditorContract
     public static readonly string[] TrainingModes = ["Learn", "Guided", "Assessment"];
     // Behaviour objects must name a runtime capability; Unity behaviour is never inferred from the kind alone.
     public static readonly string[] CapabilityRequiredKinds = ["Hazard", "Npc", "Equipment"];
+    /// <summary>Elevators belong to the building: the game places them from the IFC, a scenario never does (BE#193).</summary>
+    public const string BuildingOnlyCapability = "transport.elevator";
     public const int MaxFloors = 500, MaxMappings = 100_000, MaxObjects = 2_000;
     /// <summary>Metrics computed from the core events (ExitReached, WrongExit, HazardExposure.amount, Moved.distanceMeters) for every runtime.</summary>
     public static readonly string[] CoreMetrics = ["reached_exit", "completion_time_seconds", "wrong_exits", "hazard_exposure", "distance_meters"];
@@ -561,6 +563,8 @@ public static class ScenarioStateV1Validator
                 {
                     var capabilityId = r.Text(capability["id"], $"{path}.capability.id", 128, pattern: EditorContract.IdPattern());
                     var version = r.Text(capability["version"], $"{path}.capability.version", 32, pattern: EditorContract.SemverPattern());
+                    if (complete && kind == "Equipment" && capabilityId == EditorContract.BuildingOnlyCapability)
+                        r.Add("CAPABILITY_BUILDING_ONLY", $"{path}.capability.id", "Elevators come from the IFC drawing; a scenario cannot place one.");
                     if (complete && capabilityId is not null && version is not null)
                     {
                         if (runtime is null || contracts is null || !contracts.TryGetValue(capabilityId, out contract))

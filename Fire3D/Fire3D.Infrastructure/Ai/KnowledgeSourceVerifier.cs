@@ -65,6 +65,8 @@ public sealed class KnowledgeSourceVerifier(IHttpClientFactory clients) : IKnowl
         }
         catch (HttpRequestException ex) when (ex.InnerException is BlockedAddressException) { return Unavailable("ADDRESS_NOT_PUBLIC"); }
         catch (HttpRequestException) { return Unavailable("FETCH_FAILED"); }
+        // Body read failures (connection reset: HttpIOException; corrupt gzip/brotli: InvalidDataException) are fetch failures too.
+        catch (Exception ex) when (ex is IOException or InvalidDataException) { return Unavailable("FETCH_FAILED"); }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return Unavailable("TIMEOUT"); }
     }
 

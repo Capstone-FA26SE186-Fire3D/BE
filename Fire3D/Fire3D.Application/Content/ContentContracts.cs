@@ -38,7 +38,7 @@ public sealed record LearnPostAdminPage(IReadOnlyList<LearnPostAdminRow> Items, 
 public sealed record LearnPostSummary(Guid Id, string Slug, string Kind, string Title, string Summary, string? CoverImageUrl, DateTime PublishedAt);
 public sealed record LearnPostPage(IReadOnlyList<LearnPostSummary> Items, int Total, int Page, int PageSize);
 /// <summary>Available=false when the post is no longer public: only PostId, Available and BookmarkedAt are returned then.</summary>
-public sealed record LearnBookmarkView(Guid PostId, bool Available, DateTime BookmarkedAt, string? Slug = null, string? Title = null, string? Summary = null, string? Kind = null);
+public sealed record LearnBookmarkView(Guid PostId, bool Available, DateTime BookmarkedAt, string? Slug = null, string? Title = null, string? Summary = null, string? Kind = null, string? CoverImageUrl = null);
 /// <summary>Every bookmark of the Trainee whatever the filters and page: available ones by kind (keys are the kind values), the rest as unavailable.</summary>
 public sealed record LearnBookmarkCounts([property: JsonPropertyName("Article")] int Article, [property: JsonPropertyName("Tip")] int Tip,
     [property: JsonPropertyName("Video")] int Video, int Unavailable);
