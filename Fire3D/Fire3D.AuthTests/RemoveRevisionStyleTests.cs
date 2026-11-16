@@ -45,7 +45,7 @@ public sealed partial class AuthIntegrationTests
 
             await db.Database.MigrateAsync();
 
-            Assert.Equal(1L, await Scalar("SELECT count(*) FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\"='20261106100000_RemoveRevisionStyle'"));
+            Assert.Equal(1L, await Scalar("SELECT count(*) FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\"='20261116100000_RemoveRevisionStyle'"));
             Assert.Equal("EXTINGUISHER:2", await Scalar("SELECT string_agg(i.code||':'||(SELECT count(*) FROM organization_library_versions v WHERE v.item_id=i.id),',') FROM organization_library_items i"));
             Assert.Equal(true, await Scalar("SELECT to_regclass('public.revision_style_selections') IS NULL AND to_regproc('public.revision_style_gate') IS NULL AND to_regproc('public.revision_style_library_ref') IS NULL AND to_regproc('public.immutable_revision_style_selection') IS NULL"));
             // The retention triggers are back on, and the kinds are gone from the CHECK.

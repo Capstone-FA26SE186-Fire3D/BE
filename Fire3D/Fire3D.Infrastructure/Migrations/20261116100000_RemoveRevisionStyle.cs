@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 namespace Fire3D.Infrastructure.Migrations;
 [DbContext(typeof(Fire3DDbContext))]
-[Migration("20261106100000_RemoveRevisionStyle")]
+[Migration("20261116100000_RemoveRevisionStyle")]
 public sealed class RemoveRevisionStyle : Migration
 {
     protected override void Up(MigrationBuilder builder)

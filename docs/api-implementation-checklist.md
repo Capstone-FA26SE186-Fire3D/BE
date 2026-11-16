@@ -197,7 +197,7 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 
 - **Quyết định 04/11/2026:** người dùng bỏ hai loại thư viện "Bộ vật liệu"/"Bảng màu" (FE và Docs đã gỡ); BE#194 gỡ `StylePreset`/`ColorScheme` và API `/api/revisions/{id}/style`. Không phát triển thêm mục này.
 
-- **Đã gỡ (BE#194, migration `20261106100000_RemoveRevisionStyle`):** xóa item/version `StylePreset`/`ColorScheme`, CHECK `kind` chỉ còn `ScenarioTemplate`, `RubricSample`, `Equipment` (tạo item loại khác → 400 `VALIDATION_ERROR`), xóa bảng `revision_style_selections` và `revision_style_gate`/`revision_style_library_ref`; `GET/PUT /api/revisions/{id}/style` trả 404. Đã xóa `contracts/style/v1/` và `docs/revision-style.md`.
+- **Đã gỡ (BE#194, migration `20261116100000_RemoveRevisionStyle`):** xóa item/version `StylePreset`/`ColorScheme`, CHECK `kind` chỉ còn `ScenarioTemplate`, `RubricSample`, `Equipment` (tạo item loại khác → 400 `VALIDATION_ERROR`), xóa bảng `revision_style_selections` và `revision_style_gate`/`revision_style_library_ref`; `GET/PUT /api/revisions/{id}/style` trả 404. Đã xóa `contracts/style/v1/` và `docs/revision-style.md`.
 
 - **Contract/current:** Mục 5.5: IFC hầu như không mang màu/texture dùng được; vật liệu lấy từ thư viện PBR CC0 theo preset công trình và loại phòng.
 - **Sửa code:** Lưu preset phong cách và override vật liệu theo nhóm cho revision; worker Blender/Unity đọc và áp dụng tự động.
