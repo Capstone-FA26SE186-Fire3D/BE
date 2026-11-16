@@ -231,10 +231,10 @@ public sealed partial class AuthIntegrationTests
     {
         using var admin = await SignedIn(adminId);
         var revision = Guid.NewGuid();
+        // The revision style route was removed with STYLE-01 (#194); RemoveRevisionStyleTests checks that it answers 404.
         foreach (var (method, path, body) in new[]
         {
-            (HttpMethod.Patch, $"/api/revisions/{revision}/equipment-decisions", (object)new { items = new[] { new { candidateId = "door-1", decision = "Confirmed" } } }),
-            (HttpMethod.Put, $"/api/revisions/{revision}/style", new { presetVersionId = Guid.NewGuid() })
+            (HttpMethod.Patch, $"/api/revisions/{revision}/equipment-decisions", (object)new { items = new[] { new { candidateId = "door-1", decision = "Confirmed" } } })
         })
         {
             using var request = new HttpRequestMessage(method, path) { Content = JsonContent.Create(body) };
