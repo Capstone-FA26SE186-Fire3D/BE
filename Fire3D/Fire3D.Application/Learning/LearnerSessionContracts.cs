@@ -15,6 +15,8 @@ public sealed class LearnerSessionOptions
     public string ContinuationAudience { get; set; } = "FET3D.Learner.Continuation";
     /// <summary>Offline sync window for a started session; after it a live login reissues continuation for the same owner.</summary>
     public int ContinuationTtlDays { get; set; } = 7;
+    /// <summary>Close sessions a phone abandoned without completing (#207/#208); see StaleLearnerSessionWorker.</summary>
+    public bool StaleCloseEnabled { get; set; } = true;
 }
 
 /// <summary>Who is calling: a live Fire3D session (Family) or a continuation for exactly one started session.</summary>

@@ -186,8 +186,10 @@ revision lost its accepted geometry meanwhile: `NeedsReconcile AI_REVISION_STALE
   score, `passThreshold`, criteria with the label/description the result screen shows, metrics; criteria are null for Learn/Guided).
   It stays usable after Building access is lost.
 
-Unavailable context → `404 AI_CONTEXT_NOT_FOUND`. While the Trainee has an Assessment session in Created/Launching/Running, submit
-returns `409 AI_BLOCKED_DURING_ASSESSMENT`. A Trainee sees only their own requests; when a Training context is no longer
+Unavailable context → `404 AI_CONTEXT_NOT_FOUND`. While the Trainee has an Assessment in progress, submit
+returns `409 AI_BLOCKED_DURING_ASSESSMENT` and quota reports `blockedByAssessment: true`. In progress means a Launching session whose
+launch grant has not expired, or a Running session with no completion request and a heartbeat, launch or received event in the last
+5 minutes (#208, migration `20261118090000_CloseStaleSessions`); a stale row from an earlier attempt no longer locks the AI. A Trainee sees only their own requests; when a Training context is no longer
 accessible, or the Learn post was removed, the request is returned with `resultWithheld: true`, `result: null` and no citations.
 
 ## Request representation
