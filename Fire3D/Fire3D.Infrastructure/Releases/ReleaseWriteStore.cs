@@ -11,7 +11,6 @@ namespace Fire3D.Infrastructure.Releases;
 
 public sealed class ReleaseWriteStore(Fire3DDbContext db, TimeProvider clock, IOptions<PublishingOptions>? publishing = null) : IReleaseStore
 {
-    private readonly TimeProvider legacyClock = clock;
     public async Task<AuthResult<ReleaseResponse>> BuildAsync(Guid actorId,Guid? organizationId,BuildReleaseRequest request,CancellationToken ct,string? key=null,Guid? family=null)
     {
         var result=await JsonCommandGate.Execute(db,"release_access_gate","Build",actorId,family,request.ScenarioVersionId,request,key,null,ct);

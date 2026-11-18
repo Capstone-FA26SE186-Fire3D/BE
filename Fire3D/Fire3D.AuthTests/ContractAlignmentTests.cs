@@ -39,7 +39,7 @@ public sealed partial class AuthIntegrationTests
     public async Task OpenAPI_publishes_processing_enums_retry_key_and_deprecated_building_query()
     {
         var root=await OpenApiRoot();var schemas=root.GetProperty("components").GetProperty("schemas");
-        string?[] Values(string schema,string property)=>schemas.GetProperty(schema).GetProperty("properties").GetProperty(property).GetProperty("enum").EnumerateArray().Select(x=>x.GetString()).ToArray();
+        string[] Values(string schema,string property)=>schemas.GetProperty(schema).GetProperty("properties").GetProperty(property).GetProperty("enum").EnumerateArray().Select(x=>x.GetString()!).ToArray();
         Assert.Equal(["Queued","Running","Succeeded","Failed","Cancelled"],Values("ProcessingJobResponse","status"));
         Assert.Equal(["Running","Succeeded","Failed","Expired"],Values("ProcessingAttemptResponse","status"));
         Assert.Equal(["Passed","Failed"],Values("ValidationRunResponse","outcome"));

@@ -38,10 +38,13 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal(0, await db.Set<BillingCheckoutOperation>().CountAsync(x => x.Status == "Creating"));
             await db.Database.ExecuteSqlRawAsync("UPDATE billing_checkout_operations SET attempts=attempts WHERE false");
             await db.Database.ExecuteSqlRawAsync("UPDATE payment_provisioning_records SET status=status WHERE false");
-            Assert.Equal(1, await db.Database.SqlQueryRaw<int>($"SELECT count(*)::int AS \"Value\" FROM quotations WHERE id='{quote}'").SingleAsync());
-            Assert.Equal(1, await db.Database.SqlQueryRaw<int>($"SELECT count(*)::int AS \"Value\" FROM service_packages WHERE id='{package}'").SingleAsync());
+            Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM quotations WHERE id={quote}").SingleAsync());
+            Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM service_packages WHERE id={package}").SingleAsync());
+            // Table names come from the fixed list below; identifiers cannot be parameters.
+#pragma warning disable EF1002
             foreach (var table in new[] { "payos_payment_requests", "payment_transactions", "service_entitlements", "payos_webhook_inbox", "billing_command_receipts" })
                 await db.Database.SqlQueryRaw<int>($"SELECT count(*)::int AS \"Value\" FROM {table}").SingleAsync();
+#pragma warning restore EF1002
 
             // Money tables stay read-only for the general API identity.
             var denied = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("DELETE FROM payment_transactions WHERE false"));

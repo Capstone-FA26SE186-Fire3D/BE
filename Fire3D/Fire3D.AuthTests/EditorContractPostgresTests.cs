@@ -199,7 +199,7 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(HttpStatusCode.NoContent, legacy.StatusCode);
         var stored = (await client.GetFromJsonAsync<JsonObject>($"/api/scenario-drafts/{draft}"))!["state"]!;
         Assert.Null(stored["schemaVersion"]);
-        Assert.Equal(1, stored["spawnPoints"]!.AsArray().Count);
+        Assert.Single(stored["spawnPoints"]!.AsArray());
         var snapshot = await client.SendAsync(Snapshot(draft, legacy.Headers.ETag!.Tag, "editor-snapshot-legacy"));
         Assert.Equal(HttpStatusCode.Created, snapshot.StatusCode);
         var version = (await snapshot.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();

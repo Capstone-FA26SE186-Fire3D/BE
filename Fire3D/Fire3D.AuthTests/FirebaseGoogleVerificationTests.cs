@@ -81,7 +81,7 @@ public sealed class FirebaseGoogleVerificationTests
     public async Task Sign_in_provider_is_read_from_any_dictionary_shape_and_other_shapes_are_invalid()
     {
         var claims = Claims();
-        IDictionary<string, object> expando = new System.Dynamic.ExpandoObject();
+        IDictionary<string, object?> expando = new System.Dynamic.ExpandoObject();
         expando["sign_in_provider"] = "google.com";
         claims["firebase"] = expando; // IDictionary that is not IReadOnlyDictionary
         Assert.Equal("google-uid", (await Provider(new Verifier((_, _) => Task.FromResult(new VerifiedFirebaseClaims("google-uid", claims))))
