@@ -227,6 +227,7 @@ Verified immutable intent/source, canonical transactional outbox, HTTP dispatche
 
 ### ASSESSMENT-01 — SOURCE/HTTP/DB TESTED · Kết quả theo rubric (FR-TRAINING-01,08)
 
+- **Trạng thái 18/11/2026 (#207, #208, nhánh `fix/stale-sessions-207-208`, migration `20261118090000_CloseStaleSessions`, chưa áp production):** session điện thoại bỏ dở không còn treo mãi. `StaleLearnerSessionWorker` (5 phút/lần) đóng session `Launching`/`Running` chưa có completion khi im lặng 30 phút **và** continuation đã hết hạn hoặc im lặng 24 giờ: hoàn tất tại sequence đã ack với `endReason=Abandoned` qua `learner_session_finalize` (Assessment → `Incomplete`), ghi audit `CloseStale`. AI Trainee chỉ bị khóa khi Assessment đang diễn ra thật (grant khởi động còn hạn, hoặc heartbeat/sự kiện trong 5 phút), nên dòng cũ bị kẹt không khóa AI nữa ngay khi migration được áp. Xem `docs/learner-sessions.md#abandoned-sessions-207208`.
 - **Trạng thái 16/10/2026 (#96, chờ merge):** OpenAPI có enum cho status/mode/outcome/reason/endReason; tiêu chí có `label`/`description`, kết quả có `passThresholdPercent`; `GET /api/training/buildings` cho Trainee; 403 `CONTINUATION_SESSION_MISMATCH`. Xem `docs/learner-sessions.md`.
 
 - **Trạng thái 12/10/2026:** kết quả theo rubric hash đã duyệt, outcome `Passed|NotPassed|Incomplete|NotAssessed` tách completion; rubric `schema_version` chuẩn `"1"` (#69). Nội dung dưới đây là lịch sử.

@@ -17,6 +17,7 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Billing.IBillingService,Fire3D.Infrastructure.Billing.BillingService>();
         Fire3D.API.Authorization.LearnerContinuationAuthentication.AddLearnerContinuation(services,configuration);
         services.AddScoped<Fire3D.Application.Learning.ILearnerSessions,Fire3D.Infrastructure.Learning.LearnerSessions>();
+        services.AddHostedService<Fire3D.Infrastructure.Workers.StaleLearnerSessionWorker>();
         services.AddScoped<Fire3D.Application.Learning.IBuildingQrCodes,Fire3D.Infrastructure.Learning.BuildingQrCodes>();
         services.AddScoped<Fire3D.Application.Administration.IPlatformServiceAdmin,Fire3D.Infrastructure.Administration.PlatformServiceAdmin>();
         services.AddScoped<Fire3D.Application.Content.IContentGates,Fire3D.Infrastructure.Content.ContentGates>();

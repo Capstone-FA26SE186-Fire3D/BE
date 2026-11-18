@@ -11,6 +11,7 @@ LearnerSessions__Enabled=true
 LearnerSessions__SigningKey=<launch grant key, 32-512 bytes>
 LearnerSessions__ContinuationSigningKey=<different key, 32-512 bytes>
 LearnerSessions__ContinuationTtlDays=7
+LearnerSessions__StaleCloseEnabled=true   # default; closes abandoned sessions, see below
 ```
 
 Disabled by default: prepare works, start and continuation return `503 LEARNER_LAUNCH_UNAVAILABLE` without holding a seat. Keys must differ from each other and from the API JWT key; the continuation audience (`FET3D.Learner.Continuation`) differs from the API audience.
@@ -45,6 +46,18 @@ One seat per Trainee per entitlement period (`billing_learner_seats`, unique ent
 ## Continuation (offline sync)
 
 The continuation JWT (issuer `FET3D.Learner`, audience `FET3D.Learner.Continuation`, purpose `learner_continuation`) names the owner, one started session and a continuation ID; it lasts `ContinuationTtlDays` (default 7). It is accepted only by get/heartbeat/events/complete/result of that session, and the database checks it is the session's current continuation. It never prepares, starts or reconciles. Logout, lost Building access and entitlement expiry do not delete history or block finishing a started session. After expiry a live login calls `/continuation`.
+
+## Abandoned sessions (#207/#208)
+
+A phone may stop talking to BE before it sends `complete` (game killed, app removed, phone lost, a launch dropped locally). Every
+5 minutes `StaleLearnerSessionWorker` calls `learner_session_close_stale` (migration `20261118090000_CloseStaleSessions`). It closes a
+`Launching` or `Running` session with no completion request once it has been silent for **30 minutes** (no heartbeat, launch or
+received event) **and** its continuation has expired or it has been silent for **24 hours**, so a phone can still sync an offline play
+while its continuation lives. The session completes at its acknowledged sequence with `endReason=Abandoned` through the normal
+finalize path: an Assessment gets `Incomplete`/`ENDED_BEFORE_COMPLETION` ("Chưa hoàn thành"), Learn/Guided `NotAssessed`; history
+and reports stop showing it as in progress. A session still heartbeating, or one whose completion waits for missing events
+(`AwaitingSync`), is never closed. A later upload for a closed session gets `409 SESSION_TERMINAL`. Each close writes an audit row
+(`Session`, `operation: CloseStale`). `LearnerSessions__StaleCloseEnabled=false` turns the worker off.
 
 ## Telemetry and result
 
@@ -168,5 +181,12 @@ Rubric criteria accept an optional `label` (1–200 characters) beside `descript
 QR content format: scanners (Web and Mobile) read the printed URL and use its last path segment as `qrToken`; a bare 43-character base64url token is accepted the same way. A QR identifies a Building only: it does not authenticate, grant participation or entitlement, and legacy release QR rows are not reused.
 
 ## Evidence
+
+#207/#208 (`StaleSessionsPostgresTests`, real migrations on disposable PostgreSQL, sessions driven through the gate with an
+EXECUTE-only login): a silent Assessment closes as `Incomplete` at its acknowledged sequence (a gap stays unscored), a never-launched
+play closes as `NotAssessed`, a live play, a play still inside its continuation and an `AwaitingSync` play stay open, the offline play
+closes once its continuation expires, a second run changes nothing, a late upload gets `SESSION_TERMINAL`, each close is audited,
+and only the API executor roles may run the sweep. The AI quota reports `blockedByAssessment` only for a live launch grant or a
+Running Assessment active in the last 5 minutes, never for stale rows, Learn plays or a play whose completion was requested.
 
 Actual migrations on disposable PostgreSQL with an EXECUTE-only caller: prepare/start/seat/regrant/launch, events with gaps, duplicates and conflicts, AwaitingSync then finalize, rubric result and immutability, seat reuse, last-seat race, upgrade and renewal capacity, continuation after logout/access loss/expiry and reissue, Private access and code rotation, mode/runtime/rubric gates, reconcile scoping, QR create/rotate/revoke/resolve and the HTTP continuation scheme. Mobile, Unity and deployment are not verified.

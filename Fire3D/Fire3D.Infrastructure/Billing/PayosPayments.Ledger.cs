@@ -75,8 +75,11 @@ public sealed partial class PayosPayments
             new("org",NpgsqlDbType.Uuid){Value=(object?)org??DBNull.Value},new("quotation",NpgsqlDbType.Uuid){Value=(object?)quotation??DBNull.Value},
             new("status",NpgsqlDbType.Text){Value=(object?)status??DBNull.Value},new("from",NpgsqlDbType.TimestampTz){Value=(object?)start??DBNull.Value},
             new("to",NpgsqlDbType.TimestampTz){Value=(object?)end??DBNull.Value}];
+        // from/where/createdAt/order are fixed SQL fragments chosen by the callers above, never request text; every value is a parameter.
+#pragma warning disable EF1002, EF1003
         var total=await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\""+from+where,Parameters()).SingleAsync(ct);
         var items=await db.Database.SqlQueryRaw<PayosLedgerItem>(LedgerSelect.Replace("{0}",createdAt)+from+LedgerJoins+where+$" ORDER BY {order} OFFSET {(long)(page-1)*size} LIMIT {size}",Parameters()).ToListAsync(ct);
+#pragma warning restore EF1002, EF1003
         return new(items,total,page,size);
     }
 }

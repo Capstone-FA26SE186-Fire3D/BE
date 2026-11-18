@@ -182,7 +182,7 @@ public sealed partial class AuthIntegrationTests
             Assert.True(await AiWorker(runtime, fake).RunOnceAsync(default));
             Assert.Equal("NeedsReconcile/AI_RESULT_INVALID", (string?)await ScalarAsync($"SELECT status||'/'||failure_code FROM ai_requests WHERE id='{result.Value.GetProperty("requestId").GetGuid()}'"));
 
-            await SeedAnalyticsSession(org, trainee, f.Training, "now()", status: "Running", mode: "Assessment");
+            await SeedAnalyticsSession(org, trainee, f.Training, "now()", status: "Running", mode: "Assessment", heartbeatAt: "now()");
             Assert.Equal("AI_BLOCKED_DURING_ASSESSMENT", (await Ask("during-assessment")).Error?.Code);
             Assert.True((await gates.TraineeAsync("Quota", trainee, traineeFamily, Guid.Empty, new { }, null, default)).Value.GetProperty("blockedByAssessment").GetBoolean());
             var list = (await gates.TraineeAsync("List", trainee, traineeFamily, Guid.Empty, new { page = 1, pageSize = 20 }, null, default)).Value;

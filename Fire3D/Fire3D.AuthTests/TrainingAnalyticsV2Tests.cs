@@ -63,7 +63,8 @@ public sealed partial class AuthIntegrationTests
 
         var byBuilding = await Read(Q("building"));
         var buildingName = (string)(await ScalarAsync($"SELECT name FROM buildings WHERE id='{f.Building}'"))!;
-        Assert.Equal((f.Building.ToString(), buildingName, 2L), (byBuilding.Cohorts!.Single().Key, byBuilding.Cohorts.Single().Label, byBuilding.Cohorts.Single().UniqueTrainees));
+        var cohort = byBuilding.Cohorts!.Single();
+        Assert.Equal((f.Building.ToString(), buildingName, 2L), (cohort.Key, cohort.Label, cohort.UniqueTrainees));
         var scenario = (Guid)(await ScalarAsync($"SELECT v.scenario_id FROM sessions s JOIN scenario_versions v ON v.id=s.scenario_version_id WHERE s.id='{passed}'"))!;
         Assert.Equal(4L, (await Read(Q(null, f.Building, scenario))).Plays);
         Assert.Null((await Read(Q())).Cohorts);
