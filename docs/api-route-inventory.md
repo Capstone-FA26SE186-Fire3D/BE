@@ -238,8 +238,6 @@
 | GET | /api/revisions/{revisionId}/processing-logs | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/revisions/{revisionId}/readiness | Bearer | None | 200, 401, 403, 404 |
 | POST | /api/revisions/{revisionId}/reviews | Bearer | None | 201, 400, 401, 403, 404, 409, 429 |
-| GET | /api/revisions/{revisionId}/style | Bearer | None | 200, 401, 403, 404 |
-| PUT | /api/revisions/{revisionId}/style | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 422, 428 |
 | POST | /api/revisions/{revisionId}/upload-complete | Bearer | None | 204, 400, 404, 409, 410, 422, 429, 503 |
 | GET | /api/revisions/{revisionId}/validation-runs | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/scenario-drafts/{draftId} | Bearer | None | 200 |
