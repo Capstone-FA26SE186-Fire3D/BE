@@ -215,4 +215,40 @@ public sealed class AvatarRecoveryPostgresTests
         Assert.Equal(1L, await db.Scalar($"SELECT profile_revision_no FROM users WHERE id='{intent.UserId}'"));
         Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM audit_logs"));
     }
+
+    // The candidate of an abandoned upload used to come back on every Claim after Complete deleted its row, so the worker looped
+    // without pause (about 46 million gate calls on production). Complete now keeps a done marker that Claim never picks.
+    [BillingPostgresFact]
+    public async Task Completed_abandoned_candidate_is_not_queued_again()
+    {
+        await using var db = await BillingDatabase.Create(false);
+        await BackendDatabasePermissionsTests.Apply(db, "AddAvatarCleanupGate");
+        await BackendDatabasePermissionsTests.Apply(db, "FixAvatarCleanupLoop");
+        var intent = await Intent(db);
+        await using var reserve = db.Context();
+        var candidate = (await new AvatarStore(reserve).ReserveCopyCandidateAsync(intent.Id, intent.UserId, 1, "etag", DateTime.UtcNow, default)).Candidate!;
+        await db.Sql($"UPDATE avatar_upload_intents SET candidate_lease_until=now()-interval '2 hours' WHERE id='{intent.Id}'; DELETE FROM avatar_object_cleanups");
+
+        for (var round = 0; round < 2; round++)
+        {
+            await using var context = db.Context();
+            var cleanup = new AvatarStore(context);
+            var job = await cleanup.ClaimAsync(default);
+            if (round == 1) { Assert.Null(job); break; }
+            Assert.Equal(candidate.ObjectKey, job!.ObjectKey);
+            Assert.False(await cleanup.IsReferencedAsync(job.ObjectKey, default));
+            Assert.True(await cleanup.RenewAsync(job, default));
+            await cleanup.CompleteAsync(job, default);
+        }
+        Assert.Equal("infinity", await db.Scalar($"SELECT available_at::text FROM avatar_object_cleanups WHERE object_key='{candidate.ObjectKey}' AND lease_token IS NULL"));
+
+        // A key no upload intent names is still removed on Complete.
+        await using var other = db.Context();
+        var store = new AvatarStore(other);
+        await store.QueueAsync("avatars/users/replaced", DateTime.UtcNow.AddMinutes(-1), default);
+        var replaced = (await store.ClaimAsync(default))!;
+        Assert.Equal("avatars/users/replaced", replaced.ObjectKey);
+        await store.CompleteAsync(replaced, default);
+        Assert.Equal(0L, await db.Scalar("SELECT count(*) FROM avatar_object_cleanups WHERE object_key='avatars/users/replaced'"));
+    }
 }
