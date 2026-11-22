@@ -89,6 +89,7 @@
         <EmbeddedResource Include="Persistence/Sql/ScenarioReviewReads.sql" />
         <EmbeddedResource Include="Persistence/Sql/PendingRegistrationCleanup.sql" />
         <EmbeddedResource Include="Persistence/Sql/AvatarCleanupGate.sql" />
+    <EmbeddedResource Include="Persistence/Sql/AvatarCleanupLoop.sql" />
         <EmbeddedResource Include="Persistence/Sql/ReadinessLiveFamily.sql" />
         <EmbeddedResource Include="Persistence/Sql/ReadinessAuditChanges.sql" />
         <EmbeddedResource Include="Persistence/Sql/ProcessingRedisDelivery.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ProcessingRedisDelivery.sql" />
