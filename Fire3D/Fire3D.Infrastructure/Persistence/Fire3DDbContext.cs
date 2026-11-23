@@ -103,7 +103,7 @@ public partial class Fire3DDbContext : DbContext
             .HasPostgresEnum("support_priority_enum", new[] { "Low", "Normal", "High", "Urgent" })
             .HasPostgresEnum("support_ticket_status_enum", new[] { "Open", "InProgress", "Resolved", "Closed" })
             .HasPostgresEnum("training_status_enum", new[] { "Draft", "Active", "Closed", "Archived" })
-            .HasPostgresEnum("user_role_enum", new[] { "PlatformAdmin", "OrganizationUser", "Trainee" })
+            .HasPostgresEnum("user_role_enum", new[] { "PlatformAdmin", "OrganizationUser", "Trainee", "FireSafetyExpert" })
             .HasPostgresExtension("pgcrypto");
 
         modelBuilder.Entity<AnnotationSet>(entity =>

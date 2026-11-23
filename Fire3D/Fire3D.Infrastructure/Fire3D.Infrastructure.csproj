@@ -158,4 +158,6 @@
 	
 	
   <ItemGroup><EmbeddedResource Include="Persistence/Sql/IfcDependencyGrants.sql" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Persistence/Sql/FireSafetyExpertRole.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.FireSafetyExpertRole.sql" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Persistence/Sql/ExpertContentReview.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ExpertContentReview.sql" /></ItemGroup>
 </Project>

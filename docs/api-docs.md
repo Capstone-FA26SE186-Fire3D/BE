@@ -64,7 +64,7 @@ Endpoint bảo vệ cần `Authorization: Bearer <Fire3D accessToken>`. Firebase
 | Editor | OrganizationUser trong tổ chức mình hoặc PlatformAdmin qua `IfcAccess`; Trainee bị 403 |
 | Building CRUD | Mutation kiểm actor/tenant DB, body organizationId cho admin create; query deprecated. Read scope DB; lifecycle/Building locks, atomic location/contact/audit. |
 
-Ba role hiện có: `PlatformAdmin`, `OrganizationUser`, `Trainee`. Không có `OrganizationAdmin`. OrganizationUser phải có tổ chức hoạt động; hai role còn lại không có organizationId. Public register không cho chọn role/tổ chức. JWT được kiểm tra cả tài khoản, tổ chức và phiên DB; chưa tới exp vẫn có thể mất hiệu lực khi phiên bị thu hồi.
+Bốn role hiện có: `PlatformAdmin`, `OrganizationUser`, `Trainee`, `FireSafetyExpert` (Chuyên viên PCCC, chỉ PlatformAdmin tạo, không có tổ chức; xem [expert-review.md](expert-review.md)). Không có `OrganizationAdmin`. OrganizationUser phải có tổ chức hoạt động; hai role còn lại không có organizationId. Public register không cho chọn role/tổ chức. JWT được kiểm tra cả tài khoản, tổ chức và phiên DB; chưa tới exp vẫn có thể mất hiệu lực khi phiên bị thu hồi.
 
 **Building CRUD:** create/update/archive kiểm actor/role/tenant từ DB và mutation/audit trong cùng transaction, khóa lifecycle/user. PlatformAdmin gửi `organizationId` đích trong **body** khi tạo; query `organizationId` chỉ là alias deprecated (khác body → 400). OrganizationUser dùng tenant mình, không được đổi tenant. Thiếu scope bị handler từ chối, không coi Guid.Empty là quyền admin. List/detail vẫn lọc organization claim (admin không có tenant có thể nhận list rỗng/404); không suy từ quyền mutation rằng read CRUD đã hỗ trợ admin toàn nền tảng.
 

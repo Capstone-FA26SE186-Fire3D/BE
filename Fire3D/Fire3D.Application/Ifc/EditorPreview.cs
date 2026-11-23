@@ -65,6 +65,15 @@ public sealed class GetEditorPreviewHandler(IAuthStore accounts, IEditorPreviewS
             return AuthResult<EditorPreviewResponse>.Fail("VALIDATION_ERROR", "buildingId and revisionId are required.", 400);
         var source = await store.ReadAsync(request.BuildingId, request.RevisionId, scope.Value!.OrganizationId, ct);
         if (source is null) return AuthResult<EditorPreviewResponse>.Fail("NOT_FOUND", "Revision not found in this building.", 404);
+        return await EditorPreviewBuilder.BuildAsync(source, signer, ct);
+    }
+}
+
+/// <summary>Signs the GLB of an accepted Geometry artifact when it is Ready; shared by editor-preview and the expert review preview.</summary>
+public static class EditorPreviewBuilder
+{
+    public static async Task<AuthResult<EditorPreviewResponse>> BuildAsync(EditorPreviewSource source, IPreviewDownloadSigner signer, CancellationToken ct)
+    {
         var classification = EditorPreviewMetadata.Classify(source);
         var ready = classification == "Valid" && source.SizeBytes > 0 && !string.IsNullOrWhiteSpace(source.StorageKey)
             && source.Sha256Hash is { Length: 64 } hash && hash.All(Uri.IsHexDigit);
