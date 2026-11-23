@@ -13,6 +13,12 @@ Nguồn chuẩn: [v7 contract](../../Docs/schema_v7_contract.md) và [requiremen
 - Learner RAG chỉ index `name`, `objectives`, `instructions` của scenario approved/published và mỗi retrieval kiểm quyền/service hiện tại. Không draft/rubric/đáp án/IFC private. Learn scope cần cả `learn_post_id` và published `learn_version_id`; Hidden có thể RAG với pointer hợp lệ, Deleted/Unpublished không. Mất quyền vẫn đọc giải thích kết quả của chính mình đã lưu và Common, không retrieval Building mới.
 - Trainee tự chọn Learn/Guided Drill/Assessment, không prerequisite/sprint, retry không giới hạn, không certificate. AI bị chặn trong Assessment. Server lưu rubric hash, criterion results, score, outcome `Passed|NotPassed|Incomplete|NotAssessed` và lý do; session Completed không tự Passed. Giá/quota/expiry/rollover/upgrade và ngưỡng/trọng số cụ thể không được tự suy ra.
 
+## Định hướng 23/11/2026 — Flow 1 theo Mẫu PC06 (chưa triển khai)
+
+- Góp ý của giảng viên hướng dẫn: phạm vi còn chung cư và trường học; nội dung bám Mẫu PC06 (Nghị định 105/2025/NĐ-CP); tách Hạ tầng (khóa sau thẩm định) khỏi Tình huống; vai trò `FireSafetyExpert` thẩm định hai vòng; Admin báo giá; thêm `step_count`, `route_efficiency`; nhật ký luyện tập theo tình huống.
+- Việc của BE và điểm khác source hiện tại: [docs/flow1-pc06-target-design.md](../docs/flow1-pc06-target-design.md). Contract sản phẩm: `Docs/phap-ly-pccc.md` và nhóm FR-PLAN trong requirements.
+- Người đứng đầu cơ sở mới là người phê duyệt phương án PC06; không dùng cụm "phê duyệt phương án" cho hành động của hệ thống hay của `FireSafetyExpert`.
+
 ## Hiện trạng đã kiểm tra
 
 - [.NET 10 solution](../Fire3D/Fire3D.slnx) gồm API, Application, Domain và Infrastructure.

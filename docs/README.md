@@ -4,6 +4,8 @@ Tài liệu sản phẩm chuẩn nằm trong repo `Docs`. Khi tài liệu BE và
 
 ## Thứ tự đọc
 
+- **Định hướng 23/11/2026 (chưa triển khai):** [Flow 1 theo Mẫu PC06 — thiết kế đích cho BE](flow1-pc06-target-design.md); căn cứ ở [Docs: pháp lý PCCC](../../Docs/phap-ly-pccc.md).
+
 0. [Product contract v7](../../Docs/schema_v7_contract.md) — các quyết định mới về approval, quyền Building, learner seats và AI trả trước.
 1. [Docs gốc: requirements](../../Docs/fire_evacuation_requirements.md) — hành vi và tiêu chí sản phẩm.
 2. [Docs gốc: workflows](../../Docs/fire-evacuation-training-workflows.md) — luồng actor và nghiệp vụ.
