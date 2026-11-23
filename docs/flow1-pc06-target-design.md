@@ -31,6 +31,7 @@ Người đứng đầu cơ sở phê duyệt phương án PC06 ngoài hệ th�
 | Kịch bản | Không có đối tượng, không có giả định PC06 | `audience`, giả định, `workingHours` |
 | Chấm điểm | Metric `reached_exit`, `completion_time_seconds`, `wrong_exits`, `hazard_exposure`, `distance_meters`, thiết bị | Thêm `step_count`, `route_efficiency` |
 | Báo giá | Quotation theo Building đã có (`docs/billing.md`) | Chỉ cho yêu cầu báo giá khi có ít nhất một tình huống đạt thẩm định |
+| Chặn tệp rác | Một job cho mỗi revision; không hạn mức theo Organization, không so mã băm đã hỏng | Hạn mức ngày, một job cùng lúc cho mỗi Organization, từ chối mã băm đã hỏng, quét nhanh nội dung ở upload-complete (mục 9) |
 | Nhật ký luyện tập | `analytics/training` có `groupBy=scenario` và export CSV, tối đa 90 ngày (`docs/learner-analytics.md`) | Khoảng một năm, ngày luyện gần nhất, tình huống chưa luyện, dòng miễn trừ trong bản xuất |
 
 ## 1. Vai trò `FireSafetyExpert`
@@ -89,6 +90,20 @@ Mở rộng `analytics/training` thay vì tạo API mới:
 - Mỗi nhóm thêm `lastPlayedAt` và `workingHours`, `audience` của tình huống.
 - Trả cả tình huống đã phát hành nhưng chưa có lượt nào trong khoảng (plays = 0) để web cảnh báo "chưa luyện trong năm".
 - Bản CSV thêm dòng đầu: "Số liệu luyện tập trên mô phỏng, mang tính hỗ trợ, không thay buổi thực tập phương án."
+
+## 9. Chặn tệp rác trước khi tốn lượt worker (lớp 3 của bốn lớp chặn)
+
+Bốn lớp: (1) phần đầu tệp và (2) nội dung tệp do web kiểm tra trên trình duyệt; (3) máy chủ; (4) worker hình học dừng sớm (repo Unity, `Tools/GeometryWorker/fet3d_geometry/convert.py`). BE chịu lớp 3 vì web không chặn được người gọi thẳng API.
+
+Hiện trạng: `ProcessRevisionAsync` (`Infrastructure/Ifc/IfcWriteStore.cs`) chỉ giới hạn một job cho mỗi revision; không có hạn mức theo Organization, không giới hạn job chạy cùng lúc, không so mã băm với lần đã hỏng; `ifc_upload_gate` (`Persistence/Sql/IfcUploads.sql`) luôn tạo revision mới. Rate limit `administration` là 120 request/phút theo IP, không theo Organization.
+
+Đề xuất:
+
+- Hạn mức lượt xử lý theo Organization mỗi ngày UTC (`IfcProcessing:DailyLimitPerOrganization`, PlatformAdmin cấu hình); vượt trả `429 IFC_PROCESS_DAILY_LIMIT` kèm `Retry-After`. Retry của job lỗi hệ thống không tính.
+- Mỗi Organization một job hình học đang chờ hoặc đang chạy; thêm job trả `409 IFC_ORG_JOB_RUNNING` kèm `jobId` đang chạy.
+- Ở initiate: nếu `sha256` trùng một source của cùng Organization mà lần xử lý gần nhất kết thúc `Failed` vì lỗi chặn, trả `409 IFC_SOURCE_ALREADY_FAILED` kèm danh sách mã QA của lần đó; không tạo revision.
+- Ở `upload-complete`, sau khi kiểm `FILE_SCHEMA`: quét văn bản STEP theo luồng, đếm `IFCBUILDINGSTOREY(`, `IFCSPACE(`, `IFCDOOR(`, `IFCWALL`/`IFCSLAB`; thiếu nhóm nào trả `422 IFC_PRECHECK_FAILED` với mã QA tương ứng, xóa revision Draft, không tạo job.
+- Ghi audit cho mỗi lần từ chối để PlatformAdmin thấy Organization nào gửi nhiều tệp hỏng.
 
 ## Ca kiểm tra nghiệm thu
 
