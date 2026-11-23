@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-286 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+287 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -161,6 +161,7 @@
 | GET | /api/buildings/{id}/trainings | Bearer | None | 200, 400, 404 |
 | GET | /api/feedback | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/feedback | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/ifc/upload-limits | Bearer | None | 200, 401, 403 |
 | GET | /api/knowledge-sources/files/{fileId} | Anonymous | None | 302, 404, 503 |
 | GET | /api/learn/bookmarks | Bearer | None | 200, 400 |
 | DELETE | /api/learn/bookmarks/{postId} | Bearer | None | 200 |

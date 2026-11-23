@@ -11,7 +11,7 @@ namespace Fire3D.IfcTests;
 
 public sealed class IfcUploadServiceBranchTests
 {
-    private static readonly byte[] Bytes = "ISO-10303-21;HEADER;ENDSEC;"u8.ToArray();
+    private static readonly byte[] Bytes = "ISO-10303-21;HEADER;FILE_SCHEMA(('IFC4'));ENDSEC;DATA;#1=IFCBUILDINGSTOREY('a');#2=IFCSPACE('b');#3=IFCDOOR('c');#4=IFCWALL('d');ENDSEC;END-ISO-10303-21;"u8.ToArray();
     private static readonly string Hash = Convert.ToHexStringLower(SHA256.HashData(Bytes));
     private static T Unexpected<T>() where T : class => StubProxy.For<T>((method, _) => throw new Exception("Unexpected: " + method));
     private static IfcUploadService Service(IIfcUploadStore store, IIfcSourceInspector inspector, IfcUploadOptions? options = null) =>
@@ -31,7 +31,7 @@ public sealed class IfcUploadServiceBranchTests
         (string)args[0]! == "ifc/final/model.ifc" ? final(method, args) : method switch
         {
             nameof(IIfcSourceInspector.MetadataAsync) => Task.FromResult<StorageObjectMetadata?>(new(Bytes.Length, "application/octet-stream", "staging-etag")),
-            nameof(IIfcSourceInspector.InspectAsync) => Task.FromResult<IfcObjectDigest?>(new(Bytes.Length, Hash, "staging-etag")),
+            nameof(IIfcSourceInspector.InspectAsync) => Task.FromResult<IfcObjectDigest?>(new(Bytes.Length, Hash, "staging-etag", IfcStepScanner.Scan(Bytes))),
             nameof(IIfcSourceInspector.CopyAsync) => Task.FromResult(true),
             _ => throw new Exception("Unexpected: " + method)
         });
@@ -73,7 +73,7 @@ public sealed class IfcUploadServiceBranchTests
         var changed = Inspector((method, _) => method switch
         {
             nameof(IIfcSourceInspector.MetadataAsync) => Task.FromResult<StorageObjectMetadata?>(new(Bytes.Length, "application/octet-stream", "final-etag")),
-            nameof(IIfcSourceInspector.InspectAsync) => Task.FromResult<IfcObjectDigest?>(new(Bytes.Length, new string('b', 64), "final-etag")),
+            nameof(IIfcSourceInspector.InspectAsync) => Task.FromResult<IfcObjectDigest?>(new(Bytes.Length, new string('b', 64), "final-etag", IfcStepScanner.Scan(Bytes))),
             _ => throw new Exception("Unexpected: " + method)
         });
         result = await Service(Store(Intent(Bytes.Length)), changed).CompleteAsync(Guid.NewGuid(), Guid.NewGuid(), Complete(), default);
