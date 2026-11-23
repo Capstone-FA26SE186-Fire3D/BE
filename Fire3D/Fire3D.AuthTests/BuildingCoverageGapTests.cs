@@ -67,7 +67,7 @@ public sealed class BuildingCoverageGapTests
         var building = Stored_(Guid.NewGuid());
         var store = ResetProxy.For<IBuildingStore>((method, _) => method == nameof(IBuildingStore.FindBuildingAsync)
             ? Task.FromResult<Building?>(building) : throw new InvalidOperationException("Unexpected persistence: " + method));
-        var update = await Update(store, Accounts(admin, organizationActive: false)).Handle(new(admin.Id, null, building.Id, new("Renamed", null, 2, null, null), Tag), default);
+        var update = await Update(store, Accounts(admin, organizationActive: false)).Handle(new(admin.Id, null, building.Id, new("Renamed", "School", 2, null, null), Tag), default);
         Assert.Equal(("FORBIDDEN", 403), (update.Error?.Code, update.Error?.Status));
         var archive = await SetActive(store, Accounts(admin, organizationActive: false)).Handle(new(admin.Id, null, building.Id, false, Tag), default);
         Assert.Equal(("FORBIDDEN", 403), (archive.Error?.Code, archive.Error?.Status));
@@ -91,14 +91,14 @@ public sealed class BuildingCoverageGapTests
                 default: throw new InvalidOperationException(method);
             }
         });
-        var request = new UpdateBuildingRequest(" Tower ", " Office ", 4, new(" 1 Main St ", " Hanoi ", " Ba Dinh ", 21.03m, 105.85m, null),
+        var request = new UpdateBuildingRequest(" Tower ", " Apartment ", 4, new(" 1 Main St ", " Hanoi ", " Ba Dinh ", 21.03m, 105.85m, null),
             new(" Lan ", " Manager ", " 0900000000 ", " lan@example.test ", true));
         var result = await Update(store, Accounts(owner)).Handle(new(owner.Id, org, building.Id, request, Tag), default);
         Assert.True(result.IsSuccess, result.Error?.Code);
         Assert.Equal(BuildingEtag.Version(Stored), expected);
         Assert.Equal((building.Id, "1 Main St", "Hanoi", "Ba Dinh", 21.03m, 105.85m), (location!.BuildingId, location.Address, location.City, location.District, location.Latitude, location.Longitude));
         Assert.Equal((building.Id, "Lan", "Manager", "0900000000", "lan@example.test", true), (contact!.BuildingId, contact.ContactName, contact.ContactRole, contact.Phone, contact.Email, contact.IsPrimary));
-        Assert.Equal(("Tower", "Office", 4), (result.Value!.Name, result.Value.BuildingType, result.Value.TotalFloors));
+        Assert.Equal(("Tower", "Apartment", 4), (result.Value!.Name, result.Value.BuildingType, result.Value.TotalFloors));
         Assert.Equal(("1 Main St", "Lan"), (result.Value.Location!.Address, result.Value.Contact!.ContactName));
     }
 
@@ -114,7 +114,7 @@ public sealed class BuildingCoverageGapTests
             nameof(IBuildingStore.UpdateBuildingWithAuditAsync) => Task.FromResult(outcome),
             _ => throw new InvalidOperationException(method)
         });
-        var result = await Update(store, Accounts(owner)).Handle(new(owner.Id, org, building.Id, new("Renamed", null, 2, null, null), Tag), default);
+        var result = await Update(store, Accounts(owner)).Handle(new(owner.Id, org, building.Id, new("Renamed", "School", 2, null, null), Tag), default);
         Assert.Equal((code, status), (result.Error?.Code, result.Error?.Status));
     }
 
@@ -145,7 +145,7 @@ public sealed class BuildingCoverageGapTests
             stored = (BuildingContact?)args[2];
             return Task.FromResult((outcome, ((Building)args[0]!).Id));
         });
-        var request = new CreateBuildingRequest("Office", null, 1, null, new(" Lan ", null, " 0900000000 ", null, false));
+        var request = new CreateBuildingRequest("Office", "School", 1, null, new(" Lan ", null, " 0900000000 ", null, false));
         var created = await Create(store, Accounts(owner)).Handle(new(owner.Id, org, request, "create-1"), default);
         Assert.True(created.IsSuccess, created.Error?.Code);
         Assert.Equal(("Lan", "0900000000", false), (stored!.ContactName, stored.Phone, stored.IsPrimary));

@@ -31,12 +31,12 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
         // The uncorrelated COUNT runs once next to the page rows, so total and page share one round trip.
         var rows = await query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
             .Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize)
-            .Select(x => new { Item = new BuildingSummaryResponse(x.Id, x.Name, x.BuildingType, x.TotalFloors, x.IsActive, x.CreatedAt, x.UpdatedAt), Total = query.Count() })
+            .Select(x => new { Item = new BuildingSummaryResponse(x.Id, x.Name, x.BuildingType, x.TotalFloors, x.IsActive, x.CreatedAt, x.UpdatedAt, null), x.FloorAreaSquareMeters, Total = query.Count() })
             .ToListAsync(ct);
         // A page past the end has no rows to carry the total, so only then count separately.
         var count = rows.Count > 0 ? rows[0].Total : filter.Page == 1 ? 0 : await query.CountAsync(ct);
 
-        return new PageResponse<BuildingSummaryResponse>(rows.Select(x => x.Item).ToList(), count, filter.Page, filter.PageSize);
+        return new PageResponse<BuildingSummaryResponse>(rows.Select(x => x.Item with { RiskGroup = BuildingRiskGroup.Compute(x.Item.BuildingType, x.Item.TotalFloors, x.FloorAreaSquareMeters) }).ToList(), count, filter.Page, filter.PageSize);
     }
 
     public async Task<bool> TryCreateBuildingAsync(Building building, BuildingLocation? location, BuildingContact? contact, CancellationToken ct)
@@ -111,6 +111,7 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
         existing.Name = building.Name;
         existing.BuildingType = building.BuildingType;
         existing.TotalFloors = building.TotalFloors;
+        existing.FloorAreaSquareMeters = building.FloorAreaSquareMeters; existing.FacilityHeadName = building.FacilityHeadName; existing.FacilityHeadPhone = building.FacilityHeadPhone; existing.OnSiteForce = building.OnSiteForce; existing.EmergencyContacts = building.EmergencyContacts;
         existing.UpdatedAt = building.UpdatedAt;
         
         if (location != null) 
@@ -162,6 +163,7 @@ public sealed class BuildingStore(Fire3DDbContext db) : IBuildingStore
         if (expectedVersion is { } expected && BuildingEtag.Version(existing.UpdatedAt) != expected) return BuildingWriteOutcome.Stale;
         now = BuildingEtag.Next(now, existing.UpdatedAt);
         existing.Name = building.Name; existing.BuildingType = building.BuildingType; existing.TotalFloors = building.TotalFloors; existing.UpdatedAt = now;
+        existing.FloorAreaSquareMeters = building.FloorAreaSquareMeters; existing.FacilityHeadName = building.FacilityHeadName; existing.FacilityHeadPhone = building.FacilityHeadPhone; existing.OnSiteForce = building.OnSiteForce; existing.EmergencyContacts = building.EmergencyContacts;
         if (location is not null)
         {
             // A first location has a client-generated key: mark it Added, or EF treats it as existing and issues an UPDATE of 0 rows.

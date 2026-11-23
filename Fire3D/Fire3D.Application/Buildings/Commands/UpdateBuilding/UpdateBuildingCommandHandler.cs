@@ -17,6 +17,7 @@ internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, IAuthSt
         var name = request.Name?.Trim();
 
         var errors = BuildingValidation.Validate(name, request.BuildingType, request.TotalFloors, request.Location, request.Contact);
+        BuildingFacility.Validate(errors, request.FloorAreaSquareMeters, request.FacilityHeadName, request.FacilityHeadPhone, request.OnSiteForce, request.EmergencyContacts);
         if (errors.Count > 0)
             return AuthResult<BuildingResponse>.Fail("VALIDATION_ERROR", "Building validation failed.", 400, errors);
         var scope = await BuildingAuthorization.ResolveScopeAsync(accounts, command.ActorId, command.OrganizationId, ct);
@@ -33,6 +34,7 @@ internal sealed class UpdateBuildingCommandHandler(IBuildingStore store, IAuthSt
         building.Name = name!;
         building.BuildingType = request.BuildingType?.Trim();
         building.TotalFloors = request.TotalFloors;
+        BuildingFacility.Apply(building, request.FloorAreaSquareMeters, request.FacilityHeadName, request.FacilityHeadPhone, request.OnSiteForce, request.EmergencyContacts);
         building.UpdatedAt = now;
 
         BuildingLocation? location = null;

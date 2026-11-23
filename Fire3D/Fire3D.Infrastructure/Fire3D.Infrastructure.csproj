@@ -158,4 +158,5 @@
 	
 	
   <ItemGroup><EmbeddedResource Include="Persistence/Sql/IfcDependencyGrants.sql" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Persistence/Sql/BuildingPc06Profile.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.BuildingPc06Profile.sql" /></ItemGroup>
 </Project>

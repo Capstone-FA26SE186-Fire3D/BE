@@ -40,7 +40,9 @@ internal static class BuildingMapping
     internal static BuildingResponse ToResponse(Fire3D.Domain.Entities.Building building) => new(building.Id, building.Name, building.BuildingType,
         building.TotalFloors, building.IsActive, building.OrganizationId, building.CreatedAt, building.UpdatedAt,
         building.BuildingLocation is { } l ? new BuildingLocationResponse(l.Id, l.Address, l.City, l.District, l.Latitude, l.Longitude, l.Geojson) : null,
-        building.BuildingContact is { } c ? new BuildingContactResponse(c.Id, c.ContactName, c.ContactRole, c.Phone, c.Email, c.IsPrimary) : null);
+        building.BuildingContact is { } c ? new BuildingContactResponse(c.Id, c.ContactName, c.ContactRole, c.Phone, c.Email, c.IsPrimary) : null,
+        BuildingRiskGroup.Compute(building.BuildingType, building.TotalFloors, building.FloorAreaSquareMeters), building.FloorAreaSquareMeters,
+        building.FacilityHeadName, building.FacilityHeadPhone, BuildingFacility.Force(building), BuildingFacility.Contacts(building), building.SignedPlanDocumentId);
 }
 
 public static class BuildingCommandKey
@@ -68,7 +70,8 @@ public static class BuildingCommandKey
             {
                 contactName = request.Contact.ContactName?.Trim(), contactRole = request.Contact.ContactRole?.Trim(),
                 phone = request.Contact.Phone?.Trim(), email = request.Contact.Email?.Trim(), request.Contact.IsPrimary
-            }
+            },
+            facility = BuildingFacility.Normalized(request.FloorAreaSquareMeters, request.FacilityHeadName, request.FacilityHeadPhone, request.OnSiteForce, request.EmergencyContacts)
         };
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(normalized))));
     }
