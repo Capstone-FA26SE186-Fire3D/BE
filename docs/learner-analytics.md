@@ -29,6 +29,18 @@ more than 10000 rows → `422 EXPORT_ROW_LIMIT_EXCEEDED` (never truncated); more
 UTC day → `429 EXPORT_DAILY_LIMIT_EXCEEDED` with `Retry-After`. Each export is recorded in `analytics_exports` and audited
 (`Download`, target `AnalyticsExport`). Small groups are not suppressed, as decided in #80.
 
+## Training log per situation (BE#218, FR-PLAN-11)
+
+Điều 16 Nghị định 105/2025/NĐ-CP: every situation of the plan is practised at least once a year, and the result goes into Mẫu PC04. The
+training routes and their exports serve this log with `groupBy=scenario` (migration `20261124160000_TrainingLog`):
+- **Range:** up to **366 days** with `groupBy=scenario`. Every other grouping, and no grouping, keeps 90 days (400 `VALIDATION_ERROR`).
+- **Cohort rows** add `lastPlayedAt`: the latest session start in the range, null without a play.
+- **With `groupBy=scenario`**, rows also carry `audience` and `workingHours` from the situation's newest version (BE#215).
+- **Published situations with no play in the range** are listed with `plays: 0` and `lastPlayedAt: null`, so the web can warn "chưa luyện trong năm". "Published" means an Active training of a Published, not revoked, release inside the report's filters.
+- **CSV:**
+  - Line 1 is the disclaimer "Số liệu luyện tập trên mô phỏng, mang tính hỗ trợ, không thay buổi thực tập phương án." It is quoted because it contains commas.
+  - Then the header: the existing columns in the same order, followed by `lastPlayedAt,audience,workingHours`.
+
 ## Metric definitions
 
 | Metric | Source and rule |

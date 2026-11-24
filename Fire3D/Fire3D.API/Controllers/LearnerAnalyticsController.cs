@@ -12,7 +12,7 @@ namespace Fire3D.API.Controllers;
 public sealed class LearnerAnalyticsController(ILearnerAnalytics analytics) : ControllerBase
 {
     /// <summary>OrganizationUser training analytics for the caller's organization plus its AI usage.</summary>
-    /// <remarks>UTC [from,to), default 30 days, maximum 90. Filters buildingId and scenarioId stay inside the report scope (another tenant's id is 404);
+    /// <remarks>UTC [from,to), default 30 days, maximum 90 (366 with groupBy=scenario, the training log of BE#218). Filters buildingId and scenarioId stay inside the report scope (another tenant's id is 404);
     /// groupBy day|week|month (weeks start Monday)|building|scenario adds cohorts, with uniqueTrainees counted per group. Completed excludes
     /// Abandoned; duration is runtime play time. Playtests and preparations are never counted. See definitions in the response.</remarks>
     [Authorize(Roles="OrganizationUser")]

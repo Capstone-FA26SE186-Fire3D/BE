@@ -53,16 +53,17 @@ public sealed class LearnerAnalytics(Fire3DDbContext db,IOptions<LearnerAnalytic
         {
             scope=query.Scope,organizationId=query.OrganizationId,buildingId=query.BuildingId,scenarioId=query.ScenarioId,groupBy=query.GroupBy,
             from=range.From,to=range.To,activeSeconds=active,export
-        },readOnly:!export);
+        },readOnly:!export,maxDays:query.GroupBy=="scenario"?366:90);
 
     private async Task<AuthResult<JsonElement>> Query(string sql,Action<NpgsqlCommand> bind,Guid actor,Guid family,string? from,string? to,CancellationToken ct,
-        Func<(DateTime From,DateTime To),int,object>? input=null,bool readOnly=true)
+        Func<(DateTime From,DateTime To),int,object>? input=null,bool readOnly=true,int maxDays=90)
     {
         await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead,ct);
         if(readOnly)await db.Database.ExecuteSqlRawAsync("SET TRANSACTION READ ONLY",ct);
         var asOf=await db.Database.SqlQueryRaw<DateTime>("SELECT transaction_timestamp() AS \"Value\"").SingleAsync(ct);
-        if(!ReportingRange.TryParse(from,to,asOf,out var range))
-            return AuthResult<JsonElement>.Fail("VALIDATION_ERROR","Use timezone-qualified timestamps and a positive range of at most 90 days.",400);
+        // BE#218: the training log (groupBy=scenario) may cover a year (366 days); every other report keeps 90 days.
+        if(!ReportingRange.TryParse(from,to,asOf,out var range,maxDays))
+            return AuthResult<JsonElement>.Fail("VALIDATION_ERROR",$"Use timezone-qualified timestamps and a positive range of at most {maxDays} days.",400);
         await using var command=new NpgsqlCommand(sql,(NpgsqlConnection)db.Database.GetDbConnection(),(NpgsqlTransaction)tx.GetDbTransaction());
         bind(command);
         command.Parameters.AddWithValue("actor",NpgsqlDbType.Uuid,actor);

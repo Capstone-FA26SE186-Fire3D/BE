@@ -3,11 +3,11 @@ using System.Text.RegularExpressions;
 namespace Fire3D.Infrastructure.Reporting;
 public static class ReportingRange
 {
-    public static bool TryParse(string? from,string? to,DateTime asOf,out (DateTime From,DateTime To) range)
+    public static bool TryParse(string? from,string? to,DateTime asOf,out (DateTime From,DateTime To) range,int maxDays=90)
     {
         range=(asOf.AddDays(-30),asOf);
         if(from is not null && !Timestamp(from,out range.Item1) || to is not null && !Timestamp(to,out range.Item2))return false;
-        return range.To>range.From && range.To-range.From<=TimeSpan.FromDays(90);
+        return range.To>range.From && range.To-range.From<=TimeSpan.FromDays(maxDays);
     }
     private static bool Timestamp(string value,out DateTime utc)
     {
