@@ -125,7 +125,7 @@ Metrics are computed only from received events:
 | `hazard_exposure` | sum of `HazardExposure.payload.amount` (finite, ≥ 0) |
 | `distance_meters` | sum of `Moved.payload.distanceMeters` (finite, ≥ 0) |
 | `step_count` (BE#216) | sum of `Moved.payload.steps` (optional whole number ≥ 0); absent when no `Moved` event carries `steps` |
-| `route_efficiency` (BE#216) | `RouteBaseline.payload.optimalDistanceMeters` (first one) ÷ `distance_meters`, clamped to 0..1, 4 decimals; absent without a `RouteBaseline` or with 0 m moved. Example: optimal 40 m, walked 50 m → 0.8; walked 30 m → 1 |
+| `route_efficiency` (BE#216) | `RouteBaseline.payload.optimalDistanceMeters` (first one) ÷ `distance_meters`, clamped to 0..1, 4 decimals; absent (not evaluable) without a `RouteBaseline`; 0 when a baseline was sent but the learner did not move (1 if the optimal distance is 0). Example: optimal 40 m, walked 50 m → 0.8; walked 30 m → 1 |
 | player-action metrics of the session's runtime | count of accepted events of the API type the metric is declared on; rejected events are not counted |
 
 The player-action metrics (migration `20261017110000_AddEventRubricMetrics`, BE#101) are named after the Docs IFC 6.1 events, so a
