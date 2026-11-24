@@ -25,7 +25,7 @@ Where codes appear:
     `errors.qaCodes` (`IFC_NO_STOREYS`, `IFC_NO_SPACES`, `IFC_NO_DOORS`, `IFC_NO_WALLS_OR_SLABS`), and is cleaned up like the two errors
     above; no processing job can exist for it.
   - #219 initiate: when the latest Geometry run of the same SHA-256 in the same Organization failed on an `Error`/`Critical` issue,
-    initiate answers 409 `IFC_SOURCE_ALREADY_FAILED` with `errors.qaCodes` (that run's blocking codes), `errors.jobId` and
+    initiate answers 409 `IFC_SOURCE_ALREADY_FAILED` with `errors.qaCodes` (that run's blocking codes), `errors.jobId` and The refusal holds only while the same Geometry worker version (toolchain) would judge the file again: after a worker release the same bytes may be uploaded and processed again.
     `errors.validationRunId`, creates no revision and writes an audit row (`target_entity` buildings, `code`, `sha256`, `qaCodes`). A run
     that failed with warnings only, a later passed run, or another Organization does not block the file.
   - An adopted source gets `quarantineStatus` `Accepted` (shown in the Building revision list). Sources uploaded before #214 keep
