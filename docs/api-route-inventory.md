@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-301 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+305 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -40,6 +40,10 @@
 | GET | /api/admin/feedback | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/feedback/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | PATCH | /api/admin/feedback/{id}/status | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/admin/ifc-processing/policies | Bearer | None | 200, 400, 401, 403, 404 |
+| POST | /api/admin/ifc-processing/policies | Bearer | None | 201, 400, 401, 403, 404 |
+| GET | /api/admin/organizations/{organizationId}/ifc-processing | Bearer | None | 200, 401, 403, 404 |
+| GET | /api/organizations/me/ifc-processing | Bearer | None | 200, 401, 403 |
 | GET | /api/admin/knowledge-sources | Bearer | None | 200, 400 |
 | POST | /api/admin/knowledge-sources | Bearer | Idempotency-Key | 201, 409, 422 |
 | POST | /api/admin/knowledge-sources/upload-intent | Bearer | Idempotency-Key | 200, 400, 409, 503 |

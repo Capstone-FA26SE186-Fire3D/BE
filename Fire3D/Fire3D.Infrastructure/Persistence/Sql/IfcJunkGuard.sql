@@ -7,7 +7,10 @@
 --    there, plus before a new Geometry job: an Organization advisory lock, 409 IFC_ORG_JOB_RUNNING while a Geometry job of the
 --    Organization is Queued/Running, 429 IFC_PROCESS_DAILY_LIMIT (retryAfter = seconds to the next UTC midnight) when the Organization
 --    already created p_daily_limit Geometry jobs this UTC day. Each refusal is audited (action Reject).
--- The owner already reads processing_jobs, validation_runs and revision_issues (ProcessingWorker.sql); no table grants change.
+--  * ifc_processing_policies (team decision 24/11/2026): the daily limit is a versioned policy PlatformAdmin edits (default and per
+--    Organization); p_daily_limit is only the starting value when no policy exists. ifc_processing_policy_gate serves the admin and
+--    Organization routes.
+-- The owner already reads processing_jobs, validation_runs and revision_issues (ProcessingWorker.sql).
 CREATE TEMP TABLE ifc_junk_guard_permissions(original_set boolean,original_inherit boolean,changed boolean,had_create boolean) ON COMMIT DROP;
 DO $$ DECLARE os boolean;oi boolean;c boolean;hc boolean;BEGIN
  SELECT set_option,inherit_option INTO os,oi FROM pg_auth_members WHERE roleid='fet3d_ifc_upload_owner'::regrole AND member=current_user::regrole;
@@ -135,10 +138,98 @@ BEGIN
  RETURN jsonb_build_object('code','OK','intent',jsonb_build_object('revisionId',intent.revision_id,'buildingId',b.id,'organizationId',b.organization_id,'actorId',p_actor,'stagingKey',intent.staging_key,'size',intent.size,'hash',intent.hash,'filename',intent.filename,'expiresAt',intent.expires_at,'completed',intent.completed_at IS NOT NULL));
 END $$;
 
+
+-- #219 (team decision 24/11/2026): the daily number of new Geometry jobs is a versioned policy that PlatformAdmin edits, modelled on the
+-- AI quota policies (immutable rows with an effective time). A row with organization_id NULL is the default for every Organization; a
+-- row for one Organization overrides it (daily_limit NULL there means "back to the default"). The newest row in effect wins; without
+-- any row the API's IfcProcessing:DailyLimitPerOrganization (default 20) applies. policy_kind leaves room for selling extra runs later.
+CREATE TABLE ifc_processing_policies(
+ id uuid PRIMARY KEY,
+ organization_id uuid REFERENCES organizations(id),
+ policy_kind text NOT NULL DEFAULT 'DailyGeometryRuns' CHECK(policy_kind IN('DailyGeometryRuns')),
+ daily_limit integer CHECK(daily_limit IS NULL OR daily_limit BETWEEN 0 AND 100000),
+ effective_from timestamptz NOT NULL,
+ note text CHECK(note IS NULL OR length(note) BETWEEN 1 AND 500),
+ created_by uuid NOT NULL REFERENCES users(id),
+ created_at timestamptz NOT NULL DEFAULT now(),
+ CONSTRAINT ifc_processing_default_has_limit CHECK(organization_id IS NOT NULL OR daily_limit IS NOT NULL)
+);
+CREATE INDEX ifc_processing_policies_lookup ON ifc_processing_policies(organization_id,effective_from DESC,created_at DESC);
+CREATE FUNCTION immutable_ifc_processing_policy() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN RAISE EXCEPTION 'IFC processing policies are immutable; add a new version'; END $$;
+CREATE TRIGGER ifc_processing_policy_immutable BEFORE UPDATE OR DELETE ON ifc_processing_policies FOR EACH ROW EXECUTE FUNCTION immutable_ifc_processing_policy();
+
+-- Effective limit of one Organization now: {dailyLimit, source Organization|Default|Configuration, policyId}.
+CREATE FUNCTION ifc_processing_effective_limit(p_org uuid,p_fallback integer) RETURNS jsonb LANGUAGE plpgsql STABLE SET search_path=pg_catalog,public AS $$
+DECLARE o ifc_processing_policies;d ifc_processing_policies;
+BEGIN
+ SELECT * INTO o FROM ifc_processing_policies WHERE organization_id=p_org AND effective_from<=clock_timestamp() ORDER BY effective_from DESC,created_at DESC,id LIMIT 1;
+ IF o.id IS NOT NULL AND o.daily_limit IS NOT NULL THEN RETURN jsonb_build_object('dailyLimit',o.daily_limit,'source','Organization','policyId',o.id);END IF;
+ SELECT * INTO d FROM ifc_processing_policies WHERE organization_id IS NULL AND effective_from<=clock_timestamp() ORDER BY effective_from DESC,created_at DESC,id LIMIT 1;
+ IF d.id IS NOT NULL THEN RETURN jsonb_build_object('dailyLimit',d.daily_limit,'source','Default','policyId',d.id);END IF;
+ RETURN jsonb_build_object('dailyLimit',p_fallback,'source','Configuration','policyId',NULL);
+END $$;
+
+-- Limit and use today (UTC) of one Organization, as the 429 and the usage routes report them.
+CREATE FUNCTION ifc_processing_usage(p_org uuid,p_fallback integer) RETURNS jsonb LANGUAGE plpgsql STABLE SET search_path=pg_catalog,public AS $$
+DECLARE lim jsonb:=ifc_processing_effective_limit(p_org,p_fallback);day_start timestamptz:=date_trunc('day',clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';used integer;
+BEGIN
+ SELECT count(*) INTO used FROM processing_jobs j JOIN revisions r ON r.id=j.revision_id JOIN buildings b ON b.id=r.building_id
+  WHERE b.organization_id=p_org AND j.kind='Geometry' AND j.created_at>=day_start;
+ RETURN lim||jsonb_build_object('organizationId',p_org,'used',used,'remaining',GREATEST(0,(lim->>'dailyLimit')::int-used),'resetsAt',day_start+interval '1 day');
+END $$;
+
+-- PlatformAdmin: ListPolicies (input organizationId?, page, pageSize), CreatePolicy (input organizationId?, dailyLimit, effectiveFrom?, note?),
+-- Usage (resource = Organization). OrganizationUser: Usage of the own Organization (resource ignored).
+CREATE FUNCTION ifc_processing_policy_gate(p_action text,p_actor uuid,p_family uuid,p_resource uuid,p_input jsonb,p_key text,p_expected bigint)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE actor users;org uuid;page_number integer;page_size integer;total integer;result jsonb;p ifc_processing_policies;lim integer;eff timestamptz;fallback integer;
+BEGIN
+ IF p_action NOT IN('ListPolicies','CreatePolicy','Usage') THEN RETURN jsonb_build_object('code','ACTION_INVALID','status',400);END IF;
+ SELECT * INTO actor FROM users WHERE id=p_actor AND is_active AND deleted_at IS NULL;
+ IF actor.id IS NULL OR p_family IS NULL OR NOT fet3d_live_family(p_actor,p_family) THEN RETURN jsonb_build_object('code','UNAUTHORIZED','status',401);END IF;
+ fallback:=COALESCE((p_input->>'fallback')::int,20);
+ IF p_action='Usage' THEN
+  IF actor.role::text='OrganizationUser' THEN org:=actor.organization_id;
+  ELSIF actor.role::text='PlatformAdmin' THEN org:=p_resource;
+  ELSE RETURN jsonb_build_object('code','FORBIDDEN','status',403);END IF;
+  IF org IS NULL OR NOT EXISTS(SELECT 1 FROM organizations WHERE id=org AND deleted_at IS NULL) THEN RETURN jsonb_build_object('code','NOT_FOUND','status',404);END IF;
+  RETURN jsonb_build_object('code','OK','result',ifc_processing_usage(org,fallback));
+ END IF;
+ IF actor.role::text<>'PlatformAdmin' THEN RETURN jsonb_build_object('code','FORBIDDEN','status',403);END IF;
+ org:=(p_input->>'organizationId')::uuid;
+ IF org IS NOT NULL AND NOT EXISTS(SELECT 1 FROM organizations WHERE id=org AND deleted_at IS NULL) THEN RETURN jsonb_build_object('code','NOT_FOUND','status',404);END IF;
+ IF p_action='ListPolicies' THEN
+  page_number:=COALESCE((p_input->>'page')::int,1);page_size:=COALESCE((p_input->>'pageSize')::int,20);
+  IF page_number<1 OR page_size NOT BETWEEN 1 AND 100 THEN RETURN jsonb_build_object('code','VALIDATION_ERROR','status',400);END IF;
+  SELECT count(*) INTO total FROM ifc_processing_policies WHERE (p_input->>'organizationId' IS NULL AND p_input->>'scope'='Default' AND organization_id IS NULL)
+   OR (org IS NOT NULL AND organization_id=org) OR (p_input->>'organizationId' IS NULL AND COALESCE(p_input->>'scope','All')='All');
+  SELECT COALESCE(jsonb_agg(jsonb_build_object('id',x.id,'organizationId',x.organization_id,'policyKind',x.policy_kind,'dailyLimit',x.daily_limit,
+    'effectiveFrom',x.effective_from,'note',x.note,'createdBy',x.created_by,'createdAt',x.created_at) ORDER BY x.effective_from DESC,x.created_at DESC,x.id),'[]'::jsonb) INTO result
+  FROM (SELECT * FROM ifc_processing_policies WHERE (p_input->>'organizationId' IS NULL AND p_input->>'scope'='Default' AND organization_id IS NULL)
+    OR (org IS NOT NULL AND organization_id=org) OR (p_input->>'organizationId' IS NULL AND COALESCE(p_input->>'scope','All')='All')
+   ORDER BY effective_from DESC,created_at DESC,id LIMIT page_size OFFSET (page_number::bigint-1)*page_size) x;
+  RETURN jsonb_build_object('code','OK','result',jsonb_build_object('items',result,'totalCount',total,'page',page_number,'pageSize',page_size,
+   'effectiveDefault',ifc_processing_effective_limit(NULL,fallback)));
+ END IF;
+ -- CreatePolicy: a new version; the previous ones stay as history.
+ lim:=(p_input->>'dailyLimit')::int;eff:=COALESCE((p_input->>'effectiveFrom')::timestamptz,clock_timestamp());
+ IF (lim IS NULL AND org IS NULL) OR lim NOT BETWEEN 0 AND 100000 OR eff<clock_timestamp()-interval '1 minute'
+  OR (p_input->>'note' IS NOT NULL AND length(btrim(p_input->>'note')) NOT BETWEEN 1 AND 500) THEN
+  RETURN jsonb_build_object('code','VALIDATION_ERROR','status',400);END IF;
+ INSERT INTO ifc_processing_policies(id,organization_id,daily_limit,effective_from,note,created_by)
+ VALUES(gen_random_uuid(),org,lim,eff,NULLIF(btrim(p_input->>'note'),''),p_actor) RETURNING * INTO p;
+ INSERT INTO audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,new_values,created_at)
+ VALUES(gen_random_uuid(),p_actor,org,'User','Create','IfcProcessingPolicy',p.id,gen_random_uuid(),
+  jsonb_build_object('organizationId',org,'dailyLimit',lim,'effectiveFrom',eff),now());
+ RETURN jsonb_build_object('code','OK','result',jsonb_build_object('id',p.id,'organizationId',p.organization_id,'policyKind',p.policy_kind,'dailyLimit',p.daily_limit,
+  'effectiveFrom',p.effective_from,'note',p.note,'createdBy',p.created_by,'createdAt',p.created_at));
+END $$;
+
 DROP FUNCTION request_revision_processing(uuid,uuid,text);
 CREATE FUNCTION request_revision_processing(p_actor uuid,p_revision uuid,p_key text,p_daily_limit integer) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
-DECLARE u users;r revisions;b buildings;s source_documents;receipt processing_command_receipts;j uuid;h text;
+DECLARE u users;r revisions;b buildings;s source_documents;receipt processing_command_receipts;j uuid;h text;lim integer;
  running uuid;used bigint;day_start timestamptz;retry integer;
 BEGIN
  IF p_daily_limit IS NULL OR p_daily_limit NOT BETWEEN 1 AND 100000 THEN RAISE EXCEPTION 'IFC processing daily limit must be 1-100000'; END IF;
@@ -179,13 +270,15 @@ BEGIN
   day_start:=date_trunc('day',clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';
   SELECT count(*) INTO used FROM processing_jobs j2 JOIN revisions r2 ON r2.id=j2.revision_id JOIN buildings b2 ON b2.id=r2.building_id
    WHERE b2.organization_id=b.organization_id AND j2.kind='Geometry' AND j2.created_at>=day_start;
-  IF used>=p_daily_limit THEN
+  -- The policy in effect (Organization, else default), else the configured starting value.
+  lim:=(ifc_processing_effective_limit(b.organization_id,p_daily_limit)->>'dailyLimit')::int;
+  IF used>=lim THEN
    retry:=GREATEST(1,ceil(extract(epoch FROM (day_start+interval '1 day')-clock_timestamp()))::integer);
    INSERT INTO audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,new_values,created_at)
     VALUES(gen_random_uuid(),p_actor,b.organization_id,'User','Reject','revisions',r.id,gen_random_uuid(),
-     jsonb_build_object('operation','IfcProcessRejected','code','IFC_PROCESS_DAILY_LIMIT','limit',p_daily_limit,'used',used),now());
+     jsonb_build_object('operation','IfcProcessRejected','code','IFC_PROCESS_DAILY_LIMIT','limit',lim,'used',used),now());
    RETURN jsonb_build_object('code','IFC_PROCESS_DAILY_LIMIT','status',429,'retryAfter',retry,
-    'errors',jsonb_build_object('limit',jsonb_build_array(p_daily_limit::text),'used',jsonb_build_array(used::text)));
+    'limit',lim,'used',used,'errors',jsonb_build_object('limit',jsonb_build_array(lim::text),'used',jsonb_build_array(used::text)));
   END IF;
   j:=gen_random_uuid();
   INSERT INTO processing_jobs(id,revision_id,source_document_id,kind,job_key,status,input_hash,created_at) VALUES(j,r.id,s.id,'Geometry',gen_random_uuid(),'Queued',lower(s.sha256_hash),now());
@@ -198,6 +291,22 @@ END $$;
 
 DO $grants$ DECLARE r text;s record;sig text;BEGIN
  ALTER FUNCTION request_revision_processing(uuid,uuid,text,integer) OWNER TO fet3d_ifc_upload_owner;
+ ALTER TABLE ifc_processing_policies ENABLE ROW LEVEL SECURITY;
+ REVOKE ALL ON ifc_processing_policies FROM PUBLIC;
+ FOREACH r IN ARRAY ARRAY['anon','authenticated','fire3d_api','fet3d_backend_executor'] LOOP IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON ifc_processing_policies FROM %I',r);END IF;END LOOP;
+ GRANT SELECT,INSERT ON ifc_processing_policies TO fet3d_ifc_upload_owner;
+ CREATE POLICY ifc_processing_policy_owner ON ifc_processing_policies TO fet3d_ifc_upload_owner USING(true) WITH CHECK(true);
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='fet3d_pending_cleanup_owner') THEN
+  GRANT SELECT ON ifc_processing_policies TO fet3d_pending_cleanup_owner;
+  CREATE POLICY pending_cleanup_owner ON ifc_processing_policies FOR SELECT TO fet3d_pending_cleanup_owner USING(true);
+ END IF;
+ GRANT INSERT ON audit_logs TO fet3d_ifc_upload_owner;
+ FOREACH sig IN ARRAY ARRAY['ifc_processing_effective_limit(uuid,integer)','ifc_processing_usage(uuid,integer)','ifc_processing_policy_gate(text,uuid,uuid,uuid,jsonb,text,bigint)','immutable_ifc_processing_policy()'] LOOP
+  EXECUTE format('ALTER FUNCTION %s OWNER TO fet3d_ifc_upload_owner',sig);EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',sig);
+  FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',sig,r);END IF;END LOOP;
+ END LOOP;
+ FOREACH r IN ARRAY ARRAY['fet3d_backend_executor','fire3d_api'] LOOP IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN
+  EXECUTE format('GRANT EXECUTE ON FUNCTION ifc_processing_policy_gate(text,uuid,uuid,uuid,jsonb,text,bigint) TO %I',r);END IF;END LOOP;
  FOREACH sig IN ARRAY ARRAY['request_revision_processing(uuid,uuid,text,integer)','ifc_upload_gate(text,uuid,uuid,jsonb,text,uuid,text)'] LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',sig);
   FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',sig,r);END IF;END LOOP;

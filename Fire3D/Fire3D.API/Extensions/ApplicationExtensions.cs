@@ -157,6 +157,7 @@ public static class ApplicationExtensions
         services.AddScoped<Fire3D.Application.Expert.IExpertReviews, Fire3D.Infrastructure.Expert.ExpertReviews>();
         services.AddScoped<Fire3D.Application.FireSafety.IFireInfrastructureStore, Fire3D.Infrastructure.FireSafety.FireInfrastructureStore>();
         services.AddScoped<Fire3D.Application.FireSafety.IFireInfrastructureService, Fire3D.Application.FireSafety.FireInfrastructureService>();
+        services.AddScoped<Fire3D.Application.Ifc.IIfcProcessingPolicies, Fire3D.Infrastructure.Ifc.IfcProcessingPolicies>();
         services.AddScoped<Fire3D.Application.Support.ISupportService,Fire3D.Infrastructure.Support.SupportService>();
         services.AddScoped<Fire3D.Application.Buildings.IBuildingAccessService,Fire3D.Infrastructure.Buildings.BuildingAccessService>();
         services.AddScoped<Fire3D.Application.Buildings.IBuildingStore, Fire3D.Infrastructure.Buildings.BuildingStore>();
