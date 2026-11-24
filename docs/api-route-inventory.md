@@ -141,7 +141,7 @@
 | GET | /api/buildings | Bearer | None | 200 |
 | POST | /api/buildings | Bearer | Idempotency-Key | 201, 400, 401, 403, 409 |
 | GET | /api/buildings/{buildingId}/editor-preview | Bearer | None | 200, 400, 401, 403, 404, 503 |
-| POST | /api/buildings/{buildingId}/ifc | Bearer | Idempotency-Key | 201, 400, 404, 429 |
+| POST | /api/buildings/{buildingId}/ifc | Bearer | Idempotency-Key | 201, 400, 404, 409, 429 |
 | GET | /api/buildings/{buildingId}/qr-codes | Bearer | None | 200, 400, 401, 403, 404 |
 | POST | /api/buildings/{buildingId}/qr-codes | Bearer | None | 201, 400, 401, 403, 404, 409 |
 | POST | /api/buildings/{buildingId}/qr-codes/{qrId}/revoke | Bearer | None | 200, 401, 403, 404, 409 |
@@ -248,7 +248,7 @@
 | GET | /api/revisions/{revisionId}/equipment-candidates | Bearer | None | 200, 401, 403, 404, 409 |
 | PATCH | /api/revisions/{revisionId}/equipment-decisions | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 422, 428 |
 | GET | /api/revisions/{revisionId}/issues | Bearer | None | 200, 400, 401, 403, 404 |
-| POST | /api/revisions/{revisionId}/process | Bearer | Idempotency-Key | 202, 400, 404, 409, 429 |
+| POST | /api/revisions/{revisionId}/process | Bearer | Idempotency-Key | 202, 400, 404, 409, 422, 429 |
 | GET | /api/revisions/{revisionId}/processing-jobs | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/revisions/{revisionId}/processing-logs | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/revisions/{revisionId}/readiness | Bearer | None | 200, 401, 403, 404 |

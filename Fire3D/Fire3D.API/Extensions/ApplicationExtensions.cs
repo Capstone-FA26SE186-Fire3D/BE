@@ -137,6 +137,8 @@ public static class ApplicationExtensions
         services.AddOptions<Fire3D.Application.Ifc.IfcUploadOptions>().Bind(configuration.GetSection("IfcUpload"))
             .Validate(o => !o.Enabled || (o.MaxBytes is > 0 && o.CleanupEnabled), "IfcUpload requires explicit positive MaxBytes and CleanupEnabled=true when enabled.").ValidateOnStart();
         services.AddScoped<Fire3D.Application.Ifc.IIfcUploadStore, Fire3D.Infrastructure.Ifc.IfcUploadStore>();
+        services.AddOptions<Fire3D.Application.Ifc.IfcProcessingOptions>().Bind(configuration.GetSection("IfcProcessing"))
+            .Validate(o => Fire3D.Application.Ifc.IfcProcessingOptions.IsValidDailyLimit(o.DailyLimitPerOrganization), "IfcProcessing DailyLimitPerOrganization must be 1-100000.").ValidateOnStart();
         services.AddScoped<Fire3D.Application.Ifc.IIfcSourceInspector, Fire3D.Infrastructure.Storage.IfcSourceInspector>();
         services.AddScoped<Fire3D.Application.Ifc.IIfcUploadService, Fire3D.Application.Ifc.IfcUploadService>();
         services.AddHostedService<Fire3D.Infrastructure.Ifc.IfcUploadCleanupWorker>();

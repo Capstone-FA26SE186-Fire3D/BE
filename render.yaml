@@ -49,3 +49,7 @@ services:
       # IFC upload: largest accepted file (500 MiB); published to the web by GET /api/ifc/upload-limits.
       - key: IfcUpload__MaxBytes
         value: "524288000"
+
+      # IFC processing: new Geometry jobs per Organization per UTC day (429 IFC_PROCESS_DAILY_LIMIT above it).
+      - key: IfcProcessing__DailyLimitPerOrganization
+        value: "20"
