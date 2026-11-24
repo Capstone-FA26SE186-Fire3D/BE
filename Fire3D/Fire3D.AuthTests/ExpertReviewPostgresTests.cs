@@ -4,6 +4,7 @@ using System.Text.Json;
 using Fire3D.Application.Billing;
 using Fire3D.Infrastructure.Billing;
 using Fire3D.Infrastructure.Scenarios;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Fire3D.AuthTests;
@@ -127,5 +128,43 @@ public sealed partial class AuthIntegrationTests
         var rejectedNotes = await new OrganizationNotifications(db).List(rejected.Owner, rejected.Owner, new NotificationQuery(Type: "ContentReviewRejected"), default);
         Assert.Contains("Thiếu điểm tập kết.", Assert.Single(rejectedNotes.Items).Body);
         Assert.DoesNotContain("phê duyệt", note.Body + note.Title, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // BE#211 deny by default: an expert token gets 403 FORBIDDEN on every /api route outside the review queue and its own account,
+    // whatever the controller or SQL gate would decide; its own account and the queue still work, and other roles are unaffected.
+    [PostgresFact]
+    public async Task Fire_safety_expert_is_refused_on_every_api_route_outside_the_queue_and_its_own_account()
+    {
+        using var expert = await RoleClient("FireSafetyExpert");
+        var routes = factory!.Services.GetRequiredService<Microsoft.AspNetCore.Routing.EndpointDataSource>().Endpoints
+            .OfType<Microsoft.AspNetCore.Routing.RouteEndpoint>()
+            .SelectMany(e => (e.Metadata.GetMetadata<Microsoft.AspNetCore.Routing.HttpMethodMetadata>()?.HttpMethods ?? ["GET"])
+                .Select(method => (Method: method, Path: "/" + System.Text.RegularExpressions.Regex.Replace(e.RoutePattern.RawText!.TrimStart('/'), @"\{[^}]+\}", Guid.NewGuid().ToString()))))
+            .Where(r => r.Path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
+            .Distinct().ToList();
+        Assert.True(routes.Count > 250, $"only {routes.Count} routes found");
+        var refused = routes.Where(r => !Fire3D.API.Authorization.ExpertRouteGuard.Allows(r.Path)).ToList();
+        Assert.Contains(refused, r => r.Path.StartsWith("/api/buildings"));
+        Assert.Contains(refused, r => r.Path.StartsWith("/api/admin"));
+        var leaks = new List<string>();
+        foreach (var (method, path) in refused)
+        {
+            using var request = new HttpRequestMessage(new HttpMethod(method), path);
+            if (method is "POST" or "PUT" or "PATCH") request.Content = JsonContent.Create(new { });
+            using var response = await expert.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (response.StatusCode != HttpStatusCode.Forbidden || !body.Contains("\"code\":\"FORBIDDEN\"")) leaks.Add($"{method} {path} -> {(int)response.StatusCode}");
+        }
+        Assert.Empty(leaks);
+
+        // Own account and the queue stay open.
+        var me = await expert.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        Assert.Equal("FireSafetyExpert", me.GetProperty("role").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await expert.GetAsync("/api/expert/reviews")).StatusCode);
+        // The guard only concerns experts.
+        var tenant = await SeedAiTenant();
+        using var org = await RoleClient("OrganizationUser", tenant.Org);
+        Assert.Equal(HttpStatusCode.OK, (await org.GetAsync("/api/buildings")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await org.GetAsync("/api/expert/reviews")).StatusCode);
     }
 }

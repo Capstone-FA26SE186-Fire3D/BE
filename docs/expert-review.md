@@ -9,6 +9,12 @@ Migrations: `20261124090000_AddFireSafetyExpertRole` (enum label, runs outside a
 - `FireSafetyExpert` is a value of `UserRole` / `user_role_enum`. The account has **no organization** (like PlatformAdmin and Trainee).
 - Created only by PlatformAdmin: `POST /api/accounts` with `role: "FireSafetyExpert"` and no `organizationId` (with one: 400). Self-registration and Google onboarding cannot create it.
 - Reads: the queue below, the frozen content of a reviewed version, and the 3D preview of the revision that version uses — for every organization. Nothing else: no drafts, no billing (billing and notification routes answer 403), no other organization data, no edits, no publishing.
+- Deny by default (`ExpertRouteGuard`, runs right after authentication): an expert token gets `403 FORBIDDEN` on every `/api` route
+  except `/api/expert/*`, `/api/auth/*` (me, logout, devices, change-password) and `/api/me/*` (avatar, password, Google link).
+  Many controllers accept any signed-in role and leave role and tenant checks to handlers and SQL gates written before this role
+  existed; the guard closes all of them at once, and a new route stays closed to experts unless it is added to the guard's list.
+  Without the guard, a sweep of the 244 other routes found 235 already refusing, 2 answering 200 (`GET /api/learn/situations`,
+  `GET /api/learn/posts`) and 7 not provable with fake ids.
 - At deploy time at least one expert account must exist, otherwise Submitted items wait. Reviews already Submitted move to the expert queue as they are; Approved ones stay Approved.
 
 ## API
