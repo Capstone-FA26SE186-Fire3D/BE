@@ -47,6 +47,8 @@ public sealed class SelectedGatePrivilegeMigrationTests
    await Sql($"DO $$ DECLARE t text;BEGIN FOR t IN SELECT tablename FROM pg_tables WHERE schemaname='public' LOOP EXECUTE format('ALTER TABLE public.%I OWNER TO %I',t,'{migrationLogin}'); END LOOP; END $$;");
    // Standalone sequences (PayOS order codes) were created by the same migration identity; column-owned ones follow their table.
    await Sql($"DO $$ DECLARE s text;BEGIN FOR s IN SELECT c.relname FROM pg_class c WHERE c.relkind='S' AND c.relnamespace='public'::regnamespace AND NOT EXISTS(SELECT 1 FROM pg_depend d WHERE d.objid=c.oid AND d.deptype IN('a','i')) LOOP EXECUTE format('ALTER SEQUENCE public.%I OWNER TO %I',s,'{migrationLogin}'); END LOOP; END $$;");
+   // The same identity created the role enum and the notification trigger function, so it may extend them (BE#211).
+   await Sql($"ALTER TYPE public.user_role_enum OWNER TO {migrationLogin};ALTER FUNCTION public.validate_organization_notification_write() OWNER TO {migrationLogin};");
    await using(var restricted=new Fire3DDbContext(new DbContextOptionsBuilder<Fire3DDbContext>().UseNpgsql(new NpgsqlConnectionStringBuilder(source.ConnectionString){Username=migrationLogin}.ConnectionString).Options)) await restricted.Database.MigrateAsync();
    Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','fet3d_ifc_upload_owner','USAGE')"));
    Assert.False(await Bool($"SELECT pg_has_role('{migrationLogin}','fet3d_ifc_upload_owner','SET')"));

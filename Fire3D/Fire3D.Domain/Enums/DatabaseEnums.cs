@@ -7,7 +7,9 @@ public enum UserRole
 {
     PlatformAdmin,
     OrganizationUser,
-    Trainee
+    Trainee,
+    /// <summary>Chuyên viên PCCC: thẩm định hạ tầng và tình huống of every organization (BE#211). Created by PlatformAdmin only.</summary>
+    FireSafetyExpert
 }
 
 public enum UserGender

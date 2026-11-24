@@ -20,6 +20,7 @@ public sealed class ScenarioContentReviewsController(IScenarioReadinessStore sto
     /// <summary>Approves only the exact submitted contentHash and rubricHash.</summary>
     /// <remarks>400 VALIDATION_ERROR (hash format). 409 CONTENT_REVIEW_NOT_PENDING (already decided), CONTENT_HASH_MISMATCH
     /// (hashes differ from the submission), SCENARIO_SNAPSHOT_REQUIRED (version has no frozen snapshot), IDEMPOTENCY_KEY_CONFLICT.</remarks>
+    [Obsolete("Thẩm định moved to FireSafetyExpert: use /api/expert/reviews/{id}/approve (BE#211).")]
     [Authorize(Roles="PlatformAdmin")]
     [HttpPost("/api/admin/scenario-versions/{id:guid}/approve")]
     [ProducesResponseType<ContentReviewResponse>(200)]
@@ -29,6 +30,7 @@ public sealed class ScenarioContentReviewsController(IScenarioReadinessStore sto
     /// <summary>Rejects submitted content with a reason. Further changes require a new version and submission.</summary>
     /// <remarks>400 VALIDATION_ERROR (hash format or missing reason). 409 CONTENT_REVIEW_NOT_PENDING, CONTENT_HASH_MISMATCH,
     /// SCENARIO_SNAPSHOT_REQUIRED, IDEMPOTENCY_KEY_CONFLICT.</remarks>
+    [Obsolete("Thẩm định moved to FireSafetyExpert: use /api/expert/reviews/{id}/reject (BE#211).")]
     [Authorize(Roles="PlatformAdmin")]
     [HttpPost("/api/admin/scenario-versions/{id:guid}/reject")]
     [ProducesResponseType<ContentReviewResponse>(200)]
