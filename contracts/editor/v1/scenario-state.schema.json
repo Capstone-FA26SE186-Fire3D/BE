@@ -27,6 +27,18 @@
     },
     "learningObjectives": { "type": "array", "maxItems": 50, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 1000 }, "description": "Required and nonempty for snapshot." },
     "learnerInstructions": { "type": "string", "minLength": 1, "maxLength": 10000, "description": "Required for snapshot." },
+    "audience": { "enum": ["Evacuee", "Communications", "EvacuationGuide", "FirstResponse"], "description": "BE#215, Mẫu PC06 mục IV.1 b): who trains on this situation (người thoát nạn, thông tin liên lạc, hướng dẫn thoát nạn, chữa cháy ban đầu). Required for validate and snapshot of a draft on a fire infrastructure." },
+    "workingHours": { "enum": ["InHours", "OffHours"], "description": "BE#215: the situation happens in or outside working hours (chú thích (3) Mẫu PC06). Required for validate and snapshot of a draft on a fire infrastructure." },
+    "assumption": {
+      "description": "BE#215, Mẫu PC06 mục IV.1 a): giả định tình huống. Required (all four fields) for validate and snapshot of a draft on a fire infrastructure.",
+      "type": "object", "additionalProperties": false, "required": ["time", "location", "cause", "peoplePresent"],
+      "properties": {
+        "time": { "type": "string", "minLength": 1, "maxLength": 100, "description": "Giờ xảy ra hoặc phát hiện cháy, e.g. 14:30 or 'ban đêm'." },
+        "location": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "cause": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "peoplePresent": { "type": "integer", "minimum": 0, "maximum": 100000 }
+      }
+    },
     "libraryRefs": {
       "description": "Optional provenance: Library versions the author copied from. Never changes runtime behaviour.",
       "type": "array", "maxItems": 50,

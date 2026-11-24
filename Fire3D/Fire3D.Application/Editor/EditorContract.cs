@@ -461,9 +461,13 @@ public static class ParameterSchema
 public static class ScenarioStateV1Validator
 {
     private static readonly string[] Root = ["schemaVersion", "name", "geometry", "runtimeVersion", "objects", "timeLimitSeconds", "rubric",
-        "learningObjectives", "learnerInstructions", "modePolicy", "randomSeed", "replanIntervalSeconds", "libraryRefs", "wind", "routingConfig"];
+        "learningObjectives", "learnerInstructions", "modePolicy", "randomSeed", "replanIntervalSeconds", "libraryRefs", "wind", "routingConfig", "audience", "workingHours", "assumption"];
     private static readonly string[] Geometry = ["artifactId", "sha256Hash"];
     private static readonly string[] Wind = ["directionDegrees", "strength"];
+    /// <summary>BE#215: nhóm nhiệm vụ of Mẫu PC06 mục IV.1 b) the situation trains.</summary>
+    public static readonly string[] Audiences = ["Evacuee", "Communications", "EvacuationGuide", "FirstResponse"];
+    public static readonly string[] WorkingHoursValues = ["InHours", "OffHours"];
+    private static readonly string[] Assumption = ["time", "location", "cause", "peoplePresent"];
     /// <summary>A* edge weights of Docs technology: distance + hazardExposure*wh + congestion*wc + portalPenalty*wp + blocked*wb.</summary>
     private static readonly string[] RoutingWeights = ["hazardExposureWeight", "congestionWeight", "portalPenaltyWeight", "blockedWeight"];
     private static readonly string[] LibraryRef = ["versionId", "kind", "code"];
@@ -482,6 +486,24 @@ public static class ScenarioStateV1Validator
     /// Partial drafts are allowed; completeness, revision references and capability parameters are checked by validate/snapshot.
     /// </summary>
     public static IReadOnlyList<ScenarioDraftValidationIssue> ValidateShape(JsonNode? state) => Run(state, complete: false, null);
+
+    /// <summary>
+    /// BE#215 (FR-PLAN-07): a situation of a PC06 plan (a draft on a fire infrastructure) names its audience, its assumption and whether it
+    /// happens in or outside working hours. Only presence is checked here; values are checked by the shape rules.
+    /// </summary>
+    public static IReadOnlyList<ScenarioDraftValidationIssue> PlanIssues(JsonNode? state)
+    {
+        var issues = new List<ScenarioDraftValidationIssue>();
+        if (state is not JsonObject root) return issues;
+        if (root["audience"] is null) issues.Add(new("FIELD_REQUIRED", "$.audience", "Choose the audience: Evacuee, Communications, EvacuationGuide or FirstResponse (Mẫu PC06 mục IV.1)."));
+        if (root["workingHours"] is null) issues.Add(new("FIELD_REQUIRED", "$.workingHours", "Choose InHours or OffHours."));
+        if (root["assumption"] is not JsonObject assumption)
+            issues.Add(new("FIELD_REQUIRED", "$.assumption", "Describe the assumption: time, location, cause and peoplePresent."));
+        else
+            foreach (var field in Assumption)
+                if (assumption[field] is null) issues.Add(new("FIELD_REQUIRED", $"$.assumption.{field}", $"assumption.{field} is required."));
+        return issues;
+    }
 
     /// <summary>Complete validation used before snapshot. Revision references are re-checked by the database gate under lock.</summary>
     public static IReadOnlyList<ScenarioDraftValidationIssue> ValidateComplete(JsonNode? state, IReadOnlyDictionary<string, CapabilityContract>? contracts) => Run(state, complete: true, contracts);
@@ -526,6 +548,16 @@ public static class ScenarioStateV1Validator
             if (r.Number(wind["directionDegrees"], "$.wind.directionDegrees", min: 0, max: 360) is >= 360)
                 r.Add("NUMBER_OUT_OF_RANGE", "$.wind.directionDegrees", "Must be at least 0 and below 360.");
             r.Number(wind["strength"], "$.wind.strength", min: 0, max: 1);
+        }
+        // BE#215: optional on every draft, complete when present; PlanIssues requires them on drafts built on a fire infrastructure.
+        if (root["audience"] is not null) r.OneOf(root["audience"], "$.audience", Audiences);
+        if (root["workingHours"] is not null) r.OneOf(root["workingHours"], "$.workingHours", WorkingHoursValues);
+        if (r.Object(root["assumption"], "$.assumption", Assumption, required: false) is { } assumption)
+        {
+            r.Text(assumption["time"], "$.assumption.time", 100);
+            r.Text(assumption["location"], "$.assumption.location", 500);
+            r.Text(assumption["cause"], "$.assumption.cause", 500);
+            r.Integer(assumption["peoplePresent"], "$.assumption.peoplePresent", min: 0, max: 100_000);
         }
         if (r.Object(root["routingConfig"], "$.routingConfig", RoutingWeights, required: false) is { } routing)
             foreach (var weight in RoutingWeights) r.Number(routing[weight], $"$.routingConfig.{weight}", min: 0, max: 1_000);
