@@ -15,17 +15,17 @@
     "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
     "parameters": { "$ref": "#/$defs/parameterSchema" },
     "events": {
-      "description": "Events the runtime may send for this capability (SCENARIO-02). A learner or playtest event whose type is neither a core event (ExitReached, WrongExit, HazardExposure, Moved) nor declared here for the pinned runtime is rejected with EVENT_TYPE_UNSUPPORTED; a payload that fails the event's schema with EVENT_PAYLOAD_INVALID. Capabilities of one runtime may share a type only with the same payload schema.",
+      "description": "Events the runtime may send for this capability (SCENARIO-02). A learner or playtest event whose type is neither a core event (ExitReached, WrongExit, HazardExposure, Moved, RouteBaseline) nor declared here for the pinned runtime is rejected with EVENT_TYPE_UNSUPPORTED; a payload that fails the event's schema with EVENT_PAYLOAD_INVALID. Capabilities of one runtime may share a type only with the same payload schema.",
       "type": "array", "maxItems": 50,
       "items": {
         "type": "object", "additionalProperties": false, "required": ["type"],
         "properties": {
-          "type": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]{0,99}$", "not": { "enum": ["ExitReached", "WrongExit", "HazardExposure", "Moved"] } },
+          "type": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]{0,99}$", "not": { "enum": ["ExitReached", "WrongExit", "HazardExposure", "Moved", "RouteBaseline"] } },
           "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
           "payload": { "$ref": "#/$defs/parameterSchema", "description": "Absent means the event carries an empty payload." },
           "metric": {
             "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "maxLength": 64,
-            "not": { "enum": ["reached_exit", "completion_time_seconds", "wrong_exits", "hazard_exposure", "distance_meters"] },
+            "not": { "enum": ["reached_exit", "completion_time_seconds", "wrong_exits", "hazard_exposure", "distance_meters", "step_count", "route_efficiency"] },
             "description": "Rubric metric counting the accepted events of this type (BE#183). Absent: the runtime 2.0.x metric for AlarmRaised, ExtinguisherUsed, ExtinguishAttemptLargeFire, ItemWetted, NoseCoveredInSmoke, CheckedDoorHeat, ClosedDoor, UsedElevator, WentBackForBelongings and NpcGuided, otherwise not scored. Capabilities may repeat a metric only for the same type; a metric naming another type, a different metric for one type, or a 2.0.x metric on another type is METRIC_CONFLICT."
           }
         }

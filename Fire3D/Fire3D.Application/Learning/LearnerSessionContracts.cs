@@ -58,8 +58,9 @@ public sealed record TrainingEventsResponse(IReadOnlyList<Guid> Accepted, IReadO
     string Status, long AcknowledgedSequence, IReadOnlyList<TrainingSequenceRange> MissingRanges);
 public sealed record CompleteTrainingSessionResponse(string Status, TrainingSessionView Session, long AcknowledgedSequence, IReadOnlyList<TrainingSequenceRange> MissingRanges);
 /// <summary>One rubric criterion as evaluated. Label and Description come from the pinned rubric (null when the author left them out);
-/// Reason is METRIC_UNAVAILABLE when the metric was not computed, otherwise null.</summary>
-public sealed record CriterionResult(string Id, string Metric, JsonElement? Value, string Operator, decimal Threshold, bool Mandatory, decimal Weight, bool Passed, string? Reason,
+/// Reason is METRIC_UNAVAILABLE when the metric was not computed (the criterion fails), METRIC_NOT_EVALUABLE when a step_count or
+/// route_efficiency criterion had no runtime telemetry (BE#216: Passed is null and its weight does not count), otherwise null.</summary>
+public sealed record CriterionResult(string Id, string Metric, JsonElement? Value, string Operator, decimal Threshold, bool Mandatory, decimal Weight, bool? Passed, string? Reason,
     string? Label = null, string? Description = null);
 /// <summary>
 /// Outcome Passed/NotPassed/Incomplete for Assessment, NotAssessed for Learn/Guided (Criteria is then null: only Assessment is

@@ -121,9 +121,13 @@ public sealed partial class LearnerSessions(Fire3DDbContext db, IOptions<Learner
                 || string.IsNullOrWhiteSpace(e.Type) || e.Type.Length > 100 || e.Payload.ValueKind != JsonValueKind.Object || e.OccurredAt == default)
                 return "Each event needs eventId, sequence >= 1, schemaVersion, type, occurredAt, elapsedMs >= 0 and an object payload.";
             // Metric inputs must be finite, non-negative numbers so the server can compute the rubric.
-            var field = e.Type switch { "HazardExposure" => "amount", "Moved" => "distanceMeters", _ => null };
+            var field = e.Type switch { "HazardExposure" => "amount", "Moved" => "distanceMeters", "RouteBaseline" => "optimalDistanceMeters", _ => null };
             if (field is not null && (!e.Payload.TryGetProperty(field, out var value) || value.ValueKind != JsonValueKind.Number || !value.TryGetDouble(out var number) || !double.IsFinite(number) || number < 0 || number > 1e9))
                 return $"{e.Type} events require a finite non-negative payload.{field}.";
+            // BE#216: Moved.steps is optional; when present it is a whole number of steps.
+            if (e.Type == "Moved" && e.Payload.TryGetProperty("steps", out var steps)
+                && (steps.ValueKind != JsonValueKind.Number || !steps.TryGetInt64(out var count) || count < 0 || count > 1_000_000_000))
+                return "Moved payload.steps must be a whole number 0-1000000000.";
         }
         return null;
     }
