@@ -101,6 +101,17 @@ internal sealed class BillingDatabase : IAsyncDisposable
                 INSERT INTO auth_refresh_tokens(id,user_id,family_id,token_hash,created_at,expires_at)
                 SELECT gen_random_uuid(),id,id,id::text,now(),now()+interval '1 day' FROM users;
                 """);
+            // BE#217: EnsureCreated databases have no content reviews; Buildings count as having an Approved situation unless a test lists
+            // them in billing_test_unapproved_buildings. Migrated databases keep the real function.
+            await result.Sql("""
+                DO $$ BEGIN
+                 IF to_regprocedure('public.building_has_approved_scenario(uuid)') IS NULL THEN
+                  EXECUTE 'CREATE TABLE billing_test_unapproved_buildings(building_id uuid PRIMARY KEY)';
+                  EXECUTE 'CREATE FUNCTION building_has_approved_scenario(p_building uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS '
+                   ||quote_literal('SELECT NOT EXISTS(SELECT 1 FROM public.billing_test_unapproved_buildings WHERE building_id=p_building)');
+                 END IF;
+                END $$;
+                """);
             return result;
         }
         catch { await result.DisposeAsync(); throw; }
