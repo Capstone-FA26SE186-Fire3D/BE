@@ -69,6 +69,11 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(((bool?)null, "METRIC_NOT_EVALUABLE"), (legacy.Criteria!.Single(c => c.Id == "steps").Passed, legacy.Criteria!.Single(c => c.Id == "steps").Reason));
         Assert.Equal(("Passed", 100m, "ALL_REQUIREMENTS_MET"), (legacy.Outcome, legacy.ScorePercent, legacy.Reason));
 
+        // A baseline but no movement is a route efficiency of 0 (review fix: "did not move" is not "no telemetry").
+        var stood = await RouteSession(f.Training, LearnerEvent(1, "RouteBaseline", 0, new { optimalDistanceMeters = 40 }));
+        Assert.Equal(0m, stood.Metrics.GetProperty("route_efficiency").GetDecimal());
+        Assert.Equal(("NotPassed", "MANDATORY_CRITERION_FAILED"), (stood.Outcome, stood.Reason));
+
         // A poor route fails the mandatory route criterion.
         var detour = await RouteSession(f.Training,
             LearnerEvent(1, "RouteBaseline", 0, new { optimalDistanceMeters = 40 }),
