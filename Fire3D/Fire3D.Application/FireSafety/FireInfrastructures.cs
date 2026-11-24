@@ -37,8 +37,11 @@ public interface IFireInfrastructureStore
 public static class FireInfrastructureRules
 {
     public static readonly string[] Categories = ["Equipment", "WaterSource", "Exit", "AssemblyPoint"];
-    /// <summary>Equipment a scenario places itself; everything else of kind Equipment belongs to the infrastructure.</summary>
-    public static readonly string[] ScenarioItemCapabilities = ["item.towel", "bait.belongings"];
+    /// <summary>
+    /// Equipment a scenario places itself; everything else of kind Equipment belongs to the infrastructure. door.exit_locked and
+    /// door.fire_wedged (BE#224) are the state of an existing IFC door in one situation (anchorId = the door), not fixed equipment.
+    /// </summary>
+    public static readonly string[] ScenarioItemCapabilities = ["item.towel", "bait.belongings", "door.exit_locked", "door.fire_wedged"];
 
     public static List<ScenarioDraftValidationIssue> Validate(JsonNode? geometry, string? runtimeVersion, JsonNode? items, bool complete,
         IReadOnlyDictionary<string, CapabilityContract>? contracts)
@@ -66,7 +69,8 @@ public static class FireInfrastructureRules
                 if (kind != "Equipment") issues.Add(new("INFRASTRUCTURE_KIND_MISMATCH", path + ".kind", $"A {category} item is an Equipment object."));
                 else if (capability is not null && (ScenarioItemCapabilities.Contains(capability) || capability == EditorContract.BuildingOnlyCapability))
                     issues.Add(new("INFRASTRUCTURE_CAPABILITY_NOT_FIXED", path + ".capability.id",
-                        capability == EditorContract.BuildingOnlyCapability ? "Elevators come from the IFC drawing." : "Scenario items belong to scenarios, not to the infrastructure."));
+                        capability == EditorContract.BuildingOnlyCapability ? "Elevators come from the IFC drawing."
+                            : "Scenario items and door states (locked exit, wedged fire door) belong to scenarios, not to the infrastructure."));
             }
         }
         var raw = complete ? ScenarioStateV1Validator.ValidateComplete(Document(geometry, runtimeVersion, array), contracts)
