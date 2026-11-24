@@ -64,7 +64,7 @@ Endpoint bảo vệ cần `Authorization: Bearer <Fire3D accessToken>`. Firebase
 | Editor | OrganizationUser trong tổ chức mình hoặc PlatformAdmin qua `IfcAccess`; Trainee bị 403 |
 | Building CRUD | Mutation kiểm actor/tenant DB, body organizationId cho admin create; query deprecated. Read scope DB; lifecycle/Building locks, atomic location/contact/audit. |
 
-Ba role hiện có: `PlatformAdmin`, `OrganizationUser`, `Trainee`. Không có `OrganizationAdmin`. OrganizationUser phải có tổ chức hoạt động; hai role còn lại không có organizationId. Public register không cho chọn role/tổ chức. JWT được kiểm tra cả tài khoản, tổ chức và phiên DB; chưa tới exp vẫn có thể mất hiệu lực khi phiên bị thu hồi.
+Bốn role hiện có: `PlatformAdmin`, `OrganizationUser`, `Trainee`, `FireSafetyExpert` (Chuyên viên PCCC, chỉ PlatformAdmin tạo, không có tổ chức; xem [expert-review.md](expert-review.md)). Không có `OrganizationAdmin`. OrganizationUser phải có tổ chức hoạt động; hai role còn lại không có organizationId. Public register không cho chọn role/tổ chức. JWT được kiểm tra cả tài khoản, tổ chức và phiên DB; chưa tới exp vẫn có thể mất hiệu lực khi phiên bị thu hồi.
 
 **Building CRUD:** create/update/archive kiểm actor/role/tenant từ DB và mutation/audit trong cùng transaction, khóa lifecycle/user. PlatformAdmin gửi `organizationId` đích trong **body** khi tạo; query `organizationId` chỉ là alias deprecated (khác body → 400). OrganizationUser dùng tenant mình, không được đổi tenant. Thiếu scope bị handler từ chối, không coi Guid.Empty là quyền admin. List/detail vẫn lọc organization claim (admin không có tenant có thể nhận list rỗng/404); không suy từ quyền mutation rằng read CRUD đã hỗ trợ admin toàn nền tảng. BE#212: `buildingType` bắt buộc `Apartment`/`School`, thêm trường thông tin cơ sở PC06 và `riskGroup` (xem [building-pc06.md](building-pc06.md)).
 
@@ -469,9 +469,9 @@ Intent/audit được lưu trước khi ký URL; response `{revisionId, uploadUr
 
 BE kiểm owner/tenant/input trước S3. BE đọc có giới hạn, pin ETag, tính SHA-256 thật; ghi candidate riêng trước copy; kiểm bytes bản copy rồi finalize source/provenance/audit/cleanup atomic. Không giữ DB transaction khi chờ S3. Replay complete đã commit trả 204, không tạo source mới. Source legacy không được tự gắn nhãn verified.
 
-Lỗi: 400 `VALIDATION_ERROR` theo field/key sai; 400 `IFC_UNSUPPORTED_FORMAT` khi tên file không phải `.ifc` (initiate, kèm `errors.originalFilename`); 422 `IFC_UNSUPPORTED_FORMAT` khi nội dung không bắt đầu bằng header STEP `ISO-10303-21;` (complete); 404 resource ngoài scope; 409 input conflict/source thay đổi; 410 intent hết hạn; 422 bytes/size/hash lệch; 503 chưa cấu hình, S3 unavailable hoặc attempt đang chạy (`Retry-After: 1`). TTL không làm mất receipt đã commit.
+Lỗi: 400 `VALIDATION_ERROR` theo field/key sai; 400 `IFC_UNSUPPORTED_FORMAT` khi tên file không phải `.ifc` (initiate, kèm `errors.originalFilename`); 422 `IFC_UNSUPPORTED_FORMAT` khi nội dung không bắt đầu bằng header STEP `ISO-10303-21;` (complete); 422 `IFC_UNSUPPORTED_SCHEMA` khi `FILE_SCHEMA` không thuộc IFC2X3/IFC4/IFC4X3 (complete; hai lỗi nội dung này xóa revision Draft và upload intent, xem [ifc-qa-codes.md](ifc-qa-codes.md)); 404 resource ngoài scope; 409 input conflict/source thay đổi; 410 intent hết hạn; 422 bytes/size/hash lệch; 503 chưa cấu hình, S3 unavailable hoặc attempt đang chạy (`Retry-After: 1`). TTL không làm mất receipt đã commit.
 
-Mặc định upload tắt. Trước khi bật: áp `AddBoundIfcUploads`, đặt `IfcUpload:Enabled=true`, `IfcUpload:MaxBytes=<giới hạn deployment quyết định>`, `IfcUpload:CleanupEnabled=true` và S3. MaxBytes không có giá trị nghiệp vụ mặc định. Cleanup lease/retry giữ job đang được bảo vệ và tombstone đã xóa để tìm copy timeout hoàn thành muộn. Có thể tắt upload mới trong khi giữ cleanup bật.
+Mặc định upload tắt. Trước khi bật: áp `AddBoundIfcUploads`, đặt `IfcUpload:Enabled=true`, `IfcUpload:MaxBytes` (mặc định 524288000 = 500 MiB khi không đặt; web đọc qua `GET /api/ifc/upload-limits`), `IfcUpload:CleanupEnabled=true` và S3. Cleanup lease/retry giữ job đang được bảo vệ và tombstone đã xóa để tìm copy timeout hoàn thành muộn. Có thể tắt upload mới trong khi giữ cleanup bật.
 
 Kiểm chứng PostgreSQL cô lập + storage giả lập; migration upload đã áp Supabase 07/10, S3/worker/binary thật chưa nghiệm thu. Xem [test IFC upload](ifc-upload-manual-test.md).
 
@@ -536,7 +536,7 @@ Tất cả cần Editor. Đây là luồng tác giả thiết kế/thử kịch 
 | POST | `/api/scenarios` | buildingId, name | 201 {id} |
 | GET | `/api/buildings/{buildingId}/scenarios` | page, pageSize | 200 Page<ScenarioSummaryResponse> |
 | GET | `/api/scenarios/{scenarioId}` | Không body | 200 ScenarioDetailResponse |
-| POST | `/api/scenarios/{scenarioId}/draft` | revisionId | 201 {id} |
+| POST | `/api/scenarios/{scenarioId}/draft` | revisionId, infrastructureId (BE#213: an Approved fire infrastructure of the same revision, required; see [fire-infrastructure.md](fire-infrastructure.md)) | 201 {id} |
 | GET | `/api/scenario-drafts/{draftId}` | Không body | 200 ScenarioDraftResponse + ETag |
 | GET | `/api/organizations/me/work-in-progress` | limit (1–5, mặc định 1); chỉ OrganizationUser | 200 `{ items: WorkInProgressItemResponse[] }`, bản nháp lưu gần nhất trước (#152) |
 | PUT | `/api/scenario-drafts/{draftId}` | State + If-Match; versioned `fet3d.editor/1` hoặc legacy | 204 + ETag; 422 `EDITOR_SCHEMA_INVALID`/`EDITOR_SCHEMA_VERSION_UNSUPPORTED`; 400 `EDITOR_JSON_MALFORMED` |

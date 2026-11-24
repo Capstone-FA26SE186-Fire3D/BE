@@ -11,6 +11,20 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class IfcQueriesController(ISender sender) : ControllerBase
 {
+    /// <summary>IFC upload limits the web checks before uploading (#214).</summary>
+    /// <remarks>
+    /// OrganizationUser or PlatformAdmin. <c>maxBytes</c> is IfcUpload:MaxBytes (500 MiB unless the deployment sets another value):
+    /// initiate refuses a larger <c>fileSizeBytes</c> with 400 VALIDATION_ERROR. upload-complete also requires the STEP header
+    /// (422 IFC_UNSUPPORTED_FORMAT) and a FILE_SCHEMA in <c>acceptedSchemas</c> (variants such as IFC4X3_ADD2 included; 422
+    /// IFC_UNSUPPORTED_SCHEMA). <c>enabled</c> false means initiate answers 503 IFC_UPLOAD_DISABLED.
+    /// </remarks>
+    [HttpGet("ifc/upload-limits")]
+    [ProducesResponseType<IfcUploadLimitsResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    public ActionResult<IfcUploadLimitsResponse> GetUploadLimits([FromServices] Microsoft.Extensions.Options.IOptions<IfcUploadOptions> upload) =>
+        Ok(IfcUploadLimitsResponse.From(upload.Value));
+
     /// <summary>Lists sanitized processing logs for an IFC revision.</summary>
     /// <remarks>
     /// Requires an OrganizationUser in the revision tenant or a PlatformAdmin. Trainee is forbidden.

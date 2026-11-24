@@ -14,6 +14,7 @@
 
 | Thao tác | Chưa login | PlatformAdmin | OrganizationUser | Trainee |
 |---|---|---|---|---|
+| Hàng chờ và quyết định thẩm định `/api/expert/reviews*` (chỉ FireSafetyExpert, [expert-review.md](expert-review.md)) | 401 | 403 | 403 | 403 |
 | Login / refresh | Được gọi; credentials phải hợp lệ | Được gọi | Được gọi | Được gọi |
 | GET /api/auth/me, POST /api/auth/logout | 401 | Chính mình | Chính mình | Chính mình |
 | Tạo/list/detail/khóa organization | 401 | Được | 403 | 403 |

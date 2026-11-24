@@ -19,6 +19,16 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
         command.Parameters.AddWithValue("revision",revision);command.Parameters.AddWithValue("state",NpgsqlDbType.Jsonb,state.ToJsonString());
         return JsonSerializer.Deserialize<List<ScenarioDraftValidationIssue>>((string)(await command.ExecuteScalarAsync(ct))!,new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
     }
+    public async Task<ScenarioInfrastructureView?> InfrastructureViewAsync(Guid infrastructureId,JsonNode state,CancellationToken ct)
+    {
+        await db.Database.OpenConnectionAsync(ct);
+        await using var command=new NpgsqlCommand("SELECT scenario_infrastructure_view(@id,@state)::text",(NpgsqlConnection)db.Database.GetDbConnection());
+        command.Parameters.AddWithValue("id",infrastructureId);command.Parameters.AddWithValue("state",NpgsqlDbType.Jsonb,state.ToJsonString());
+        var text=await command.ExecuteScalarAsync(ct) as string;
+        if(text is null) return null;
+        var node=JsonNode.Parse(text)!;
+        return new(node["conflicts"].Deserialize<List<ScenarioDraftValidationIssue>>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!,node["state"]!.DeepClone(),node["status"]!.GetValue<string>());
+    }
     public async Task<ScenarioVersionDetailResponse?> GetScenarioVersionAsync(
         Guid versionId, Guid? organizationId, CancellationToken ct)
     {
@@ -30,7 +40,7 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
         if (version is null) return null;
 
         await db.Database.OpenConnectionAsync(ct);
-        await using var snapshotCommand=new NpgsqlCommand("SELECT jsonb_build_object('state',state_snapshot,'rubric',rubric,'objectives',learning_objectives,'instructions',learner_instructions)::text FROM scenario_versions WHERE id=@id",(NpgsqlConnection)db.Database.GetDbConnection());
+        await using var snapshotCommand=new NpgsqlCommand("SELECT jsonb_build_object('state',state_snapshot,'rubric',rubric,'objectives',learning_objectives,'instructions',learner_instructions,'infrastructureId',infrastructure_id)::text FROM scenario_versions WHERE id=@id",(NpgsqlConnection)db.Database.GetDbConnection());
         snapshotCommand.Parameters.AddWithValue("id",version.Id);
         var extra=JsonNode.Parse((string)(await snapshotCommand.ExecuteScalarAsync(ct))!)!;
         return new ScenarioVersionDetailResponse(version.Id, version.ScenarioId, version.RevisionId, version.BuildingId,
@@ -46,7 +56,8 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
                 System.Text.Json.Nodes.JsonNode.Parse(version.ScoringConfig)!,
                 System.Text.Json.Nodes.JsonNode.Parse(version.ModePolicy)!,
                 System.Text.Json.Nodes.JsonNode.Parse(version.SafetyThresholds)!),
-            version.CreatedAt,extra["state"],extra["rubric"],extra["objectives"],extra["instructions"]?.GetValue<string>());
+            version.CreatedAt,extra["state"],extra["rubric"],extra["objectives"],extra["instructions"]?.GetValue<string>(),
+            InfrastructureId: extra["infrastructureId"] is JsonValue infrastructure ? infrastructure.GetValue<Guid>() : null);
     }
 
     public async Task<PageResponse<ScenarioVersionSummaryResponse>?> ListScenarioVersionsAsync(
@@ -78,7 +89,7 @@ public sealed class ScenarioReadStore(Fire3DDbContext db) : IScenarioReadStore
         return query.Where(d => d.Building.IsActive && d.Building.DeletedAt == null)
             .Select(d => new ScenarioDraftResponse(d.Id, d.ScenarioId, d.RevisionId, d.BuildingId,
                 d.OrganizationId, d.DraftNumber, d.State, d.Source, d.LastAiRequestId,
-                d.CreatedAt, d.UpdatedAt, d.Version))
+                d.CreatedAt, d.UpdatedAt, d.Version, d.InfrastructureId))
             .SingleOrDefaultAsync(ct);
     }
 

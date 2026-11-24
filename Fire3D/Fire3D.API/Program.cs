@@ -143,6 +143,8 @@ app.UseSwaggerUI(options =>
 app.UseCors("AllowFrontend");
 app.UseRateLimiter();
 app.UseAuthentication();
+// BE#211: FireSafetyExpert reaches only /api/expert and its own account; every other /api route is 403 before any handler runs.
+Fire3D.API.Authorization.ExpertRouteGuard.UseExpertRouteGuard(app);
 app.UseAuthorization();
 
 // Liveness stays process-only; readiness checks DB, migrations and dependencies of enabled Redis processing loops.

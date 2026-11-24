@@ -8,13 +8,14 @@ namespace Fire3D.Infrastructure.Billing;
 /// <summary>Reminders addressed to the calling OrganizationUser in their current organization; nothing else is readable.</summary>
 public sealed class OrganizationNotifications(Fire3DDbContext db) : IOrganizationNotifications
 {
-    private static readonly string[] Types=["BuildingServiceExpiring"];
+    private static readonly string[] Types=["BuildingServiceExpiring","ContentReviewApproved","ContentReviewRejected","FireInfrastructureApproved","FireInfrastructureRejected"];
     private const string Projection="""
         SELECT n.id AS "Id",n.notification_type AS "Type",n.title AS "Title",n.body AS "Body",n.building_id AS "BuildingId",b.name AS "BuildingName",
-         n.entitlement_id AS "EntitlementId",n.reference_ends_at AS "ReferenceEndsAt",n.created_at AS "CreatedAt",n.read_at AS "ReadAt",
-         (e.status='Active' AND e.ends_at>clock_timestamp() AND NOT EXISTS(SELECT 1 FROM service_entitlements r WHERE r.building_id=n.building_id AND r.id<>n.entitlement_id
-           AND r.payment_transaction_id IS NOT NULL AND r.status IN('Active','Suspended') AND r.starts_at>=n.reference_ends_at)) AS "StillRelevant"
-        FROM organization_notifications n JOIN service_entitlements e ON e.id=n.entitlement_id LEFT JOIN buildings b ON b.id=n.building_id AND b.deleted_at IS NULL
+         n.entitlement_id AS "EntitlementId",n.reference_ends_at AS "ReferenceEndsAt",n.content_review_id AS "ContentReviewId",n.scenario_version_id AS "ScenarioVersionId",n.fire_infrastructure_id AS "FireInfrastructureId",
+         n.created_at AS "CreatedAt",n.read_at AS "ReadAt",
+         (n.notification_type<>'BuildingServiceExpiring' OR COALESCE(e.status='Active' AND e.ends_at>clock_timestamp() AND NOT EXISTS(SELECT 1 FROM service_entitlements r WHERE r.building_id=n.building_id AND r.id<>n.entitlement_id
+           AND r.payment_transaction_id IS NOT NULL AND r.status IN('Active','Suspended') AND r.starts_at>=n.reference_ends_at),false)) AS "StillRelevant"
+        FROM organization_notifications n LEFT JOIN service_entitlements e ON e.id=n.entitlement_id LEFT JOIN buildings b ON b.id=n.building_id AND b.deleted_at IS NULL
         """;
 
     private async Task<Guid> Recipient(Guid actor,Guid family,CancellationToken ct)

@@ -73,6 +73,7 @@
     <EmbeddedResource Include="Persistence/Sql/AiSourcesPreparing.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.AiSourcesPreparing.sql" />
     <EmbeddedResource Include="Persistence/Sql/AiTraineeCriteria.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.AiTraineeCriteria.sql" />
     <EmbeddedResource Include="Persistence/Sql/CloseStaleSessions.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.CloseStaleSessions.sql" />
+    <EmbeddedResource Include="Persistence/Sql/IfcUploadHardening.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.IfcUploadHardening.sql" />
     <EmbeddedResource Include="Persistence/Sql/SupportTicketStatusCounts.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.SupportTicketStatusCounts.sql" />
     <EmbeddedResource Include="Persistence/Sql/PackageContractGates.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.PackageContractGates.sql" />
     <EmbeddedResource Include="Persistence/Sql/EditorWindRouting.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.EditorWindRouting.sql" />
@@ -159,4 +160,7 @@
 	
 	
   <ItemGroup><EmbeddedResource Include="Persistence/Sql/IfcDependencyGrants.sql" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Persistence/Sql/FireSafetyExpertRole.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.FireSafetyExpertRole.sql" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Persistence/Sql/ExpertContentReview.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.ExpertContentReview.sql" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Persistence/Sql/FireInfrastructure.sql" LogicalName="Fire3D.Infrastructure.Persistence.Sql.FireInfrastructure.sql" /></ItemGroup>
 </Project>

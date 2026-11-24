@@ -41,7 +41,7 @@ public sealed class ValidateScenarioDraftStateCommandHandler(IAuthStore accounts
         if (!normalized.IsSuccess)
             issues = normalized.Error!.Issues ?? [new(normalized.Error.Code, "$", normalized.Error.Message)];
         else
-            issues = await VersionedDraftValidation.ValidateAsync(normalized.Value!, draft.RevisionId, store, catalog, ct)
+            issues = await InfrastructureDraftValidation.ValidateAsync(draft, normalized.Value!, store, catalog, ct)
                 ?? ScenarioDraftStructuralValidator.Validate(normalized.Value!).Concat(await store.ValidateReferencesAsync(draft.RevisionId, normalized.Value!, ct)).ToList();
         return AuthResult<ScenarioDraftDryRunResponse>.Ok(new(draft.Id, draft.Version, hash, issues.Count == 0, issues));
     }
@@ -61,10 +61,47 @@ public sealed class ValidateScenarioDraftCommandHandler(IAuthStore accounts, ISc
         if (draft is null)
             return AuthResult<ScenarioDraftValidationResponse>.Fail("NOT_FOUND", "Scenario draft not found or access denied.", 404);
 
-        var issues = await VersionedDraftValidation.ValidateAsync(draft.State, draft.RevisionId, store, catalog, ct)
+        var issues = await InfrastructureDraftValidation.ValidateAsync(draft, draft.State, store, catalog, ct)
             ?? ScenarioDraftStructuralValidator.Validate(draft.State).Concat(await store.ValidateReferencesAsync(draft.RevisionId,draft.State,ct)).ToList();
         return AuthResult<ScenarioDraftValidationResponse>.Ok(
             new ScenarioDraftValidationResponse(draft.Id, draft.Version, issues.Count == 0, issues));
+    }
+}
+
+/// <summary>
+/// BE#213: a draft on a fire infrastructure is validated as the document its snapshot will freeze (its objects followed by the
+/// infrastructure items). Its own infrastructure objects are SCENARIO_CONTAINS_INFRASTRUCTURE issues; issues on infrastructure items
+/// (for example a capability version the scenario's runtime does not publish) are reported at $.infrastructure.items[i].
+/// Drafts without an infrastructure (created before BE#213) keep the previous rules. Null for those legacy-shaped drafts.
+/// </summary>
+public static class InfrastructureDraftValidation
+{
+    public const string ConflictCode = "SCENARIO_CONTAINS_INFRASTRUCTURE";
+
+    public static async Task<List<ScenarioDraftValidationIssue>?> ValidateAsync(Fire3D.Application.Scenarios.ScenarioDraftResponse draft, System.Text.Json.Nodes.JsonNode state,
+        IScenarioReadStore store, Fire3D.Application.Scenarios.Queries.GetRuntimeCatalog.IRuntimeCatalogReadStore catalog, CancellationToken ct)
+    {
+        if (draft.InfrastructureId is not Guid infrastructure) return await VersionedDraftValidation.ValidateAsync(state, draft.RevisionId, store, catalog, ct);
+        if (Fire3D.Application.Editor.EditorContract.DeclaredVersion(state) is null)
+            return [new("EDITOR_SCHEMA_REQUIRED", "$.schemaVersion", "A draft on a fire infrastructure uses fet3d.editor/1.")];
+        var view = await store.InfrastructureViewAsync(infrastructure, state, ct);
+        if (view is null) return await VersionedDraftValidation.ValidateAsync(state, draft.RevisionId, store, catalog, ct);
+        var issues = view.Conflicts.ToList();
+        if (view.Status != "Approved") issues.Add(new("FIRE_INFRASTRUCTURE_NOT_APPROVED", "$", "The fire infrastructure of this draft is not Approved."));
+        var own = state["objects"] is System.Text.Json.Nodes.JsonArray objects ? objects.Count : 0;
+        foreach (var issue in await VersionedDraftValidation.ValidateAsync(view.State, draft.RevisionId, store, catalog, ct) ?? [])
+        {
+            var mapped = issue with { Path = InfrastructurePath(issue.Path, own) };
+            if (!issues.Any(x => x.Code == mapped.Code && x.Path == mapped.Path)) issues.Add(mapped);
+        }
+        return issues;
+    }
+
+    private static string InfrastructurePath(string path, int own)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(path, @"^\$\.objects\[(\d+)\](.*)$");
+        return match.Success && int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) is var index && index >= own
+            ? $"$.infrastructure.items[{index - own}]{match.Groups[2].Value}" : path;
     }
 }
 

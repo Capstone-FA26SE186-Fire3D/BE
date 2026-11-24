@@ -39,7 +39,7 @@ namespace Fire3D.Infrastructure.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "support_priority_enum", new[] { "Low", "Normal", "High", "Urgent" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "support_ticket_status_enum", new[] { "Open", "InProgress", "Resolved", "Closed" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "training_status_enum", new[] { "Draft", "Active", "Closed", "Archived" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "user_role_enum", new[] { "PlatformAdmin", "OrganizationUser", "Trainee" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "user_role_enum", new[] { "PlatformAdmin", "OrganizationUser", "Trainee", "FireSafetyExpert" });
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pgcrypto");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
@@ -1060,13 +1060,21 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("building_id");
 
+                    b.Property<Guid?>("ContentReviewId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("content_review_id");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<Guid>("EntitlementId")
+                    b.Property<Guid?>("EntitlementId")
                         .HasColumnType("uuid")
                         .HasColumnName("entitlement_id");
+
+                    b.Property<Guid?>("FireInfrastructureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("fire_infrastructure_id");
 
                     b.Property<string>("IdempotencyKey")
                         .IsRequired()
@@ -1092,9 +1100,13 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("recipient_user_id");
 
-                    b.Property<DateTime>("ReferenceEndsAt")
+                    b.Property<DateTime?>("ReferenceEndsAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("reference_ends_at");
+
+                    b.Property<Guid?>("ScenarioVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scenario_version_id");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -2627,6 +2639,10 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Property<Guid?>("LastAiRequestId")
                         .HasColumnType("uuid")
                         .HasColumnName("last_ai_request_id");
+
+                    b.Property<Guid?>("InfrastructureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("infrastructure_id");
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid")

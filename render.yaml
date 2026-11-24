@@ -45,3 +45,7 @@ services:
         sync: false
       - key: AWS__SecretKey
         sync: false
+
+      # IFC upload: largest accepted file (500 MiB); published to the web by GET /api/ifc/upload-limits.
+      - key: IfcUpload__MaxBytes
+        value: "524288000"

@@ -103,7 +103,7 @@ public partial class Fire3DDbContext : DbContext
             .HasPostgresEnum("support_priority_enum", new[] { "Low", "Normal", "High", "Urgent" })
             .HasPostgresEnum("support_ticket_status_enum", new[] { "Open", "InProgress", "Resolved", "Closed" })
             .HasPostgresEnum("training_status_enum", new[] { "Draft", "Active", "Closed", "Archived" })
-            .HasPostgresEnum("user_role_enum", new[] { "PlatformAdmin", "OrganizationUser", "Trainee" })
+            .HasPostgresEnum("user_role_enum", new[] { "PlatformAdmin", "OrganizationUser", "Trainee", "FireSafetyExpert" })
             .HasPostgresExtension("pgcrypto");
 
         modelBuilder.Entity<AnnotationSet>(entity =>
@@ -1530,6 +1530,7 @@ public partial class Fire3DDbContext : DbContext
             entity.Property(e => e.State).HasColumnName("state").HasColumnType("jsonb");
             entity.Property(e => e.Source).HasColumnName("source");
             entity.Property(e => e.LastAiRequestId).HasColumnName("last_ai_request_id");
+            entity.Property(e => e.InfrastructureId).HasColumnName("infrastructure_id");
             entity.Property(e => e.CreatedBy).HasColumnName("created_by");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");

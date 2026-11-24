@@ -15,7 +15,15 @@ public sealed class OrganizationNotification
     [Column("building_id")]
     public Guid BuildingId { get; set; }
     [Column("entitlement_id")]
-    public Guid EntitlementId { get; set; }
+    public Guid? EntitlementId { get; set; }
+    /// <summary>The content review a ContentReviewApproved/ContentReviewRejected notification reports (BE#211).</summary>
+    [Column("content_review_id")]
+    public Guid? ContentReviewId { get; set; }
+    [Column("scenario_version_id")]
+    public Guid? ScenarioVersionId { get; set; }
+    /// <summary>The fire infrastructure version a FireInfrastructureApproved/FireInfrastructureRejected notification reports (BE#213).</summary>
+    [Column("fire_infrastructure_id")]
+    public Guid? FireInfrastructureId { get; set; }
     [Column("notification_type")]
     [MaxLength(50)]
     public string NotificationType { get; set; } = "";
@@ -24,7 +32,7 @@ public sealed class OrganizationNotification
     [Column("body")]
     public string Body { get; set; } = "";
     [Column("reference_ends_at")]
-    public DateTime ReferenceEndsAt { get; set; }
+    public DateTime? ReferenceEndsAt { get; set; }
     [Column("idempotency_key")]
     [MaxLength(255)]
     public string IdempotencyKey { get; set; } = "";

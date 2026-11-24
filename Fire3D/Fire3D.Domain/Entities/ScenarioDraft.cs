@@ -14,6 +14,8 @@ public partial class ScenarioDraft
     public JsonNode State { get; set; } = null!;
     public string Source { get; set; } = null!;
     public Guid? LastAiRequestId { get; set; }
+    /// <summary>BE#213: the Approved fire infrastructure version this draft builds on; null for drafts created before it.</summary>
+    public Guid? InfrastructureId { get; set; }
     public Guid CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

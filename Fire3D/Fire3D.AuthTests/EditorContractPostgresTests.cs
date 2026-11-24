@@ -32,9 +32,12 @@ public sealed partial class AuthIntegrationTests
         var scenario = await client.SendAsync(Keyed(HttpMethod.Post, "/api/scenarios", new { buildingId = building, name = "Editor contract" }, "editor-scenario-" + revision));
         Assert.Equal(HttpStatusCode.Created, scenario.StatusCode);
         var scenarioId = (await scenario.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
-        var draft = await client.SendAsync(Keyed(HttpMethod.Post, $"/api/scenarios/{scenarioId}/draft", new { revisionId = revision }, "editor-draft-" + revision));
-        Assert.Equal(HttpStatusCode.Created, draft.StatusCode);
-        var draftId = (await draft.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
+        // BE#213: the API creates drafts only on an Approved fire infrastructure. These editor-contract tests use a draft that holds its
+        // own exits and equipment, i.e. a draft created before BE#213, which the store still supports.
+        await using var legacyDb = BuildingContext(testConnection);
+        var created = await new Fire3D.Infrastructure.Scenarios.ScenarioWriteStore(legacyDb).CreateScenarioDraftAsync(adminId, scenarioId, null, new(revision), default, "editor-draft-" + revision);
+        Assert.True(created.IsSuccess, created.Error?.Code);
+        var draftId = created.Value;
         var read = await client.GetAsync($"/api/scenario-drafts/{draftId}");
         return (draftId, read.Headers.ETag!.Tag);
     }

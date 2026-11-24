@@ -37,6 +37,8 @@ Statuses: New → Contacted → Quoted, plus Rejected/Cancelled, and the new ter
 
 ## Expiry reminder notifications (#68)
 
+The same list also carries `ContentReviewApproved` / `ContentReviewRejected` (thẩm định results for the submitter, BE#211, [expert-review.md](expert-review.md)); for those `entitlementId` and `referenceEndsAt` are null.
+
 - `GET /api/organizations/me/notifications?unread=&type=&page=&pageSize=` (OrganizationUser, live session): reminders addressed to the caller in their current organization, newest first, default 20, maximum 100. Items carry type, title, body, Building (id and current name), entitlement, `referenceEndsAt`, `createdAt`, `readAt` and `stillRelevant`. `stillRelevant` becomes false after a renewal or once the period ended; the history is kept.
 - `PATCH /api/organizations/me/notifications/{id}/read`: idempotent; the first read time is kept. Another recipient's or tenant's notification is 404.
 
