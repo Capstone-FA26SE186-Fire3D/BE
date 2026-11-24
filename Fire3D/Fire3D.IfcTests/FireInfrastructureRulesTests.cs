@@ -47,4 +47,17 @@ public sealed class FireInfrastructureRulesTests
         Assert.DoesNotContain(issues, x => x.Code is "SPAWN_REQUIRED" or "GOAL_REQUIRED");
         Assert.Single(FireInfrastructureRules.Validate(null, null, new JsonObject(), complete: false, null), x => x.Code == "FIELD_REQUIRED");
     }
+
+    // BE#224: a locked exit door and a wedged fire door are door states of one situation, refused in the infrastructure.
+    [Theory]
+    [InlineData("door.exit_locked")]
+    [InlineData("door.fire_wedged")]
+    public void Door_states_are_scenario_items_not_infrastructure(string capability)
+    {
+        var door = Item("ext-1", "Equipment");
+        door["capability"]!["id"] = capability;
+        var issues = FireInfrastructureRules.Validate(null, null, new JsonArray(door), complete: false, null);
+        Assert.Contains(issues, x => x is { Code: "INFRASTRUCTURE_CAPABILITY_NOT_FIXED", Path: "$.items[0].capability.id" });
+        Assert.Contains(capability, FireInfrastructureRules.ScenarioItemCapabilities);
+    }
 }

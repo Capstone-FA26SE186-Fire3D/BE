@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-302 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+304 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -40,6 +40,10 @@
 | GET | /api/admin/feedback | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/feedback/{id} | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | PATCH | /api/admin/feedback/{id}/status | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/admin/ifc-processing/policies | Bearer | None | 200, 400, 401, 403, 404 |
+| POST | /api/admin/ifc-processing/policies | Bearer | None | 201, 400, 401, 403, 404 |
+| GET | /api/admin/organizations/{organizationId}/ifc-processing | Bearer | None | 200, 401, 403, 404 |
+| GET | /api/organizations/me/ifc-processing | Bearer | None | 200, 401, 403 |
 | GET | /api/admin/knowledge-sources | Bearer | None | 200, 400 |
 | POST | /api/admin/knowledge-sources | Bearer | Idempotency-Key | 201, 409, 422 |
 | POST | /api/admin/knowledge-sources/upload-intent | Bearer | Idempotency-Key | 200, 400, 409, 503 |
@@ -141,7 +145,7 @@
 | GET | /api/buildings | Bearer | None | 200 |
 | POST | /api/buildings | Bearer | Idempotency-Key | 201, 400, 401, 403, 409 |
 | GET | /api/buildings/{buildingId}/editor-preview | Bearer | None | 200, 400, 401, 403, 404, 503 |
-| POST | /api/buildings/{buildingId}/ifc | Bearer | Idempotency-Key | 201, 400, 404, 429 |
+| POST | /api/buildings/{buildingId}/ifc | Bearer | Idempotency-Key | 201, 400, 404, 409, 429 |
 | GET | /api/buildings/{buildingId}/qr-codes | Bearer | None | 200, 400, 401, 403, 404 |
 | POST | /api/buildings/{buildingId}/qr-codes | Bearer | None | 201, 400, 401, 403, 404, 409 |
 | POST | /api/buildings/{buildingId}/qr-codes/{qrId}/revoke | Bearer | None | 200, 401, 403, 404, 409 |
@@ -249,13 +253,11 @@
 | GET | /api/revisions/{revisionId}/equipment-candidates | Bearer | None | 200, 401, 403, 404, 409 |
 | PATCH | /api/revisions/{revisionId}/equipment-decisions | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 422, 428 |
 | GET | /api/revisions/{revisionId}/issues | Bearer | None | 200, 400, 401, 403, 404 |
-| POST | /api/revisions/{revisionId}/process | Bearer | Idempotency-Key | 202, 400, 404, 409, 429 |
+| POST | /api/revisions/{revisionId}/process | Bearer | Idempotency-Key | 202, 400, 404, 409, 422, 429 |
 | GET | /api/revisions/{revisionId}/processing-jobs | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/revisions/{revisionId}/processing-logs | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/revisions/{revisionId}/readiness | Bearer | None | 200, 401, 403, 404 |
 | POST | /api/revisions/{revisionId}/reviews | Bearer | None | 201, 400, 401, 403, 404, 409, 429 |
-| GET | /api/revisions/{revisionId}/style | Bearer | None | 200, 401, 403, 404 |
-| PUT | /api/revisions/{revisionId}/style | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 422, 428 |
 | POST | /api/revisions/{revisionId}/upload-complete | Bearer | None | 204, 400, 404, 409, 410, 422, 429, 503 |
 | GET | /api/revisions/{revisionId}/validation-runs | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/scenario-drafts/{draftId} | Bearer | None | 200 |
