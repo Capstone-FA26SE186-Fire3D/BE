@@ -69,9 +69,9 @@ public sealed class IfcUploadService(IIfcUploadStore store, IStorageService stor
             var digest = await inspector.InspectAsync(intent.StagingKey, metadata.ETag, intent.Size, timeout.Token);
             if (digest is null || !Sha(digest.Hash) || digest.Size != intent.Size || digest.ETag != metadata.ETag || !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(digest.Hash), Convert.FromHexString(intent.Hash)))
                 return AuthResult<bool>.Fail("IFC_SOURCE_MISMATCH", "Stored object changed or its SHA-256 does not match the upload intent.", 422);
-            // A renamed .rvt or zip passes the filename check; the content must start with the STEP header.
-            if (!digest.StepHeader)
-                return AuthResult<bool>.Fail("IFC_UNSUPPORTED_FORMAT", "The file is not an IFC (ISO-10303-21) model. Export IFC from Revit or ArchiCAD and upload again.", 422);
+            // The bytes now match the intent hash, so a content verdict is final for this intent: reject it and leave nothing behind.
+            if (ContentRejection(digest.Step) is { } rejection)
+                return await RejectAsync(actor, revision, input, rejection, ct);
             var claim = await store.ClaimAsync(actor, revision, input, digest.ETag, ct);
             if (!claim.IsSuccess) return new(default, claim.Error);
             // Candidate key is durable before copy. Every attempt owns a different final key.
@@ -96,6 +96,26 @@ public sealed class IfcUploadService(IIfcUploadStore store, IStorageService stor
             return AuthResult<bool>.Fail("IFC_STORAGE_UNAVAILABLE", "Storage is temporarily unavailable. Retry with the same input.", 503);
         }
     }
+    /// <summary>Content checks of upload-complete, in order: STEP header, then a supported FILE_SCHEMA.</summary>
+    public static IfcUploadRejection? ContentRejection(IfcStepSummary step)
+    {
+        // A renamed .rvt or zip passes the filename check; the content must start with the STEP header.
+        if (!step.StepHeader)
+            return new("IFC_UNSUPPORTED_FORMAT", "The file is not an IFC (ISO-10303-21) model. Export IFC from Revit or ArchiCAD and upload again.");
+        if (!step.SchemaSupported)
+            return new("IFC_UNSUPPORTED_SCHEMA", "FILE_SCHEMA must be IFC2X3, IFC4 or IFC4X3. Export the model again with one of these schemas.",
+                new Dictionary<string, string[]> { ["fileSchema"] = [step.Schema ?? ""], ["supportedSchemas"] = IfcStepSummary.SupportedSchemas });
+        return null;
+    }
+
+    // The gate removes the Draft revision and intent; the client still gets the content verdict when that cleanup was refused
+    // (for example a concurrent completion holds a live candidate), because the bytes cannot change under a matching SHA-256.
+    private async Task<AuthResult<bool>> RejectAsync(Guid actor, Guid revision, FinalizeIfcUploadRequest input, IfcUploadRejection rejection, CancellationToken ct)
+    {
+        await store.RejectAsync(actor, revision, input, rejection, ct);
+        return AuthResult<bool>.Fail(rejection.Code, rejection.Message, 422, rejection.Details);
+    }
+
     private static bool Sha(string? value) => value is { Length: 64 } && value.All(char.IsAsciiHexDigit);
     private static bool Key(string? key) => key is { Length: > 0 and <= 128 } && !key.Any(c => char.IsWhiteSpace(c) || char.IsControl(c));
 }

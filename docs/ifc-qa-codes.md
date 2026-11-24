@@ -5,7 +5,21 @@ Source: Docs `ifc_ingestion_visual_interaction.md` 5.9. The backend stores and r
 Where codes appear:
 
 - `GET /api/revisions/{revisionId}/issues` → `items[].issueCode`, `severity`, `message`, `ifcGlobalIds` (the IFC elements the worker reported, `[]` when none; also in `evidence.ifcGlobalIds`). FE highlights these GlobalIds in the preview.
-- Upload: `IFC_UNSUPPORTED_FORMAT` is an HTTP error, not an issue — 400 at initiate when the filename is not `.ifc` (`errors.originalFilename`), 422 at upload-complete when the bytes do not start with the STEP header `ISO-10303-21;` (renamed `.rvt`, zip, ...). At initiate nothing is created; at upload-complete the Draft revision and upload intent from initiate remain but the file is never adopted as the revision source.
+- Upload (#214): these are HTTP errors, not issues. Limits the web checks first: `GET /api/ifc/upload-limits` (`maxBytes`, default
+  `IfcUpload:MaxBytes` 524288000 = 500 MiB; `acceptedExtensions`; `acceptedSchemas`).
+  - Initiate: 400 `IFC_UNSUPPORTED_FORMAT` when the filename is not `.ifc` (`errors.originalFilename`); 400 `VALIDATION_ERROR`
+    (`errors.fileSizeBytes`) when `fileSizeBytes` is over `maxBytes`. Nothing is created.
+  - upload-complete, after size and SHA-256 match the intent, in this order: 422 `IFC_UNSUPPORTED_FORMAT` when the bytes do not start
+    with the STEP header `ISO-10303-21;` (renamed `.rvt`, zip, ...); 422 `IFC_UNSUPPORTED_SCHEMA` when the first `FILE_SCHEMA` of the
+    HEADER section is not IFC2X3, IFC4 or IFC4X3 (suffixed variants such as `IFC2X3_TC1`, `IFC4_ADD2_TC1`, `IFC4X3_ADD2` pass;
+    `IFC4X1`, `AP214` or a missing `FILE_SCHEMA` fail; `errors.fileSchema` = what the file declares, `errors.supportedSchemas`).
+    Because the SHA-256 already matched, the verdict is final for that intent: the Draft revision and upload intent from initiate are
+    deleted, the staging object is queued for the cleanup worker at once, and an audit row (`action` Reject, `target_entity`
+    revisions, `new_values.operation` IfcUploadRejected, `code`, `quarantineStatus` Rejected, `sha256`, `details`) is written. A
+    replay of the same upload-complete then answers 404 `IFC_UPLOAD_INTENT_NOT_FOUND`. Size or hash mismatches (`IFC_SOURCE_MISMATCH`)
+    keep the intent, because the client may still PUT the right bytes.
+  - An adopted source gets `quarantineStatus` `Accepted` (shown in the Building revision list). Sources uploaded before #214 keep
+    `Pending`.
 
 Revision status after Geometry QA (worker `preview_glb` output):
 
@@ -29,8 +43,19 @@ Revision status after Geometry QA (worker `preview_glb` output):
 | `IFC_TRIANGLE_BUDGET_EXCEEDED` | Warning | Chunk over the triangle budget after replacement | Re-export at a lower level of detail |
 | `IFC_DEFAULT_MASS_PRESENT` | Info | Planning mass present (removed) | None |
 | `IFC_UNSUPPORTED_FORMAT` | Block | Upload is not IFC | Export IFC (IFC2X3/IFC4/IFC4X3) |
+| `IFC_NO_STOREYS` | Block | No `IfcBuildingStorey`: the model cannot be split into floors | Export with levels/storeys (Revit: levels; ArchiCAD: stories) |
+| `IFC_NO_STAIRS_MULTISTOREY` | Block | More than one storey holds building elements but there is no `IfcStair`/`IfcStairFlight`, so no route leads off the upper floors | Model or export the stairs, then upload again |
+| `IFC_UNIT_NOT_METRE` | Warning | The IFC length unit is not metre (millimetre, foot, ...); the worker scales geometry to metres with the IFC unit | Check sizes in the preview; re-export in metres if they look wrong |
 
 Other codes may appear; FE shows them generically with the worker `message`.
+
+Who produces the codes: the Geometry worker (Unity repo, `Tools/GeometryWorker`) reads the IFC and reports every code in this table as
+an issue of its `preview_glb`/`building_metadata` output. BE checks only the issue shape (`severity`, non-empty `code` and `message`),
+stores the issues and derives the run outcome and revision status from `severity`/`outcome`, so it accepts a new code without a
+migration. `IFC_NO_STOREYS`, `IFC_NO_STAIRS_MULTISTOREY` and `IFC_UNIT_NOT_METRE` (added 23/11/2026, #214) therefore need the worker
+to emit them: `IFC_NO_STOREYS` and `IFC_NO_STAIRS_MULTISTOREY` as `Error` with outcome `Failed` (the revision becomes `NeedsFix`),
+`IFC_UNIT_NOT_METRE` as `Warning`. Count storeys that hold elements, so an empty roof or site level alone does not make a one-floor
+building "multi-storey".
 
 Mapping to API severity: the worker sends Block as `Error` (or `Critical`) with outcome `Failed`, Warning as `Warning`, Info as `Info`. Error/Critical issues also block confirm-for-training and publish.
 
