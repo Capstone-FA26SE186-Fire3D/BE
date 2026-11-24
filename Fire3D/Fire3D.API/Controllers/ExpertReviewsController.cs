@@ -21,7 +21,7 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class ExpertReviewsController(IExpertReviews reviews) : ControllerBase
 {
-    /// <summary>The thẩm định queue. kind: Scenario | Infrastructure (no Infrastructure items until BE#213); status: Submitted (default) | Approved | Rejected.</summary>
+    /// <summary>The thẩm định queue. kind: Scenario | Infrastructure (both when omitted); status: Submitted (default) | Approved | Rejected.</summary>
     /// <remarks>Submitted items are oldest first; decided items newest decision first. pageSize 1-100, default 20.</remarks>
     [HttpGet("/api/expert/reviews")]
     [ProducesResponseType<PageResponse<ExpertReviewItem>>(200)]

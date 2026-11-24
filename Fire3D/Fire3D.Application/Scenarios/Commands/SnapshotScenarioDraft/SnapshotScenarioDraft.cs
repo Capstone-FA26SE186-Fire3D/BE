@@ -21,9 +21,12 @@ public sealed class SnapshotScenarioDraftHandler(IAuthStore accounts, IScenarioW
         // A stale If-Match or replayed key is left to the gate so precondition and receipt semantics stay unchanged.
         var draft = await reads.GetScenarioDraftAsync(command.DraftId, scope.Value!.OrganizationId, ct);
         if (draft is not null && draft.Version == command.ExpectedVersion
-            && await VersionedDraftValidation.ValidateAsync(draft.State, draft.RevisionId, reads, catalog, ct) is { } issues)
+            && await InfrastructureDraftValidation.ValidateAsync(draft, draft.State, reads, catalog, ct) is { } issues)
         {
             if (issues.Any(x => x.Code == "EDITOR_SCHEMA_VERSION_UNSUPPORTED")) return DraftStateInput.Unsupported<Guid>();
+            if (issues.Any(x => x.Code == InfrastructureDraftValidation.ConflictCode))
+                return new(default, new AuthError(InfrastructureDraftValidation.ConflictCode,
+                    "Exits, assembly points and fixed equipment come from the fire infrastructure; remove them from the scenario.", 422, Issues: issues));
             if (issues.Count > 0) return DraftStateInput.Invalid<Guid>(issues);
         }
         return await store.SnapshotScenarioDraftAsync(command.ActorId, command.DraftId, scope.Value!.OrganizationId, ct, command.IdempotencyKey, command.ExpectedVersion);

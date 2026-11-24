@@ -66,7 +66,10 @@ public sealed partial class AuthIntegrationTests
         client.DefaultRequestHeaders.Add("Idempotency-Key","http-scenario");create=await client.PostAsJsonAsync("/api/scenarios",new{buildingId=building,name="Draft test"});Assert.Equal(HttpStatusCode.Created,create.StatusCode);
         var scenario=(await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
         client.DefaultRequestHeaders.Remove("Idempotency-Key");client.DefaultRequestHeaders.Add("Idempotency-Key","http-draft");
-        var createdDraft=await client.PostAsJsonAsync($"/api/scenarios/{scenario}/draft",new{revisionId=revision});Assert.Equal(HttpStatusCode.Created,createdDraft.StatusCode);var draft=(await createdDraft.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        // BE#213: a new draft needs an Approved fire infrastructure; the rest of this header test uses a pre-#213 draft from the store.
+        var noInfrastructure=await client.PostAsJsonAsync($"/api/scenarios/{scenario}/draft",new{revisionId=revision});Assert.Equal(HttpStatusCode.BadRequest,noInfrastructure.StatusCode);
+        Assert.True((await noInfrastructure.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errors").TryGetProperty("infrastructureId",out _));
+        await using var legacyDb=BuildingContext(testConnection);var legacy=await new ScenarioWriteStore(legacyDb).CreateScenarioDraftAsync(adminId,scenario,null,new(revision),default,"http-draft");Assert.True(legacy.IsSuccess,legacy.Error?.Code);var draft=legacy.Value;
         var detail=await client.GetAsync($"/api/scenario-drafts/{draft}");var etag=detail.Headers.ETag!.ToString();
         Assert.Equal((HttpStatusCode)428,(await client.PutAsJsonAsync($"/api/scenario-drafts/{draft}",ValidAuthoringState())).StatusCode);
         client.DefaultRequestHeaders.Add("If-Match","\"abc\"");Assert.Equal(HttpStatusCode.BadRequest,(await client.PutAsJsonAsync($"/api/scenario-drafts/{draft}",ValidAuthoringState())).StatusCode);

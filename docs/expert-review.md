@@ -23,21 +23,21 @@ All routes: `[Authorize(Roles="FireSafetyExpert")]`. OrganizationUser and Platfo
 
 | Method | Route | Notes |
 |---|---|---|
-| GET | `/api/expert/reviews?kind=&status=&page=&pageSize=` | One shared queue, no assignment. `kind`: `Scenario` \| `Infrastructure` (no Infrastructure items until BE#213). `status`: `Submitted` (default, oldest first) \| `Approved` \| `Rejected` (newest decision first, read-only). Page size 1-100, default 20. |
-| GET | `/api/expert/reviews/{id}` | Review item + frozen `content` (fet3d.editor/1 state), `rubric`, `learningObjectives`, `learnerInstructions`. `ETag` = revision. |
+| GET | `/api/expert/reviews?kind=&status=&page=&pageSize=` | One shared queue, no assignment. `kind`: `Scenario` \| `Infrastructure` (both when omitted; Infrastructure = fire infrastructure versions, BE#213, see [fire-infrastructure.md](fire-infrastructure.md)). `status`: `Submitted` (default, oldest first) \| `Approved` \| `Rejected` (newest decision first, read-only). Page size 1-100, default 20. |
+| GET | `/api/expert/reviews/{id}` | Review item + frozen `content`: for a Scenario the fet3d.editor/1 state (its objects followed by the items of its fire infrastructure) with `rubric`, `learningObjectives`, `learnerInstructions`; for an Infrastructure `{geometry, runtimeVersion, items}`. `ETag` = revision. |
 | GET | `/api/expert/reviews/{id}/preview` | Same shape as `editor-preview` (signed GLB, floors, anchors) for the revision of that scenario version. |
 | POST | `/api/expert/reviews/{id}/approve` | Đạt. Headers `If-Match` (the review ETag) and `Idempotency-Key`. |
 | POST | `/api/expert/reviews/{id}/reject` | Chưa đạt. Body `{ "reason": "..." }` 1-2000 characters (else 400 `VALIDATION_ERROR`, `errors.reason`). Same headers. |
 
-Review item: `reviewId, kind, status, revision, scenarioVersionId, revisionId, contentHash, rubricHash, submittedBy(+Name), submittedAt, decidedBy(+Name), decidedAt, reason, organizationId/Name, buildingId/Name, scenarioId/Name, versionNumber`.
+Review item: `reviewId, kind, status, revision, scenarioVersionId, revisionId, contentHash, rubricHash, submittedBy(+Name), submittedAt, decidedBy(+Name), decidedAt, reason, organizationId/Name, buildingId/Name, scenarioId/Name, versionNumber, infrastructureId`. Scenario items leave `infrastructureId` null; Infrastructure items have `reviewId = infrastructureId`, `versionNumber` = infrastructure version, and null `scenarioVersionId`, `rubricHash`, `scenarioId/Name`.
 
 ### Decision rules
 
-- **Revision / ETag:** a review row changes once (Submitted → Approved | Rejected), so `revision` is `1` while Submitted and `2` once decided; `ETag: "1"`.
+- **Revision / ETag:** a scenario review row changes once (Submitted → Approved | Rejected), so `revision` is `1` while Submitted and `2` once decided; `ETag: "1"`. An Infrastructure item uses the version's own revision (it grows on every change).
 - **First decision wins:** the expert who decides second sends a stale `If-Match` and gets `412 PRECONDITION_FAILED`. `decidedBy` records who decided.
 - No `If-Match`: `428 PRECONDITION_REQUIRED`; malformed: 400. No `Idempotency-Key`: 400 `IDEMPOTENCY_KEY_REQUIRED`.
 - Same `Idempotency-Key` and request: returns the first result, one decision only. Same key, different request: `409 IDEMPOTENCY_KEY_CONFLICT`.
-- `409 CONTENT_REVIEW_NOT_PENDING` (already decided, current ETag), `409 CONTENT_HASH_MISMATCH` (content no longer matches the submission).
+- `409 CONTENT_REVIEW_NOT_PENDING` / `FIRE_INFRASTRUCTURE_NOT_PENDING` (already decided, current ETag), `409 CONTENT_HASH_MISMATCH` (content no longer matches the submission).
 - **Final:** a decision cannot be changed. A fix is a new scenario version and a new submission; a wrong rejection is resubmitted as a new version. Old decisions stay in the audit log (`audit_logs`, target `ScenarioVersion`, `new_values.decidedByRole = FireSafetyExpert`).
 
 ## Result for the Organization

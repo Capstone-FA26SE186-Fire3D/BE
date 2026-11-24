@@ -62,13 +62,15 @@ public sealed partial class AuthIntegrationTests
         using var organization = await RoleClient("OrganizationUser", org);
         client.DefaultRequestHeaders.Authorization = new("Bearer", (await LoginAsync()).AccessToken);
 
-        // Queue: both waiting items, oldest first, revision 1. No Infrastructure item until BE#213.
+        // Queue: both waiting items, oldest first, revision 1.
         var queue = await first.GetFromJsonAsync<JsonElement>("/api/expert/reviews?kind=Scenario&pageSize=100");
         var ids = queue.GetProperty("items").EnumerateArray().Select(x => x.GetProperty("reviewId").GetGuid()).ToList();
         Assert.True(ids.IndexOf(approved.Review) >= 0 && ids.IndexOf(approved.Review) < ids.IndexOf(rejected.Review));
         var item = queue.GetProperty("items").EnumerateArray().Single(x => x.GetProperty("reviewId").GetGuid() == approved.Review);
         Assert.Equal(("Scenario", "Submitted", 1L), (item.GetProperty("kind").GetString(), item.GetProperty("status").GetString(), item.GetProperty("revision").GetInt64()));
-        Assert.Equal(0, (await first.GetFromJsonAsync<JsonElement>("/api/expert/reviews?kind=Infrastructure")).GetProperty("totalCount").GetInt32());
+        // kind=Infrastructure lists infrastructure versions only (BE#213); none of these reviews appears there.
+        Assert.DoesNotContain((await first.GetFromJsonAsync<JsonElement>("/api/expert/reviews?kind=Infrastructure&pageSize=100")).GetProperty("items").EnumerateArray(),
+            x => x.GetProperty("reviewId").GetGuid() == approved.Review);
         Assert.Equal(HttpStatusCode.BadRequest, (await first.GetAsync("/api/expert/reviews?status=Draft")).StatusCode);
         var detail = await first.GetAsync($"/api/expert/reviews/{approved.Review}");
         Assert.Equal(HttpStatusCode.OK, detail.StatusCode);

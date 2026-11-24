@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-291 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+297 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -164,6 +164,12 @@
 | GET | /api/expert/reviews/{id}/preview | Bearer | None | 200, 401, 403, 404, 503 |
 | POST | /api/expert/reviews/{id}/approve | Bearer | If-Match, Idempotency-Key | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/expert/reviews/{id}/reject | Bearer | If-Match, Idempotency-Key | 200, 400, 401, 403, 404, 409, 412, 428 |
+| GET | /api/revisions/{revisionId}/fire-infrastructures | Bearer | None | 200, 401, 403, 404 |
+| POST | /api/revisions/{revisionId}/fire-infrastructures | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409 |
+| GET | /api/fire-infrastructures/{id} | Bearer | None | 200, 401, 403, 404 |
+| PUT | /api/fire-infrastructures/{id} | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 422, 428 |
+| POST | /api/fire-infrastructures/{id}/validate | Bearer | None | 200, 401, 403, 404 |
+| POST | /api/fire-infrastructures/{id}/submit | Bearer | If-Match, Idempotency-Key | 200, 400, 401, 403, 404, 409, 412, 422, 428 |
 | GET | /api/feedback | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | POST | /api/feedback | Bearer | Idempotency-Key | 201, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/knowledge-sources/files/{fileId} | Anonymous | None | 302, 404, 503 |

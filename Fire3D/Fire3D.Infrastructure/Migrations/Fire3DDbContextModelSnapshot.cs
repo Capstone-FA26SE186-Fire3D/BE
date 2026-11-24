@@ -1043,6 +1043,10 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("entitlement_id");
 
+                    b.Property<Guid?>("FireInfrastructureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("fire_infrastructure_id");
+
                     b.Property<string>("IdempotencyKey")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -2606,6 +2610,10 @@ namespace Fire3D.Infrastructure.Migrations
                     b.Property<Guid?>("LastAiRequestId")
                         .HasColumnType("uuid")
                         .HasColumnName("last_ai_request_id");
+
+                    b.Property<Guid?>("InfrastructureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("infrastructure_id");
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid")

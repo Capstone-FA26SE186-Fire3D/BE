@@ -13,7 +13,7 @@ public sealed record ScenarioDraftSummaryResponse(Guid Id, Guid ScenarioId, Guid
     uint Version, Guid CreatedBy, DateTime CreatedAt, DateTime UpdatedAt, Guid? LastEditedById, string? LastEditedByName, string StateKind = "Legacy");
 public sealed record ScenarioDraftResponse(Guid Id, Guid ScenarioId, Guid RevisionId, Guid BuildingId,
     Guid OrganizationId, int DraftNumber, JsonNode State, string Source, Guid? LastAiRequestId,
-    DateTime CreatedAt, DateTime UpdatedAt, uint Version);
+    DateTime CreatedAt, DateTime UpdatedAt, uint Version, Guid? InfrastructureId = null);
 public sealed record ScenarioVersionSummaryResponse(Guid Id, Guid ScenarioId, Guid RevisionId, Guid BuildingId,
     Guid OrganizationId, int VersionNumber, string Name, string SchemaVersion, string AlgorithmVersion,
     int TimeLimitSeconds, string ScenarioHash, DateTime CreatedAt, string ReviewStatus="NotSubmitted", Guid? ReviewId=null, string? RejectReason=null);
@@ -24,7 +24,9 @@ public sealed record ScenarioVersionDetailResponse(Guid Id, Guid ScenarioId, Gui
     Guid OrganizationId, int VersionNumber, string Name, string SchemaVersion, string AlgorithmVersion,
     long RandomSeed, int TimeLimitSeconds, int ReplanIntervalSeconds, string ScenarioHash,
     ScenarioVersionConfigurationResponse Configuration, DateTime CreatedAt, JsonNode? StateSnapshot = null, JsonNode? Rubric = null, JsonNode? LearningObjectives = null, string? LearnerInstructions = null,
-    string ReviewStatus="NotSubmitted", Guid? ReviewId=null, string? RejectReason=null);
+    string ReviewStatus="NotSubmitted", Guid? ReviewId=null, string? RejectReason=null, Guid? InfrastructureId=null);
+/// <summary>BE#213: conflicts of a draft state on a fire infrastructure, and the merged document a snapshot would freeze.</summary>
+public sealed record ScenarioInfrastructureView(IReadOnlyList<Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ScenarioDraftValidationIssue> Conflicts, JsonNode State, string Status);
 
 /// <summary>One draft of the organization with its Building/scenario names and the scenario's newest snapshot (null when none).</summary>
 public sealed record ScenarioDraftWorkItem(Guid DraftId, int DraftNumber, Guid RevisionId, Guid BuildingId, string BuildingName, Guid ScenarioId,
@@ -36,6 +38,9 @@ public interface IScenarioReadStore
     Task<IReadOnlyList<ScenarioDraftWorkItem>> ListRecentDraftsAsync(Guid organizationId, int limit, CancellationToken ct);
     Task<IReadOnlyList<Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ScenarioDraftValidationIssue>> ValidateReferencesAsync(Guid revision,JsonNode state,CancellationToken ct)
         => Task.FromResult<IReadOnlyList<Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft.ScenarioDraftValidationIssue>>([]);
+    /// <summary>BE#213: null when the infrastructure does not exist (stores without infrastructure support answer null too).</summary>
+    Task<ScenarioInfrastructureView?> InfrastructureViewAsync(Guid infrastructureId, JsonNode state, CancellationToken ct)
+        => Task.FromResult<ScenarioInfrastructureView?>(null);
     Task<PageResponse<ScenarioSummaryResponse>?> ListBuildingScenariosAsync(
         Guid buildingId, Guid? organizationId, int page, int pageSize, CancellationToken ct);
     Task<ScenarioDetailResponse?> GetScenarioAsync(Guid scenarioId, Guid? organizationId, CancellationToken ct);
