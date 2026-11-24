@@ -27,6 +27,14 @@ public sealed class IfcSourceInspectorTests
         Assert.Equal(bytes.Length,digest!.Size); Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(bytes)),digest.Hash);
     }
     [Fact]
+    public async Task Digest_reads_file_schema_from_a_fragmented_stream()
+    {
+        var bytes=System.Text.Encoding.ASCII.GetBytes("ISO-10303-21;HEADER;FILE_NAME('a','b',(''),(''),'','','');FILE_SCHEMA(('IFC4X3_ADD2'));ENDSEC;DATA;ENDSEC;END-ISO-10303-21;");
+        var client=ResetProxy.For<IAmazonS3>((_,_)=>Task.FromResult(new GetObjectResponse { ContentLength=bytes.Length,ETag="inspected",ResponseStream=new Fragmented(bytes) }));
+        var digest=await Inspector(client).InspectAsync("source","inspected",bytes.Length,default);
+        Assert.True(digest!.Step.StepHeader); Assert.Equal("IFC4X3_ADD2",digest.Step.Schema); Assert.True(digest.Step.SchemaSupported);
+    }
+    [Fact]
     public async Task Digest_rejects_oversize_stream_even_if_the_provider_lies_about_length()
     {
         var client=ResetProxy.For<IAmazonS3>((_,_)=>Task.FromResult(new GetObjectResponse { ContentLength=1,ETag="inspected",ResponseStream=new Fragmented(new byte[1000]) }));

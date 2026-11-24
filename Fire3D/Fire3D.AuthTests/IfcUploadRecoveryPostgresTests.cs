@@ -20,7 +20,10 @@ namespace Fire3D.AuthTests;
 
 public sealed partial class AuthIntegrationTests
 {
-    private static readonly byte[] IfcBytes = Encoding.UTF8.GetBytes("ISO-10303-21;HEADER;ENDSEC;DATA;ENDSEC;END-ISO-10303-21;");
+    // Smallest model the upload checks accept: STEP header, FILE_SCHEMA IFC4 and one storey, space, door and wall.
+    private static readonly byte[] IfcBytes = Encoding.UTF8.GetBytes(IfcModel("IFC4"));
+    private static string IfcModel(string schema, string data = "#1=IFCBUILDINGSTOREY('0a',$,'L1',$,$,$,$,$,.ELEMENT.,0.);#2=IFCSPACE('0b',$,'101',$,$,$,$,$,.ELEMENT.,.INTERNAL.,$);#3=IFCDOOR('0c',$,'D1',$,$,$,$,$,2.1,0.9,.DOOR.,.SINGLE_SWING_LEFT.,$);#4=IFCWALL('0d',$,'W1',$,$,$,$,$,.STANDARD.);") =>
+        $"ISO-10303-21;HEADER;FILE_DESCRIPTION(('ViewDefinition [ReferenceView]'),'2;1');FILE_NAME('model.ifc','2026-11-23T00:00:00',(''),(''),'','','');FILE_SCHEMA(('{schema}'));ENDSEC;DATA;{data}ENDSEC;END-ISO-10303-21;";
     private static readonly string IfcHash = Convert.ToHexStringLower(SHA256.HashData(IfcBytes));
     private static readonly IOptions<IfcUploadOptions> IfcOptions = Options.Create(new IfcUploadOptions { Enabled = true, MaxBytes = 1024, CleanupEnabled = true });
 
@@ -216,7 +219,7 @@ internal sealed class IfcMemoryStorage
     });
     private Task<IfcObjectDigest?> Inspect(string key,string etag)
     {
-        Inspections++; var item=Objects[key];return Task.FromResult<IfcObjectDigest?>(item.Etag==etag?new(item.Bytes.Length,Convert.ToHexStringLower(SHA256.HashData(item.Bytes)),etag,IfcObjectDigest.IsStep(item.Bytes)):null);
+        Inspections++; var item=Objects[key];return Task.FromResult<IfcObjectDigest?>(item.Etag==etag?new(item.Bytes.Length,Convert.ToHexStringLower(SHA256.HashData(item.Bytes)),etag,IfcStepScanner.Scan(item.Bytes)):null);
     }
     private async Task<bool> Copy(string key,string etag,string final)
     {

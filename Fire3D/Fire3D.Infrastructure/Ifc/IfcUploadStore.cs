@@ -22,6 +22,10 @@ public sealed class IfcUploadStore(Fire3DDbContext db) : IIfcUploadStore
         Gate<IfcUploadAttempt>("Claim", actor, revision, input, null, null, etag, "attempt", ct);
     public Task<AuthResult<bool>> AdoptAsync(Guid actor, Guid revision, Guid attempt, FinalizeIfcUploadRequest input, string etag, CancellationToken ct) =>
         Gate<bool>("Adopt", actor, revision, input, null, attempt, etag, null, ct);
+    // The rejection travels in the input next to the completion fields the gate compares with the intent; the gate whitelists the code.
+    public Task<AuthResult<bool>> RejectAsync(Guid actor, Guid revision, FinalizeIfcUploadRequest input, IfcUploadRejection rejection, CancellationToken ct) =>
+        Gate<bool>("Reject", actor, revision, new { input.ObjectKey, input.FileSizeBytes, input.MimeType, input.Sha256Hash, input.OriginalFilename,
+            Rejection = new { rejection.Code, Details = rejection.Details ?? new Dictionary<string, string[]>() } }, null, null, null, null, ct);
     private async Task<AuthResult<T>> Gate<T>(string action, Guid actor, Guid resource, object input, string? key, Guid? attempt, string? etag, string? field, CancellationToken ct)
     {
         await db.Database.OpenConnectionAsync(ct);
@@ -34,6 +38,7 @@ public sealed class IfcUploadStore(Fire3DDbContext db) : IIfcUploadStore
         using var result = JsonDocument.Parse((string)(await cmd.ExecuteScalarAsync(ct))!);
         var root = result.RootElement; var code = root.GetProperty("code").GetString()!;
         if (code != "OK") return AuthResult<T>.Fail(code, "IFC upload could not be completed. Check the intent and retry with the same input.", root.GetProperty("status").GetInt32(),
+            root.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Object ? errors.Deserialize<Dictionary<string, string[]>>(Json) : null,
             retryAfterSeconds: root.TryGetProperty("retryAfter", out var retry) ? retry.GetInt32() : null);
         return AuthResult<T>.Ok(field is null ? (T)(object)true : root.GetProperty(field).Deserialize<T>(Json)!);
     }

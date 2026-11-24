@@ -17,7 +17,8 @@ public sealed class ContractSchemaTransformer : IOpenApiSchemaTransformer
     public static readonly string[] IssueStatuses = ["Open"];
     public static readonly string[] IfcQaCodes = ["IFC_NO_BODY_GEOMETRY", "IFC_BODY_NONSTANDARD_CONTEXT", "IFC_NO_SPACES", "IFC_SPACE_UNNAMED", "IFC_EXIT_UNKNOWN",
         "IFC_NO_FIRE_EQUIPMENT", "IFC_NO_WATER_SOURCE", "IFC_LOW_CONFIDENCE_DEVICE", "IFC_UNMAPPED_MATERIAL", "IFC_EXCESSIVE_VOIDS", "IFC_NOT_ARCHITECTURAL",
-        "IFC_NO_FLOOR_UNDER_SPACE", "IFC_TRIANGLE_BUDGET_EXCEEDED", "IFC_DEFAULT_MASS_PRESENT", "IFC_UNSUPPORTED_FORMAT"];
+        "IFC_NO_FLOOR_UNDER_SPACE", "IFC_TRIANGLE_BUDGET_EXCEEDED", "IFC_DEFAULT_MASS_PRESENT", "IFC_UNSUPPORTED_FORMAT",
+        "IFC_NO_STOREYS", "IFC_NO_STAIRS_MULTISTOREY", "IFC_UNIT_NOT_METRE"];
     public static readonly string[] HistoryStatuses = ["Launching", "Running", "AwaitingSync", "Completed"];
     public static readonly string[] SessionStatuses = ["Prepared", "Expired", "Launching", "Running", "AwaitingSync", "Completed"];
     public static readonly string[] LearnerModes = ["Learn", "Guided", "Assessment"];

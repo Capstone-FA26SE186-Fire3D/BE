@@ -6,8 +6,11 @@ namespace Fire3D.Application.Ifc;
 
 public sealed class IfcUploadOptions
 {
+    /// <summary>Default upload limit (500 MiB) used by every environment that does not set IfcUpload:MaxBytes.</summary>
+    public const long DefaultMaxBytes = 524_288_000;
     public bool Enabled { get; set; }
-    public long? MaxBytes { get; set; }
+    /// <summary>Largest accepted IFC in bytes; initiate refuses a larger file. Published by GET /api/ifc/upload-limits.</summary>
+    public long? MaxBytes { get; set; } = DefaultMaxBytes;
     public bool CleanupEnabled { get; set; }
     /// <summary>Minimum storage throughput assumed when completing an upload (two full reads plus a copy); scales the completion deadline.</summary>
     public long MinThroughputBytesPerSecond { get; set; } = 5L * 1024 * 1024;
@@ -17,11 +20,17 @@ public sealed class IfcUploadOptions
     public TimeSpan CompletionTimeout(long size) =>
         TimeSpan.FromSeconds(Math.Min(Math.Max(30, MaxCompletionSeconds), 30 + 2d * size / Math.Max(1, MinThroughputBytesPerSecond)));
 }
+/// <summary>GET /api/ifc/upload-limits: what the web checks before an upload.</summary>
+public sealed record IfcUploadLimitsResponse(bool Enabled, long MaxBytes, IReadOnlyList<string> AcceptedExtensions, IReadOnlyList<string> AcceptedSchemas)
+{
+    public static IfcUploadLimitsResponse From(IfcUploadOptions options) =>
+        new(options.Enabled && options.MaxBytes is > 0, options.MaxBytes ?? 0, [".ifc"], IfcStepSummary.SupportedSchemas);
+}
 public sealed record IfcUploadIntent(Guid RevisionId, Guid BuildingId, Guid OrganizationId, Guid ActorId,
     string StagingKey, long Size, string Hash, string Filename, DateTime ExpiresAt, bool Completed);
 public sealed record IfcUploadAttempt(Guid Id, string FinalKey);
-/// <summary>StepHeader: the bytes start with the ISO-10303-21 (STEP/IFC) header, after an optional UTF-8 BOM and whitespace.</summary>
-public sealed record IfcObjectDigest(long Size, string Hash, string ETag, bool StepHeader = true)
+/// <summary>Step: what <see cref="IfcStepScanner"/> read while the object was hashed (STEP header, FILE_SCHEMA).</summary>
+public sealed record IfcObjectDigest(long Size, string Hash, string ETag, IfcStepSummary Step)
 {
     public static readonly byte[] Header = "ISO-10303-21;"u8.ToArray();
     /// <summary>True when the first bytes of the file are the STEP header; prefix holds at least the first 64 bytes or the whole file.</summary>
@@ -38,6 +47,11 @@ public interface IIfcSourceInspector
     Task<IfcObjectDigest?> InspectAsync(string key, string etag, long maxBytes, CancellationToken ct);
     Task<bool> CopyAsync(string key, string etag, string finalKey, CancellationToken ct);
 }
+/// <summary>
+/// A content check refused the uploaded bytes (Code: IFC_UNSUPPORTED_FORMAT, IFC_UNSUPPORTED_SCHEMA). The SHA-256 already matched the
+/// intent, so the same intent can never pass: the gate deletes the Draft revision and the intent and queues the staging object for cleanup.
+/// </summary>
+public sealed record IfcUploadRejection(string Code, string Message, IReadOnlyDictionary<string, string[]>? Details = null);
 public sealed class IfcStorageFailure : Exception { public IfcStorageFailure(Exception inner) : base("IFC storage provider is temporarily unavailable.", inner) { } }
 public interface IIfcUploadStore
 {
@@ -45,6 +59,8 @@ public interface IIfcUploadStore
     Task<AuthResult<IfcUploadIntent>> ReadAsync(Guid actor, Guid revision, FinalizeIfcUploadRequest input, CancellationToken ct);
     Task<AuthResult<IfcUploadAttempt>> ClaimAsync(Guid actor, Guid revision, FinalizeIfcUploadRequest input, string etag, CancellationToken ct);
     Task<AuthResult<bool>> AdoptAsync(Guid actor, Guid revision, Guid attempt, FinalizeIfcUploadRequest input, string etag, CancellationToken ct);
+    /// <summary>Removes the Draft revision, intent and abandoned attempts of a rejected upload and audits the rejection.</summary>
+    Task<AuthResult<bool>> RejectAsync(Guid actor, Guid revision, FinalizeIfcUploadRequest input, IfcUploadRejection rejection, CancellationToken ct);
 }
 public interface IIfcUploadService
 {
