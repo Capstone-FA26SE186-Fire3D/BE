@@ -25,7 +25,7 @@ public sealed partial class AuthIntegrationTests
         var f = await PublishedTraining(rubric);
         var trainee = await SeedTrainee();
         var before = (string[])(await ScalarAsync("SELECT learner_rubric_metrics('1.0.0')"))!;
-        Assert.Equal(EditorContract.CoreMetrics, before.Take(5));
+        Assert.Equal(EditorContract.CoreMetrics, before.Take(EditorContract.CoreMetrics.Length));
         Assert.Subset(before.ToHashSet(), EditorContract.LearnerMetrics.ToHashSet());
         Assert.DoesNotContain("hose_reel_used", before);
         await WithLearnerRuntime(async runtime =>
@@ -100,7 +100,7 @@ public sealed class RuntimeRubricMetricTests
         var (contracts, issues) = Parse(Batch1());
         Assert.Empty(issues);
         var metrics = EditorContract.RuntimeMetrics(contracts);
-        Assert.Equal(EditorContract.CoreMetrics, metrics.Keys.Take(5));
+        Assert.Equal(EditorContract.CoreMetrics, metrics.Keys.Take(EditorContract.CoreMetrics.Length));
         Assert.Equal(EditorContract.LearnerMetrics.Order(StringComparer.Ordinal), metrics.Keys.Order(StringComparer.Ordinal));
         Assert.Equal("AlarmRaised", metrics["alarm_raised"]);
         Assert.Null(metrics["reached_exit"]);
@@ -114,7 +114,7 @@ public sealed class RuntimeRubricMetricTests
         Assert.Empty(issues);
         var metrics = EditorContract.RuntimeMetrics(contracts);
         Assert.Equal("HoseReelUsed", metrics["hose_reel_used"]);
-        Assert.Equal(16, metrics.Count);
+        Assert.Equal(18, metrics.Count); // 7 core (step_count, route_efficiency since BE#216) + 10 runtime 2.0.x + 1 declared
         Assert.Equal("Number of accepted HoseReelUsed events (rejected events are not counted).",
             RubricContract.CatalogFor(metrics).Metrics.Single(x => x.Id == "hose_reel_used").Description);
 
@@ -132,8 +132,8 @@ public sealed class RuntimeRubricMetricTests
     {
         RuntimeCatalogDto Runtime(string version, JsonObject catalog) => new(version, "1", "1", catalog["capabilities"]!, catalog["capabilityContracts"]!.AsObject());
         var union = RuntimeCatalogContracts.Metrics([Runtime("2.0.2", Batch1()), Runtime("2.1.0", With(Batch1(), "extinguisher.hose_reel", HoseReel))]);
-        Assert.Equal(EditorContract.CoreMetrics, union.Keys.Take(5));
-        Assert.Equal(union.Keys.Skip(5).Order(StringComparer.Ordinal), union.Keys.Skip(5));
+        Assert.Equal(EditorContract.CoreMetrics, union.Keys.Take(EditorContract.CoreMetrics.Length));
+        Assert.Equal(union.Keys.Skip(EditorContract.CoreMetrics.Length).Order(StringComparer.Ordinal), union.Keys.Skip(EditorContract.CoreMetrics.Length));
         Assert.Contains("hose_reel_used", union.Keys);
         Assert.Equal(EditorContract.CoreMetrics, RuntimeCatalogContracts.Metrics([]).Keys);
     }
