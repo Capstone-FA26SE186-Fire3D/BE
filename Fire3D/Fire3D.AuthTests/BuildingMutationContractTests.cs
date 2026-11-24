@@ -28,7 +28,7 @@ public sealed class BuildingMutationContractTests
     {
         var admin = new User { Id = Guid.NewGuid(), Role = UserRole.PlatformAdmin, IsActive = true };
         var result = await Handler(Accounts(admin))
-            .Handle(new(admin.Id, Guid.Empty, new("Office", null, 1, null, null), "key-1"), default);
+            .Handle(new(admin.Id, Guid.Empty, new("Office", "Apartment", 1, null, null), "key-1"), default);
         Assert.Equal(400, result.Error?.Status);
         Assert.Equal("VALIDATION_ERROR", result.Error?.Code);
         Assert.Contains("organizationId", result.Error!.Errors!.Keys);
@@ -60,7 +60,7 @@ public sealed class BuildingMutationContractTests
             invalid == "geojson" ? "{\"type\":\"Point\",\"coordinates\":[181,10]}" : null);
         var contact = new CreateBuildingContactRequest("Owner", null, null, invalid == "email" ? "not-email" : "owner@example.test", true);
         var result = await Handler(Accounts(owner))
-            .Handle(new(owner.Id, org, new("Office", null, 1, location, contact), "key-1"), default);
+            .Handle(new(owner.Id, org, new("Office", "Apartment", 1, location, contact), "key-1"), default);
         Assert.Equal("VALIDATION_ERROR", result.Error?.Code);
         Assert.Contains(invalid == "email" ? "contact.email" : "location." + invalid, result.Error!.Errors!.Keys);
     }
@@ -70,7 +70,7 @@ public sealed class BuildingMutationContractTests
     {
         var trainee = new User { Id = Guid.NewGuid(), Role = UserRole.Trainee, IsActive = true };
         var result = await Handler(Accounts(trainee))
-            .Handle(new(trainee.Id, Guid.NewGuid(), new("Office", null, 1, null, null), "key-1"), default);
+            .Handle(new(trainee.Id, Guid.NewGuid(), new("Office", "Apartment", 1, null, null), "key-1"), default);
         Assert.Equal(403, result.Error?.Status);
     }
 
@@ -78,7 +78,7 @@ public sealed class BuildingMutationContractTests
     public async Task Organization_user_cannot_select_another_tenant_even_when_calling_handler_directly()
     {
         var owner = new User { Id = Guid.NewGuid(), OrganizationId = Guid.NewGuid(), Role = UserRole.OrganizationUser, IsActive = true };
-        var result = await Handler(Accounts(owner)).Handle(new(owner.Id, Guid.NewGuid(), new("Office", null, 1, null, null), "key-1"), default);
+        var result = await Handler(Accounts(owner)).Handle(new(owner.Id, Guid.NewGuid(), new("Office", "Apartment", 1, null, null), "key-1"), default);
         Assert.Equal(403, result.Error?.Status);
     }
 
@@ -89,7 +89,7 @@ public sealed class BuildingMutationContractTests
     public async Task Create_requires_a_printable_idempotency_key_before_any_lookup(string? key)
     {
         var accounts = ResetProxy.For<IAuthStore>((method, _) => throw new InvalidOperationException("Unexpected lookup: " + method));
-        var result = await Handler(accounts).Handle(new(Guid.NewGuid(), null, new("Office", null, 1, null, null), key), default);
+        var result = await Handler(accounts).Handle(new(Guid.NewGuid(), null, new("Office", "Apartment", 1, null, null), key), default);
         Assert.Equal("IDEMPOTENCY_KEY_REQUIRED", result.Error?.Code);
         Assert.Equal(400, result.Error?.Status);
     }

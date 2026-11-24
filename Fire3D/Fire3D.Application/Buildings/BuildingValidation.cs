@@ -16,7 +16,8 @@ internal static class BuildingValidation
                 errors[field] = [$"{field} {(required ? "is required and " : "")}must contain at most {max} characters without control characters."];
         }
         Text("name", name, 200, true);
-        Text("buildingType", type, 100);
+        if (string.IsNullOrWhiteSpace(type) || !BuildingTypes.All.Contains(type.Trim()))
+            errors["buildingType"] = ["buildingType must be Apartment or School."];
         if (floors < 1) errors["totalFloors"] = ["totalFloors must be at least 1."];
         if (contact is not null)
         {

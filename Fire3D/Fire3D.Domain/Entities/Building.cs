@@ -15,6 +15,19 @@ public partial class Building
 
     public int TotalFloors { get; set; }
 
+    /// <summary>BE#212: tổng diện tích sàn (m²), facility head, on-site force (jsonb), emergency contacts (jsonb array), signed PC06 plan.</summary>
+    public decimal? FloorAreaSquareMeters { get; set; }
+
+    public string? FacilityHeadName { get; set; }
+
+    public string? FacilityHeadPhone { get; set; }
+
+    public string? OnSiteForce { get; set; }
+
+    public string EmergencyContacts { get; set; } = "[]";
+
+    public Guid? SignedPlanDocumentId { get; set; }
+
     public bool IsActive { get; set; }
 
     public Guid CreatedBy { get; set; }

@@ -16,6 +16,7 @@ internal sealed class CreateBuildingCommandHandler(IBuildingStore store, IAuthSt
         var name = request.Name?.Trim();
 
         var errors = BuildingValidation.Validate(name, request.BuildingType, request.TotalFloors, request.Location, request.Contact);
+        BuildingFacility.Validate(errors, request.FloorAreaSquareMeters, request.FacilityHeadName, request.FacilityHeadPhone, request.OnSiteForce, request.EmergencyContacts);
         var actor = await accounts.FindUserAsync(command.ActorId, ct);
         var alias = command.OrganizationId == Guid.Empty ? null : command.OrganizationId;
         if (request.OrganizationId == Guid.Empty || (request.OrganizationId.HasValue && alias.HasValue && request.OrganizationId != alias))
@@ -42,6 +43,7 @@ internal sealed class CreateBuildingCommandHandler(IBuildingStore store, IAuthSt
             CreatedAt = now,
             UpdatedAt = now
         };
+        BuildingFacility.Apply(building, request.FloorAreaSquareMeters, request.FacilityHeadName, request.FacilityHeadPhone, request.OnSiteForce, request.EmergencyContacts);
 
         BuildingLocation? location = null;
         if (request.Location != null)
@@ -96,7 +98,7 @@ internal sealed class CreateBuildingCommandHandler(IBuildingStore store, IAuthSt
         BuildingLocationResponse? locationResponse = location != null ? new BuildingLocationResponse(location.Id, location.Address, location.City, location.District, location.Latitude, location.Longitude, location.Geojson) : null;
         BuildingContactResponse? contactResponse = contact != null ? new BuildingContactResponse(contact.Id, contact.ContactName, contact.ContactRole, contact.Phone, contact.Email, contact.IsPrimary) : null;
 
-        var response = new BuildingResponse(building.Id, building.Name, building.BuildingType, building.TotalFloors, building.IsActive, building.OrganizationId, building.CreatedAt, building.UpdatedAt, locationResponse, contactResponse);
+        var response = BuildingMapping.ToResponse(building) with { Location = locationResponse, Contact = contactResponse };
         return AuthResult<BuildingResponse>.Ok(response);
     }
 }

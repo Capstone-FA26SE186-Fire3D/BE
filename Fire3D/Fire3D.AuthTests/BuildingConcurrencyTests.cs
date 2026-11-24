@@ -11,14 +11,22 @@ public sealed partial class AuthIntegrationTests
 {
     private static Task<HttpResponseMessage> PostBuilding(HttpClient http, object body, string? key = "auto")
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/buildings") { Content = JsonContent.Create(body) };
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/buildings") { Content = JsonContent.Create(WithBuildingType(body)) };
         if (key is not null) request.Headers.TryAddWithoutValidation("Idempotency-Key", key == "auto" ? Guid.NewGuid().ToString("N") : key);
         return http.SendAsync(request);
     }
 
+    // BE#212 makes buildingType (Apartment | School) required; bodies that do not test it get Apartment.
+    private static System.Text.Json.Nodes.JsonObject WithBuildingType(object body)
+    {
+        var json = System.Text.Json.JsonSerializer.SerializeToNode(body, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!.AsObject();
+        if (!json.ContainsKey("buildingType")) json["buildingType"] = "Apartment";
+        return json;
+    }
+
     private static Task<HttpResponseMessage> SendBuilding(HttpClient http, HttpMethod method, Guid id, object? body, string? ifMatch)
     {
-        var request = new HttpRequestMessage(method, $"/api/buildings/{id}") { Content = body is null ? null : JsonContent.Create(body) };
+        var request = new HttpRequestMessage(method, $"/api/buildings/{id}") { Content = body is null ? null : JsonContent.Create(WithBuildingType(body)) };
         if (ifMatch is not null) request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
         return http.SendAsync(request);
     }

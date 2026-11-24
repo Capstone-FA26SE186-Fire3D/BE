@@ -47,13 +47,13 @@ public sealed partial class AuthIntegrationTests
             location = new { address = "1 River St", city = "Hanoi" }, contact = new { contactName = "Hoa", isPrimary = false } });
         Assert.True(created.StatusCode == HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
         var tower = (await created.Content.ReadFromJsonAsync<BuildingResponse>())!;
-        Assert.Equal(HttpStatusCode.Created, (await PostBuilding(client, new { organizationId = organization, name = "Depot B", buildingType = "Office", totalFloors = 1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await PostBuilding(client, new { organizationId = organization, name = "Depot B", buildingType = "School", totalFloors = 1 })).StatusCode);
 
         async Task<string[]> Search(string text) => (await client.GetFromJsonAsync<JsonObject>($"/api/buildings?organizationId={organization}&search={Uri.EscapeDataString(text)}"))!
             ["items"]!.AsArray().Select(x => x!["name"]!.GetValue<string>()).ToArray();
         Assert.Equal(["Riverside Tower"], await Search(" RIVERSIDE "));
         Assert.Equal(["Riverside Tower"], await Search("apart"));
-        Assert.Equal(["Depot B"], await Search("office"));
+        Assert.Equal(["Depot B"], await Search("school"));
         Assert.Empty(await Search("warehouse"));
 
         // The existing location and contact rows are updated in place, never duplicated.

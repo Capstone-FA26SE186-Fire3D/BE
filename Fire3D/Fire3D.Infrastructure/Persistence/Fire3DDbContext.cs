@@ -189,6 +189,12 @@ public partial class Fire3DDbContext : DbContext
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
             entity.Property(e => e.BuildingType).HasColumnName("building_type");
+            entity.Property(e => e.FloorAreaSquareMeters).HasColumnType("numeric(12,2)").HasColumnName("floor_area_square_meters");
+            entity.Property(e => e.FacilityHeadName).HasMaxLength(200).HasColumnName("facility_head_name");
+            entity.Property(e => e.FacilityHeadPhone).HasMaxLength(32).HasColumnName("facility_head_phone");
+            entity.Property(e => e.OnSiteForce).HasColumnType("jsonb").HasColumnName("on_site_force");
+            entity.Property(e => e.EmergencyContacts).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb").HasColumnName("emergency_contacts");
+            entity.Property(e => e.SignedPlanDocumentId).HasColumnName("signed_plan_document_id");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");

@@ -1,6 +1,6 @@
 # Route inventory generated from OpenAPI
 
-298 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
+301 HTTP operations in the captured source test artifact. Includes metadata only; this is not a completion or deployment checklist. Run the generator again after route/metadata changes. Role/tenant/lifecycle and feature evidence: [selected-api-contract.md](selected-api-contract.md), [auth-api-checklist.md](auth-api-checklist.md), [api-implementation-checklist.md](api-implementation-checklist.md).
 
 | Method | Endpoint | Authentication metadata | Required headers | Declared responses |
 |---|---|---|---|---|
@@ -159,6 +159,9 @@
 | POST | /api/buildings/{id}/revisions/upload-url | Bearer | Idempotency-Key | 201, 400, 401, 403, 404 |
 | GET | /api/buildings/{id}/service-entitlement | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/buildings/{id}/trainings | Bearer | None | 200, 400, 404 |
+| GET | /api/buildings/{id}/signed-plan | Bearer | None | 302, 401, 403, 404, 503 |
+| POST | /api/buildings/{id}/signed-plan/upload-intent | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409, 503 |
+| POST | /api/buildings/{id}/signed-plan/uploads/{uploadId}/complete | Bearer | None | 200, 400, 401, 403, 404, 409, 422, 503 |
 | GET | /api/expert/reviews | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/expert/reviews/{id} | Bearer | None | 200, 401, 403, 404 |
 | GET | /api/expert/reviews/{id}/preview | Bearer | None | 200, 401, 403, 404, 503 |
