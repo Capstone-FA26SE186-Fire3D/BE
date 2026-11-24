@@ -37,13 +37,9 @@ public sealed class IfcUploadStore(Fire3DDbContext db) : IIfcUploadStore
         cmd.Parameters.AddWithValue("etag", NpgsqlDbType.Text, (object?)etag ?? DBNull.Value);
         using var result = JsonDocument.Parse((string)(await cmd.ExecuteScalarAsync(ct))!);
         var root = result.RootElement; var code = root.GetProperty("code").GetString()!;
-        if (code != "OK") return AuthResult<T>.Fail(code, Message(code), root.GetProperty("status").GetInt32(),
+        if (code != "OK") return AuthResult<T>.Fail(code, "IFC upload could not be completed. Check the intent and retry with the same input.", root.GetProperty("status").GetInt32(),
             root.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Object ? errors.Deserialize<Dictionary<string, string[]>>(Json) : null,
             retryAfterSeconds: root.TryGetProperty("retryAfter", out var retry) ? retry.GetInt32() : null);
         return AuthResult<T>.Ok(field is null ? (T)(object)true : root.GetProperty(field).Deserialize<T>(Json)!);
     }
-    private static string Message(string code) => code switch
-    {
-        _ => "IFC upload could not be completed. Check the intent and retry with the same input."
-    };
 }
