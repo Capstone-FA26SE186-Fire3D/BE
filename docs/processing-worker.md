@@ -32,6 +32,33 @@ With either pull mode on, the HTTP dispatcher skips those job kinds; pull is ref
 
 `POST /api/revisions/{revisionId}/process`, header `Idempotency-Key: process-file-001`: verified source required; returns 202 `{jobId}` + Location. Missing key 400; unverified source 422 `IFC_SOURCE_NOT_VERIFIED`. Same key/input replays; concurrent different keys still map to one logical job. Job, canonical schema `1` event, receipt and audit commit together.
 
+Organization limits (#219, BE layer 3 of the junk-IFC guard; enforced in `request_revision_processing` under an Organization advisory lock,
+migration `20261124180000_IfcJunkGuard`). They apply only when the call would create a new Geometry job; a replayed key or a second key for a
+revision that already has its job still answers 202 with that job.
+
+- 409 `IFC_ORG_JOB_RUNNING`, `errors.jobId` = the Organization's Geometry job that is `Queued` or `Running`. One such job per Organization.
+- 429 `IFC_PROCESS_DAILY_LIMIT` with `Retry-After` (seconds to the next UTC midnight), `limit`, `used` (also in `errors.limit`,
+  `errors.used`), when the Organization already created its daily limit of Geometry jobs since 00:00 UTC.
+- **The daily limit is a PlatformAdmin policy** (team decision 24/11/2026, modelled on the AI quota policies): immutable versions in
+  `ifc_processing_policies` with an `effectiveFrom`.
+  - A version without `organizationId` is the default for every Organization. A version for one Organization overrides it, and a
+    version there with `dailyLimit: null` removes the override. The newest version in effect wins; 0 stops new processing.
+  - While no policy exists, `IfcProcessing:DailyLimitPerOrganization` applies (`IfcProcessing__DailyLimitPerOrganization`, default 20,
+    1-100000). It is only the starting value.
+  - `policyKind` is `DailyGeometryRuns`, which leaves room for extra runs sold through a quotation later.
+
+  | Method | Route | Who | Content |
+  |---|---|---|---|
+  | GET | `/api/admin/ifc-processing/policies?organizationId=&scope=All\|Default&page=&pageSize=` | PlatformAdmin | Versions, newest first, and `effectiveDefault` |
+  | POST | `/api/admin/ifc-processing/policies` | PlatformAdmin | `{organizationId?, dailyLimit, effectiveFrom?, note?}`: a new version (audited) |
+  | GET | `/api/admin/organizations/{organizationId}/ifc-processing` | PlatformAdmin | One Organization's usage |
+  | GET | `/api/organizations/me/ifc-processing` | OrganizationUser | Own usage |
+
+  Usage: `{organizationId, dailyLimit, source (Organization | Default | Configuration), policyId, used, remaining, resetsAt}`.
+  The retry below reuses the failed job, so a retry after a system failure is never counted.
+- Each refusal writes an audit row (`action` Reject, `target_entity` revisions, `new_values.operation` IfcProcessRejected, `code`), so
+  PlatformAdmin can see which Organization keeps sending broken files.
+
 Retry keeps `{requestId, reason}` at `/api/processing-jobs/{id}/retry`. Only Failed accepts a new key; old matching key returns AlreadyRequeued even after job completion; changed input conflicts. Cancelled/Succeeded are not retried by new keys.
 
 ## Worker protocol

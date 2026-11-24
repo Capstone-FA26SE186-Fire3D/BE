@@ -35,8 +35,10 @@ public sealed class ProcessingRuntimeStore(Fire3DDbContext db, IConfiguration co
     public async Task<AuthResult<Guid>> RequestAsync(Guid actor,Guid revision,string key,CancellationToken ct)
     {
         await db.Database.OpenConnectionAsync(ct);
-        await using var cmd=new NpgsqlCommand("SELECT request_revision_processing(@actor,@revision,@key)::text",(NpgsqlConnection)db.Database.GetDbConnection());
+        // #219: the gate enforces the Organization limits atomically; the API only supplies the configured daily limit.
+        await using var cmd=new NpgsqlCommand("SELECT request_revision_processing(@actor,@revision,@key,@limit)::text",(NpgsqlConnection)db.Database.GetDbConnection());
         cmd.Parameters.AddWithValue("actor",actor);cmd.Parameters.AddWithValue("revision",revision);cmd.Parameters.AddWithValue("key",key);
+        cmd.Parameters.AddWithValue("limit",DailyLimit(configuration));
         var value=Parse(await cmd.ExecuteScalarAsync(ct));
         return Error(value) is { } error ? new(default,error) : AuthResult<Guid>.Ok(value.GetProperty("jobId").GetGuid());
     }
@@ -94,6 +96,20 @@ public sealed class ProcessingRuntimeStore(Fire3DDbContext db, IConfiguration co
         cmd.Parameters.AddWithValue("token",NpgsqlDbType.Uuid,(object?)token??DBNull.Value);cmd.Parameters.AddWithValue("receipt",NpgsqlDbType.Uuid,(object?)receipt??DBNull.Value);
         return Parse(await cmd.ExecuteScalarAsync(ct));
     }
+    /// <summary>IfcProcessing:DailyLimitPerOrganization, or the default when it is not configured.</summary>
+    public static int DailyLimit(IConfiguration configuration)=>configuration.GetValue<int?>("IfcProcessing:DailyLimitPerOrganization")??IfcProcessingOptions.DefaultDailyLimitPerOrganization;
     private static JsonElement Parse(object? value) { using var json=JsonDocument.Parse((string)value!);return json.RootElement.Clone(); }
-    private static AuthError? Error(JsonElement root)=>root.GetProperty("code").GetString() is "OK" ? null : new(root.GetProperty("code").GetString()!,"Processing operation was rejected. Check scope, input and current lease.",root.GetProperty("status").GetInt32());
+    private static AuthError? Error(JsonElement root)=>root.GetProperty("code").GetString() is not { } code || code=="OK" ? null : new(code,Message(code),root.GetProperty("status").GetInt32(),
+        Details(root),
+        root.TryGetProperty("retryAfter",out var retry) ? retry.GetInt32() : null);
+    // Only the #219 request gate sends errors (string arrays such as jobId, limit, used); anything else is ignored, not thrown.
+    private static Dictionary<string,string[]>? Details(JsonElement root)=>root.TryGetProperty("errors",out var errors)&&errors.ValueKind==JsonValueKind.Object
+        &&errors.EnumerateObject().All(p=>p.Value.ValueKind==JsonValueKind.Array&&p.Value.EnumerateArray().All(x=>x.ValueKind==JsonValueKind.String))
+        ? errors.EnumerateObject().ToDictionary(p=>p.Name,p=>p.Value.EnumerateArray().Select(x=>x.GetString()!).ToArray()) : null;
+    private static string Message(string code)=>code switch
+    {
+        "IFC_PROCESS_DAILY_LIMIT"=>"The Organization reached its daily IFC processing limit. Retry after the next UTC midnight (Retry-After).",
+        "IFC_ORG_JOB_RUNNING"=>"Another IFC processing job of this Organization is queued or running (errors.jobId). Wait for it to finish.",
+        _=>"Processing operation was rejected. Check scope, input and current lease."
+    };
 }

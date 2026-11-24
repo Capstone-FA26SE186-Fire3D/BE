@@ -22,8 +22,14 @@ public static partial class EditorContract
     /// <summary>Elevators belong to the building: the game places them from the IFC, a scenario never does (BE#193).</summary>
     public const string BuildingOnlyCapability = "transport.elevator";
     public const int MaxFloors = 500, MaxMappings = 100_000, MaxObjects = 2_000;
-    /// <summary>Metrics computed from the core events (ExitReached, WrongExit, HazardExposure.amount, Moved.distanceMeters) for every runtime.</summary>
-    public static readonly string[] CoreMetrics = ["reached_exit", "completion_time_seconds", "wrong_exits", "hazard_exposure", "distance_meters"];
+    /// <summary>
+    /// Metrics computed from the core events (ExitReached, WrongExit, HazardExposure.amount, Moved.distanceMeters) for every runtime.
+    /// BE#216: step_count (sum of Moved.steps) and route_efficiency (RouteBaseline.optimalDistanceMeters / distance, 0..1) depend on
+    /// runtime telemetry; without it a criterion on them is not evaluable (<see cref="NotEvaluableMetrics"/>).
+    /// </summary>
+    public static readonly string[] CoreMetrics = ["reached_exit", "completion_time_seconds", "wrong_exits", "hazard_exposure", "distance_meters", "step_count", "route_efficiency"];
+    /// <summary>BE#216: a criterion on these metrics with no value is skipped (passed null, METRIC_NOT_EVALUABLE) instead of failed.</summary>
+    public static readonly string[] NotEvaluableMetrics = ["step_count", "route_efficiency"];
     /// <summary>
     /// Player-action metrics of runtime 2.0.x (Docs IFC 6.1 "event cho rubric"), available for every runtime next to the metrics its
     /// catalog declares (BE#183). The value is the number of accepted events of that API type, 0 when the runtime does not declare the
@@ -70,7 +76,7 @@ public static partial class EditorContract
     /// Learner/playtest events every runtime may send; the core metrics are computed from them. Any other event type must be
     /// declared in <c>events</c> of a capability of the session's pinned runtime, otherwise it is rejected (EVENT_TYPE_UNSUPPORTED).
     /// </summary>
-    public static readonly string[] CoreEvents = ["ExitReached", "WrongExit", "HazardExposure", "Moved"];
+    public static readonly string[] CoreEvents = ["ExitReached", "WrongExit", "HazardExposure", "Moved", "RouteBaseline"];
     public const int MaxCapabilityEvents = 50, MaxCapabilityActions = 50;
 
     /// <summary>Returns the declared schemaVersion, or null for a legacy document.</summary>

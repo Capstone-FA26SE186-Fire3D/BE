@@ -60,7 +60,7 @@ An item is a `fet3d.editor/1` object (`id, kind, label?, placement{floorId, posi
 | `WaterSource` | Equipment | Nguồn nước, with a capability. |
 
 - `INFRASTRUCTURE_KIND_MISMATCH` when the category and kind do not match.
-- `INFRASTRUCTURE_CAPABILITY_NOT_FIXED` for `item.towel` and `bait.belongings` (scenario items) and for `transport.elevator` (it comes from IFC).
+- `INFRASTRUCTURE_CAPABILITY_NOT_FIXED` for `item.towel` and `bait.belongings` (scenario items), for `door.exit_locked` and `door.fire_wedged` (BE#224: the state of an IFC door in one situation) and for `transport.elevator` (it comes from IFC).
 - PUT runs the editor shape checks on the items. Validate and submit also check:
   - completeness and the capability contracts of `runtimeVersion`;
   - the pinned accepted Geometry (`geometry`);
@@ -82,7 +82,7 @@ infrastructure id.
   - 422 `FIRE_INFRASTRUCTURE_NOT_APPROVED` when the version is not Approved.
   - 422 `FIRE_INFRASTRUCTURE_REVISION_MISMATCH` when it belongs to another revision.
   - The draft returns `infrastructureId`. One infrastructure carries many scenarios.
-- The draft holds only scenario objects: Spawn, Hazard, Npc, BlockedElement, and the scenario items `item.towel` and `bait.belongings`.
+- The draft holds only scenario objects: Spawn, Hazard, Npc, BlockedElement, the scenario items `item.towel` and `bait.belongings`, and the door states `door.exit_locked` (exit door locked) and `door.fire_wedged` (fire door wedged open), which are Equipment objects anchored on an IFC door (BE#224). One situation can lock the north exit, another leave it open. The anchor rules (door in the pinned Geometry, same floor) still apply.
   - Any Goal or other Equipment is refused: PUT and snapshot answer `422 SCENARIO_CONTAINS_INFRASTRUCTURE` (`errors` by path), and validate reports it as an issue at `$.objects[i]`.
 - **Validate and snapshot work on the merged document**: the draft's objects followed by the infrastructure items (without `category`).
   - Issues on infrastructure items are reported at `$.infrastructure.items[i]`. An example is a capability version that the scenario's runtime does not publish.

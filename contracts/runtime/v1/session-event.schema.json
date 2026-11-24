@@ -26,7 +26,11 @@
     },
     {
       "if": { "properties": { "type": { "const": "Moved" } } },
-      "then": { "properties": { "payload": { "type": "object", "additionalProperties": false, "required": ["distanceMeters"], "properties": { "distanceMeters": { "type": "number", "minimum": 0, "maximum": 1000000000 } } } } }
+      "then": { "properties": { "payload": { "type": "object", "additionalProperties": false, "required": ["distanceMeters"], "properties": { "distanceMeters": { "type": "number", "minimum": 0, "maximum": 1000000000 }, "steps": { "type": "integer", "minimum": 0, "maximum": 1000000000, "description": "BE#216: steps taken over this movement (optional); summed into the step_count metric." } } } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "RouteBaseline" } } },
+      "then": { "properties": { "payload": { "type": "object", "additionalProperties": false, "required": ["optimalDistanceMeters"], "properties": { "optimalDistanceMeters": { "type": "number", "minimum": 0, "maximum": 1000000000, "description": "BE#216: shortest safe distance from the spawn to the assembly point, computed by the runtime at session start. Send it once (the first one counts); route_efficiency = optimalDistanceMeters / sum of Moved.distanceMeters, clamped to 0..1." } } } } }
     }
   ]
 }

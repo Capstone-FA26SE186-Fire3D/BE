@@ -64,10 +64,14 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
                 extensions:new Dictionary<string,object?> {["code"]=result.Error.Code});
     }
 
+    /// <summary>Creates a Draft revision and an upload intent for one IFC file.</summary>
+    /// <remarks>#219: 409 IFC_SOURCE_ALREADY_FAILED (errors.qaCodes, errors.jobId) when the latest processing of the same SHA-256 in the
+    /// Organization failed on blocking QA issues; no revision is created.</remarks>
     [HttpPost("buildings/{buildingId:guid}/ifc")]
     [ProducesResponseType<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
+    [ProducesResponseType<ProblemDetails>(409)]
     public async Task<ActionResult<Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadResponse>> InitiateUpload(Guid buildingId,
         Fire3D.Application.Ifc.Commands.InitiateUpload.InitiateIfcUploadRequest request,
         [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
@@ -99,16 +103,23 @@ public sealed class IfcCommandsController(ISender sender) : ControllerBase
     }
 
     /// <summary>Queues verified IFC processing durably in PostgreSQL.</summary>
-    /// <remarks>202 does not mean processing succeeded. Deployment selects Http or RedisStreams transport. Redis Published means publication; ACK means durable worker handoff. Neither means accepted output.</remarks>
+    /// <remarks>202 does not mean processing succeeded. Deployment selects Http or RedisStreams transport. Redis Published means publication; ACK means durable worker handoff. Neither means accepted output.
+    /// #219 Organization limits for a new Geometry job (a replayed key or the revision's existing job still answers 202): 409 IFC_ORG_JOB_RUNNING
+    /// while another Geometry job of the Organization is Queued/Running (errors.jobId); 429 IFC_PROCESS_DAILY_LIMIT when the Organization
+    /// created IfcProcessing:DailyLimitPerOrganization jobs this UTC day (Retry-After = seconds to the next UTC midnight; errors.limit, errors.used).
+    /// Retrying a failed job (POST /api/processing-jobs/{jobId}/retry) is not counted.</remarks>
     [HttpPost("revisions/{revisionId:guid}/process")]
     [ProducesResponseType(202)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(404)]
     [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(422)]
+    [ProducesResponseType<ProblemDetails>(429)]
     public async Task<IActionResult> ProcessRevision(Guid revisionId, [FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader] string? key, CancellationToken ct)
     {
         var actor = User.GetActorId();
         var result = await sender.Send(new Fire3D.Application.Ifc.Commands.ProcessRevision.ProcessRevisionCommand(actor, revisionId, key), ct);
+        if (result.Error?.RetryAfterSeconds is int retry) Response.Headers.RetryAfter = retry.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return result.IsSuccess ? Accepted($"/api/processing-jobs/{result.Value}", new { JobId = result.Value })
             : Problem(statusCode: result.Error!.Status, title: result.Error.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code, ["errors"] = result.Error.Errors });

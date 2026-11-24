@@ -35,7 +35,9 @@ public static class RubricContract
         ["completion_time_seconds"]="Seconds until the first exit (or the last event when no exit was reached).",
         ["wrong_exits"]="Number of WrongExit events.",
         ["hazard_exposure"]="Sum of HazardExposure amounts.",
-        ["distance_meters"]="Sum of Moved distances in metres."
+        ["distance_meters"]="Sum of Moved distances in metres.",
+        ["step_count"]="Sum of Moved steps. Not evaluable (criterion skipped) when the runtime sends no steps.",
+        ["route_efficiency"]="Shortest safe distance (RouteBaseline) divided by the distance moved, 0..1 (1 = optimal route). Not evaluable (criterion skipped) without RouteBaseline."
     };
     /// <summary>Catalog of the runtime 2.0.x metrics (EditorContract.LearnerMetrics).</summary>
     public static RubricCatalog Catalog { get; }=CatalogFor(EditorContract.LearnerMetrics.ToDictionary(x=>x,x=>EditorContract.EventCountMetrics.GetValueOrDefault(x)));

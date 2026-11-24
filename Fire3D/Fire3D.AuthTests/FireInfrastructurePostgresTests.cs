@@ -193,4 +193,40 @@ public sealed partial class AuthIntegrationTests
         // The infrastructure counts its scenarios.
         Assert.Equal(2, (await user.GetFromJsonAsync<JsonObject>($"/api/fire-infrastructures/{infrastructureId}"))!["scenarioDraftCount"]!.GetValue<int>());
     }
+
+    // BE#224: door.exit_locked / door.fire_wedged on an IFC door are situation states: a draft on an infrastructure may hold them,
+    // while fixed doors (door.exit) and exits stay infrastructure.
+    [PostgresFact]
+    public async Task Locked_exit_and_wedged_fire_door_belong_to_the_situation()
+    {
+        static JsonObject Door(string id, string capability) => new()
+        {
+            ["id"] = id, ["kind"] = "Equipment", ["anchorId"] = "1hOSvn6df7F8_7GcBWlRGR",
+            ["capability"] = new JsonObject { ["id"] = capability, ["version"] = "1.0.0" },
+            ["placement"] = new JsonObject { ["floorId"] = "L1", ["position"] = new JsonObject { ["x"] = 8, ["y"] = 0, ["z"] = 1 }, ["rotation"] = new JsonObject { ["x"] = 0, ["y"] = 0, ["z"] = 0, ["w"] = 1 } }
+        };
+        var state = new JsonObject { ["objects"] = new JsonArray(Door("locked", "door.exit_locked"), Door("wedged", "door.fire_wedged"), Door("fixed", "door.exit")) };
+        var conflicts = JsonNode.Parse((string)(await ScalarAsync($"SELECT scenario_infrastructure_conflicts('{state.ToJsonString()}'::jsonb)::text"))!)!.AsArray();
+        Assert.Equal("$.objects[2]", Assert.Single(conflicts)!["path"]!.GetValue<string>());
+
+        // Through the API: a draft on an Approved infrastructure saves a locked exit door.
+        var g = await SeedEditorGeometry();
+        await SeedEditorCatalog();
+        var org = (Guid)(await ScalarAsync($"SELECT organization_id FROM revisions WHERE id='{g.Revision}'"))!;
+        using var user = await RoleClient("OrganizationUser", org);
+        var infrastructure = (await ApprovedInfrastructure(user, g.Revision, g.Artifact))["id"]!.GetValue<Guid>();
+        var scenario = await CreateScenarioOn(user, g.Building);
+        var created = await user.SendAsync(Keyed(HttpMethod.Post, $"/api/scenarios/{scenario}/draft", new { revisionId = g.Revision, infrastructureId = infrastructure }, "door-draft"));
+        var draft = (await created.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
+        var read = await user.GetAsync($"/api/scenario-drafts/{draft}");
+        var own = PinnedState(g.Artifact);
+        var objects = own["objects"]!.AsArray();
+        foreach (var o in objects.Where(o => o!["id"]!.GetValue<string>() is "goal-exit" or "ext-1").ToList()) objects.Remove(o);
+        objects.Add(Door("locked", "door.exit_locked"));
+        var put = await user.SendAsync(InfrastructureRequest(HttpMethod.Put, $"/api/scenario-drafts/{draft}", read.Headers.ETag!.Tag, null, own));
+        Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
+        objects.Add(Door("fixed", "door.exit"));
+        var refused = await user.SendAsync(InfrastructureRequest(HttpMethod.Put, $"/api/scenario-drafts/{draft}", put.Headers.ETag!.Tag, null, own));
+        Assert.Equal(("SCENARIO_CONTAINS_INFRASTRUCTURE", (HttpStatusCode)422), (await ProblemCode(refused), refused.StatusCode));
+    }
 }

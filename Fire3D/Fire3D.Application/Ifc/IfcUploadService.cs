@@ -96,7 +96,7 @@ public sealed class IfcUploadService(IIfcUploadStore store, IStorageService stor
             return AuthResult<bool>.Fail("IFC_STORAGE_UNAVAILABLE", "Storage is temporarily unavailable. Retry with the same input.", 503);
         }
     }
-    /// <summary>Content checks of upload-complete, in order: STEP header, then a supported FILE_SCHEMA.</summary>
+    /// <summary>Content checks of upload-complete, in order: STEP header, a supported FILE_SCHEMA, then (#219) the entity precheck.</summary>
     public static IfcUploadRejection? ContentRejection(IfcStepSummary step)
     {
         // A renamed .rvt or zip passes the filename check; the content must start with the STEP header.
@@ -105,6 +105,11 @@ public sealed class IfcUploadService(IIfcUploadStore store, IStorageService stor
         if (!step.SchemaSupported)
             return new("IFC_UNSUPPORTED_SCHEMA", "FILE_SCHEMA must be IFC2X3, IFC4 or IFC4X3. Export the model again with one of these schemas.",
                 new Dictionary<string, string[]> { ["fileSchema"] = [step.Schema ?? ""], ["supportedSchemas"] = IfcStepSummary.SupportedSchemas });
+        // #219 layer 3: a building model without storeys, rooms, doors or walls/slabs would only fail in the Geometry worker.
+        var missing = step.Counts.Missing();
+        if (missing.Count > 0)
+            return new("IFC_PRECHECK_FAILED", "The IFC lacks " + string.Join(", ", missing.Select(m => m.Group)) + ". Export the architectural model with levels, rooms, doors and walls, then upload again.",
+                new Dictionary<string, string[]> { ["missing"] = [.. missing.Select(m => m.Group)], ["qaCodes"] = [.. missing.Select(m => m.QaCode)] });
         return null;
     }
 

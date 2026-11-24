@@ -58,8 +58,7 @@ public sealed record CreateLibraryItemRequest(string Kind, string Code);
 /// <summary>Only isActive changes: code is the stable business key and kind fixes the payload schema, so both are immutable.</summary>
 public sealed record UpdateLibraryItemRequest(bool IsActive);
 /// <summary>Payload fields by kind: ScenarioTemplate {state (fet3d.editor/1), description?}, RubricSample {rubric, description?},
-/// Equipment {description?, properties?}, StylePreset {buildingTypes, keywords?, materials, defaultScheme?, description?},
-/// ColorScheme {colors{wall, accentWall, doorWood, skirting}, description?} (STYLE-01, docs/revision-style.md).
+/// Equipment {description?, properties?}.
 /// description is optional for every kind (1-2000 characters when present).
 /// RequiredCapabilities must be offered by an active runtime catalog row when the version is published.</summary>
 public sealed record LibraryVersionInput(string Name, JsonObject Payload, IReadOnlyList<string>? RequiredCapabilities = null);
@@ -326,7 +325,6 @@ public static class LibraryContent
         string[] allowed = kind switch
         {
             "ScenarioTemplate" => ["state", "description"], "RubricSample" => ["rubric", "description"],
-            "StylePreset" => ["buildingTypes", "keywords", "materials", "defaultScheme", "description"], "ColorScheme" => ["colors", "description"],
             _ => ["description", "properties"]
         };
         foreach (var (name, _) in input.Payload) if (!allowed.Contains(name)) issues.Add(new("FIELD_UNKNOWN", $"$.payload.{name}", "Field is not defined for this library kind."));
@@ -341,12 +339,6 @@ public static class LibraryContent
                 break;
             case "RubricSample":
                 issues.AddRange(ScenarioStateV1Validator.ValidateRubricDocument(input.Payload["rubric"], rubricMetrics).Select(x => x with { Path = "$.payload" + x.Path[1..] }));
-                break;
-            case "StylePreset":
-                Fire3D.Application.Ifc.StyleRules.ValidatePreset(input.Payload, issues);
-                break;
-            case "ColorScheme":
-                Fire3D.Application.Ifc.StyleRules.ValidateScheme(input.Payload, issues);
                 break;
             default:
                 if (input.Payload["properties"] is { } props && (props is not JsonObject po || po.Count > 50 || po.Any(p => p.Value is not JsonValue pv || pv.GetValueKind() is not (JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False))))

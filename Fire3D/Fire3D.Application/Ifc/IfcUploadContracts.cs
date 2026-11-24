@@ -21,10 +21,12 @@ public sealed class IfcUploadOptions
         TimeSpan.FromSeconds(Math.Min(Math.Max(30, MaxCompletionSeconds), 30 + 2d * size / Math.Max(1, MinThroughputBytesPerSecond)));
 }
 /// <summary>GET /api/ifc/upload-limits: what the web checks before an upload.</summary>
-public sealed record IfcUploadLimitsResponse(bool Enabled, long MaxBytes, IReadOnlyList<string> AcceptedExtensions, IReadOnlyList<string> AcceptedSchemas)
+public sealed record IfcUploadLimitsResponse(bool Enabled, long MaxBytes, IReadOnlyList<string> AcceptedExtensions, IReadOnlyList<string> AcceptedSchemas,
+    int DailyProcessLimitPerOrganization = IfcProcessingOptions.DefaultDailyLimitPerOrganization)
 {
-    public static IfcUploadLimitsResponse From(IfcUploadOptions options) =>
-        new(options.Enabled && options.MaxBytes is > 0, options.MaxBytes ?? 0, [".ifc"], IfcStepSummary.SupportedSchemas);
+    public static IfcUploadLimitsResponse From(IfcUploadOptions options, IfcProcessingOptions? processing = null) =>
+        new(options.Enabled && options.MaxBytes is > 0, options.MaxBytes ?? 0, [".ifc"], IfcStepSummary.SupportedSchemas,
+            (processing ?? new()).DailyLimitPerOrganization);
 }
 public sealed record IfcUploadIntent(Guid RevisionId, Guid BuildingId, Guid OrganizationId, Guid ActorId,
     string StagingKey, long Size, string Hash, string Filename, DateTime ExpiresAt, bool Completed);
@@ -48,7 +50,7 @@ public interface IIfcSourceInspector
     Task<bool> CopyAsync(string key, string etag, string finalKey, CancellationToken ct);
 }
 /// <summary>
-/// A content check refused the uploaded bytes (Code: IFC_UNSUPPORTED_FORMAT, IFC_UNSUPPORTED_SCHEMA). The SHA-256 already matched the
+/// A content check refused the uploaded bytes (Code: IFC_UNSUPPORTED_FORMAT, IFC_UNSUPPORTED_SCHEMA, IFC_PRECHECK_FAILED). The SHA-256 already matched the
 /// intent, so the same intent can never pass: the gate deletes the Draft revision and the intent and queues the staging object for cleanup.
 /// </summary>
 public sealed record IfcUploadRejection(string Code, string Message, IReadOnlyDictionary<string, string[]>? Details = null);

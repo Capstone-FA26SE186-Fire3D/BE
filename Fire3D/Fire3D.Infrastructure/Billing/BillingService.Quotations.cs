@@ -105,6 +105,11 @@ public sealed partial class BillingService
             if(!Text(building.Address,10000))incomplete["address"]=["The Building needs an address before it can be quoted."];
             if(incomplete.Count>0)throw new BillingException(409,"BUILDING_PROFILE_INCOMPLETE","Complete the Building name and address before quoting it.",incomplete)
                 {Extensions=new Dictionary<string,object?>{["buildingId"]=input.BuildingId}};
+            // BE#217 (Flow 1 PC06): thẩm định hạ tầng -> thẩm định tình huống -> báo giá -> thanh toán -> phát hành. A Building is quoted only once
+            // one of its situations passed thẩm định (decisions made by PlatformAdmin before BE#211 keep counting).
+            if(!await db.Database.SqlQuery<bool>($"SELECT building_has_approved_scenario({input.BuildingId}) AS \"Value\"").SingleAsync(ct))
+                throw new BillingException(409,"QUOTE_REQUIRES_APPROVED_SCENARIO","The Building needs at least one situation that passed thẩm định before it can be quoted.")
+                    {Extensions=new Dictionary<string,object?>{["buildingId"]=input.BuildingId}};
             var package=await db.ServicePackages.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==input.ServicePackageId&&x.IsActive,ct)??throw Missing();
             if(!PackageView(package).IsPurchasable)throw new BillingException(409,"PACKAGE_NOT_PURCHASABLE","Choose a fully configured v7 package.");
             BillingQuotaPolicy? policy=null;
