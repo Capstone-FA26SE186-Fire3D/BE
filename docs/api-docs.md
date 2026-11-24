@@ -535,7 +535,7 @@ Tất cả cần Editor. Đây là luồng tác giả thiết kế/thử kịch 
 | POST | `/api/scenarios` | buildingId, name | 201 {id} |
 | GET | `/api/buildings/{buildingId}/scenarios` | page, pageSize | 200 Page<ScenarioSummaryResponse> |
 | GET | `/api/scenarios/{scenarioId}` | Không body | 200 ScenarioDetailResponse |
-| POST | `/api/scenarios/{scenarioId}/draft` | revisionId | 201 {id} |
+| POST | `/api/scenarios/{scenarioId}/draft` | revisionId, infrastructureId (BE#213: an Approved fire infrastructure of the same revision, required; see [fire-infrastructure.md](fire-infrastructure.md)) | 201 {id} |
 | GET | `/api/scenario-drafts/{draftId}` | Không body | 200 ScenarioDraftResponse + ETag |
 | GET | `/api/organizations/me/work-in-progress` | limit (1–5, mặc định 1); chỉ OrganizationUser | 200 `{ items: WorkInProgressItemResponse[] }`, bản nháp lưu gần nhất trước (#152) |
 | PUT | `/api/scenario-drafts/{draftId}` | State + If-Match; versioned `fet3d.editor/1` hoặc legacy | 204 + ETag; 422 `EDITOR_SCHEMA_INVALID`/`EDITOR_SCHEMA_VERSION_UNSUPPORTED`; 400 `EDITOR_JSON_MALFORMED` |

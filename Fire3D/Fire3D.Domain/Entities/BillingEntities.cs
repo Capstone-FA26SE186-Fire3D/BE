@@ -21,6 +21,9 @@ public sealed class OrganizationNotification
     public Guid? ContentReviewId { get; set; }
     [Column("scenario_version_id")]
     public Guid? ScenarioVersionId { get; set; }
+    /// <summary>The fire infrastructure version a FireInfrastructureApproved/FireInfrastructureRejected notification reports (BE#213).</summary>
+    [Column("fire_infrastructure_id")]
+    public Guid? FireInfrastructureId { get; set; }
     [Column("notification_type")]
     [MaxLength(50)]
     public string NotificationType { get; set; } = "";
