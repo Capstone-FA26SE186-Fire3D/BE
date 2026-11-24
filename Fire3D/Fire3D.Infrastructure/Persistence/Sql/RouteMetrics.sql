@@ -3,7 +3,7 @@
 --   steps on Moved. training_event_rejection accepts RouteBaseline like the other core events (payload ranges are checked by the API).
 -- * learner_session_finalize (body of 20261028120000_RuntimeRubricMetrics) adds metrics step_count (sum of Moved.steps, null when no
 --   Moved event carries steps), optimal_distance_meters (the baseline, shown on the result card, not scorable) and route_efficiency =
---   optimal / actual distance clamped to 0..1 (null without a baseline or distance). A criterion on route_efficiency or step_count whose
+--   optimal / actual distance clamped to 0..1 (null without a baseline; 0 with a baseline but no movement). A criterion on route_efficiency or step_count whose
 --   value is null is not evaluable (passed null, reason METRIC_NOT_EVALUABLE, weight excluded, never a mandatory failure).
 -- * learner_rubric_metrics lists the two metrics with the core ones, so Assessment prepare accepts rubrics that use them.
 -- Existing results are immutable and keep their scores.
@@ -55,9 +55,11 @@ BEGIN
    -- BE#216: the first RouteBaseline of the session (shortest safe distance to the assembly point, computed by the runtime).
    'optimal_distance_meters',(array_agg((event_data->>'optimalDistanceMeters')::numeric ORDER BY sequence_number) FILTER(WHERE event_type='RouteBaseline'))[1])
   INTO metrics FROM session_events WHERE session_id=p_id AND sequence_number<=s.completion_last_sequence;
- -- route_efficiency = optimal / actual distance, clamped to 0..1; not evaluable without a baseline or without any distance moved.
+ -- route_efficiency = optimal / actual distance, clamped to 0..1; not evaluable only without a baseline. With a baseline but no
+ -- movement it is 0 (the learner did not walk the route), or 1 when the optimal distance itself is 0 (already at the assembly point).
  baseline:=(metrics->>'optimal_distance_meters')::numeric;distance:=(metrics->>'distance_meters')::numeric;
- metrics:=metrics||jsonb_build_object('route_efficiency',CASE WHEN baseline IS NOT NULL AND distance>0 THEN least(1,greatest(0,round(baseline/distance,4))) END);
+ metrics:=metrics||jsonb_build_object('route_efficiency',CASE WHEN baseline IS NULL THEN NULL WHEN distance>0 THEN least(1,greatest(0,round(baseline/distance,4)))
+  WHEN baseline=0 THEN 1 ELSE 0 END);
  -- Player-action counts come from the session's pinned runtime catalog; the core metrics above win over a clashing name.
  metrics:=(SELECT COALESCE(jsonb_object_agg(m.metric,m.n),'{}') FROM (SELECT r.metric,count(e.session_id) n FROM runtime_event_metrics(s.runtime_version) r
   LEFT JOIN session_events e ON e.session_id=p_id AND e.sequence_number<=s.completion_last_sequence AND e.rejection_code IS NULL AND e.event_type=r.event_type

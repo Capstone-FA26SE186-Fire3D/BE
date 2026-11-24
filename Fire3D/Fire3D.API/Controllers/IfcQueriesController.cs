@@ -17,16 +17,15 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
     /// initiate refuses a larger <c>fileSizeBytes</c> with 400 VALIDATION_ERROR. upload-complete also requires the STEP header
     /// (422 IFC_UNSUPPORTED_FORMAT) and a FILE_SCHEMA in <c>acceptedSchemas</c> (variants such as IFC4X3_ADD2 included; 422
     /// IFC_UNSUPPORTED_SCHEMA), then at least one IfcBuildingStorey, IfcSpace, IfcDoor and IfcWall/IfcSlab (422 IFC_PRECHECK_FAILED).
-    /// <c>dailyProcessLimitPerOrganization</c> is IfcProcessing:DailyLimitPerOrganization (new processing jobs per UTC day).
+    /// The daily processing limit and today's use of the caller's Organization: GET /api/organizations/me/ifc-processing.
     /// <c>enabled</c> false means initiate answers 503 IFC_UPLOAD_DISABLED.
     /// </remarks>
     [HttpGet("ifc/upload-limits")]
     [ProducesResponseType<IfcUploadLimitsResponse>(200)]
     [ProducesResponseType<ProblemDetails>(401)]
     [ProducesResponseType<ProblemDetails>(403)]
-    public ActionResult<IfcUploadLimitsResponse> GetUploadLimits([FromServices] Microsoft.Extensions.Options.IOptions<IfcUploadOptions> upload,
-        [FromServices] Microsoft.Extensions.Options.IOptions<IfcProcessingOptions> processing) =>
-        Ok(IfcUploadLimitsResponse.From(upload.Value, processing.Value));
+    public ActionResult<IfcUploadLimitsResponse> GetUploadLimits([FromServices] Microsoft.Extensions.Options.IOptions<IfcUploadOptions> upload) =>
+        Ok(IfcUploadLimitsResponse.From(upload.Value));
 
     /// <summary>Lists sanitized processing logs for an IFC revision.</summary>
     /// <remarks>
