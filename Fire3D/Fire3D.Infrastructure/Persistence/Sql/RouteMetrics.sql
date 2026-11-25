@@ -51,9 +51,12 @@ BEGIN
    'hazard_exposure',COALESCE(sum((event_data->>'amount')::numeric) FILTER(WHERE event_type='HazardExposure'),0),
    'distance_meters',COALESCE(sum((event_data->>'distanceMeters')::numeric) FILTER(WHERE event_type='Moved'),0),
    -- BE#216: steps of Moved events, only when the runtime reports them (otherwise NULL, i.e. not evaluable).
-   'step_count',CASE WHEN bool_or(event_type='Moved' AND event_data ? 'steps') THEN sum((event_data->>'steps')::numeric) FILTER(WHERE event_type='Moved' AND event_data ? 'steps') END,
+   -- Only accepted events whose value is a JSON number count: events stored before this change were not checked by the API.
+   'step_count',CASE WHEN bool_or(event_type='Moved' AND rejection_code IS NULL AND jsonb_typeof(event_data->'steps')='number')
+    THEN sum((event_data->>'steps')::numeric) FILTER(WHERE event_type='Moved' AND rejection_code IS NULL AND jsonb_typeof(event_data->'steps')='number') END,
    -- BE#216: the first RouteBaseline of the session (shortest safe distance to the assembly point, computed by the runtime).
-   'optimal_distance_meters',(array_agg((event_data->>'optimalDistanceMeters')::numeric ORDER BY sequence_number) FILTER(WHERE event_type='RouteBaseline'))[1])
+   'optimal_distance_meters',(array_agg((event_data->>'optimalDistanceMeters')::numeric ORDER BY sequence_number)
+    FILTER(WHERE event_type='RouteBaseline' AND rejection_code IS NULL AND jsonb_typeof(event_data->'optimalDistanceMeters')='number'))[1])
   INTO metrics FROM session_events WHERE session_id=p_id AND sequence_number<=s.completion_last_sequence;
  -- route_efficiency = optimal / actual distance, clamped to 0..1; not evaluable only without a baseline. With a baseline but no
  -- movement it is 0 (the learner did not walk the route), or 1 when the optimal distance itself is 0 (already at the assembly point).

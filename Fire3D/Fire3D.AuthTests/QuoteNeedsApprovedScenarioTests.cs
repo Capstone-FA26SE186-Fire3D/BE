@@ -26,6 +26,14 @@ public sealed class QuoteNeedsApprovedScenarioTests
         await database.Sql($"DELETE FROM billing_test_unapproved_buildings WHERE building_id='{BillingDatabase.Building}'");
         var quote = await service.CreateQuotation(BillingDatabase.Owner, BillingDatabase.Owner, new([new(BillingDatabase.Building, package.Id, "New")]), "approved", default);
         Assert.Equal(600, quote.TotalAmount);
+
+        // PlatformAdmin issuing an existing Draft is never blocked, even if the Building has no Approved situation any more (review fix).
+        db.ChangeTracker.Clear();
+        await database.Sql($"INSERT INTO billing_test_unapproved_buildings VALUES('{BillingDatabase.Building}')");
+        var start = new DateTimeOffset(DateTime.UtcNow.Year + 1, 8, 31, 0, 0, 0, TimeSpan.Zero);
+        var issued = await service.IssueQuotation(BillingDatabase.Admin, BillingDatabase.Admin, quote.Id,
+            new(0, "Terms", DateTimeOffset.UtcNow.AddDays(1), [new(quote.Items[0].Id, start)]), BillingETag.Format(quote.Id, quote.Revision), default);
+        Assert.Equal("Issued", issued.Status);
     }
 }
 
