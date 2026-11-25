@@ -60,6 +60,17 @@ public sealed partial class AuthIntegrationTests
         var unplayed = cohorts.Single(c => c.Key == unplayedScenario.ToString());
         Assert.Equal((0L, (DateTimeOffset?)null, "EvacuationGuide", "OffHours", "Ngoài giờ - tầng 3"), (unplayed.Plays, unplayed.LastPlayedAt, unplayed.Audience, unplayed.WorkingHours, unplayed.Label));
 
+        // Without from/to the training log covers the last 365 days, so a play 9 months ago still counts (review fix).
+        var byDefault = (await analytics.ReadTraining(played.Owner, played.OwnerFamily, new("Organization", null, null, null, "scenario", null, null), default)).Value
+            .Deserialize<TrainingAnalyticsReport>(web)!.Cohorts!;
+        Assert.Equal(1L, byDefault.Single(c => c.Key == playedScenario.ToString()).Plays);
+        // A training past its end date is no longer a situation to practise (review fix).
+        await ExecuteAsync($"UPDATE trainings SET end_date=now()-interval '1 day' WHERE release_id='{release}'");
+        var afterEnd = (await analytics.ReadTraining(played.Owner, played.OwnerFamily, new("Organization", null, null, null, "scenario", from, to), default)).Value
+            .Deserialize<TrainingAnalyticsReport>(web)!.Cohorts!;
+        Assert.DoesNotContain(afterEnd, c => c.Key == unplayedScenario.ToString());
+        await ExecuteAsync($"UPDATE trainings SET end_date=NULL WHERE release_id='{release}'");
+
         // Every other grouping keeps the 90-day limit; a year by scenario is fine, more than 366 days is not.
         Assert.Equal("VALIDATION_ERROR", (await analytics.ReadTraining(played.Owner, played.OwnerFamily, new("Organization", null, null, null, "day", from, to), default)).Error?.Code);
         Assert.Equal("VALIDATION_ERROR", (await analytics.ReadTraining(played.Owner, played.OwnerFamily, new("Organization", null, null, null, "scenario", "2025-11-01T00:00:00Z", to), default)).Error?.Code);

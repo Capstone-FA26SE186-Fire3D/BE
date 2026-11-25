@@ -45,7 +45,8 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public AS $$
  published AS (
   SELECT DISTINCT v.scenario_id FROM trainings t JOIN releases rel ON rel.id=t.release_id AND rel.status='Published' AND rel.revoked_at IS NULL
    JOIN scenario_versions v ON v.id=t.scenario_version_id
-  WHERE p_group='scenario' AND t.status='Active' AND (p_org IS NULL OR t.organization_id=p_org) AND (p_building IS NULL OR v.building_id=p_building)
+   JOIN buildings bb ON bb.id=v.building_id AND bb.is_active AND bb.deleted_at IS NULL
+  WHERE p_group='scenario' AND t.status='Active' AND (t.end_date IS NULL OR t.end_date>p_as_of) AND (p_org IS NULL OR t.organization_id=p_org) AND (p_building IS NULL OR v.building_id=p_building)
    AND (p_scenario IS NULL OR v.scenario_id=p_scenario)),
  all_rows AS (
   SELECT * FROM rows
