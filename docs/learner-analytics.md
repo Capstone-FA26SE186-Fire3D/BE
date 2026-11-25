@@ -37,9 +37,10 @@ training routes and their exports serve this log with `groupBy=scenario` (migrat
 - **Cohort rows** add `lastPlayedAt`: the latest session start in the range, null without a play.
 - **With `groupBy=scenario`**, rows also carry `audience` and `workingHours` from the situation's newest version (BE#215).
 - **Published situations with no play in the range** are listed with `plays: 0` and `lastPlayedAt: null`, so the web can warn "chưa luyện trong năm". "Published" means an Active training of a Published, not revoked, release inside the report's filters.
-- **CSV:**
+- **CSV of the training log (`groupBy=scenario`):**
   - Line 1 is the disclaimer "Số liệu luyện tập trên mô phỏng, mang tính hỗ trợ, không thay buổi thực tập phương án." It is quoted because it contains commas.
   - Then the header: the existing columns in the same order, followed by `lastPlayedAt,audience,workingHours`.
+  - Other exports keep the header as line 1 (with the same appended columns), so existing imports keep working.
 
 ## Metric definitions
 

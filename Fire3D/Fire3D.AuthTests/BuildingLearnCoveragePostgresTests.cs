@@ -285,7 +285,7 @@ public sealed partial class AuthIntegrationTests
             Assert.StartsWith(prefix, name);
             return (name, Encoding.UTF8.GetString(bytes[3..]));
         }
-        var header = Fire3D.Application.Reporting.TrainingAnalyticsCsv.Cell(Fire3D.Application.Reporting.TrainingAnalyticsCsv.Disclaimer) + "\r\n" + string.Join(',', Fire3D.Application.Reporting.TrainingAnalyticsCsv.Header) + "\r\n";
+        var header = string.Join(',', Fire3D.Application.Reporting.TrainingAnalyticsCsv.Header) + "\r\n";
         Assert.Equal(header, (await Csv(org, "/api/organizations/me/analytics/training/export", "training-organization-day-")).Text);
         Assert.Equal((HttpStatusCode.BadRequest, "VALIDATION_ERROR"), await CovCode(await org.GetAsync("/api/organizations/me/analytics/training/export?from=2026-01-01T00:00:00Z&to=2026-06-01T00:00:00Z")));
         Assert.Equal(HttpStatusCode.Forbidden, (await org.GetAsync("/api/admin/analytics/training/export")).StatusCode);

@@ -68,7 +68,8 @@ public sealed record TrainingAnalyticsReport(DateTime AsOf, DateTime From, DateT
 /// <summary>CSV of cohort rows: UTF-8 with BOM for Excel, fixed header, cells that could start a formula are prefixed with an apostrophe.</summary>
 public static class TrainingAnalyticsCsv
 {
-    /// <summary>BE#218: first line of every export (Điều 16 Nghị định 105/2025/NĐ-CP; the simulation never replaces a real drill).</summary>
+    /// <summary>BE#218: first line of the training-log export (groupBy=scenario; Điều 16 Nghị định 105/2025/NĐ-CP: the simulation never replaces a
+    /// real drill). Other exports keep the header as their first line so existing imports are not shifted.</summary>
     public const string Disclaimer = "Số liệu luyện tập trên mô phỏng, mang tính hỗ trợ, không thay buổi thực tập phương án.";
     /// <summary>The columns before BE#218 keep their order; lastPlayedAt, audience and workingHours are appended.</summary>
     public static readonly string[] Header = ["groupBy", "key", "label", "plays", "uniqueTrainees", "completed", "abandoned", "awaitingSync", "assessed", "passed", "passRate", "averageDurationSeconds",
@@ -77,7 +78,7 @@ public static class TrainingAnalyticsCsv
     public static byte[] Build(string groupBy, IEnumerable<AnalyticsCohortRow> rows)
     {
         var text = new System.Text.StringBuilder();
-        text.Append(Cell(Disclaimer)).Append("\r\n");
+        if (groupBy == "scenario") text.Append(Cell(Disclaimer)).Append("\r\n");
         text.Append(string.Join(',', Header)).Append("\r\n");
         foreach (var r in rows)
         {
