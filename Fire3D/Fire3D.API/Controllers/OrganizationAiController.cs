@@ -29,6 +29,11 @@ public sealed class OrganizationAiController(IOrganizationAiGates gates, IOption
     /// <summary>Queues a scenario draft suggestion for a Building of the caller's organization. Idempotency-Key required; returns 202 with the request.</summary>
     /// <remarks>The request pins one revision with accepted geometry (revisionId, or the newest such revision) and sends its BIM facts:
     /// floors, semantic anchors, annotations, quality flags and the active runtime capabilities. No such revision: 409 AI_REVISION_NOT_READY.
+    /// BE#231: infrastructureId pins an Approved fire infrastructure version of the Building (without revisionId, its revision is pinned);
+    /// omitted, the newest Approved version of the pinned revision is used when there is one. Its items go to the AI service in bim.infrastructure
+    /// and input.infrastructureId names it. 422 FIRE_INFRASTRUCTURE_REVISION_MISMATCH (not a version of the pinned revision or Building),
+    /// 422 FIRE_INFRASTRUCTURE_NOT_APPROVED. The draft of such a request holds no exit (Goal) or fixed Equipment: they are removed and the
+    /// first limitations say so, followed by the PC06 fields (audience, workingHours, assumption) still to fill in.
     /// A finished draft has status Succeeded, resultType ScenarioDraft and result.status NeedsUserEdit: it must be edited and saved in the editor.</remarks>
     [HttpPost("api/ai/organization/scenario-draft")]
     [ProducesResponseType<AiRequestView>(202)]
@@ -41,8 +46,13 @@ public sealed class OrganizationAiController(IOrganizationAiGates gates, IOption
         var issues = OrganizationAiInput.Text(request.Prompt, "$.prompt");
         if (request.BuildingId == Guid.Empty) issues.Add(new("FIELD_REQUIRED", "$.buildingId", "Required."));
         if (request.RevisionId == Guid.Empty) issues.Add(new("FIELD_INVALID", "$.revisionId", "Omit it or send a revision of the Building."));
+        if (request.InfrastructureId == Guid.Empty) issues.Add(new("FIELD_INVALID", "$.infrastructureId", "Omit it or send an Approved fire infrastructure version of the revision."));
         issues.AddRange(OrganizationAiInput.Sources(request.Sources));
-        return Submit("ScenarioDraft", new { buildingId = request.BuildingId, revisionId = request.RevisionId, prompt = request.Prompt, sources = request.Sources ?? [] }, issues, key, ct);
+        // infrastructureId is sent only when given, so the input hash of requests without it stays what it was (idempotent replays).
+        object input = request.InfrastructureId is { } infrastructure
+            ? new { buildingId = request.BuildingId, revisionId = request.RevisionId, infrastructureId = infrastructure, prompt = request.Prompt, sources = request.Sources ?? [] }
+            : new { buildingId = request.BuildingId, revisionId = request.RevisionId, prompt = request.Prompt, sources = request.Sources ?? [] };
+        return Submit("ScenarioDraft", input, issues, key, ct);
     }
 
     /// <summary>Queues a grounded answer over the caller's eligible sources. Idempotency-Key required; returns 202 with the request.</summary>

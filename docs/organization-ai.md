@@ -146,10 +146,11 @@ login, like Learn images; do not upload documents an organization must keep from
 
 ## Scenario draft BIM facts (#91)
 
-`POST /api/ai/organization/scenario-draft` takes `{buildingId, prompt, sources?, revisionId?}`. The request pins one revision
+`POST /api/ai/organization/scenario-draft` takes `{buildingId, prompt, sources?, revisionId?, infrastructureId?}`. The request pins one revision
 whose geometry was accepted (status ReadyForScenario/ConfirmedForTraining, current succeeded Geometry attempt, Passed QA without
-Error/Critical issues, `fet3d.editor/1` metadata): `revisionId` if given (another Building's revision → 404), otherwise the newest
-such revision. None → `409 AI_REVISION_NOT_READY`. The pinned `bim` object (sent to the adapter, shown to Admin):
+Error/Critical issues, `fet3d.editor/1` metadata): `revisionId` if given (another Building's revision → 404), otherwise the revision of
+`infrastructureId` if given, otherwise the newest such revision. None → `409 AI_REVISION_NOT_READY`. The pinned `bim` object (sent to the
+adapter, shown to Admin):
 
 ```json
 { "revisionId": "…", "buildingId": "…", "versionLabel": "v1", "revisionStatus": "ReadyForScenario",
@@ -159,7 +160,11 @@ such revision. None → `409 AI_REVISION_NOT_READY`. The pinned `bim` object (se
   "anchors": [{ "ifcGlobalId": "…", "nodeId": "door_101", "floorId": "L1", "semanticType": "IfcDoor" }],
   "annotations": [{ "id": "…", "ifcGlobalId": "…", "label": "…", "note": "…" }],
   "qualityFlags": [{ "code": "EXIT_MAPPING_MISSING", "severity": "Warning", "message": null, "ifcGlobalId": null }],
-  "runtime": { "runtimeVersion": "1.4.0", "protocolVersion": "1", "capabilities": [], "capabilityContracts": {} } }
+  "runtime": { "runtimeVersion": "1.4.0", "protocolVersion": "1", "capabilities": [], "capabilityContracts": {} },
+  "infrastructure": { "id": "…", "version": 2, "items": [
+    { "id": "exit-1", "kind": "Goal", "category": "Exit", "label": "Cửa thoát tầng 1", "anchorId": "…", "placement": { "floorId": "L1" } },
+    { "id": "ext-1", "kind": "Equipment", "category": "Equipment", "label": "Bình bột",
+      "capability": { "id": "extinguisher.portable", "version": "1.0.0" }, "placement": { "floorId": "L1" } } ] } }
 ```
 
 `qualityFlags` holds the QA findings of the accepted run (Info/Warning) plus derived flags: `SEMANTIC_MAPPING_EMPTY`,
@@ -170,6 +175,31 @@ A draft result is accepted only when it keeps the pinned geometry (`state.geomet
 pinned revision (every `bim_anchors[].revision_id` equal, every `ifc_global_id` an anchor or floor of the pin, at least one), and
 the editor reference check (`scenario_reference_issues`) finds nothing. Otherwise `NeedsReconcile AI_BIM_ANCHOR_INVALID`. If the
 revision lost its accepted geometry meanwhile: `NeedsReconcile AI_REVISION_STALE`.
+
+### Draft on a fire infrastructure (BE#231, migration `20261125090000_AiDraftInfrastructure`)
+
+A draft is a situation on a fire infrastructure (BE#213, BE#215, BE#224), so the request pins one when the revision has it:
+
+- `infrastructureId` given: an Approved version of this Building on the pinned revision. Another Building's or revision's version (or an
+  unknown id) → `422 FIRE_INFRASTRUCTURE_REVISION_MISMATCH`; Draft, Submitted or Rejected → `422 FIRE_INFRASTRUCTURE_NOT_APPROVED`
+  (both with `errors.infrastructureId`, the codes of CreateDraft). Without `revisionId` the version's own revision is pinned.
+- Not given: the newest Approved version of the pinned revision. None: no `bim.infrastructure`, and the request and its result work as
+  before (legacy drafts need neither the infrastructure nor the PC06 fields).
+- `bim.infrastructure` = `{id, version, items[]}`; each item keeps `id`, `kind`, `category`, `label`, `anchorId`, `capability`, and only
+  `floorId` of its placement. `input.infrastructureId` (every view) and the audit row of the submit name the version. The AI service
+  (AI#36, AI#39) then places no `Goal` and only the scenario-only Equipment `item.towel`, `bait.belongings`, `door.exit_locked`,
+  `door.fire_wedged`, and fills `audience`, `workingHours`, `assumption`.
+
+The backend still checks the result with the rules of `PUT /api/scenario-drafts` for such a draft, as the web does when it applies one
+(FE PR #261): the worker removes every `Goal` and every other `Equipment` from `scenario_draft.state.objects`, and names the PC06 fields
+still missing. The draft stays `NeedsUserEdit`. What the user reads comes first in `limitations`, in Vietnamese:
+
+- `Đã bỏ N đối tượng thuộc hạ tầng PCCC (x lối thoát/điểm tập kết, y thiết bị cố định): …` when objects were removed;
+- `Bản nháp chưa có audience, workingHours, assumption…: cần điền trước khi lưu …` when PC06 fields are missing.
+
+`result.ruleResults` (stored, not in the tenant view) gets `SCENARIO_CONTAINS_INFRASTRUCTURE` (the removed paths and kinds) and
+`PLAN_FIELDS_REQUIRED` (the missing fields), both `flag`. As a last guard, `ai_worker_gate` parks a draft of such a request that still holds
+a Goal or fixed Equipment (`scenario_infrastructure_conflicts`) as `NeedsReconcile AI_RESULT_INVALID`.
 
 ## Trainee context (#77)
 
@@ -196,7 +226,7 @@ accessible, or the Learn post was removed, the request is returned with `resultW
 
 `GET /api/ai/requests[/{id}]` (organization), `GET /api/ai/trainee/requests[/{id}]` (Trainee) and the Admin routes return
 `AiRequestView` (OpenAPI schema): `requestId, audience, operation, status, resultType, quotaUnit, reservedUnits, consumedUnits,
-input {text, inputHash, buildingId, buildingName, revisionId, requestedSources, context}, sources (pins with link), result
+input {text, inputHash, buildingId, buildingName, revisionId, infrastructureId, requestedSources, context}, sources (pins with link), result
 {status, answer | draft {state, notes} | message, confidence, assumptions, limitations, bimAnchors}, citations [{kind, id,
 versionId, title, versionLabel, chunkId, locator, relevance, link}], failureCode, resultWithheld (Trainee only), createdAt,
 completedAt, revision`. `input` lets a client that lost the submit response find its request again by text or `inputHash`.
@@ -241,7 +271,7 @@ Routes: `POST {BaseUrl}/v2/organization/answer`, `POST {BaseUrl}/v2/organization
   "sources": [{ "kind": "KnowledgeSource | LibraryVersion | LearnPost | TrainingSnapshot | SessionResult",
                 "document_id": "…", "document_version": "…", "title": "…", "version_label": "…", "content_hash": "…",
                 "source_uri": "https://… (KnowledgeSource) or null", "content": { } , "content_omitted": false }],
-  "bim": { … see above, ScenarioDraft only },
+  "bim": { … see above, ScenarioDraft only; bim.infrastructure when the request pins a fire infrastructure (BE#231) },
   "learn_context": { "post_id": "…", "version_id": "…" },
   "context": { "kind": "Learn | Training | Result", … },
   "limits": { "quota_unit": "tokens", "max_units": 100 }, "attempt": 1 }
@@ -322,7 +352,7 @@ skipped for that question (the answer lists it under `limitations`) and queued; 
 |---|---|---|---|
 | GET | `/api/ai/organization/sources` | OrganizationUser | Eligible sources now, with links. |
 | GET | `/api/ai/organization/limits` | OrganizationUser | estimatedReserve and balance per operation. |
-| POST | `/api/ai/organization/scenario-draft` | OrganizationUser | `{buildingId, prompt, sources?, revisionId?}` + Idempotency-Key → `202`. |
+| POST | `/api/ai/organization/scenario-draft` | OrganizationUser | `{buildingId, prompt, sources?, revisionId?, infrastructureId?}` + Idempotency-Key → `202`. |
 | POST | `/api/ai/organization/answer` | OrganizationUser | `{question, sources?}` + Idempotency-Key → `202`. |
 | GET | `/api/ai/requests?status=&resultType=&operation=&mine=&page=&pageSize=` | OrganizationUser | Own organization only, newest first. |
 | GET | `/api/ai/requests/{requestId}` | OrganizationUser | Same organization only. |

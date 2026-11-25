@@ -9,8 +9,10 @@ using Fire3D.Application.Scenarios.Commands.ValidateScenarioDraft;
 namespace Fire3D.Application.Ai;
 
 public sealed record AiSourceRef(string Kind, Guid Id);
-/// <summary>RevisionId pins the Building revision whose accepted geometry the draft uses; omitted, the newest revision with accepted geometry.</summary>
-public sealed record ScenarioDraftAiRequest(Guid BuildingId, string Prompt, IReadOnlyList<AiSourceRef>? Sources = null, Guid? RevisionId = null);
+/// <summary>RevisionId pins the Building revision whose accepted geometry the draft uses; omitted, the newest revision with accepted geometry
+/// (or the revision of InfrastructureId). InfrastructureId (BE#231) pins an Approved fire infrastructure version of that revision; omitted, the
+/// newest Approved version of the pinned revision, if any. With one, the draft is a situation on it: no exit or fixed equipment of its own.</summary>
+public sealed record ScenarioDraftAiRequest(Guid BuildingId, string Prompt, IReadOnlyList<AiSourceRef>? Sources = null, Guid? RevisionId = null, Guid? InfrastructureId = null);
 public sealed record AnswerAiRequest(string Question, IReadOnlyList<AiSourceRef>? Sources = null);
 /// <summary>DailyUnits is required for TraineeAnswer (units one Trainee may use per Vietnam calendar day) and absent otherwise.</summary>
 public sealed record CreateAiPolicyRequest(string Operation, string QuotaUnit, int ReserveUnits, int MaxInputChars, int MaxSources, DateTimeOffset? EffectiveFrom = null, DateTimeOffset? EffectiveUntil = null, int? DailyUnits = null);
@@ -37,9 +39,9 @@ public sealed record AiBimAnchorView(string IfcGlobalId, string? EntityType, Gui
 public sealed record AiDraftView(JsonElement State, string? Notes);
 public sealed record AiRequestResultView(string Status, string? Answer, AiDraftView? Draft, string? Message, string? Confidence,
     IReadOnlyList<string>? Assumptions, IReadOnlyList<string>? Limitations, IReadOnlyList<AiBimAnchorView>? BimAnchors);
-/// <summary>What was asked: the text, the Building/revision for drafts or the Trainee context, and the canonical input hash.</summary>
+/// <summary>What was asked: the text, the Building/revision (and fire infrastructure, BE#231) for drafts or the Trainee context, and the canonical input hash.</summary>
 public sealed record AiRequestInputView(string Text, string InputHash, Guid? BuildingId, string? BuildingName, Guid? RevisionId,
-    IReadOnlyList<AiSourceRef> RequestedSources, JsonElement? Context);
+    IReadOnlyList<AiSourceRef> RequestedSources, JsonElement? Context, Guid? InfrastructureId = null);
 public sealed record AiRequestView(Guid RequestId, string Audience, string Operation, string Status, string? ResultType, string QuotaUnit,
     int ReservedUnits, int? ConsumedUnits, AiRequestInputView Input, IReadOnlyList<AiPinnedSourceView> Sources, AiRequestResultView? Result,
     IReadOnlyList<AiCitationView> Citations, string? FailureCode, bool? ResultWithheld, DateTime CreatedAt, DateTime? CompletedAt, long Revision,
@@ -174,12 +176,18 @@ public static partial class OrganizationAiInput
         return issues;
     }
 
+    /// <summary>Equipment a situation on a fire infrastructure may place itself (scenario_infrastructure_conflicts, BE#224).</summary>
+    public static readonly string[] ScenarioOnlyCapabilities = ["item.towel", "bait.belongings", "door.exit_locked", "door.fire_wedged"];
+
     /// <summary>
     /// Normalizes an adapter v2 response (Docs fire_evacuation_bim_rag_pccc.md section 6, snake_case) before the database
     /// settles it. Shape problems leave status null, which the gate parks as NeedsReconcile AI_RESULT_INVALID with the raw body
     /// kept for Admin; citations, BIM anchors and usage limits are re-checked there against the pinned request.
+    /// onInfrastructure (BE#231): the request pinned a fire infrastructure, so the draft is a situation on it. Exits (Goal) and fixed
+    /// Equipment are removed from the draft, as the web does when it applies one, and the PC06 fields still missing are named; both go
+    /// first in limitations (what the user reads) and in ruleResults.
     /// </summary>
-    public static (JsonObject Completion, string? Violation) Completion(string operation, Guid requestId, JsonObject body)
+    public static (JsonObject Completion, string? Violation) Completion(string operation, Guid requestId, JsonObject body, bool onInfrastructure = false)
     {
         string? violation = null;
         static string? Str(JsonNode? node) => node is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
@@ -187,13 +195,19 @@ public static partial class OrganizationAiInput
         var responseType = Str(body["response_type"]);
         var expectedType = operation == "ScenarioDraft" ? "ScenarioDraft" : "KnowledgeAnswer";
         var result = new JsonObject();
+        (List<string> Notes, JsonArray Rules) infrastructure = ([], []);
         if (Str(body["request_id"]) != requestId.ToString() || status is null || !ResultStatuses.Contains(status) || responseType != expectedType
             || (status == "NeedsUserEdit" && operation != "ScenarioDraft") || (status == "Answered" && operation == "ScenarioDraft"))
             violation = "AI_RESULT_INVALID";
         else if (status == "NeedsUserEdit")
         {
             if (body["scenario_draft"] is not JsonObject draft || draft["state"] is not JsonObject state || ScenarioStateV1Validator.ValidateShape(state).Count > 0) violation = "AI_RESULT_INVALID";
-            else result["draft"] = new JsonObject { ["state"] = state.DeepClone(), ["notes"] = PlainOrNull(draft["notes"] ?? body["recommendation"]) };
+            else
+            {
+                var kept = state.DeepClone().AsObject();
+                if (onInfrastructure) infrastructure = OnInfrastructure(kept);
+                result["draft"] = new JsonObject { ["state"] = kept, ["notes"] = PlainOrNull(draft["notes"] ?? body["recommendation"]) };
+            }
         }
         else if (status == "Answered")
         {
@@ -208,8 +222,10 @@ public static partial class OrganizationAiInput
             else violation ??= "AI_RESULT_INVALID";
         }
         result["assumptions"] = PlainList(body["assumptions"], ref violation);
-        result["limitations"] = PlainList(body["limitations"], ref violation);
-        var rules = new JsonArray();
+        var limitations = PlainList(body["limitations"], ref violation);
+        for (var i = infrastructure.Notes.Count - 1; i >= 0; i--) limitations.Insert(0, infrastructure.Notes[i]);
+        result["limitations"] = limitations;
+        var rules = infrastructure.Rules;
         if (body["rule_results"] is JsonArray ruleList)
             foreach (var rule in ruleList)
             {
@@ -253,6 +269,44 @@ public static partial class OrganizationAiInput
             ["modelVersion"] = PlainOrNull(usage?["model_version"]),
             ["raw"] = violation is null ? null : body.DeepClone()
         }, violation);
+    }
+
+    // BE#231: the rules PUT /api/scenario-drafts applies to a draft on a fire infrastructure. Objects that belong to the infrastructure are
+    // removed in place (their paths are the provider's); missing audience, workingHours and assumption fields are named, never invented.
+    private static (List<string> Notes, JsonArray Rules) OnInfrastructure(JsonObject state)
+    {
+        static string? Str(JsonNode? node) => node is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+        var notes = new List<string>();
+        var rules = new JsonArray();
+        if (state["objects"] is JsonArray objects)
+        {
+            var removed = new List<string>();
+            var exits = 0;
+            for (var i = objects.Count - 1; i >= 0; i--)
+            {
+                if (objects[i] is not JsonObject o) continue;
+                var kind = Str(o["kind"]);
+                var capability = o["capability"] is JsonObject c ? Str(c["id"]) : null;
+                if (kind != "Goal" && (kind != "Equipment" || ScenarioOnlyCapabilities.Contains(capability))) continue;
+                if (kind == "Goal") exits++;
+                removed.Insert(0, kind == "Goal" ? $"$.objects[{i}] Goal" : $"$.objects[{i}] Equipment {capability ?? "(no capability)"}");
+                objects.RemoveAt(i);
+            }
+            if (removed.Count > 0)
+            {
+                notes.Add($"Đã bỏ {removed.Count} đối tượng thuộc hạ tầng PCCC ({exits} lối thoát/điểm tập kết, {removed.Count - exits} thiết bị cố định): "
+                    + "tình huống dùng các đối tượng này từ hạ tầng đã thẩm định.");
+                var reason = "Removed: " + string.Join(", ", removed);
+                rules.Add(new JsonObject { ["ruleId"] = "SCENARIO_CONTAINS_INFRASTRUCTURE", ["outcome"] = "flag", ["reason"] = reason.Length > 2000 ? reason[..2000] : reason });
+            }
+        }
+        var missing = ScenarioStateV1Validator.PlanIssues(state).Select(x => x.Path.StartsWith("$.", StringComparison.Ordinal) ? x.Path[2..] : x.Path).ToList();
+        if (missing.Count > 0)
+        {
+            notes.Add($"Bản nháp chưa có {string.Join(", ", missing)}: cần điền trước khi lưu (đối tượng, trong/ngoài giờ, giả định).");
+            rules.Add(new JsonObject { ["ruleId"] = "PLAN_FIELDS_REQUIRED", ["outcome"] = "flag", ["reason"] = "Missing: " + string.Join(", ", missing) });
+        }
+        return (notes, rules);
     }
 
     private static JsonArray PlainList(JsonNode? node, ref string? violation)

@@ -393,5 +393,8 @@ public abstract class ContentControllerBase : ControllerBase
             ["errors"] = issues.GroupBy(i => i.Path.StartsWith("$.", StringComparison.Ordinal) ? i.Path[2..] : i.Path.TrimStart('$'))
                 .ToDictionary(g => g.Key.Length == 0 ? "$" : g.Key, g => g.Select(i => i.Message).Distinct().ToArray())
         });
-    protected ObjectResult Problem(AuthError error) => Problem(statusCode: error.Status, title: error.Message, extensions: new Dictionary<string, object?> { ["code"] = error.Code });
+    // errors (field -> messages) only when the gate named fields, e.g. infrastructureId on an AI scenario draft (BE#231).
+    protected ObjectResult Problem(AuthError error) => Problem(statusCode: error.Status, title: error.Message, extensions: error.Errors is null
+        ? new Dictionary<string, object?> { ["code"] = error.Code }
+        : new Dictionary<string, object?> { ["code"] = error.Code, ["errors"] = error.Errors });
 }
