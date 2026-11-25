@@ -88,7 +88,7 @@ public sealed partial class BillingService
         var pricing=snapshot.Status switch {"Draft"=>"Estimated","Issued" or "Accepted" or "Expired"=>"Final",_=>"LegacyUnknown"};
         return snapshot with {PricingStatus=pricing,TaxAmount=pricing=="Final"?snapshot.TaxAmount:null};
     }
-    private async Task PriceLines(Quotation quote,IReadOnlyList<QuotationItemRequest> requested,CancellationToken ct)
+    private async Task PriceLines(Quotation quote,IReadOnlyList<QuotationItemRequest> requested,CancellationToken ct,bool requireApprovedScenario=false)
     {
         await Lock("fet3d:billing:catalog",true,ct);
         var existing=await db.Set<QuotationBuildingItem>().Where(x=>x.QuotationId==quote.Id).ToListAsync(ct);
@@ -106,8 +106,10 @@ public sealed partial class BillingService
             if(incomplete.Count>0)throw new BillingException(409,"BUILDING_PROFILE_INCOMPLETE","Complete the Building name and address before quoting it.",incomplete)
                 {Extensions=new Dictionary<string,object?>{["buildingId"]=input.BuildingId}};
             // BE#217 (Flow 1 PC06): thẩm định hạ tầng -> thẩm định tình huống -> báo giá -> thanh toán -> phát hành. A Building is quoted only once
-            // one of its situations passed thẩm định (decisions made by PlatformAdmin before BE#211 keep counting).
-            if(!await db.Database.SqlQuery<bool>($"SELECT building_has_approved_scenario({input.BuildingId}) AS \"Value\"").SingleAsync(ct))
+            // one of its situations passed thẩm định (decisions made by PlatformAdmin before BE#211 keep counting). Checked when the Organization
+            // creates or edits a Draft for a New purchase only: renewals and upgrades of a paying Building, and PlatformAdmin issuing an existing
+            // Draft, are never blocked.
+            if(requireApprovedScenario&&input.PurchaseAction=="New"&&!await db.Database.SqlQuery<bool>($"SELECT building_has_approved_scenario({input.BuildingId}) AS \"Value\"").SingleAsync(ct))
                 throw new BillingException(409,"QUOTE_REQUIRES_APPROVED_SCENARIO","The Building needs at least one situation that passed thẩm định before it can be quoted.")
                     {Extensions=new Dictionary<string,object?>{["buildingId"]=input.BuildingId}};
             var package=await db.ServicePackages.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==input.ServicePackageId&&x.IsActive,ct)??throw Missing();
@@ -218,7 +220,7 @@ public sealed partial class BillingService
             quote.CommercialVersion=7;quote.Quantity=1;quote.UnitPrice=0;quote.SubtotalAmount=0;quote.DiscountAmount=0;quote.TotalAmount=0;
             quote.PriceSnapshot=JsonSerializer.Serialize(new {currency="VND",purpose=TopUpPurpose,lineIds=new[]{item.Id}});
         }
-        else await PriceLines(quote,request.Items!,ct);
+        else await PriceLines(quote,request.Items!,ct,requireApprovedScenario:true);
         await db.SaveChangesAsync(ct);return quote;
     }
     public async Task<QuotationResponse> UpdateDraft(Guid actor,Guid family,Guid id,QuotationWriteRequest request,string? ifMatch,CancellationToken ct)
@@ -233,7 +235,7 @@ public sealed partial class BillingService
             var item=await db.Set<QuotationTopUpItem>().SingleAsync(x=>x.QuotationId==id,ct);
             item.RequestedQuotaUnits=request.TopUp!.RequestedQuotaUnits;item.UpdatedAt=DateTime.UtcNow;quote.UpdatedAt=DateTime.UtcNow;
         }
-        else await PriceLines(quote,request.Items!,ct);
+        else await PriceLines(quote,request.Items!,ct,requireApprovedScenario:true);
         quote.Revision++;
         Audit(identity,quote.OrganizationId,"quotations",id,AuditAction.Update,old,new {quote.Quantity,quote.TotalAmount,quote.Revision});
         await db.SaveChangesAsync(ct);var response=await QuoteView(quote,ct);await tx.CommitAsync(ct);return response;

@@ -269,7 +269,8 @@ BEGIN
   SELECT j2.id INTO running FROM processing_jobs j2 JOIN revisions r2 ON r2.id=j2.revision_id JOIN buildings b2 ON b2.id=r2.building_id
    LEFT JOIN processing_job_attempts pa2 ON pa2.id=j2.current_attempt_id
    WHERE b2.organization_id=b.organization_id AND b2.is_active AND b2.deleted_at IS NULL AND j2.kind='Geometry'
-    AND ((j2.status='Queued' AND j2.created_at>clock_timestamp()-interval '2 hours')
+    -- Queued age counts from the latest queueing: a requeued job keeps its created_at but its last attempt just ended.
+    AND ((j2.status='Queued' AND GREATEST(j2.created_at,COALESCE(pa2.finished_at,pa2.started_at,j2.created_at))>clock_timestamp()-interval '2 hours')
      OR (j2.status='Running' AND pa2.status='Running' AND pa2.lease_until>clock_timestamp()-interval '5 minutes'))
    ORDER BY j2.created_at,j2.id LIMIT 1;
   IF running IS NOT NULL THEN
@@ -283,6 +284,13 @@ BEGIN
    WHERE b2.organization_id=b.organization_id AND j2.kind='Geometry' AND j2.created_at>=day_start;
   -- The policy in effect (Organization, else default), else the configured starting value.
   lim:=(ifc_processing_effective_limit(b.organization_id,p_daily_limit)->>'dailyLimit')::int;
+  -- A limit of 0 is PlatformAdmin stopping new processing for the Organization: no Retry-After, waiting never helps.
+  IF lim=0 THEN
+   INSERT INTO audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,new_values,created_at)
+    VALUES(gen_random_uuid(),p_actor,b.organization_id,'User','Reject','revisions',r.id,gen_random_uuid(),
+     jsonb_build_object('operation','IfcProcessRejected','code','IFC_PROCESSING_DISABLED'),now());
+   RETURN jsonb_build_object('code','IFC_PROCESSING_DISABLED','status',403,'limit',0,'used',used);
+  END IF;
   IF used>=lim THEN
    retry:=GREATEST(1,ceil(extract(epoch FROM (day_start+interval '1 day')-clock_timestamp()))::integer);
    INSERT INTO audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,new_values,created_at)

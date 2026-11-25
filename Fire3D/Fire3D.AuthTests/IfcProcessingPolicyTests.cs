@@ -61,11 +61,20 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal("IFC_PROCESS_DAILY_LIMIT", (await store.RequestAsync(adminId, revisions[2], "policy-3", default)).Error?.Code);
         });
 
-        // History is kept: three versions, newest first, and versions are never edited.
+        // A limit of 0 stops new processing with its own code and no Retry-After (review fix).
+        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/admin/ifc-processing/policies", new { organizationId = org, dailyLimit = 0 })).StatusCode);
+        await WithProcessingRuntime(async (api, worker) =>
+        {
+            await using var db = BuildingContext(api);
+            var stopped = await new ProcessingRuntimeStore(db, ProcessingConfig(worker)).RequestAsync(adminId, revisions[2], "policy-stopped", default);
+            Assert.Equal(("IFC_PROCESSING_DISABLED", 403, (int?)null), (stopped.Error?.Code, stopped.Error?.Status, stopped.Error?.RetryAfterSeconds));
+        });
+
+        // History is kept: four versions, newest first, and versions are never edited.
         var list = await client.GetFromJsonAsync<JsonElement>("/api/admin/ifc-processing/policies");
-        Assert.Equal(3, list.GetProperty("totalCount").GetInt32());
+        Assert.Equal(4, list.GetProperty("totalCount").GetInt32());
         Assert.Equal(1, list.GetProperty("effectiveDefault").GetProperty("dailyLimit").GetInt32());
-        Assert.Equal(2, (await client.GetFromJsonAsync<JsonElement>($"/api/admin/ifc-processing/policies?organizationId={org}")).GetProperty("totalCount").GetInt32());
+        Assert.Equal(3, (await client.GetFromJsonAsync<JsonElement>($"/api/admin/ifc-processing/policies?organizationId={org}")).GetProperty("totalCount").GetInt32());
         await Assert.ThrowsAsync<Npgsql.PostgresException>(() => ExecuteAsync("UPDATE ifc_processing_policies SET daily_limit=99"));
     }
 }

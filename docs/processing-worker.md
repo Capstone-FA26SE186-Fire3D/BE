@@ -36,9 +36,10 @@ Organization limits (#219, BE layer 3 of the junk-IFC guard; enforced in `reques
 migration `20261124180000_IfcJunkGuard`). They apply only when the call would create a new Geometry job; a replayed key or a second key for a
 revision that already has its job still answers 202 with that job.
 
-- 409 `IFC_ORG_JOB_RUNNING`, `errors.jobId` = the Organization's live Geometry job. One such job per Organization. Live means its Building is still active and the job is `Queued` for less than 2 hours, or `Running` on a lease that has not expired (5 minutes of grace). A job stranded by an archived Building, a dead worker or a lost event never blocks the Organization.
+- 409 `IFC_ORG_JOB_RUNNING`, `errors.jobId` = the Organization's live Geometry job. One such job per Organization. Live means its Building is still active and the job is `Queued` for less than 2 hours since it was last queued (a requeued job counts from its last attempt), or `Running` on a lease that has not expired (5 minutes of grace). A job stranded by an archived Building, a dead worker or a lost event never blocks the Organization.
 - 429 `IFC_PROCESS_DAILY_LIMIT` with `Retry-After` (seconds to the next UTC midnight), `limit`, `used` (also in `errors.limit`,
   `errors.used`), when the Organization already created its daily limit of Geometry jobs since 00:00 UTC.
+- 403 `IFC_PROCESSING_DISABLED` (no `Retry-After`) when the policy in effect has `dailyLimit` 0: PlatformAdmin stopped new processing for the Organization.
 - **The daily limit is a PlatformAdmin policy** (team decision 24/11/2026, modelled on the AI quota policies): immutable versions in
   `ifc_processing_policies` with an `effectiveFrom`.
   - A version without `organizationId` is the default for every Organization. A version for one Organization overrides it, and a
