@@ -108,6 +108,7 @@ public sealed class ProcessingRuntimeStore(Fire3DDbContext db, IConfiguration co
         ? errors.EnumerateObject().ToDictionary(p=>p.Name,p=>p.Value.EnumerateArray().Select(x=>x.GetString()!).ToArray()) : null;
     private static string Message(string code)=>code switch
     {
+        "IFC_PROCESSING_DISABLED"=>"New IFC processing is stopped for this Organization by PlatformAdmin (daily limit 0). Contact support.",
         "IFC_PROCESS_DAILY_LIMIT"=>"The Organization reached its daily IFC processing limit. Retry after the next UTC midnight (Retry-After).",
         "IFC_ORG_JOB_RUNNING"=>"Another IFC processing job of this Organization is queued or running (errors.jobId). Wait for it to finish.",
         _=>"Processing operation was rejected. Check scope, input and current lease."
