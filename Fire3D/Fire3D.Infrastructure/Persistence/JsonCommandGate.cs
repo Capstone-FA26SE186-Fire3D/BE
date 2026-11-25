@@ -18,6 +18,28 @@ internal static class JsonCommandGate
   using var doc=JsonDocument.Parse((string)(await command.ExecuteScalarAsync(ct))!);var value=doc.RootElement;
   if(value.GetProperty("code").GetString()=="OK")return AuthResult<JsonElement>.Ok(value.GetProperty("result").Clone());
   var errors=value.TryGetProperty("errors",out var fields)?fields.Deserialize<Dictionary<string,string[]>>():null;
-  return AuthResult<JsonElement>.Fail(value.GetProperty("code").GetString()!,"The operation was rejected. Check lifecycle, ownership, revision and required provenance.",value.GetProperty("status").GetInt32(),errors);
+  var code=value.GetProperty("code").GetString()!;
+  return AuthResult<JsonElement>.Fail(code,Message(code),value.GetProperty("status").GetInt32(),errors);
  }
+ // Codes a client shows to a person get their own sentence; everything else keeps the generic one.
+ private static string Message(string code)=>code switch
+ {
+  "PLAN_SCENARIO_COVERAGE_INCOMPLETE"=>"Publishing needs an Approved situation in working hours and one outside them on this fire infrastructure (errors.workingHours lists what is missing).",
+  "FIRE_INFRASTRUCTURE_NOT_APPROVED"=>"Use a fire infrastructure version that passed thẩm định (Approved).",
+  "FIRE_INFRASTRUCTURE_LOCKED"=>"An Approved fire infrastructure is locked; create a new version to change it.",
+  "FIRE_INFRASTRUCTURE_NOT_DRAFT"=>"Only a Draft fire infrastructure version can change; create a new version after a decision.",
+  "FIRE_INFRASTRUCTURE_OPEN_VERSION_EXISTS"=>"This revision already has a Draft or Submitted fire infrastructure version (errors.id).",
+  "FIRE_INFRASTRUCTURE_INVALID"=>"The fire infrastructure needs geometry, runtimeVersion and items before it can be submitted.",
+  "FIRE_INFRASTRUCTURE_NOT_PENDING"=>"This fire infrastructure version was already decided.",
+  "CONTENT_REVIEW_NOT_PENDING"=>"This situation was already decided.",
+  "CONTENT_HASH_MISMATCH"=>"The content changed after it was submitted; it cannot be decided.",
+  "PRECONDITION_FAILED"=>"The data changed since you read it (someone else decided or saved first). Reload and try again.",
+  "PRECONDITION_REQUIRED"=>"Send the current ETag in If-Match.",
+  "IDEMPOTENCY_KEY_REQUIRED"=>"Send an Idempotency-Key header.",
+  "IDEMPOTENCY_KEY_CONFLICT"=>"This Idempotency-Key was already used with a different request.",
+  "NOT_FOUND"=>"Not found, or not visible to this account.",
+  "FORBIDDEN"=>"This account's role cannot do this.",
+  "UNAUTHORIZED"=>"The session is no longer active.",
+  _=>"The operation was rejected. Check lifecycle, ownership, revision and required provenance."
+ };
 }
