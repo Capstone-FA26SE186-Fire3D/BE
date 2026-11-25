@@ -21,12 +21,11 @@ public sealed class IfcUploadOptions
         TimeSpan.FromSeconds(Math.Min(Math.Max(30, MaxCompletionSeconds), 30 + 2d * size / Math.Max(1, MinThroughputBytesPerSecond)));
 }
 /// <summary>GET /api/ifc/upload-limits: what the web checks before an upload.</summary>
-public sealed record IfcUploadLimitsResponse(bool Enabled, long MaxBytes, IReadOnlyList<string> AcceptedExtensions, IReadOnlyList<string> AcceptedSchemas,
-    int DailyProcessLimitPerOrganization = IfcProcessingOptions.DefaultDailyLimitPerOrganization)
+/// <remarks>The daily processing limit is a per-Organization policy (BE#219): GET /api/organizations/me/ifc-processing.</remarks>
+public sealed record IfcUploadLimitsResponse(bool Enabled, long MaxBytes, IReadOnlyList<string> AcceptedExtensions, IReadOnlyList<string> AcceptedSchemas)
 {
-    public static IfcUploadLimitsResponse From(IfcUploadOptions options, IfcProcessingOptions? processing = null) =>
-        new(options.Enabled && options.MaxBytes is > 0, options.MaxBytes ?? 0, [".ifc"], IfcStepSummary.SupportedSchemas,
-            (processing ?? new()).DailyLimitPerOrganization);
+    public static IfcUploadLimitsResponse From(IfcUploadOptions options) =>
+        new(options.Enabled && options.MaxBytes is > 0, options.MaxBytes ?? 0, [".ifc"], IfcStepSummary.SupportedSchemas);
 }
 public sealed record IfcUploadIntent(Guid RevisionId, Guid BuildingId, Guid OrganizationId, Guid ActorId,
     string StagingKey, long Size, string Hash, string Filename, DateTime ExpiresAt, bool Completed);

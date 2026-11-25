@@ -24,7 +24,7 @@ END $$;
 
 CREATE OR REPLACE FUNCTION ifc_upload_gate(p_action text,p_actor uuid,p_resource uuid,p_input jsonb,p_key text DEFAULT NULL,p_attempt uuid DEFAULT NULL,p_etag text DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
-DECLARE actor users; b buildings; intent ifc_upload_intents; attempt ifc_upload_attempts; r uuid; s uuid;
+DECLARE actor users; b buildings; intent ifc_upload_intents; attempt ifc_upload_attempts; r uuid; s uuid; failed_toolchain text; current_toolchain text;
  h text:=fet3d_jsonb_payload_hash(p_input); k text; result jsonb; failed_job uuid; failed_run uuid; failed_outcome text; qa jsonb;
 BEGIN
  PERFORM pg_advisory_xact_lock_shared(hashtextextended('fire3d:identity-management',0));
@@ -53,12 +53,17 @@ BEGIN
   IF intent.revision_id IS NULL THEN
    -- #219: the latest Geometry run of this SHA-256 in the Organization failed on a blocking (Error/Critical) QA issue. The same bytes
    -- would fail again, so no revision, intent or worker run is spent; the answer names that run's blocking QA codes.
-   SELECT j.id,vr.id,vr.outcome INTO failed_job,failed_run,failed_outcome
+   SELECT j.id,vr.id,vr.outcome,pa.toolchain_version INTO failed_job,failed_run,failed_outcome,failed_toolchain
     FROM processing_jobs j JOIN revisions rv ON rv.id=j.revision_id JOIN buildings bb ON bb.id=rv.building_id
     JOIN validation_runs vr ON vr.job_id=j.id AND vr.processing_attempt_id=j.current_attempt_id
+    JOIN processing_job_attempts pa ON pa.id=j.current_attempt_id
     WHERE bb.organization_id=b.organization_id AND j.kind='Geometry' AND j.input_hash=lower(p_input->>'sha256Hash')
     ORDER BY vr.created_at DESC,vr.id DESC LIMIT 1;
-   IF failed_outcome='Failed' THEN
+   -- Only while the same Geometry worker version would judge the bytes again: after a worker release (newest Geometry attempt has another
+   -- toolchain_version) the file gets a new chance, so a worker bug that failed valid models never locks them out.
+   SELECT a.toolchain_version INTO current_toolchain FROM processing_job_attempts a JOIN processing_jobs jj ON jj.id=a.processing_job_id
+    WHERE jj.kind='Geometry' ORDER BY a.created_at DESC,a.id DESC LIMIT 1;
+   IF failed_outcome='Failed' AND failed_toolchain IS NOT DISTINCT FROM current_toolchain THEN
     SELECT COALESCE(jsonb_agg(DISTINCT code ORDER BY code),'[]'::jsonb) INTO qa FROM revision_issues WHERE validation_run_id=failed_run AND severity IN('Error','Critical');
     IF jsonb_array_length(qa)>0 THEN
      INSERT INTO audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,new_values,created_at)
@@ -259,8 +264,14 @@ BEGIN
   -- A replayed key or an existing job of this revision returned above; requeue of a failed job (system failure) reuses its job and
   -- is never counted.
   PERFORM pg_advisory_xact_lock(hashtextextended('fire3d:ifc-processing:'||b.organization_id,0));
+  -- Only a live job blocks: its Building is still active, and it is Queued for less than 2 hours or Running on a lease that has not
+  -- expired (5 minutes of grace). A job stranded by an archived Building, a dead worker or a lost event never blocks the Organization.
   SELECT j2.id INTO running FROM processing_jobs j2 JOIN revisions r2 ON r2.id=j2.revision_id JOIN buildings b2 ON b2.id=r2.building_id
-   WHERE b2.organization_id=b.organization_id AND j2.kind='Geometry' AND j2.status IN('Queued','Running') ORDER BY j2.created_at,j2.id LIMIT 1;
+   LEFT JOIN processing_job_attempts pa2 ON pa2.id=j2.current_attempt_id
+   WHERE b2.organization_id=b.organization_id AND b2.is_active AND b2.deleted_at IS NULL AND j2.kind='Geometry'
+    AND ((j2.status='Queued' AND j2.created_at>clock_timestamp()-interval '2 hours')
+     OR (j2.status='Running' AND pa2.status='Running' AND pa2.lease_until>clock_timestamp()-interval '5 minutes'))
+   ORDER BY j2.created_at,j2.id LIMIT 1;
   IF running IS NOT NULL THEN
    INSERT INTO audit_logs(id,user_id,organization_id,actor_type,action,target_entity,target_id,correlation_id,new_values,created_at)
     VALUES(gen_random_uuid(),p_actor,b.organization_id,'User','Reject','revisions',r.id,gen_random_uuid(),

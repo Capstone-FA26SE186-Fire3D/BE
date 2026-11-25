@@ -141,9 +141,12 @@ BEGIN
    'waterSources',(SELECT COALESCE(jsonb_agg(e.i),'[]'::jsonb) FROM jsonb_array_elements(COALESCE(f.items,'[]'::jsonb)) e(i) WHERE e.i->>'category'='WaterSource')),
   'hazard',jsonb_build_object('buildingType',b.building_type,'totalFloors',b.total_floors,'floorAreaSquareMeters',b.floor_area_square_meters),
   'scenarios',scenario_list,
+  -- Same rule as publish_release_gate: any Approved version (matching hash) on this infrastructure, not only each scenario's newest one.
   'coverage',jsonb_build_object(
-   'inHours',EXISTS(SELECT 1 FROM jsonb_array_elements(scenario_list) s(x) WHERE s.x->>'workingHours'='InHours' AND s.x->>'reviewStatus'='Approved'),
-   'offHours',EXISTS(SELECT 1 FROM jsonb_array_elements(scenario_list) s(x) WHERE s.x->>'workingHours'='OffHours' AND s.x->>'reviewStatus'='Approved')),
+   'inHours',EXISTS(SELECT 1 FROM scenario_versions sv JOIN scenario_content_reviews scr ON scr.scenario_version_id=sv.id AND scr.status='Approved' AND scr.content_hash=sv.scenario_hash
+     WHERE sv.infrastructure_id=f.id AND sv.state_snapshot->>'workingHours'='InHours'),
+   'offHours',EXISTS(SELECT 1 FROM scenario_versions sv JOIN scenario_content_reviews scr ON scr.scenario_version_id=sv.id AND scr.status='Approved' AND scr.content_hash=sv.scenario_hash
+     WHERE sv.infrastructure_id=f.id AND sv.state_snapshot->>'workingHours'='OffHours')),
   'history',(SELECT COALESCE(jsonb_agg(jsonb_build_object('id',h.id,'version',h.version_number,'status',h.status,'submittedAt',h.submitted_at,'decidedAt',h.decided_at)
     ORDER BY h.version_number DESC),'[]'::jsonb) FROM fire_infrastructures h WHERE h.revision_id=f.revision_id)));
 END $$;

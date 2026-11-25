@@ -59,7 +59,13 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal(job.Value, (await store.RequestAsync(adminId, first, "org-one", default)).Value);
             Assert.Equal(job.Value, (await store.RequestAsync(adminId, first, "org-one-again", default)).Value);
             Assert.True((await store.RequestAsync(adminId, otherOrg, "other-org", default)).IsSuccess);
-            await ExecuteAsync($"UPDATE processing_jobs SET status='Running' WHERE id='{job.Value}'");
+            // A worker holds the job on a live lease (a Running job always has its current attempt).
+            var attempt = Guid.NewGuid();
+            await ExecuteAsync($"""
+                INSERT INTO processing_job_attempts(id,processing_job_id,attempt_number,input_hash,toolchain_version,lease_owner,lease_token,lease_until,status)
+                SELECT '{attempt}',id,1,input_hash,'geometry-test','worker',gen_random_uuid(),now()+interval '10 minutes','Running' FROM processing_jobs WHERE id='{job.Value}';
+                UPDATE processing_jobs SET status='Running',current_attempt_id='{attempt}' WHERE id='{job.Value}';
+                """);
             Assert.Equal("IFC_ORG_JOB_RUNNING", (await store.RequestAsync(adminId, second, "org-two-running", default)).Error?.Code);
             await ExecuteAsync($"UPDATE processing_jobs SET status='Succeeded',finished_at=now() WHERE id='{job.Value}'");
             Assert.True((await store.RequestAsync(adminId, second, "org-two-after", default)).IsSuccess);
@@ -143,7 +149,8 @@ public sealed partial class AuthIntegrationTests
         using var limitedProblem = JsonDocument.Parse(await limited.Content.ReadAsStringAsync());
         Assert.Equal("IFC_PROCESS_DAILY_LIMIT", limitedProblem.RootElement.GetProperty("code").GetString());
         using var limits = JsonDocument.Parse(await http.GetStringAsync("/api/ifc/upload-limits"));
-        Assert.Equal(1, limits.RootElement.GetProperty("dailyProcessLimitPerOrganization").GetInt32());
+        // The limit is an Organization policy, read from /api/organizations/me/ifc-processing, not from upload-limits.
+        Assert.False(limits.RootElement.TryGetProperty("dailyProcessLimitPerOrganization", out _));
     }
 
     [PostgresFact]
@@ -164,6 +171,12 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal(revisions, await ScalarAsync("SELECT count(*) FROM revisions"));
             Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM ifc_upload_intents WHERE idempotency_key='same-failed-file'"));
             Assert.Equal("IFC_SOURCE_ALREADY_FAILED", await ScalarAsync($"SELECT new_values->>'code' FROM audit_logs WHERE target_id='{building}' AND action='Reject'"));
+            // After a Geometry worker release (the newest attempt runs another toolchain) the same bytes get a new chance (review fix).
+            await ExecuteAsync($"""
+                INSERT INTO processing_job_attempts(id,processing_job_id,attempt_number,input_hash,toolchain_version,lease_owner,lease_token,lease_until,status,created_at)
+                SELECT gen_random_uuid(),j.id,99,j.input_hash,'geometry-worker-next','test',gen_random_uuid(),now(),'Expired',now()+interval '1 second' FROM processing_jobs j WHERE j.id='{failed.Job}'
+                """);
+            Assert.True((await flow.InitiateAsync(adminId, building, new(IfcBytes.Length, "model.ifc", "after-release", IfcHash), "same-file-new-worker", default)).IsSuccess);
             // A fixed file (another SHA-256) is accepted.
             var fixedBytes = Encoding.UTF8.GetBytes(IfcModel("IFC4").Replace("'L1'", "'fixed'"));
             Assert.True((await flow.InitiateAsync(adminId, building, new(fixedBytes.Length, "model.ifc", "fixed", Convert.ToHexStringLower(SHA256.HashData(fixedBytes))), "fixed-file", default)).IsSuccess);
@@ -205,6 +218,30 @@ public sealed partial class AuthIntegrationTests
             Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM processing_jobs"));
             Assert.Equal(0, fake.Copies);
             Assert.Equal("IFC_NO_STOREYS", await ScalarAsync($"SELECT new_values#>>'{{details,qaCodes,0}}' FROM audit_logs WHERE target_id='{upload.RevisionId}' AND action='Reject'"));
+        });
+    }
+
+    // Review fix: a job stranded by an archived Building, or Queued for more than 2 hours (lost event, dead worker), never blocks the
+    // Organization's next processing request.
+    [PostgresFact]
+    public async Task Ifc_process_ignores_stranded_geometry_jobs_of_the_organization()
+    {
+        var building = await SeedIfcBuilding();
+        var archived = Guid.NewGuid();
+        await ExecuteAsync($"INSERT INTO buildings(id,organization_id,name,building_type,total_floors,is_active,created_by,created_at,updated_at) SELECT '{archived}',organization_id,'Archived',building_type,total_floors,true,created_by,now(),now() FROM buildings WHERE id='{building}'");
+        var inArchived = await SeedDistinctIfcRevisionIn(archived, "S0");
+        var first = await SeedDistinctIfcRevisionIn(building, "S1"); var second = await SeedDistinctIfcRevisionIn(building, "S2");
+        await WithProcessingRuntime(async (api, worker) =>
+        {
+            await using var db = BuildingContext(api);
+            var store = new ProcessingRuntimeStore(db, ProcessingConfig(worker));
+            Assert.True((await store.RequestAsync(adminId, inArchived, "stranded-0", default)).IsSuccess);
+            await ExecuteAsync($"UPDATE buildings SET is_active=false WHERE id='{archived}'");
+            var job = await store.RequestAsync(adminId, first, "stranded-1", default);
+            Assert.True(job.IsSuccess, job.Error?.Code);
+            Assert.Equal("IFC_ORG_JOB_RUNNING", (await store.RequestAsync(adminId, second, "stranded-2", default)).Error?.Code);
+            await ExecuteAsync($"UPDATE processing_jobs SET created_at=now()-interval '3 hours' WHERE id='{job.Value}'");
+            Assert.True((await store.RequestAsync(adminId, second, "stranded-2b", default)).IsSuccess);
         });
     }
 }

@@ -37,7 +37,7 @@ It is built on the newest **Approved** infrastructure of the Building, or on `in
 | `facility` | II | `facilityHeadName/Phone`, `onSiteForce`, `emergencyContacts` (BE#212); `equipment[{catalogKey, count}]` (II.5) and `waterSources[]` (II.6) from the infrastructure |
 | `hazard` | III | `buildingType`, `riskGroup`, `totalFloors`, `floorAreaSquareMeters` |
 | `scenarios[]` | IV.1 | The newest version of each scenario on the infrastructure, numbered 1, 2, 3… in creation order: `number, scenarioId, scenarioName, scenarioVersionId, versionNumber, audience, assumption, workingHours, reviewStatus (NotSubmitted / Submitted / Approved / Rejected), reviewedAt` |
-| `coverage` | (3) | `inHours`, `offHours` (an Approved situation exists), `complete` (both, so publishing is allowed) |
+| `coverage` | (3) | `inHours`, `offHours`: an Approved version (matching hash) on the infrastructure exists, the same rule as publishing; `complete`: both |
 | `history[]` | V | Every infrastructure version of that revision: `id, version, status, submittedAt, decidedAt` |
 | `signedPlanDocumentId` | | The signed PC06 (BE#212). The web view and any print are a **reference**, never the signed plan. |
 
