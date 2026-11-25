@@ -41,6 +41,16 @@ public sealed class ProcessingWorkerOptions
         _ => null
     };
 }
+/// <summary>
+/// #219: IfcProcessing section. DailyLimitPerOrganization caps new Geometry jobs per Organization per UTC day (requeue of a failed job
+/// is not counted); request_revision_processing enforces it in SQL together with one Queued/Running Geometry job per Organization.
+/// </summary>
+public sealed class IfcProcessingOptions
+{
+    public const int DefaultDailyLimitPerOrganization = 20;
+    public int DailyLimitPerOrganization { get; set; } = DefaultDailyLimitPerOrganization;
+    public static bool IsValidDailyLimit(int limit) => limit is >= 1 and <= 100_000;
+}
 public interface IRevisionProcessingStore
 {
     Task<AuthResult<Guid>> RequestAsync(Guid actor, Guid revision, string key, CancellationToken ct);

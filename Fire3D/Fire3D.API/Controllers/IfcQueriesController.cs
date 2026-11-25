@@ -16,7 +16,9 @@ public sealed class IfcQueriesController(ISender sender) : ControllerBase
     /// OrganizationUser or PlatformAdmin. <c>maxBytes</c> is IfcUpload:MaxBytes (500 MiB unless the deployment sets another value):
     /// initiate refuses a larger <c>fileSizeBytes</c> with 400 VALIDATION_ERROR. upload-complete also requires the STEP header
     /// (422 IFC_UNSUPPORTED_FORMAT) and a FILE_SCHEMA in <c>acceptedSchemas</c> (variants such as IFC4X3_ADD2 included; 422
-    /// IFC_UNSUPPORTED_SCHEMA). <c>enabled</c> false means initiate answers 503 IFC_UPLOAD_DISABLED.
+    /// IFC_UNSUPPORTED_SCHEMA), then at least one IfcBuildingStorey, IfcSpace, IfcDoor and IfcWall/IfcSlab (422 IFC_PRECHECK_FAILED).
+    /// The daily processing limit and today's use of the caller's Organization: GET /api/organizations/me/ifc-processing.
+    /// <c>enabled</c> false means initiate answers 503 IFC_UPLOAD_DISABLED.
     /// </remarks>
     [HttpGet("ifc/upload-limits")]
     [ProducesResponseType<IfcUploadLimitsResponse>(200)]

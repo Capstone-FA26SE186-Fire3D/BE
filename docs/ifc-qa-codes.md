@@ -18,6 +18,16 @@ Where codes appear:
     revisions, `new_values.operation` IfcUploadRejected, `code`, `quarantineStatus` Rejected, `sha256`, `details`) is written. A
     replay of the same upload-complete then answers 404 `IFC_UPLOAD_INTENT_NOT_FOUND`. Size or hash mismatches (`IFC_SOURCE_MISMATCH`)
     keep the intent, because the client may still PUT the right bytes.
+  - #219 precheck, after `FILE_SCHEMA`: the STEP text is scanned while it is hashed (streamed, never held in memory) and counts entity
+    instances `#id=NAME(` outside strings and comments: `IFCBUILDINGSTOREY`, `IFCSPACE`, `IFCDOOR`/`IFCDOORSTANDARDCASE`, and every
+    `IFCWALL*`/`IFCSLAB*` element (`IFCWALLSTANDARDCASE`, `IFCSLABELEMENTEDCASE`, ...; the `...TYPE` type objects do not count). A missing
+    group answers 422 `IFC_PRECHECK_FAILED` with `errors.missing` (`IfcBuildingStorey`, `IfcSpace`, `IfcDoor`, `IfcWall/IfcSlab`) and
+    `errors.qaCodes` (`IFC_NO_STOREYS`, `IFC_NO_SPACES`, `IFC_NO_DOORS`, `IFC_NO_WALLS_OR_SLABS`), and is cleaned up like the two errors
+    above; no processing job can exist for it.
+  - #219 initiate: when the latest Geometry run of the same SHA-256 in the same Organization failed on an `Error`/`Critical` issue,
+    initiate answers 409 `IFC_SOURCE_ALREADY_FAILED` with `errors.qaCodes` (that run's blocking codes), `errors.jobId` and The refusal holds only while the same Geometry worker version (toolchain) would judge the file again: after a worker release the same bytes may be uploaded and processed again.
+    `errors.validationRunId`, creates no revision and writes an audit row (`target_entity` buildings, `code`, `sha256`, `qaCodes`). A run
+    that failed with warnings only, a later passed run, or another Organization does not block the file.
   - An adopted source gets `quarantineStatus` `Accepted` (shown in the Building revision list). Sources uploaded before #214 keep
     `Pending`.
 
@@ -45,9 +55,14 @@ Revision status after Geometry QA (worker `preview_glb` output):
 | `IFC_UNSUPPORTED_FORMAT` | Block | Upload is not IFC | Export IFC (IFC2X3/IFC4/IFC4X3) |
 | `IFC_NO_STOREYS` | Block | No `IfcBuildingStorey`: the model cannot be split into floors | Export with levels/storeys (Revit: levels; ArchiCAD: stories) |
 | `IFC_NO_STAIRS_MULTISTOREY` | Block | More than one storey holds building elements but there is no `IfcStair`/`IfcStairFlight`, so no route leads off the upper floors | Model or export the stairs, then upload again |
+| `IFC_NO_DOORS` | Block (upload precheck only) | No `IfcDoor`/`IfcDoorStandardCase` | Export doors with the architectural model |
+| `IFC_NO_WALLS_OR_SLABS` | Block (upload precheck only) | No `IfcWall*` or `IfcSlab*` element | Export the architectural model, not a single discipline |
 | `IFC_UNIT_NOT_METRE` | Warning | The IFC length unit is not metre (millimetre, foot, ...); the worker scales geometry to metres with the IFC unit | Check sizes in the preview; re-export in metres if they look wrong |
 
 Other codes may appear; FE shows them generically with the worker `message`.
+
+`IFC_NO_STOREYS` and `IFC_NO_SPACES` are also returned by the BE upload precheck (#219) in `errors.qaCodes` of 422
+`IFC_PRECHECK_FAILED`; `IFC_NO_DOORS` and `IFC_NO_WALLS_OR_SLABS` exist only there.
 
 Who produces the codes: the Geometry worker (Unity repo, `Tools/GeometryWorker`) reads the IFC and reports every code in this table as
 an issue of its `preview_glb`/`building_metadata` output. BE checks only the issue shape (`severity`, non-empty `code` and `message`),

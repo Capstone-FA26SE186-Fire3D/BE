@@ -21,6 +21,7 @@ public sealed class IfcUploadOptions
         TimeSpan.FromSeconds(Math.Min(Math.Max(30, MaxCompletionSeconds), 30 + 2d * size / Math.Max(1, MinThroughputBytesPerSecond)));
 }
 /// <summary>GET /api/ifc/upload-limits: what the web checks before an upload.</summary>
+/// <remarks>The daily processing limit is a per-Organization policy (BE#219): GET /api/organizations/me/ifc-processing.</remarks>
 public sealed record IfcUploadLimitsResponse(bool Enabled, long MaxBytes, IReadOnlyList<string> AcceptedExtensions, IReadOnlyList<string> AcceptedSchemas)
 {
     public static IfcUploadLimitsResponse From(IfcUploadOptions options) =>
@@ -48,7 +49,7 @@ public interface IIfcSourceInspector
     Task<bool> CopyAsync(string key, string etag, string finalKey, CancellationToken ct);
 }
 /// <summary>
-/// A content check refused the uploaded bytes (Code: IFC_UNSUPPORTED_FORMAT, IFC_UNSUPPORTED_SCHEMA). The SHA-256 already matched the
+/// A content check refused the uploaded bytes (Code: IFC_UNSUPPORTED_FORMAT, IFC_UNSUPPORTED_SCHEMA, IFC_PRECHECK_FAILED). The SHA-256 already matched the
 /// intent, so the same intent can never pass: the gate deletes the Draft revision and the intent and queues the staging object for cleanup.
 /// </summary>
 public sealed record IfcUploadRejection(string Code, string Message, IReadOnlyDictionary<string, string[]>? Details = null);
