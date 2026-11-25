@@ -73,9 +73,13 @@ public sealed class OrganizationAiGates(Fire3DDbContext db) : IOrganizationAiGat
             "AI_BLOCKED_DURING_ASSESSMENT" => "AI is not available while an Assessment attempt is open.",
             "AI_CONTEXT_NOT_FOUND" => "The Learn post, Training or result is not available to you.",
             "AI_DAILY_QUOTA_EXHAUSTED" => "Today's AI allowance is used up; it resets at the start of the next day.",
+            "FIRE_INFRASTRUCTURE_REVISION_MISMATCH" => "Use a fire infrastructure version of the pinned revision of this Building (errors.infrastructureId).",
+            "FIRE_INFRASTRUCTURE_NOT_APPROVED" => "Use a fire infrastructure version that passed thẩm định (Approved).",
             _ => "AI request was rejected."
         };
-        return AuthResult<JsonElement>.Fail(code, message, value.GetProperty("status").GetInt32());
+        // BE#231: the fire infrastructure codes name the field, as when a draft is created.
+        var errors = value.TryGetProperty("errors", out var fields) && fields.ValueKind == JsonValueKind.Object ? fields.Deserialize<Dictionary<string, string[]>>() : null;
+        return AuthResult<JsonElement>.Fail(code, message, value.GetProperty("status").GetInt32(), errors);
     }
 }
 
@@ -193,7 +197,7 @@ public sealed class OrganizationAiWorker(IServiceScopeFactory scopes, IOptions<O
         var call = dispatch ? await provider.DispatchAsync(claim, ct) : await provider.LookupAsync(id, ct);
         var (action, input) = call.Status switch
         {
-            AiCallStatus.Completed => ("Complete", (object)OrganizationAiInput.Completion(claim.GetProperty("operation").GetString()!, id, call.Body!).Completion),
+            AiCallStatus.Completed => ("Complete", (object)OrganizationAiInput.Completion(claim.GetProperty("operation").GetString()!, id, call.Body!, OnInfrastructure(claim)).Completion),
             AiCallStatus.NotDelivered when dispatch => ("Retry", new { maxAttempts = o.MaxAttempts, backoffSeconds = Math.Max(o.BackoffSeconds, call.RetryAfterSeconds ?? 0), reason = "AI_PROVIDER_NOT_DELIVERED" }),
             AiCallStatus.Rejected when dispatch => ("Reject", AiRefusal.Input(call.Body, call.Reason, call.RetryAfterSeconds)),
             AiCallStatus.NotFound when !dispatch => ("NotFound", new { }),
@@ -205,4 +209,9 @@ public sealed class OrganizationAiWorker(IServiceScopeFactory scopes, IOptions<O
             settled.TryGetProperty("result", out var r) && r.TryGetProperty("status", out var s) ? s.GetString() : null);
         return true;
     }
+
+    // BE#231: the pinned bim names a fire infrastructure, so the draft is a situation on it (the claim carries the payload in both phases).
+    private static bool OnInfrastructure(JsonElement claim) =>
+        claim.TryGetProperty("payload", out var payload) && payload.TryGetProperty("bim", out var bim) && bim.ValueKind == JsonValueKind.Object
+        && bim.TryGetProperty("infrastructure", out var infrastructure) && infrastructure.ValueKind == JsonValueKind.Object;
 }
