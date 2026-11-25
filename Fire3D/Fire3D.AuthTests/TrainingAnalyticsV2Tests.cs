@@ -78,6 +78,7 @@ public sealed partial class AuthIntegrationTests
         Assert.True(export.IsSuccess, export.Error?.Code);
         Assert.Equal(Encoding.UTF8.GetPreamble(), export.Value!.Content[..3]);
         var lines = Encoding.UTF8.GetString(export.Value.Content[3..]).Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        // BE#218: only the training log (groupBy=scenario) starts with the disclaimer; this export keeps the header first.
         Assert.Equal(string.Join(',', TrainingAnalyticsCsv.Header), lines[0]);
         Assert.Equal(3, lines.Length);
         Assert.StartsWith("week,2026-10-05,2026-10-05,2,1,2,0,0,", lines[1]);

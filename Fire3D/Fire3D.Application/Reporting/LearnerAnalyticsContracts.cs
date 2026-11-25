@@ -33,9 +33,14 @@ public sealed record AnalyticsTrainingRow(Guid TrainingId, string? TrainingName,
 public sealed record AnalyticsBuildingRow(Guid BuildingId, string? BuildingName, long Plays, long UniqueTrainees, long Completed);
 public sealed record AnalyticsScenarioRow(Guid ScenarioId, string? ScenarioName, long Plays, long UniqueTrainees, long Completed, long Passed);
 public sealed record AnalyticsOrganizationRow(Guid OrganizationId, string? OrganizationName, long Plays, long UniqueTrainees, long Completed);
-/// <summary>One cohort group. UniqueTrainees counts inside this group only; never add groups to get a total.</summary>
+/// <summary>
+/// One cohort group. UniqueTrainees counts inside this group only; never add groups to get a total. LastPlayedAt is the latest start in
+/// the range (null without a play). BE#218, groupBy=scenario: Audience and WorkingHours of the situation's newest version, and published
+/// situations without a play in the range appear with Plays 0 (the training log warns "chưa luyện trong năm").
+/// </summary>
 public sealed record AnalyticsCohortRow(string Key, string? Label, long Plays, long UniqueTrainees, long Completed, long Abandoned, long AwaitingSync,
-    long Assessed, long Passed, decimal? PassRate, decimal? AverageDurationSeconds);
+    long Assessed, long Passed, decimal? PassRate, decimal? AverageDurationSeconds, DateTimeOffset? LastPlayedAt = null, string? Audience = null,
+    string? WorkingHours = null);
 /// <summary>Assessment criterion results stored by the server, aggregated; no individual answers.</summary>
 public sealed record AnalyticsDebriefRow(string CriterionId, string Metric, long Evaluated, long Passed, decimal PassRate);
 public sealed record AnalyticsQuotaUnits(string QuotaUnit, long Units);
@@ -63,17 +68,24 @@ public sealed record TrainingAnalyticsReport(DateTime AsOf, DateTime From, DateT
 /// <summary>CSV of cohort rows: UTF-8 with BOM for Excel, fixed header, cells that could start a formula are prefixed with an apostrophe.</summary>
 public static class TrainingAnalyticsCsv
 {
-    public static readonly string[] Header = ["groupBy", "key", "label", "plays", "uniqueTrainees", "completed", "abandoned", "awaitingSync", "assessed", "passed", "passRate", "averageDurationSeconds"];
+    /// <summary>BE#218: first line of the training-log export (groupBy=scenario; Điều 16 Nghị định 105/2025/NĐ-CP: the simulation never replaces a
+    /// real drill). Other exports keep the header as their first line so existing imports are not shifted.</summary>
+    public const string Disclaimer = "Số liệu luyện tập trên mô phỏng, mang tính hỗ trợ, không thay buổi thực tập phương án.";
+    /// <summary>The columns before BE#218 keep their order; lastPlayedAt, audience and workingHours are appended.</summary>
+    public static readonly string[] Header = ["groupBy", "key", "label", "plays", "uniqueTrainees", "completed", "abandoned", "awaitingSync", "assessed", "passed", "passRate", "averageDurationSeconds",
+        "lastPlayedAt", "audience", "workingHours"];
 
     public static byte[] Build(string groupBy, IEnumerable<AnalyticsCohortRow> rows)
     {
         var text = new System.Text.StringBuilder();
+        if (groupBy == "scenario") text.Append(Cell(Disclaimer)).Append("\r\n");
         text.Append(string.Join(',', Header)).Append("\r\n");
         foreach (var r in rows)
         {
             string N(decimal? value) => value?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
             text.Append(string.Join(',', new[] { groupBy, r.Key, r.Label ?? "", r.Plays.ToString(), r.UniqueTrainees.ToString(), r.Completed.ToString(),
-                r.Abandoned.ToString(), r.AwaitingSync.ToString(), r.Assessed.ToString(), r.Passed.ToString(), N(r.PassRate), N(r.AverageDurationSeconds) }.Select(Cell))).Append("\r\n");
+                r.Abandoned.ToString(), r.AwaitingSync.ToString(), r.Assessed.ToString(), r.Passed.ToString(), N(r.PassRate), N(r.AverageDurationSeconds),
+                r.LastPlayedAt?.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture) ?? "", r.Audience ?? "", r.WorkingHours ?? "" }.Select(Cell))).Append("\r\n");
         }
         return [.. System.Text.Encoding.UTF8.GetPreamble(), .. System.Text.Encoding.UTF8.GetBytes(text.ToString())];
     }
