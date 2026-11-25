@@ -54,7 +54,7 @@ Revision status after Geometry QA (worker `preview_glb` output):
 | `IFC_DEFAULT_MASS_PRESENT` | Info | Planning mass present (removed) | None |
 | `IFC_UNSUPPORTED_FORMAT` | Block | Upload is not IFC | Export IFC (IFC2X3/IFC4/IFC4X3) |
 | `IFC_NO_STOREYS` | Block | No `IfcBuildingStorey`: the model cannot be split into floors | Export with levels/storeys (Revit: levels; ArchiCAD: stories) |
-| `IFC_NO_STAIRS_MULTISTOREY` | Block | More than one storey holds building elements but there is no `IfcStair`/`IfcStairFlight`, so no route leads off the upper floors | Model or export the stairs, then upload again |
+| `IFC_NO_STAIRS_MULTISTOREY` | Block | More than one storey holds a room (`IfcSpace`) but there is no `IfcStair`, `IfcStairFlight`, `IfcRamp` or `IfcRampFlight`, so no route leads off the upper floors | Model or export the stairs or ramps, then upload again |
 | `IFC_NO_DOORS` | Block (upload precheck only) | No `IfcDoor`/`IfcDoorStandardCase` | Export doors with the architectural model |
 | `IFC_NO_WALLS_OR_SLABS` | Block (upload precheck only) | No `IfcWall*` or `IfcSlab*` element | Export the architectural model, not a single discipline |
 | `IFC_UNIT_NOT_METRE` | Warning | The IFC length unit is not metre (millimetre, foot, ...); the worker scales geometry to metres with the IFC unit | Check sizes in the preview; re-export in metres if they look wrong |
@@ -69,8 +69,21 @@ an issue of its `preview_glb`/`building_metadata` output. BE checks only the iss
 stores the issues and derives the run outcome and revision status from `severity`/`outcome`, so it accepts a new code without a
 migration. `IFC_NO_STOREYS`, `IFC_NO_STAIRS_MULTISTOREY` and `IFC_UNIT_NOT_METRE` (added 23/11/2026, #214) therefore need the worker
 to emit them: `IFC_NO_STOREYS` and `IFC_NO_STAIRS_MULTISTOREY` as `Error` with outcome `Failed` (the revision becomes `NeedsFix`),
-`IFC_UNIT_NOT_METRE` as `Warning`. Count storeys that hold elements, so an empty roof or site level alone does not make a one-floor
-building "multi-storey".
+`IFC_UNIT_NOT_METRE` as `Warning`.
+
+`IFC_NO_STAIRS_MULTISTOREY` (rule agreed by FE and Unity, 25/11/2026, #232; Unity#161/Unity PR #163, FE#262):
+
+- Multi-storey means more than one storey holding at least one `IfcSpace`. A one-floor Revit export often has a "Roof" storey with the
+  roof slab or a "Foundation" storey with footings; counting storeys with any element blocked those files by mistake. People stand only
+  where there are rooms, so counting rooms still blocks the case that matters: an upper floor with rooms and no way down. The count comes
+  from the entity relationships, so the worker stops before it builds any mesh.
+- A ramp connects storeys like a stair: `IfcStair`, `IfcStairFlight`, `IfcRamp` and `IfcRampFlight` all count (the worker's
+  `classify.STAIR_CLASSES` and the browser check use the same list).
+- The worker emits it as `Error` in the same early-stop group as `IFC_NO_STOREYS` and `IFC_NO_SPACES`; its message names the number of
+  storeys with rooms. The web blocks the upload button only when the file states which storey each room belongs to (`IfcRelAggregates`)
+  and two or more storeys have rooms; when it cannot tell, it only warns and leaves the decision to the worker.
+- BE has no code change for this rule: it stores the worker's `severity`, `code` and `message`, and the BE upload precheck does not check
+  stairs.
 
 Mapping to API severity: the worker sends Block as `Error` (or `Critical`) with outcome `Failed`, Warning as `Warning`, Info as `Info`. Error/Critical issues also block confirm-for-training and publish.
 
