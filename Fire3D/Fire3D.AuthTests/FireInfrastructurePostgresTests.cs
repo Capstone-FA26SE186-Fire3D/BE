@@ -164,9 +164,8 @@ public sealed partial class AuthIntegrationTests
             var withExit = PinnedState(g.Artifact);
             var put = await user.SendAsync(InfrastructureRequest(HttpMethod.Put, $"/api/scenario-drafts/{draft}", read.Headers.ETag!.Tag, null, withExit));
             Assert.Equal(("SCENARIO_CONTAINS_INFRASTRUCTURE", (HttpStatusCode)422), (await ProblemCode(put), put.StatusCode));
-            var own = PinnedState(g.Artifact);
-            var objects = own["objects"]!.AsArray();
-            foreach (var infrastructureObject in objects.Where(o => o!["id"]!.GetValue<string>() is "goal-exit" or "ext-1").ToList()) objects.Remove(infrastructureObject);
+            // BE#215: a PC06 situation also names its audience, assumption and working hours.
+            var own = PlanState(g.Artifact, "Evacuee", name == "in-hours" ? "InHours" : "OffHours");
             put = await user.SendAsync(InfrastructureRequest(HttpMethod.Put, $"/api/scenario-drafts/{draft}", read.Headers.ETag!.Tag, null, own));
             Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
 

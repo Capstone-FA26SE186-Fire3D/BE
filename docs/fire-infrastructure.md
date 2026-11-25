@@ -88,6 +88,7 @@ infrastructure id.
   - Issues on infrastructure items are reported at `$.infrastructure.items[i]`. An example is a capability version that the scenario's runtime does not publish.
   - The snapshot freezes this merged document in `state_snapshot` and records `infrastructureId` on the version (`GET /api/scenario-versions/{id}`).
   - So `scenarioHash`, the expert review, the legacy projections (`goal_config`…) and the package worker (`scenario.json`, `fet3d.package/1`) are unchanged: **Unity needs no change**. Two scenarios on the same infrastructure freeze the same equipment list.
+- Such a draft also needs `audience`, `assumption` and `workingHours` (BE#215, see [plan-dossier.md](plan-dossier.md)); publishing needs Approved in-hours and off-hours situations on the infrastructure.
 - Drafts created before BE#213 (`infrastructureId` null) keep their own objects and the previous rules.
 
 ## Web (FE) work

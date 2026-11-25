@@ -72,7 +72,7 @@ public sealed class ValidateScenarioDraftCommandHandler(IAuthStore accounts, ISc
 /// BE#213: a draft on a fire infrastructure is validated as the document its snapshot will freeze (its objects followed by the
 /// infrastructure items). Its own infrastructure objects are SCENARIO_CONTAINS_INFRASTRUCTURE issues; issues on infrastructure items
 /// (for example a capability version the scenario's runtime does not publish) are reported at $.infrastructure.items[i].
-/// Drafts without an infrastructure (created before BE#213) keep the previous rules. Null for those legacy-shaped drafts.
+/// Such a draft also needs audience, assumption and workingHours (BE#215). Drafts without an infrastructure (created before BE#213) keep the previous rules. Null for those legacy-shaped drafts.
 /// </summary>
 public static class InfrastructureDraftValidation
 {
@@ -87,6 +87,8 @@ public static class InfrastructureDraftValidation
         var view = await store.InfrastructureViewAsync(infrastructure, state, ct);
         if (view is null) return await VersionedDraftValidation.ValidateAsync(state, draft.RevisionId, store, catalog, ct);
         var issues = view.Conflicts.ToList();
+        // BE#215: a PC06 situation names its audience, assumption and working hours.
+        issues.AddRange(Fire3D.Application.Editor.ScenarioStateV1Validator.PlanIssues(state));
         if (view.Status != "Approved") issues.Add(new("FIRE_INFRASTRUCTURE_NOT_APPROVED", "$", "The fire infrastructure of this draft is not Approved."));
         var own = state["objects"] is System.Text.Json.Nodes.JsonArray objects ? objects.Count : 0;
         foreach (var issue in await VersionedDraftValidation.ValidateAsync(view.State, draft.RevisionId, store, catalog, ct) ?? [])
