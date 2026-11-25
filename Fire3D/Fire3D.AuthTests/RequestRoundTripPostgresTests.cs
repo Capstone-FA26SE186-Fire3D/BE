@@ -44,7 +44,7 @@ public sealed partial class AuthIntegrationTests
         using var other = factory!.CreateClient();
         other.DefaultRequestHeaders.Authorization = new("Bearer", (await LoginAsync("trips-other@example.test")).AccessToken);
 
-        var create = new HttpRequestMessage(HttpMethod.Post, "/api/buildings") { Content = JsonContent.Create(new { name = "Trips", totalFloors = 2 }) };
+        var create = new HttpRequestMessage(HttpMethod.Post, "/api/buildings") { Content = JsonContent.Create(new { name = "Trips", buildingType = "Apartment", totalFloors = 2 }) };
         create.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
         var created = await org.SendAsync(create);
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
