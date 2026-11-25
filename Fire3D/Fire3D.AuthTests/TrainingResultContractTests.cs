@@ -68,7 +68,7 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(["Passed", "NotPassed", "Incomplete", "NotAssessed"], Values("TrainingHistoryItem", "resultStatus"));
         Assert.Equal(["Finished", "TimedOut", "Abandoned"], Values("TrainingHistoryItem", "endReason"));
         Assert.Contains("BELOW_PASS_THRESHOLD", Values("TrainingResultView", "reason"));
-        Assert.Equal(["METRIC_UNAVAILABLE"], Values("CriterionResult", "reason"));
+        Assert.Equal(["METRIC_UNAVAILABLE", "METRIC_NOT_EVALUABLE"], Values("CriterionResult", "reason"));
         Assert.Contains("Prepared", Values("TrainingSessionView", "status"));
         Assert.True(schemas.GetProperty("TrainingResultView").GetProperty("properties").TryGetProperty("passThresholdPercent", out _));
         var paths = root.GetProperty("paths");

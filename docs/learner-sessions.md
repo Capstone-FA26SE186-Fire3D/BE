@@ -109,6 +109,12 @@ Assessment needs a scorable rubric: at least one criterion and a positive total 
 
 Completion pins `lastEventSequence`. If events are missing the session is `AwaitingSync` (202); the arrival of the missing events, or a retry with the same key, finalizes it. Exactly one immutable result is written.
 
+**BE#216 (FR-PLAN-10) route telemetry.**
+- `RouteBaseline {optimalDistanceMeters}` is a core event that the runtime sends once at session start: the shortest safe distance from the spawn to the assembly point.
+- `Moved` may add `steps`.
+- Both are validated by the API (finite and ≥ 0; `steps` must be a whole number). A runtime catalog cannot declare `RouteBaseline` itself (`EVENT_TYPE_RESERVED`).
+- The result `metrics` also carries `optimal_distance_meters`, which the result card uses to compare with the optimal route. It is not a rubric metric.
+
 Metrics are computed only from received events:
 
 | Metric | Source |
@@ -118,6 +124,8 @@ Metrics are computed only from received events:
 | `wrong_exits` | count of `WrongExit` |
 | `hazard_exposure` | sum of `HazardExposure.payload.amount` (finite, ≥ 0) |
 | `distance_meters` | sum of `Moved.payload.distanceMeters` (finite, ≥ 0) |
+| `step_count` (BE#216) | sum of `Moved.payload.steps` (optional whole number ≥ 0); absent when no `Moved` event carries `steps` |
+| `route_efficiency` (BE#216) | `RouteBaseline.payload.optimalDistanceMeters` (first one) ÷ `distance_meters`, clamped to 0..1, 4 decimals; absent (not evaluable) without a `RouteBaseline`; 0 when a baseline was sent but the learner did not move (1 if the optimal distance is 0). Example: optimal 40 m, walked 50 m → 0.8; walked 30 m → 1 |
 | player-action metrics of the session's runtime | count of accepted events of the API type the metric is declared on; rejected events are not counted |
 
 The player-action metrics (migration `20261017110000_AddEventRubricMetrics`, BE#101) are named after the Docs IFC 6.1 events, so a
@@ -149,7 +157,7 @@ Runtime 2.1.0 (batch 2, Unity) declares: `HoseReelUsed` → `hose_reel_used`, `F
 `wheelchair_to_refuge`, `AssemblyPointReached` → `assembly_point_reached`, `WindowOpened` → `window_opened`. Registering that catalog
 is enough; no backend change is needed for a new event metric.
 
-Criteria compare a metric with `gte`/`lte`/`eq`; a missing metric fails the criterion. Score = passed weight / total weight (stored as percent). Assessment: `Passed` when every mandatory criterion passes and the ratio reaches `pass_threshold`, otherwise `NotPassed`; `Abandoned` gives `Incomplete`. Learn and Guided give `NotAssessed`. Completion never implies Passed and the client never sends a score. Versioned editor drafts reject criteria on metrics their runtime does not offer (`RUBRIC_METRIC_UNSUPPORTED`), and Assessment prepare rejects versions with metrics the requested runtime does not offer (`RUBRIC_NOT_SUPPORTED`).
+Criteria compare a metric with `gte`/`lte`/`eq`; a missing metric fails the criterion (`reason: METRIC_UNAVAILABLE`), except `step_count` and `route_efficiency` (BE#216): without that telemetry the criterion is **not evaluable**, so `passed` is null and `reason` is `METRIC_NOT_EVALUABLE`. Its weight is left out of the score and it never fails a mandatory requirement; the other criteria are still scored. Score = passed weight / total weight (stored as percent). Assessment: `Passed` when every mandatory criterion passes and the ratio reaches `pass_threshold`, otherwise `NotPassed`; `Abandoned` gives `Incomplete`. Learn and Guided give `NotAssessed`. Completion never implies Passed and the client never sends a score. Versioned editor drafts reject criteria on metrics their runtime does not offer (`RUBRIC_METRIC_UNSUPPORTED`), and Assessment prepare rejects versions with metrics the requested runtime does not offer (`RUBRIC_NOT_SUPPORTED`).
 
 ### Result fields
 

@@ -14,7 +14,7 @@
     "scorePercent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
     "rubricHash": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
     "criteria": { "type": ["array", "null"], "items": { "$ref": "#/$defs/criterion" }, "description": "Assessment only; null for Learn and Guided." },
-    "metrics": { "type": "object", "description": "Server metrics by name (reached_exit, completion_time_seconds, wrong_exits, hazard_exposure, distance_meters, player-action counts declared by the session's runtime); see GET /api/scenario-rubrics/catalog?runtimeVersion=." },
+    "metrics": { "type": "object", "description": "Server metrics by name (reached_exit, completion_time_seconds, wrong_exits, hazard_exposure, distance_meters, step_count and route_efficiency (BE#216, present only when the runtime sent Moved.steps / RouteBaseline), optimal_distance_meters (the RouteBaseline, for the result card, not scorable), player-action counts declared by the session's runtime); see GET /api/scenario-rubrics/catalog?runtimeVersion=." },
     "lastEventSequence": { "type": "integer", "minimum": 0 },
     "createdAt": { "type": "string", "format": "date-time" },
     "passThresholdPercent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 }
@@ -32,8 +32,8 @@
         "threshold": { "type": "number" },
         "mandatory": { "type": "boolean" },
         "weight": { "type": "number", "minimum": 0 },
-        "passed": { "type": "boolean" },
-        "reason": { "type": ["string", "null"], "enum": ["METRIC_UNAVAILABLE", null] },
+        "passed": { "type": ["boolean", "null"], "description": "null when the criterion is not evaluable (reason METRIC_NOT_EVALUABLE): its weight is left out of the score and it never fails a mandatory requirement." },
+        "reason": { "type": ["string", "null"], "enum": ["METRIC_UNAVAILABLE", "METRIC_NOT_EVALUABLE", null], "description": "METRIC_UNAVAILABLE: metric not computed, the criterion fails. METRIC_NOT_EVALUABLE (BE#216): a step_count or route_efficiency criterion without runtime telemetry." },
         "label": { "type": ["string", "null"] },
         "description": { "type": ["string", "null"] }
       }
