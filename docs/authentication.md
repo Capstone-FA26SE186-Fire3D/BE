@@ -68,13 +68,37 @@ Nguồn: [AuthController](../Fire3D/Fire3D.API/Controllers/AuthController.cs), [
 ### Luồng đăng nhập, phiên và đăng xuất
 
 1. FE gọi `POST /api/auth/login` bằng email/password. BE chuẩn hóa email, tìm account và kiểm password/rehash trước khi mở transaction. Sau khi lấy khóa lifecycle rồi user, BE đọc lại identity, kiểm email/hash không đổi và account/organization đang hoạt động cùng điều kiện pending legacy. Session, cập nhật login và audit được ghi atomic với reset fence. Login không áp minimum6 của password mới, chỉ yêu cầu không rỗng/tối đa128 để tương thích tài khoản cũ. Xem [đo và tối ưu authentication](auth-performance.md).
-2. Password sai/email không có trả401 INVALID_CREDENTIALS; account/organization bị khóa 403 ACCOUNT_DISABLED. Account pending legacy chưa xác thực/hết hạn trả403 EMAIL_NOT_VERIFIED/REGISTRATION_EXPIRED. Account OTP mới đã verified tại register.
+2. Password sai/email không có trả401 INVALID_CREDENTIALS; account/organization bị khóa 403 ACCOUNT_DISABLED. Account pending legacy chưa xác thực/hết hạn trả403 EMAIL_NOT_VERIFIED/REGISTRATION_EXPIRED. Account OTP mới đã verified tại register. Tài khoản Chuyên viên PCCC do quản trị tạo, chưa xác minh email: password đúng trả 403 FIRST_LOGIN_VERIFICATION_REQUIRED kèm challenge, chưa có phiên (mục kế tiếp).
 3. Login thành công tạo session family mới, lưu hash refresh token, cập nhật lastLoginAt và audit cùng transaction. Response200 gồm accessToken/refreshToken/user; LoginResponse và TokenResponse không có field expiresAt. TTL do cấu hình Jwt quyết định; mặc định code15 phút access và7 ngày refresh.
 4. FE gửi Bearer vào API bảo vệ. Middleware kiểm chữ ký/issuer/audience/expiry rồi đọc DB để kiểm account, organization, role/tenant và family. Access JWT chưa tới exp vẫn bị từ chối sau khi family bị revoke.
 5. `POST /api/auth/refresh` nhận refreshToken mới nhất, không cần Bearer. Rotation consume token cũ, cấp cặp mới trong cùng family, giữ hạn tuyệt đối ban đầu. Replay token đã consume/revoke thu hồi family và trả401 INVALID_REFRESH_TOKEN. FE cần đồng bộ refresh, thay cả hai token sau200; policy 10/IP/phút trên mỗi instance trả 429 AUTH_REFRESH_RATE_LIMITED/Retry-After khi vượt quota.
 6. `POST /api/auth/logout` dùng Bearer, không body, revoke family hiện tại và trả204. `POST /api/auth/logout-all` kiểm lại family dưới khóa, revoke tất cả family, tắt push bindings và ghi audit atomic, trả204. FE xóa token local; access/refresh cũ bị từ chối. Login mới sau commit tạo family mới; đăng ký device lại nếu cần nhận push.
 
 `GET /api/auth/me` đọc hồ sơ và ETag; mutation profile/Avatar yêu cầu If-Match. Đăng ký device cần UUID installation và X-Installation-Key ngoài Bearer, không đồng nghĩa với việc login cấp phiên thành công.
+
+### Lần đăng nhập đầu của tài khoản do quản trị tạo (BE#235, migration `20261126090000_FirstLoginVerification`)
+
+Phạm vi: tài khoản **FireSafetyExpert** do PlatformAdmin tạo qua `POST /api/accounts`. Vai trò khác do quản trị tạo (Trainee, OrganizationUser, PlatformAdmin) và mọi tài khoản đã có trước migration không đổi (`first_login_step` để trống). Quản trị vẫn đặt mật khẩu ban đầu và tự đưa cho chuyên viên qua kênh riêng.
+
+Trạng thái `users.first_login_step` (cũng có trong `user.firstLoginStep` của login, `/api/auth/me` và danh sách tài khoản của quản trị):
+
+| Giá trị | Nghĩa |
+|---|---|
+| `VerifyEmail` | Mới tạo. Chưa có phiên nào; quên mật khẩu không gửi link (người giữ hộp thư bị gõ sai không chiếm được tài khoản). |
+| `ChangePassword` | Đã xác minh email (`emailVerifiedAt` có giá trị). Phiên chỉ được `POST /api/auth/change-password`, `GET /api/auth/me`, `POST /api/auth/logout`, `/logout-all`; route `/api` khác trả 403 `PASSWORD_CHANGE_REQUIRED`. |
+| `null` | Bình thường. |
+
+Luồng:
+
+1. `POST /api/auth/login` với mật khẩu ban đầu đúng → **403 `FIRST_LOGIN_VERIFICATION_REQUIRED`**, problem có thêm `challengeToken`, `challengeExpiresAt` (30 phút), `codeExpiresAt` (10 phút), `emailHint` (`a***@example.com`) và `resendAfterSeconds`. BE gửi mã 6 số tới email của tài khoản (bảng `first_login_email_jobs`, worker `FirstLoginEmailWorker`, cùng Mailgun với OTP đăng ký). Đăng nhập lại trong lúc mã còn hạn không gửi email mới, chỉ cấp challenge token mới (token cũ hết dùng được).
+2. `POST /api/auth/first-login/verify` `{challengeToken, code}` → **200** như login (`accessToken`, `refreshToken`, `user.firstLoginStep: "ChangePassword"`). Lỗi: 400 `FIRST_LOGIN_CODE_INVALID` (`attemptsRemaining`), 400 `FIRST_LOGIN_CODE_EXPIRED`, 400 `FIRST_LOGIN_CODE_LOCKED` sau 5 lần sai (`resendAfterSeconds`, phải gửi mã mới), 401 `FIRST_LOGIN_CHALLENGE_INVALID` (challenge hết hạn hoặc đã bị thay: đăng nhập lại).
+3. Thay cho mã: `POST /api/auth/first-login/google` `{challengeToken, idToken}`. Google phải xác minh đúng email của tài khoản (403 `GOOGLE_EMAIL_MISMATCH`); tài khoản chưa liên kết Google thì được liên kết với danh tính đó (409 `GOOGLE_ACCOUNT_IN_USE` nếu Google đó thuộc tài khoản khác). Vẫn phải qua bước mật khẩu trước: chỉ Google (chỉ hộp thư) không đủ, vì quản trị gõ sai email thì người lạ cũng có Google của email đó.
+4. `POST /api/auth/first-login/resend` `{challengeToken}` → 202 với challenge (giữ nguyên token); mã mới thay mã cũ và đặt lại số lần sai. Tối đa 1 mã/phút và 5 mã/giờ mỗi tài khoản: 429 `OTP_RATE_LIMITED` + `Retry-After`. Giới hạn này cũng áp cho lần login cần gửi mã mới.
+5. `POST /api/auth/change-password` (mật khẩu ban đầu → mật khẩu mới) xóa bước, thu hồi mọi phiên; đăng nhập lại là đăng nhập bình thường.
+
+Mã và challenge token chỉ lưu dạng băm (HMAC-SHA256 / SHA-256); job email giữ mã mã hóa AES-GCM và chỉ gửi khi mã còn là mã hiện tại của tài khoản. Quản trị gõ sai email: `PATCH /api/accounts/{id}/email` (xem [administration](administration.md)); mã đang chờ của email cũ bị hủy.
+
+Nguồn: [FirstLoginVerification](../Fire3D/Fire3D.Application/Authentication/FirstLoginVerification.cs), [FirstLoginVerificationStore](../Fire3D/Fire3D.Infrastructure/Authentication/FirstLoginVerificationStore.cs), [PasswordChangeGuard](../Fire3D/Fire3D.API/Authorization/PasswordChangeGuard.cs), [FirstLoginVerification.sql](../Fire3D/Fire3D.Infrastructure/Persistence/Sql/FirstLoginVerification.sql).
 
 Nguồn: [LoginWithPasswordCommand](../Fire3D/Fire3D.Application/Authentication/Commands/LoginWithPassword/LoginWithPasswordCommand.cs), [RefreshTokenCommandHandler](../Fire3D/Fire3D.Application/Authentication/Commands/RefreshToken/RefreshTokenCommandHandler.cs), [ValidateSessionQueryHandler](../Fire3D/Fire3D.Application/Authentication/Queries/ValidateSession/ValidateSessionQueryHandler.cs), [LogoutAllCommand](../Fire3D/Fire3D.Application/Authentication/Commands/Logout/LogoutAllCommand.cs), [AuthenticationExtensions](../Fire3D/Fire3D.API/Extensions/AuthenticationExtensions.cs).
 

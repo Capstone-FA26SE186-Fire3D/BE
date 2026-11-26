@@ -145,6 +145,8 @@ app.UseRateLimiter();
 app.UseAuthentication();
 // BE#211: FireSafetyExpert reaches only /api/expert and its own account; every other /api route is 403 before any handler runs.
 Fire3D.API.Authorization.ExpertRouteGuard.UseExpertRouteGuard(app);
+// BE#235: a first sign-in session must change the initial password before anything else.
+Fire3D.API.Authorization.PasswordChangeGuard.UsePasswordChangeGuard(app);
 app.UseAuthorization();
 
 // Liveness stays process-only; readiness checks DB, migrations and dependencies of enabled Redis processing loops.

@@ -50,12 +50,16 @@ public static class AuthenticationExtensions
         services.AddScoped<RegistrationOtpStore>();
         services.AddScoped<IRegistrationOtpService>(provider => provider.GetRequiredService<RegistrationOtpStore>());
         services.AddScoped<IRegistrationOtpDeliveryQueue>(provider => provider.GetRequiredService<RegistrationOtpStore>());
+        services.AddScoped<Fire3D.Infrastructure.Authentication.FirstLoginVerificationStore>();
+        services.AddScoped<IFirstLoginVerification>(provider => provider.GetRequiredService<Fire3D.Infrastructure.Authentication.FirstLoginVerificationStore>());
+        services.AddScoped<IFirstLoginDeliveryQueue>(provider => provider.GetRequiredService<Fire3D.Infrastructure.Authentication.FirstLoginVerificationStore>());
         services.AddExceptionHandler<PasswordResetExceptionHandler>();
         services.AddHttpClient<IPasswordResetProvider, FirebasePasswordResetProvider>(client => client.Timeout = TimeSpan.FromSeconds(15))
             .RemoveAllLoggers();
         services.AddHostedService<Fire3D.Infrastructure.Workers.PasswordResetWorker>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.EmailVerificationWorker>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.RegistrationOtpEmailWorker>();
+        services.AddHostedService<Fire3D.Infrastructure.Workers.FirstLoginEmailWorker>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.PendingRegistrationCleanupWorker>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.AvatarCleanupWorker>();
         services.AddHostedService<Fire3D.Infrastructure.Workers.RefreshTokenCleanupWorker>();

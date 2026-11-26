@@ -2,12 +2,15 @@
 
 Nguồn sản phẩm: FR-AUTH-01,04–13 và workflow §2 trong Docs. Nguồn thực thi: `AuthController`, `GoogleOnboardingController`, `GoogleLinkController`, `GooglePasswordController`, `AvatarController`, `OrganizationProfileController`, DI trong Program/AuthenticationExtensions. Phạm vi bảng là identity/auth/profile/Avatar, không gồm API quản trị tài khoản hoặc analytics tổ chức.
 
-✅ = có đường thực thi source, không đồng nghĩa provider/deployment/FE hoàn tất. Các test đọc metadata và HTTP dùng PostgreSQL disposable, Firebase/S3/mail giả lập; giới hạn từng nhóm ở dưới. Có **29 cặp method–route** trong phạm vi này; contract test đối chiếu bảng với OpenAPI để phát hiện route thêm/bỏ.
+✅ = có đường thực thi source, không đồng nghĩa provider/deployment/FE hoàn tất. Các test đọc metadata và HTTP dùng PostgreSQL disposable, Firebase/S3/mail giả lập; giới hạn từng nhóm ở dưới. Có **32 cặp method–route** trong phạm vi này; contract test đối chiếu bảng với OpenAPI để phát hiện route thêm/bỏ.
 
 | Method | Route | Code | Quyền/input chính |
 | --- | --- | --- | --- |
 | POST | `/api/auth/login` | ✅ | Public; email/password; không áp quy tắc password mới vào login; giới hạn theo email: 10 lần sai/15 phút → 429 `AUTH_LOGIN_RATE_LIMITED` + `Retry-After` (BE#141); audit chỉ cần INSERT, không SELECT |
 | POST | `/api/auth/login-firebase` | ✅ | Public; Firebase ID token JSON string; Google verified/revocation |
+| POST | `/api/auth/first-login/verify` | ✅ | Public; BE#235 challengeToken + mã 6 số của lần đăng nhập đầu (tài khoản Chuyên viên do quản trị tạo); 5 lần sai thì khoá mã |
+| POST | `/api/auth/first-login/google` | ✅ | Public; BE#235 challengeToken + Google ID token đúng email tài khoản; liên kết Google nếu chưa có |
+| POST | `/api/auth/first-login/resend` | ✅ | Public; BE#235 gửi mã mới, 1 lần/phút, 5 lần/giờ mỗi tài khoản → 429 `OTP_RATE_LIMITED` |
 | POST | `/api/auth/register` | ✅ | Alias Trainee; deprecated, cùng proof/validation |
 | POST | `/api/auth/register/trainee` | ✅ | Public; toàn bộ form + registrationToken; server gán role |
 | POST | `/api/auth/register/organization` | ✅ | Public; form organization + registrationToken; owner/org atomic; phone conflict409/errors.organizationPhoneNumber; username tùy chọn (luật Trainee, trùng409 USERNAME_EXISTS) |

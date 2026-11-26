@@ -45,8 +45,10 @@ public sealed partial class AuthIntegrationTests
         var org = Guid.NewGuid();
         var withOrg = await client.PostAsJsonAsync("/api/accounts", new { email = $"expert-{Guid.NewGuid():N}@example.test", password, role = "FireSafetyExpert", organizationId = org });
         Assert.Equal(HttpStatusCode.BadRequest, withOrg.StatusCode);
-        // The expert signs in normally.
-        Assert.False(string.IsNullOrEmpty((await LoginAsync(email)).AccessToken));
+        // BE#235: the first sign-in proves the email before any session (FirstLoginVerificationPostgresTests covers the rest).
+        var signIn = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
+        Assert.Equal(HttpStatusCode.Forbidden, signIn.StatusCode);
+        Assert.Equal("FIRST_LOGIN_VERIFICATION_REQUIRED", await ExpertCode(signIn));
     }
 
     // BE#211 acceptance: shared queue, If-Match / Idempotency-Key decisions, reason on reject, 403 for other roles and for billing,

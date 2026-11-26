@@ -1,4 +1,5 @@
 using Fire3D.Application.Administration;
+using Fire3D.Application.Administration.Commands.ChangeAccountEmail;
 using Fire3D.Application.Administration.Commands.SetAccountActive;
 using Fire3D.Application.Administration.Queries.GetAccount;
 using Fire3D.Application.Administration.Queries.ListAccounts;
@@ -67,4 +68,18 @@ public sealed class AccountsController(ISender sender, IAvatarService? avatars =
     [HttpPatch("{id:guid}/status")]
     public async Task<ActionResult<ManagedAccountResponse>> SetActive(Guid id, SetActiveRequest request, CancellationToken ct) =>
         Respond(await sender.Send(new SetAccountActiveCommand(ActorId, id, request.IsActive, NewCorrelationId()), ct));
+
+    /// <summary>BE#235: sửa email của tài khoản chưa xác minh email (firstLoginStep VerifyEmail), khi quản trị gõ sai địa chỉ.</summary>
+    /// <remarks>If-Match: ETag của GET /api/accounts/{id} (profileRevision); thiếu → 428 PRECONDITION_REQUIRED, cũ → 412 PRECONDITION_FAILED.
+    /// Mã xác minh đang chờ của email cũ bị huỷ; lần đăng nhập kế tiếp gửi mã về email mới. 409 EMAIL_ALREADY_VERIFIED khi tài khoản đã
+    /// xác minh (database cũng chặn), 409 EMAIL_EXISTS khi email đã có tài khoản khác. Trả tài khoản và ETag mới; ghi audit.</remarks>
+    [HttpPatch("{id:guid}/email")]
+    [Fire3D.API.OpenApi.ResponseHeader("ETag")]
+    public async Task<ActionResult<ManagedAccountResponse>> ChangeEmail(Guid id, ChangeAccountEmailRequest request,
+        [FromHeader(Name = "If-Match"), Fire3D.API.OpenApi.RequiredRequestHeader] string? ifMatch, CancellationToken ct)
+    {
+        var result = await sender.Send(new ChangeAccountEmailCommand(ActorId, id, request?.Email, ifMatch, NewCorrelationId()), ct);
+        if (result.IsSuccess) Response.Headers.ETag = ProfileEtag.Format(result.Value!.ProfileRevision);
+        return Respond(result);
+    }
 }

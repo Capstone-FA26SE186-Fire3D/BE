@@ -8,6 +8,7 @@ Migrations: `20261124090000_AddFireSafetyExpertRole` (enum label, runs outside a
 
 - `FireSafetyExpert` is a value of `UserRole` / `user_role_enum`. The account has **no organization** (like PlatformAdmin and Trainee).
 - Created only by PlatformAdmin: `POST /api/accounts` with `role: "FireSafetyExpert"` and no `organizationId` (with one: 400). Self-registration and Google onboarding cannot create it.
+- First sign-in (BE#235): the password alone opens no session; the expert enters the code sent to the account email (or uses Google of that email), then must change the initial password before any `/api/expert` call (403 `PASSWORD_CHANGE_REQUIRED`). See [authentication](authentication.md).
 - Reads: the queue below, the frozen content of a reviewed version, and the 3D preview of the revision that version uses — for every organization. Nothing else: no drafts, no billing (billing and notification routes answer 403), no other organization data, no edits, no publishing.
 - Deny by default (`ExpertRouteGuard`, runs right after authentication): an expert token gets `403 FORBIDDEN` on every `/api` route
   except `/api/expert/*`, `/api/auth/*` (me, logout, devices, change-password) and `/api/me/*` (avatar, password, Google link).

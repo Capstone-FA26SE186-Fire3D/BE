@@ -75,8 +75,10 @@ public sealed class LocalPasswordReset(Fire3DDbContext db, IAuthStore accounts,
             return AuthResult<bool>.Fail("PASSWORD_UNCHANGED", "New password must differ from the current password.", 400);
 
         var passwordHash = passwords.Hash(user!, newPassword);
+        // BE#235: the first sign-in ends here; the next session is a normal one.
         await db.Users.Where(x => x.Id == userId).ExecuteUpdateAsync(update => update
             .SetProperty(x => x.PasswordHash, passwordHash)
+            .SetProperty(x => x.FirstLoginStep, x => x.FirstLoginStep == FirstLoginSteps.ChangePassword ? null : x.FirstLoginStep)
             .SetProperty(x => x.UpdatedAt, now), ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE public.local_password_reset_tokens SET used_at=clock_timestamp()
@@ -93,5 +95,7 @@ public sealed class LocalPasswordReset(Fire3DDbContext db, IAuthStore accounts,
         && Enum.IsDefined(user.Role)
         && (user.Role == UserRole.OrganizationUser) == user.OrganizationId.HasValue
         && !(user.RegistrationExpiresAt.HasValue && !user.EmailVerifiedAt.HasValue)
+        // BE#235: an account that has not proved its email cannot reset its password by email: a mistyped address would hand it to a stranger.
+        && user.FirstLoginStep != FirstLoginSteps.VerifyEmail
         && (user.OrganizationId is not Guid organizationId || await accounts.OrganizationIsActiveAsync(organizationId, ct));
 }

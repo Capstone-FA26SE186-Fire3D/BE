@@ -36,6 +36,9 @@ public partial class User
     /// <summary>UTC deadline for a self-registration that has not yet verified its email.</summary>
     public DateTime? RegistrationExpiresAt { get; set; }
 
+    /// <summary>BE#235: null, VerifyEmail (no session until the email is proved) or ChangePassword (a session that must change the password).</summary>
+    public string? FirstLoginStep { get; set; }
+
     public bool IsActive { get; set; }
 
     public DateTime? LastLoginAt { get; set; }

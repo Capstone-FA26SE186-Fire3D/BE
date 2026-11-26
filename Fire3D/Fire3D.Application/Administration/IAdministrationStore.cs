@@ -14,6 +14,8 @@ public interface IAdministrationStore
     Task<PageResponse<ManagedAccountResponse>> ListAccountsAsync(AccountFilter filter, CancellationToken ct);
     Task SetOrganizationActiveAsync(Guid id, bool active, DateTime now, CancellationToken ct);
     Task SetAccountActiveAsync(Guid id, bool active, DateTime now, CancellationToken ct);
+    /// <summary>BE#235: new email of an account still in VerifyEmail; its pending first sign-in code is dropped.</summary>
+    Task<Commands.ChangeAccountEmail.AccountEmailChange> ChangeUnverifiedEmailAsync(Guid id, string email, long expectedRevision, DateTime now, CancellationToken ct);
     Task WriteAuditAsync(Guid actorId, Guid? organizationId, string targetEntity, Guid targetId,
         bool? previousActive, bool active, Guid correlationId, DateTime now, CancellationToken ct);
     Task WriteOrganizationProfileAuditAsync(OrganizationProfileAuditChange change, CancellationToken ct);
