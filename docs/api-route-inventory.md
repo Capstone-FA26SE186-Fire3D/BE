@@ -7,6 +7,7 @@
 | GET | /api/accounts | Bearer | None | 200, 429 |
 | POST | /api/accounts | Bearer | None | 201, 429 |
 | GET | /api/accounts/{id} | Bearer | None | 200, 429 |
+| PATCH | /api/accounts/{id}/email | Bearer | If-Match | 200, 400, 409, 412, 428, 429 |
 | PATCH | /api/accounts/{id}/status | Bearer | None | 200, 429 |
 | GET | /api/admin/ai/policies | Bearer | None | 200, 400 |
 | POST | /api/admin/ai/policies | Bearer | Idempotency-Key | 201, 409, 422 |
@@ -113,6 +114,9 @@
 | DELETE | /api/auth/devices/{deviceUuid} | Bearer | X-Installation-Key | 204, 400 |
 | POST | /api/auth/forgot-password | Anonymous | None | 202, 400, 429, 503 |
 | POST | /api/auth/google/onboarding/complete | Anonymous | None | 201, 400, 403, 409, 503 |
+| POST | /api/auth/first-login/google | Anonymous | None | 200, 401, 403, 409, 503 |
+| POST | /api/auth/first-login/resend | Anonymous | None | 202, 401, 429 |
+| POST | /api/auth/first-login/verify | Anonymous | None | 200, 400, 401 |
 | POST | /api/auth/login | Anonymous | None | 200, 400, 401, 403 |
 | POST | /api/auth/login-firebase | Anonymous | None | 200, 400, 401, 403, 409, 429, 503 |
 | POST | /api/auth/logout | Bearer | None | 204 |

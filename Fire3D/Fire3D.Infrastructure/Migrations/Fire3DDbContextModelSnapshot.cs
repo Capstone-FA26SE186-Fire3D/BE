@@ -3748,6 +3748,10 @@ namespace Fire3D.Infrastructure.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("firebase_uid");
 
+                    b.Property<string>("FirstLoginStep")
+                        .HasColumnType("text")
+                        .HasColumnName("first_login_step");
+
                     b.Property<string>("FullName")
                         .HasColumnType("text")
                         .HasColumnName("full_name");

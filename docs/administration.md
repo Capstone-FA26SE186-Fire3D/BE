@@ -23,6 +23,7 @@ Authorization is centralized in API/Authorization/AuthorizationPolicies.cs. Cont
 | GET | /api/accounts | Paginated accounts |
 | GET | /api/accounts/{id} | Account details, `ETag` (profile revision) |
 | PATCH | /api/accounts/{id}/status | Activate/deactivate account |
+| PATCH | /api/accounts/{id}/email | Fix the email of an account that has not verified it (BE#235), `If-Match` required |
 
 Create an organization:
 
@@ -64,9 +65,11 @@ The request carries the initial password in plain text: call it only over HTTPS 
 | Unknown or deleted organization | 404 `NOT_FOUND` |
 | Success | 200 `OrganizationResponse` + new `ETag`; audit `organizations` Update with old/new values and `X-Correlation-ID` |
 
+**Unverified email (BE#235).** A FireSafetyExpert created here starts with `firstLoginStep: "VerifyEmail"`: its first sign-in sends a code to the email before any session (see [authentication](authentication.md)). When the address was mistyped, `PATCH /api/accounts/{id}/email` `{email}` with `If-Match: <ETag of GET /api/accounts/{id}>` replaces it: 428 `PRECONDITION_REQUIRED` without If-Match, 412 `PRECONDITION_FAILED` when stale, 409 `EMAIL_ALREADY_VERIFIED` once the account verified its email, 409 `EMAIL_EXISTS` when another account uses the address. It bumps `profileRevision` (new `ETag`), drops the pending code of the old address and writes an audit row. The database refuses any email change of a verified account (trigger `users_email_only_while_unverified`), so the API still cannot rewrite a verified email.
+
 An inactive organization stays editable by Admin. Slug, plan and status are not changed here.
 
-`ManagedAccountResponse` adds `username`, `phoneNumber`, `avatarUrl` and `profileRevision`. `avatarUrl` is a 5-minute signed URL on `GET /api/accounts/{id}` only, like `/api/auth/me`; it is null in lists, when no avatar is set or when the account is inactive. The legacy `avatar_url` column is never served. `GET /api/accounts/{id}` returns `ETag: "<profileRevision>"`.
+`ManagedAccountResponse` adds `username`, `phoneNumber`, `avatarUrl`, `profileRevision`, `emailVerifiedAt` and `firstLoginStep` (BE#235: `VerifyEmail` = the email is not verified yet, `ChangePassword` = verified but the initial password is not changed, `null` = normal). `avatarUrl` is a 5-minute signed URL on `GET /api/accounts/{id}` only, like `/api/auth/me`; it is null in lists, when no avatar is set or when the account is inactive. The legacy `avatar_url` column is never served. `GET /api/accounts/{id}` returns `ETag: "<profileRevision>"`.
 
 Both status endpoints accept:
 

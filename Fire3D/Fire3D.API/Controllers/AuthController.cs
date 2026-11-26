@@ -19,6 +19,10 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
     /// <remarks>Body: email, password. BE kiểm tra hash trong PostgreSQL; không gọi Firebase.
     /// 200: accessToken, refreshToken, user; 400: dữ liệu sai; 401: sai email/mật khẩu;
     /// 403: tài khoản/tổ chức bị vô hiệu hóa hoặc email chưa xác thực.
+    /// 403 FIRST_LOGIN_VERIFICATION_REQUIRED (BE#235): tài khoản Chuyên viên PCCC do quản trị tạo, mật khẩu đúng nhưng chưa xác minh email;
+    /// chưa có phiên. Problem có challengeToken, challengeExpiresAt, codeExpiresAt, emailHint, resendAfterSeconds; mã 6 số đã gửi về email.
+    /// Hoàn tất bằng POST first-login/verify (mã) hoặc first-login/google; gửi lại mã: first-login/resend.
+    /// 429 OTP_RATE_LIMITED + Retry-After: đã gửi mã quá nhiều (1 lần/phút, 5 lần/giờ mỗi tài khoản).
     /// 429 AUTH_LOGIN_RATE_LIMITED + Retry-After: quá LoginAttempts:MaxFailures (mặc định 10) lần sai cho cùng email trong
     /// LoginAttempts:WindowMinutes (mặc định 15) phút; đếm theo email, không theo IP; đăng nhập đúng xóa bộ đếm.</remarks>
     [HttpPost("login")]
@@ -166,6 +170,57 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
         var result = await sender.Send(new Fire3D.Application.Authentication.RequestRegistrationOtpCommand(
             request.Email, HttpContext.Connection.RemoteIpAddress?.ToString()), ct);
         return RespondToRegistrationOtpRequest(result);
+    }
+
+    /// <summary>BE#235: finishes the first sign-in of an account created by PlatformAdmin with the code emailed after the password login.</summary>
+    /// <remarks>Body {challengeToken, code}. 200: accessToken, refreshToken, user with firstLoginStep ChangePassword; until the password is
+    /// changed every route except POST /api/auth/change-password, GET /api/auth/me and logout answers 403 PASSWORD_CHANGE_REQUIRED.
+    /// 400 FIRST_LOGIN_CODE_INVALID (attemptsRemaining), FIRST_LOGIN_CODE_EXPIRED, FIRST_LOGIN_CODE_LOCKED after 5 wrong codes
+    /// (resendAfterSeconds); 401 FIRST_LOGIN_CHALLENGE_INVALID: the challenge expired (30 minutes) or was replaced, sign in again.</remarks>
+    [HttpPost("first-login/verify")]
+    [AllowAnonymous]
+    [ProducesResponseType<LoginResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(400)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    public async Task<IActionResult> VerifyFirstLogin([FromBody] FirstLoginVerifyRequest request,
+        [FromServices] IFirstLoginVerification firstLogin, CancellationToken ct)
+    {
+        var result = await firstLogin.VerifyCodeAsync(request, ct);
+        return result.IsSuccess ? Ok(result.Value) : ResetProblem(result.Error!);
+    }
+
+    /// <summary>BE#235: finishes the first sign-in with a Google identity of the account email instead of the code.</summary>
+    /// <remarks>Body {challengeToken, idToken}: the password login came first, so both the password and the mailbox are proved. The Google
+    /// email must equal the account email (403 GOOGLE_EMAIL_MISMATCH); an unlinked account is linked to that Google identity
+    /// (409 GOOGLE_ACCOUNT_IN_USE when another account holds it). 200 as first-login/verify. 401 INVALID_FIREBASE_TOKEN or
+    /// FIRST_LOGIN_CHALLENGE_INVALID; 503 GOOGLE_PROVIDER_UNAVAILABLE.</remarks>
+    [HttpPost("first-login/google")]
+    [AllowAnonymous]
+    [ProducesResponseType<LoginResponse>(200)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
+    [ProducesResponseType<ProblemDetails>(409)]
+    public async Task<IActionResult> VerifyFirstLoginWithGoogle([FromBody] FirstLoginGoogleRequest request,
+        [FromServices] IFirstLoginVerification firstLogin, CancellationToken ct)
+    {
+        var result = await firstLogin.VerifyGoogleAsync(request, ct);
+        return result.IsSuccess ? Ok(result.Value) : ResetProblem(result.Error!);
+    }
+
+    /// <summary>BE#235: sends a new first sign-in code; the challenge token stays the same.</summary>
+    /// <remarks>Body {challengeToken}. 202: the challenge (codeExpiresAt, resendAfterSeconds). A new code replaces the old one and resets the
+    /// wrong-attempt count. 429 OTP_RATE_LIMITED + Retry-After: at most one code a minute and 5 an hour per account.
+    /// 401 FIRST_LOGIN_CHALLENGE_INVALID.</remarks>
+    [HttpPost("first-login/resend")]
+    [AllowAnonymous]
+    [ProducesResponseType<FirstLoginChallenge>(202)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(429)]
+    public async Task<IActionResult> ResendFirstLoginCode([FromBody] FirstLoginResendRequest request,
+        [FromServices] IFirstLoginVerification firstLogin, CancellationToken ct)
+    {
+        var result = await firstLogin.ResendAsync(request, ct);
+        return result.IsSuccess ? Accepted(result.Value) : ResetProblem(result.Error!);
     }
 
     /// <summary>Verifies a six-digit registration code and returns a short-lived registration proof.</summary>
@@ -368,6 +423,8 @@ public sealed class AuthController(ISender sender, IAvatarService? avatars = nul
         if (error.RetryAfterSeconds is int retry) Response.Headers.RetryAfter = retry.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var extensions = new Dictionary<string, object?> { ["code"] = error.Code };
         if (error.Errors is { Count: > 0 }) extensions["errors"] = error.Errors;
+        // BE#235: e.g. challengeToken of FIRST_LOGIN_VERIFICATION_REQUIRED.
+        if (error.Extensions is not null) foreach (var (name, value) in error.Extensions) extensions[name] = value;
         return Problem(statusCode: error.Status, title: error.Message,
             detail: error.Errors is { Count: > 0 } ? "Kiểm tra các trường được liệt kê." : null, extensions: extensions);
     }

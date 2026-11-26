@@ -71,7 +71,8 @@ public sealed class UpdateOrganizationProfileRequestJsonConverter : JsonConverte
 public enum OrganizationProfileUpdateResult { Updated, PreconditionFailed, Unavailable, PhoneTaken }
 public sealed record ManagedAccountResponse(Guid Id, string Email, string? FullName, UserRole Role,
     Guid? OrganizationId, bool IsActive, DateTime? LastLoginAt, DateTime CreatedAt, DateTime UpdatedAt,
-    string? Username = null, string? PhoneNumber = null, string? AvatarUrl = null, long ProfileRevision = 1);
+    string? Username = null, string? PhoneNumber = null, string? AvatarUrl = null, long ProfileRevision = 1,
+    DateTime? EmailVerifiedAt = null, string? FirstLoginStep = null);
 public sealed record PageResponse<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
 /// <summary>Sort is one field, optionally prefixed with '-' for descending; default -createdAt. Ties break on id.</summary>
 public sealed record OrganizationFilter(int Page = 1, int PageSize = 20, string? Search = null, bool? IsActive = null, string? Sort = null);

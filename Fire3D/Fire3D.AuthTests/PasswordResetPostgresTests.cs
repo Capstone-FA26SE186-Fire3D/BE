@@ -51,7 +51,7 @@ public sealed class PasswordResetPostgresTests
                   full_name text, username varchar(30), dob date, gender text, phone_number varchar(32), avatar_url varchar(2048), avatar_storage_key text, profile_revision_no bigint NOT NULL DEFAULT 1, password_hash text, role user_role_enum NOT NULL, is_active boolean NOT NULL DEFAULT true,
                   last_login_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
                   updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz,
-                  registration_expires_at timestamptz, email_verified_at timestamptz);
+                  registration_expires_at timestamptz, email_verified_at timestamptz, first_login_step text);
                 CREATE TABLE organizations (
                   id uuid PRIMARY KEY, registration_owner_user_id uuid NULL);
                 CREATE TABLE buildings (id uuid PRIMARY KEY, organization_id uuid NOT NULL);

@@ -27,7 +27,9 @@ internal static class AuthSupport
         {
             Id = Guid.NewGuid(), Email = email, FullName = request.FullName?.Trim(),
             Role = request.Role.Value, OrganizationId = request.OrganizationId, Username = username,
-            IsActive = true, CreatedAt = now, UpdatedAt = now
+            IsActive = true, CreatedAt = now, UpdatedAt = now,
+            // BE#235: an expert account proves its email at the first sign-in, then changes the initial password.
+            FirstLoginStep = request.Role == UserRole.FireSafetyExpert ? FirstLoginSteps.VerifyEmail : null
         };
         user.PasswordHash = passwords.Hash(user, request.Password);
         await using var transaction = actor is null ? null : await store.BeginUserTransactionAsync(actor.Id, ct);
@@ -89,7 +91,7 @@ internal static class AuthSupport
     internal static AccountResponse ToAccount(User user) => new(user.Id, user.Email, user.FullName, user.Role, user.OrganizationId,
         user.Username, user.Dob, user.Gender, user.PhoneNumber, null, user.IsActive,
         user.LastLoginAt, user.CreatedAt, user.UpdatedAt, user.EmailVerifiedAt, user.RegistrationExpiresAt, user.ProfileRevision,
-        !string.IsNullOrEmpty(user.PasswordHash), user.FirebaseUid is not null);
+        !string.IsNullOrEmpty(user.PasswordHash), user.FirebaseUid is not null, user.FirstLoginStep);
 
     internal static bool IsPendingEmailVerification(User user) =>
         user.RegistrationExpiresAt.HasValue && !user.EmailVerifiedAt.HasValue;

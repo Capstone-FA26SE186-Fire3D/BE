@@ -127,8 +127,31 @@ public sealed class AdministrationStore(Fire3DDbContext db) : IAdministrationSto
         };
         var items = await ordered.Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize)
             .Select(x => new ManagedAccountResponse(x.Id, x.Email, x.FullName, x.Role, x.OrganizationId,
-                x.IsActive, x.LastLoginAt, x.CreatedAt, x.UpdatedAt, x.Username, x.PhoneNumber, null, x.ProfileRevision)).ToListAsync(ct);
+                x.IsActive, x.LastLoginAt, x.CreatedAt, x.UpdatedAt, x.Username, x.PhoneNumber, null, x.ProfileRevision, x.EmailVerifiedAt, x.FirstLoginStep)).ToListAsync(ct);
         return new(items, count, filter.Page, filter.PageSize);
+    }
+
+    public async Task<Fire3D.Application.Administration.Commands.ChangeAccountEmail.AccountEmailChange> ChangeUnverifiedEmailAsync(Guid id, string email,
+        long expectedRevision, DateTime now, CancellationToken ct)
+    {
+        int changed;
+        try
+        {
+            // The trigger users_email_only_while_unverified refuses the same change for any account that has verified its email.
+            changed = await db.Users.Where(x => x.Id == id && x.ProfileRevision == expectedRevision && x.FirstLoginStep == FirstLoginSteps.VerifyEmail)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Email, email).SetProperty(x => x.ProfileRevision, x => x.ProfileRevision + 1)
+                    .SetProperty(x => x.UpdatedAt, now), ct);
+        }
+        catch (Exception e) when ((e as PostgresException ?? e.InnerException as PostgresException)?.SqlState == "23505") { return Fire3D.Application.Administration.Commands.ChangeAccountEmail.AccountEmailChange.EmailExists; }
+        if (changed == 0)
+            return await db.Users.AnyAsync(x => x.Id == id && x.FirstLoginStep == FirstLoginSteps.VerifyEmail, ct)
+                ? Fire3D.Application.Administration.Commands.ChangeAccountEmail.AccountEmailChange.Stale
+                : Fire3D.Application.Administration.Commands.ChangeAccountEmail.AccountEmailChange.NotUnverified;
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM public.first_login_verifications WHERE user_id={id};
+            UPDATE public.first_login_email_jobs SET status='Dead',lease_token=NULL,lease_until=NULL WHERE user_id={id} AND status IN('Pending','Leased');
+            """, ct);
+        return Fire3D.Application.Administration.Commands.ChangeAccountEmail.AccountEmailChange.Changed;
     }
 
     public async Task SetAccountActiveAsync(Guid id, bool active, DateTime now, CancellationToken ct)

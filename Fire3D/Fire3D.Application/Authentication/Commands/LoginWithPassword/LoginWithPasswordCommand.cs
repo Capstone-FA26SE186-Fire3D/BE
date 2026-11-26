@@ -6,7 +6,7 @@ namespace Fire3D.Application.Authentication.Commands.LoginWithPassword;
 public sealed record LoginWithPasswordCommand(string Email, string Password) : IRequest<AuthResult<LoginResponse>>;
 
 public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordService passwords,
-    ITokenService tokens, TimeProvider clock, ILoginAttemptLimiter? attempts = null) : IRequestHandler<LoginWithPasswordCommand, AuthResult<LoginResponse>>
+    ITokenService tokens, TimeProvider clock, ILoginAttemptLimiter? attempts = null, IFirstLoginVerification? firstLogin = null) : IRequestHandler<LoginWithPasswordCommand, AuthResult<LoginResponse>>
 {
     public async Task<AuthResult<LoginResponse>> Handle(LoginWithPasswordCommand command, CancellationToken ct)
     {
@@ -53,6 +53,17 @@ public sealed class LoginWithPasswordCommandHandler(IAuthStore store, IPasswordS
         if (AuthSupport.IsPendingEmailVerification(user))
             return AuthResult<LoginResponse>.Fail("EMAIL_NOT_VERIFIED", "Verify your email before signing in.", 403);
         var now = AuthSupport.UtcNow(clock);
+        // BE#235: an account created by PlatformAdmin proves its email before any session exists. The correct password only
+        // returns a challenge; the code goes to the email (a recent live code is reused).
+        if (user.FirstLoginStep == FirstLoginSteps.VerifyEmail)
+        {
+            if (firstLogin is null) return AuthResult<LoginResponse>.Fail("FIRST_LOGIN_UNAVAILABLE", "First sign-in verification is unavailable.", 503);
+            var challenge = await firstLogin.StartAsync(user, now, ct);
+            if (!challenge.IsSuccess) return new(default, challenge.Error);
+            await tx.CommitAsync(ct);
+            attempts?.Reset(email);
+            return FirstLoginSteps.Required<LoginResponse>(challenge.Value!);
+        }
         using var persistence=AuthDiagnostics.Measure(LoginPhase.Persistence);
         var family=Guid.NewGuid();var raw=tokens.CreateRefreshToken();
         await store.FinalizePasswordLoginAsync(user,upgradedHash,new Fire3D.Domain.Entities.RefreshToken
