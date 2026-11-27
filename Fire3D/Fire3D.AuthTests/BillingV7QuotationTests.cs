@@ -17,12 +17,12 @@ public sealed class BillingV7QuotationTests
         var quote=await service.CreateQuotation(BillingDatabase.Owner,BillingDatabase.Owner,new([new(BillingDatabase.Building,package.Id,"New")]),"first",default);
         Assert.Equal(600,quote.TotalAmount);
         var start=new DateTimeOffset(DateTime.UtcNow.Year+1,8,31,0,0,0,TimeSpan.Zero);
-        quote=await service.IssueQuotation(BillingDatabase.Admin,BillingDatabase.Admin,quote.Id,new(0,"Terms",DateTimeOffset.UtcNow.AddDays(1),[new(quote.Items[0].Id,start)]),BillingETag.Format(quote.Id,quote.Revision),default);
+        quote=await service.IssueQuotation(BillingDatabase.Admin,BillingDatabase.Admin,quote.Id,new(1400,"Terms",DateTimeOffset.UtcNow.AddDays(1),[new(quote.Items[0].Id,start)]),BillingETag.Format(quote.Id,quote.Revision),default);
         Assert.Equal(start.UtcDateTime.AddMonths(6),quote.Items[0].EndsAt);
         Assert.Equal(25,quote.Items[0].LearnerLimit);Assert.Equal(1000,quote.Items[0].AiQuotaUnits);Assert.Equal("tokens",quote.Items[0].AiQuotaUnit);
         await service.SavePackage(BillingDatabase.Admin,BillingDatabase.Admin,package.Id,new("V7","V7",200,12,true,null,50,0),BillingETag.Format(package.Id,package.Revision),default);
         var stored=await service.GetQuotation(BillingDatabase.Owner,quote.Id,default);
-        Assert.Equal(600,stored.TotalAmount);Assert.Equal(1,stored.Items[0].PackageRevision);
+        Assert.Equal(2000,stored.TotalAmount);Assert.Equal(1,stored.Items[0].PackageRevision);
         await Assert.ThrowsAsync<PostgresException>(()=>database.Sql($"UPDATE quotation_building_items SET learner_limit=999 WHERE quotation_id='{quote.Id}'"));
         await service.AcceptQuotation(BillingDatabase.Owner,BillingDatabase.Owner,quote.Id,BillingETag.Format(quote.Id,quote.Revision),default);
     }
@@ -51,7 +51,7 @@ public sealed class BillingV7QuotationTests
             var service=new BillingService(db);var p=await service.SavePackage(BillingDatabase.Admin,BillingDatabase.Admin,null,new("V7","V7",100,12,true,null,10,0),null,default);
             quote=await service.CreateQuotation(BillingDatabase.Owner,BillingDatabase.Owner,new([new(BillingDatabase.Building,p.Id,"New")]),"first",default);
         }
-        var input=new IssueQuotationRequest(0,"Terms",DateTimeOffset.UtcNow.AddDays(1),[new(quote.Items[0].Id,DateTimeOffset.UtcNow.AddDays(2))]);
+        var input=new IssueQuotationRequest(2000,"Terms",DateTimeOffset.UtcNow.AddDays(1),[new(quote.Items[0].Id,DateTimeOffset.UtcNow.AddDays(2))]);
         async Task<int> Issue()
         {
             await using var db=database.Context();
@@ -73,5 +73,30 @@ public sealed class BillingV7QuotationTests
         Assert.Equal(["address"],failure.Errors!.Keys.ToArray());Assert.Equal(bare,failure.Extensions!["buildingId"]);
         // A Building of another tenant is still simply not found.
         Assert.Equal(404,(await Assert.ThrowsAsync<BillingException>(()=>service.CreateQuotation(BillingDatabase.Other,BillingDatabase.Other,new([new(bare,package.Id,"New")]),"foreign",default))).Status);
+    }
+
+    // BE#241: a quotation the customer could pay only after its service started, or below the smallest PayOS transfer, is refused.
+    [BillingPostgresFact]
+    public async Task Issue_needs_a_15_minute_gap_before_the_start_and_at_least_2000_VND()
+    {
+        await using var database=await BillingDatabase.Create();await using var db=database.Context();var service=new BillingService(db);
+        var package=await service.SavePackage(BillingDatabase.Admin,BillingDatabase.Admin,null,new("V7","V7",2000,6,true,null,25,0),null,default);
+        var quote=await service.CreateQuotation(BillingDatabase.Owner,BillingDatabase.Owner,new([new(BillingDatabase.Building,package.Id,"New")]),"gap",default);
+        var start=new DateTimeOffset(DateTime.UtcNow.Date.AddDays(3),TimeSpan.Zero);
+        var tight=await Assert.ThrowsAsync<BillingException>(()=>service.IssueQuotation(BillingDatabase.Admin,BillingDatabase.Admin,quote.Id,
+            new(0,"Terms",start.AddMinutes(-10),[new(quote.Items[0].Id,start)]),BillingETag.Format(quote.Id,quote.Revision),default));
+        Assert.Equal((400,"validUntil"),(tight.Status,tight.Errors!.Keys.Single()));
+        db.ChangeTracker.Clear();
+        var issued=await service.IssueQuotation(BillingDatabase.Admin,BillingDatabase.Admin,quote.Id,
+            new(0,"Terms",start.AddMinutes(-15),[new(quote.Items[0].Id,start)]),BillingETag.Format(quote.Id,quote.Revision),default);
+        Assert.Equal("Issued",issued.Status);
+
+        var cheap=await service.SavePackage(BillingDatabase.Admin,BillingDatabase.Admin,null,new("CHEAP","Cheap",200,6,true,null,25,0),null,default);
+        var small=await service.CreateQuotation(BillingDatabase.Owner,BillingDatabase.Owner,new([new(BillingDatabase.Building,cheap.Id,"New")]),"small",default);
+        db.ChangeTracker.Clear();
+        var below=await Assert.ThrowsAsync<BillingException>(()=>service.IssueQuotation(BillingDatabase.Admin,BillingDatabase.Admin,small.Id,
+            new(100,"Terms",DateTimeOffset.UtcNow.AddDays(1),[new(small.Items[0].Id,start.AddMonths(7))]),BillingETag.Format(small.Id,small.Revision),default));
+        Assert.Equal((409,"QUOTATION_TOTAL_BELOW_PAYOS_MINIMUM"),(below.Status,below.Code));
+        Assert.Equal("Draft",await database.Scalar($"SELECT status::text FROM quotations WHERE id='{small.Id}'"));
     }
 }

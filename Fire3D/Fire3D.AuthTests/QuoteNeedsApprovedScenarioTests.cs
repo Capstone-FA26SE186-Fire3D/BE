@@ -32,7 +32,7 @@ public sealed class QuoteNeedsApprovedScenarioTests
         await database.Sql($"INSERT INTO billing_test_unapproved_buildings VALUES('{BillingDatabase.Building}')");
         var start = new DateTimeOffset(DateTime.UtcNow.Year + 1, 8, 31, 0, 0, 0, TimeSpan.Zero);
         var issued = await service.IssueQuotation(BillingDatabase.Admin, BillingDatabase.Admin, quote.Id,
-            new(0, "Terms", DateTimeOffset.UtcNow.AddDays(1), [new(quote.Items[0].Id, start)]), BillingETag.Format(quote.Id, quote.Revision), default);
+            new(1400, "Terms", DateTimeOffset.UtcNow.AddDays(1), [new(quote.Items[0].Id, start)]), BillingETag.Format(quote.Id, quote.Revision), default);
         Assert.Equal("Issued", issued.Status);
     }
 }

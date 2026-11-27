@@ -84,7 +84,7 @@ Tổng: **121** endpoint mới hoặc đổi contract so với `3c9ef1f` (trư�
 <details><summary>Mô tả từng endpoint</summary>
 
 - **POST `/api/admin/enterprise-quote-requests/{id}/quotations`** — Admin drafts a Building quotation for the requesting OrganizationUser and marks the request Quoted. Idempotency-Key required; no service is granted.
-- **POST `/api/admin/quotations/{id}/issue`** — Admin reprices and freezes the v7 snapshot: monthly price, 6/12 month term, learner limit, quota/policy and fixed UTC service periods. Provide items with quotationItemId/startsAt, taxAmount, terms, validUntil and If-Match. Renewal derives an existing committed end; payment deadline cannot exceed the earliest start.
+- **POST `/api/admin/quotations/{id}/issue`** — Admin reprices and freezes the v7 snapshot: monthly price, 6/12 month term, learner limit, quota/policy and fixed UTC service periods. Provide items with quotationItemId/startsAt, taxAmount, terms, validUntil and If-Match. Renewal derives an existing committed end; the payment deadline must be at least 15 minutes before the earliest start and the total at least 2,000 VND (BE#241).
 - **POST `/api/billing/quotations`** — OrganizationUser creates a Draft for their own Buildings. Idempotency-Key is required; totals are server-calculated.
 - **PATCH `/api/billing/quotations/{id}`** — Replaces Draft Building selections using If-Match. Issued/Accepted lines are immutable.
 - **GET `/api/buildings/{id}/service-entitlement`** — Current and upcoming paid service of a Building: effective learner limit (with upgrades), seats used/remaining, period and upgrades.

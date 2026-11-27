@@ -124,13 +124,13 @@ public sealed class BillingApiTests
         using var admin=factory.As(BillingDatabase.Admin); using var owner=factory.As(BillingDatabase.Owner);
         var package=await Package(admin);
         var created=await owner.SendAsync(QuoteRequest(package));var quote=await Body(created);var id=quote.GetProperty("id").GetGuid();
-        var issueBody=new {taxAmount=10,terms="Six month Building service",validUntil=DateTimeOffset.UtcNow.AddDays(3),
+        var issueBody=new {taxAmount=1410,terms="Six month Building service",validUntil=DateTimeOffset.UtcNow.AddDays(3),
             items=quote.GetProperty("items").EnumerateArray().Select(x=>new{quotationItemId=x.GetProperty("id").GetGuid(),startsAt=DateTimeOffset.UtcNow.AddDays(4)}).ToArray()};
         Assert.Equal((HttpStatusCode)428,(await admin.PostAsJsonAsync($"/api/admin/quotations/{id}/issue",issueBody)).StatusCode);
         using var issue=new HttpRequestMessage(HttpMethod.Post,$"/api/admin/quotations/{id}/issue") {Content=JsonContent.Create(issueBody)};
         issue.Headers.Add("If-Match",created.Headers.ETag!.ToString());
         var issued=await admin.SendAsync(issue); var snapshot=await Body(issued);
-        Assert.Equal("Issued",snapshot.GetProperty("status").GetString());Assert.Equal(610,snapshot.GetProperty("totalAmount").GetDecimal());
+        Assert.Equal("Issued",snapshot.GetProperty("status").GetString());Assert.Equal(2010,snapshot.GetProperty("totalAmount").GetDecimal());
         using var stale=new HttpRequestMessage(HttpMethod.Post,$"/api/billing/quotations/{id}/accept");stale.Headers.Add("If-Match",created.Headers.ETag!.ToString());
         Assert.Equal(HttpStatusCode.PreconditionFailed,(await owner.SendAsync(stale)).StatusCode);
         using var accept=new HttpRequestMessage(HttpMethod.Post,$"/api/billing/quotations/{id}/accept");accept.Headers.Add("If-Match",issued.Headers.ETag!.ToString());
@@ -198,7 +198,7 @@ public sealed class BillingApiTests
         var package=await Package(admin);var created=await owner.SendAsync(QuoteRequest(package));
         var body=await Body(created);var id=body.GetProperty("id").GetGuid();
         using var issue=new HttpRequestMessage(HttpMethod.Post,$"/api/admin/quotations/{id}/issue")
-        {Content=JsonContent.Create(new{taxAmount=0,terms="Frozen terms",validUntil=DateTimeOffset.UtcNow.AddDays(1),
+        {Content=JsonContent.Create(new{taxAmount=1400,terms="Frozen terms",validUntil=DateTimeOffset.UtcNow.AddDays(1),
             items=body.GetProperty("items").EnumerateArray().Select(x=>new{quotationItemId=x.GetProperty("id").GetGuid(),startsAt=DateTimeOffset.UtcNow.AddDays(2)}).ToArray()})};
         issue.Headers.Add("If-Match",created.Headers.ETag!.ToString());var issued=await admin.SendAsync(issue);await Body(issued);
         var current=await admin.GetAsync($"/api/billing/service-packages/{package}");
@@ -208,7 +208,7 @@ public sealed class BillingApiTests
         HttpRequestMessage Accept(){var r=new HttpRequestMessage(HttpMethod.Post,$"/api/billing/quotations/{id}/accept");r.Headers.Add("If-Match",issued.Headers.ETag!.ToString());return r;}
         var results=await Task.WhenAll(owner.SendAsync(Accept()),owner.SendAsync(Accept()));
         Assert.Single(results,x=>x.StatusCode==HttpStatusCode.OK);Assert.Single(results,x=>x.StatusCode==HttpStatusCode.PreconditionFailed);
-        var final=await Body(await owner.GetAsync($"/api/billing/quotations/{id}"));Assert.Equal(600,final.GetProperty("totalAmount").GetDecimal());
+        var final=await Body(await owner.GetAsync($"/api/billing/quotations/{id}"));Assert.Equal(2000,final.GetProperty("totalAmount").GetDecimal());
         Assert.Equal("Monthly Building",final.GetProperty("items")[0].GetProperty("packageName").GetString());
         Assert.Equal(1L,await database.Scalar($"SELECT count(*) FROM audit_logs WHERE target_id='{id}' AND new_values->>'status'='Accepted'"));
         var replay=await Body(await owner.SendAsync(QuoteRequest(package)));Assert.Equal("Draft",replay.GetProperty("status").GetString());Assert.Equal(600,replay.GetProperty("totalAmount").GetDecimal());

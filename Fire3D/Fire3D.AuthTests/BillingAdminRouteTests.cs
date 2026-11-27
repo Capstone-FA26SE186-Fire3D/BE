@@ -108,7 +108,7 @@ public sealed class BillingAdminRouteTests
         var overflow=await admin.SendAsync(Send(HttpMethod.Post,$"/api/admin/quotations/{id}/issue",new{taxAmount=0,terms="Terms",validUntil=DateTimeOffset.UtcNow.AddDays(1),
             items=new[]{new{quotationItemId=line,startsAt=new DateTimeOffset(9999,10,1,0,0,0,TimeSpan.Zero)}}},updated.Headers.ETag!.ToString()));
         Assert.Equal(HttpStatusCode.BadRequest,overflow.StatusCode);Assert.Equal("BILLING_VALIDATION_FAILED",await Code(overflow));
-        var issued=await admin.SendAsync(Send(HttpMethod.Post,$"/api/admin/quotations/{id}/issue",new{taxAmount=0,terms="Terms",validUntil=DateTimeOffset.UtcNow.AddDays(1),
+        var issued=await admin.SendAsync(Send(HttpMethod.Post,$"/api/admin/quotations/{id}/issue",new{taxAmount=2000,terms="Terms",validUntil=DateTimeOffset.UtcNow.AddDays(1),
             items=new[]{new{quotationItemId=line,startsAt=DateTimeOffset.UtcNow.AddDays(2)}}},updated.Headers.ETag!.ToString()));
         Assert.Equal("Issued",(await Body(issued)).GetProperty("status").GetString());
         var locked=await owner.SendAsync(Send(HttpMethod.Patch,$"/api/billing/quotations/{id}",items,issued.Headers.ETag!.ToString()));

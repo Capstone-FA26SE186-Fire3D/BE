@@ -235,7 +235,7 @@ public sealed class BillingUpgradeTopUpTests
         Assert.Equal("BILLING_POLICY_INTERVAL_INVALID",beyond.Code);
         var early=await Assert.ThrowsAsync<BillingException>(()=>billing.IssueQuotation(BillingDatabase.Admin,BillingDatabase.Admin,quote.Id,new(0,"t",validUntil,null,new(policy.Id,10,1000,validUntil.AddMinutes(-30),validUntil.AddDays(5))),ETag(quote),default));
         Assert.Contains("payment deadline",early.Message);
-        var issued=await billing.IssueQuotation(BillingDatabase.Admin,BillingDatabase.Admin,quote.Id,new(0,"t",validUntil,null,new(policy.Id,10,1000,validUntil,validUntil.AddDays(5))),ETag(quote),default);
+        var issued=await billing.IssueQuotation(BillingDatabase.Admin,BillingDatabase.Admin,quote.Id,new(0,"t",validUntil,null,new(policy.Id,10,2000,validUntil.AddMinutes(15),validUntil.AddDays(5))),ETag(quote),default);
         Assert.Equal("Issued",issued.Status);
         await Assert.ThrowsAsync<Npgsql.PostgresException>(()=>db.Sql($"UPDATE quotation_topup_items SET quota_units=99 WHERE quotation_id='{quote.Id}'"));
     }

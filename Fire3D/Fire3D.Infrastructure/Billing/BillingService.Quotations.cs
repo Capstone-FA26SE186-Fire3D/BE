@@ -271,6 +271,8 @@ public sealed partial class BillingService
             ApplyTotals(quote,db.ChangeTracker.Entries<QuotationBuildingItem>().Where(x=>x.State!=EntityState.Deleted&&x.Entity.QuotationId==id).Select(x=>x.Entity).OrderBy(x=>x.BuildingId).ToArray(),DateTime.UtcNow);
         }
         if(quote.TotalAmount==0)throw new BillingException(409,"ZERO_AMOUNT_NOT_SUPPORTED","Zero-amount quotations do not have a supported payment/provisioning flow.");
+        if(quote.TotalAmount<PayosMinimumAmount)
+            throw new BillingException(409,"QUOTATION_TOTAL_BELOW_PAYOS_MINIMUM","The total to pay must be at least 2,000 VND, the smallest PayOS transfer.");
         // Persist line snapshots while still Draft, then transition under the same transaction/row lock.
         await db.SaveChangesAsync(ct);quote.Status=QuotationStatus.Issued;quote.IssuedBy=actor;quote.IssuedAt=DateTime.UtcNow;quote.Revision++;
         Audit(identity,quote.OrganizationId,"quotations",id,AuditAction.Update,new {status="Draft"},new {status="Issued",quote.TotalAmount,quote.Revision});

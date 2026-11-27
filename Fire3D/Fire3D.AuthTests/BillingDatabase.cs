@@ -82,7 +82,8 @@ internal sealed class BillingDatabase : IAsyncDisposable
                             .Concat(new Fire3D.Infrastructure.Migrations.AddBillingQuotationCancel().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
                             .Concat(new Fire3D.Infrastructure.Migrations.AddNotificationDeliveryLease().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
                             .Concat(new Fire3D.Infrastructure.Migrations.AddPushNotificationChannel().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
-                            .Concat(new Fire3D.Infrastructure.Migrations.AddEnterpriseWorkflow().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>()))
+                            .Concat(new Fire3D.Infrastructure.Migrations.AddEnterpriseWorkflow().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
+                            .Concat(new Fire3D.Infrastructure.Migrations.PayosLatePaymentShift().UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>()))
                             await result.Sql(operation.Sql);
                 }
             }

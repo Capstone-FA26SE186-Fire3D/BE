@@ -128,6 +128,7 @@
         <EmbeddedResource Include="Billing/BillingV7Catalog.sql" LogicalName="Fire3D.Infrastructure.Billing.BillingV7Catalog.sql" />
         <EmbeddedResource Include="Billing/BillingV7Quotations.sql" LogicalName="Fire3D.Infrastructure.Billing.BillingV7Quotations.sql" />
         <EmbeddedResource Include="Billing/BillingV7Provisioning.sql" LogicalName="Fire3D.Infrastructure.Billing.BillingV7Provisioning.sql" />
+        <EmbeddedResource Include="Billing/PayosLatePaymentShift.sql" LogicalName="Fire3D.Infrastructure.Billing.PayosLatePaymentShift.sql" />
         <EmbeddedResource Include="Billing/BillingV7UpgradeTopUp.sql" LogicalName="Fire3D.Infrastructure.Billing.BillingV7UpgradeTopUp.sql" />
         <EmbeddedResource Include="Billing/BillingQuotationCancel.sql" LogicalName="Fire3D.Infrastructure.Billing.BillingQuotationCancel.sql" />
         <EmbeddedResource Include="Billing/NotificationDeliveryLease.sql" LogicalName="Fire3D.Infrastructure.Billing.NotificationDeliveryLease.sql" />
