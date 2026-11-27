@@ -35,4 +35,16 @@ public class GetProcessingJobTests
         var result=await new GetProcessingJobHandler(RevisionAccessTests.Accounts(actor),store).Handle(new(actor.Id,Guid.NewGuid()),default);
         Assert.Equal(403,result.Error?.Status);
     }
+
+    // BE#239: a client can say why a job was claimed again; endReason is serialized with the attempt.
+    [Theory]
+    [InlineData("Succeeded","Completed")] [InlineData("Failed","WorkerFailed")] [InlineData("Expired","LeaseExpired")] [InlineData("Running",null)]
+    public void Attempt_end_reason_follows_the_status(string status,string? reason)
+    {
+        var attempt=new ProcessingAttemptResponse(Guid.NewGuid(),1,status,"t",DateTime.UtcNow,null,null);
+        Assert.Equal(reason,attempt.EndReason);
+        var json=System.Text.Json.JsonSerializer.SerializeToNode(attempt,new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        Assert.Equal(reason,json["endReason"]?.GetValue<string>());
+        Assert.Equal(reason,new RevisionProcessingLogResponse(Guid.NewGuid(),Guid.NewGuid(),Guid.NewGuid(),"ReleasePackage",status,null,null,1,DateTime.UtcNow).EndReason);
+    }
 }

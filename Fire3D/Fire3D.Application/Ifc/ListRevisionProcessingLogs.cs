@@ -13,7 +13,10 @@ public sealed record RevisionProcessingLogResponse(
     string? Message,
     int? DurationMs,
     int AttemptNumber,
-    DateTime LoggedAt);
+    DateTime LoggedAt)
+{
+    public string? EndReason => ProcessingAttemptEnd.Reason(Status);
+}
 
 public sealed record ListRevisionProcessingLogsQuery(Guid ActorId, Guid RevisionId, int Page = 1, int PageSize = 20)
     : IRequest<AuthResult<PageResponse<RevisionProcessingLogResponse>>>;

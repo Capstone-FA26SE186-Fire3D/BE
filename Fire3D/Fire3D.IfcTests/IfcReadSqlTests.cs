@@ -105,6 +105,10 @@ public sealed partial class IfcReadSqlTests(IfcReadDatabase database) : IClassFi
         Assert.NotNull(own);
         Assert.Equal(database.Attempt,own.CurrentAttempt?.Id);
         Assert.Equal(1,own.CurrentAttempt?.AttemptNumber);
+        // BE#239: the attempt before the current one, with why it ended.
+        Assert.Equal((database.PreviousAttempt,"Failed","WorkerFailed","IFC parse failed."),
+            (own.PreviousAttempt!.Id,own.PreviousAttempt.Status,own.PreviousAttempt.EndReason,own.PreviousAttempt.Message));
+        Assert.Equal("Completed",own.CurrentAttempt!.EndReason);
         Assert.Null(await store.GetJobAsync(database.Job,database.OtherTenant,default));
         Assert.NotNull(await store.GetJobAsync(database.Job,null,default));
         Assert.Null(await store.GetJobAsync(Guid.NewGuid(),database.Tenant,default));
