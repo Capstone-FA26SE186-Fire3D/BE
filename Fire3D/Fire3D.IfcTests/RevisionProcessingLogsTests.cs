@@ -58,6 +58,7 @@ public sealed partial class IfcReadSqlTests
         var failed = result.Items.Single(x => x.Id == database.PreviousAttempt);
         Assert.Equal((database.Revision, database.Job, "Geometry", "Failed", "IFC parse failed.", 0), (failed.RevisionId, failed.JobId, failed.Step, failed.Status, failed.Message, failed.AttemptNumber));
         Assert.InRange(failed.DurationMs!.Value, 1400, 1600);
+        Assert.Equal("WorkerFailed", failed.EndReason);
         Assert.Null(await store.ListRevisionProcessingLogsAsync(database.Revision, database.OtherTenant, 1, 20, default));
         Assert.Single((await store.ListRevisionProcessingLogsAsync(database.Revision, database.Tenant, 2, 1, default))!.Items);
         Assert.Empty((await store.ListRevisionProcessingLogsAsync(database.Revision, database.Tenant, 3, 1, default))!.Items);

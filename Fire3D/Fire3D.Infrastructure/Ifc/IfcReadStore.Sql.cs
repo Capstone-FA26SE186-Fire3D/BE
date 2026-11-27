@@ -55,11 +55,18 @@ public sealed partial class IfcReadStore
                 'inputHash',j.input_hash,'currentAttemptId',j.current_attempt_id,
                 'currentAttempt', CASE WHEN a.id IS NULL THEN NULL ELSE jsonb_build_object(
                     'id',a.id,'attemptNumber',a.attempt_number,'status',a.status,'toolchainVersion',a.toolchain_version,
-                    'startedAt',a.started_at,'finishedAt',a.finished_at,'outputHash',a.output_hash) END)::text
+                    'startedAt',a.started_at,'finishedAt',a.finished_at,'outputHash',a.output_hash,'message',a.error_message) END,
+                'previousAttempt', CASE WHEN p.id IS NULL THEN NULL ELSE jsonb_build_object(
+                    'id',p.id,'attemptNumber',p.attempt_number,'status',p.status,'toolchainVersion',p.toolchain_version,
+                    'startedAt',p.started_at,'finishedAt',p.finished_at,'outputHash',p.output_hash,'message',p.error_message) END)::text
             FROM public.processing_jobs j
             """ + "\n" + ScopeJoins + "\n" + """
             LEFT JOIN public.processing_job_attempts a ON a.id=j.current_attempt_id
                 AND a.processing_job_id=j.id AND a.input_hash=j.input_hash
+            LEFT JOIN LATERAL (SELECT x.* FROM public.processing_job_attempts x
+                WHERE x.processing_job_id=j.id AND x.id IS DISTINCT FROM j.current_attempt_id
+                  AND (a.id IS NULL OR x.attempt_number<a.attempt_number)
+                ORDER BY x.attempt_number DESC LIMIT 1) p ON true
             WHERE j.id=@id AND
             """ + " " + ScopePredicate, jobId, organizationId, ct);
 }

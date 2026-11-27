@@ -39,11 +39,17 @@ Errors:
 ### First version
 
 The first version is seeded from the revision's equipment decisions (`PATCH /api/revisions/{id}/equipment-decisions`):
-- Every **Confirmed/Retyped** candidate becomes an item: `kind` Equipment, category `WaterSource` for `water.*` and `Equipment` otherwise.
+- Every **Confirmed/Retyped** candidate becomes an item `infra-eq-N`: `kind` Equipment, category `WaterSource` for `water.*` and `Equipment` otherwise.
 - Its position is the detected one, its rotation comes from `rotationY`, and `anchorId` is the IFC GlobalId.
-- `capability.version` is taken from the newest active runtime, and `runtimeVersion` is set to that runtime.
-- Exits and assembly points are not detected; the organization adds them. `geometry` is not seeded either: pin the accepted Geometry
+- It has **no `label`** (BE#239): the IFC class (`IfcBuildingElementProxy`, `IfcDoor`) is not a name. Clients show the capability name
+  until the organization names the item.
+- Each candidate confirmed as **`door.exit`** also gets an Exit item `infra-exit-N` (BE#239): `kind` Goal, category `Exit`, capability
+  `exit.final`, label "Lối ra ngoài", on the same door (`anchorId`) and position. So the exit chosen in the equipment step counts for
+  `EXIT_REQUIRED`. A revision with no confirmed exit door still needs an Exit added by hand.
+- `capability.version` is taken from the newest active runtime (1.0.0 when it does not publish the capability), and `runtimeVersion` is set to that runtime.
+- Assembly points are not detected; the organization adds them. `geometry` is not seeded either: pin the accepted Geometry
   artifact as the editor does.
+- Required parameters (for example an extinguisher's `agent` and `dischargeSeconds`) are left empty: they are data the expert reviews.
 
 Later versions copy the newest version (items, geometry, runtimeVersion).
 

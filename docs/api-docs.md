@@ -498,7 +498,7 @@ Tất cả cần Editor; list nhận page/pageSize. Sai filter/Guid.Empty 400, s
 
 | Method | Path | Thành công |
 | --- | --- | --- |
-| GET | `/api/revisions/{revisionId}/processing-logs` | 200 Page<RevisionProcessingLogResponse>: one item per worker attempt (step = job kind, status = attempt status, message = attempt error) |
+| GET | `/api/revisions/{revisionId}/processing-logs` | 200 Page<RevisionProcessingLogResponse>: one item per worker attempt (step = job kind, status = attempt status, message = attempt error, endReason = why it ended, see below) |
 | GET | `/api/revisions/{revisionId}/processing-jobs` | 200 Page<ProcessingJobResponse> |
 | GET | `/api/processing-jobs/{jobId}` | 200 ProcessingJobDetailResponse |
 | GET | `/api/validation-runs/{validationRunId}` | 200 ValidationRunResponse |
@@ -511,8 +511,8 @@ Tất cả cần Editor; list nhận page/pageSize. Sai filter/Guid.Empty 400, s
 | DTO | Thuộc tính JSON |
 | --- | --- |
 | ProcessingJobResponse | id, revisionId, sourceDocumentId, scenarioVersionId nullable, kind, status (`Queued`/`Running`/`Succeeded`/`Failed`/`Cancelled`), createdAt |
-| ProcessingJobDetailResponse | job (ProcessingJobResponse), inputHash, currentAttemptId nullable, currentAttempt nullable |
-| ProcessingAttemptResponse | id, attemptNumber, status (`Running`/`Succeeded`/`Failed`/`Expired`), toolchainVersion, startedAt, finishedAt nullable, outputHash nullable |
+| ProcessingJobDetailResponse | job (ProcessingJobResponse), inputHash, currentAttemptId nullable, currentAttempt nullable, previousAttempt nullable (the attempt before the current one, BE#239) |
+| ProcessingAttemptResponse | id, attemptNumber, status (`Running`/`Succeeded`/`Failed`/`Expired`), toolchainVersion, startedAt, finishedAt nullable, outputHash nullable, message nullable (worker error), endReason nullable: `Completed` (Succeeded), `WorkerFailed` (Failed, see message), `LeaseExpired` (Expired: the worker did not renew its lease in time, e.g. it restarted or lost its connection, so the job was handed out again), null while Running |
 | ValidationRunResponse | id, revisionId, processingJobId, processingAttemptId, artifactId nullable, scenarioVersionId nullable, scope, validatorVersion, outcome (`Passed`/`Failed`), status (= outcome, giữ tương thích), summary (JSON), startedAt/finishedAt nullable, createdAt |
 | JobQaResponse | jobId, currentAttemptId nullable, validationRuns (Page<ValidationRunResponse>) |
 | RevisionIssueResponse | id, revisionId, validationRunId, processingAttemptId, artifactId nullable, issueCode, severity (`Info`/`Warning`/`Error`/`Critical`), status (`Open`), message, evidence (JSON), isCurrentAttempt, createdAt |

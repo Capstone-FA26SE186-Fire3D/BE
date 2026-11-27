@@ -100,6 +100,61 @@ public static class FireInfrastructureRules
     }
 
     public static string ItemPath(string path) => path.StartsWith("$.objects", StringComparison.Ordinal) ? "$.items" + path["$.objects".Length..] : path;
+
+    /// <summary>Capability of the Exit Goal seeded for each confirmed exit door (BE#239).</summary>
+    public const string SeededExitCapability = "exit.final";
+    public const string SeededExitLabel = "Lối ra ngoài";
+
+    /// <summary>
+    /// Items of the first version, from the revision's Confirmed/Retyped equipment decisions (BE#213, BE#239):
+    /// - each fixed capability becomes an Equipment (WaterSource for water.*) at the detected position, with no label: the IFC class
+    ///   ("IfcBuildingElementProxy", "IfcDoor") is no name, so clients show the capability name until the organization names it;
+    /// - each door.exit also gets an Exit Goal (exit.final, "Lối ra ngoài") on the same door and position, so the exit the organization
+    ///   confirmed counts for EXIT_REQUIRED.
+    /// </summary>
+    public static JsonArray SeedItems(IEnumerable<EquipmentCandidateView> candidates, IReadOnlyDictionary<string, CapabilityContract> contracts)
+    {
+        var items = new JsonArray();
+        int equipment = 0, exits = 0;
+        string Version(string key) => contracts.TryGetValue(key, out var contract) ? contract.Version : "1.0.0";
+        foreach (var candidate in candidates)
+        {
+            if (candidate.Decision is not { Decision: "Confirmed" or "Retyped" } decision || candidate.FloorId is null || candidate.Position.Count < 3) continue;
+            var key = decision.CatalogKey ?? candidate.CatalogKey;
+            if (ScenarioItemCapabilities.Contains(key) || key == EditorContract.BuildingOnlyCapability) continue;
+            var anchor = EditorContract.IfcGlobalIdPattern().IsMatch(candidate.IfcGlobalId) ? candidate.IfcGlobalId : null;
+            var half = (double)(candidate.RotationY ?? 0) * Math.PI / 360;
+            JsonObject Placement() => new()
+            {
+                ["floorId"] = candidate.FloorId,
+                ["position"] = new JsonObject { ["x"] = candidate.Position[0], ["y"] = candidate.Position[1], ["z"] = candidate.Position[2] },
+                ["rotation"] = new JsonObject { ["x"] = 0, ["y"] = Math.Round(Math.Sin(half), 9), ["z"] = 0, ["w"] = Math.Round(Math.Cos(half), 9) }
+            };
+            var item = new JsonObject
+            {
+                ["id"] = $"infra-eq-{++equipment}",
+                ["kind"] = "Equipment",
+                ["category"] = key.StartsWith("water.", StringComparison.Ordinal) ? "WaterSource" : "Equipment",
+                ["placement"] = Placement(),
+                ["capability"] = new JsonObject { ["id"] = key, ["version"] = Version(key) }
+            };
+            if (anchor is not null) item["anchorId"] = anchor;
+            items.Add(item);
+            if (key != "door.exit") continue;
+            var exit = new JsonObject
+            {
+                ["id"] = $"infra-exit-{++exits}",
+                ["kind"] = "Goal",
+                ["category"] = "Exit",
+                ["label"] = SeededExitLabel,
+                ["placement"] = Placement(),
+                ["capability"] = new JsonObject { ["id"] = SeededExitCapability, ["version"] = Version(SeededExitCapability) }
+            };
+            if (anchor is not null) exit["anchorId"] = anchor;
+            items.Add(exit);
+        }
+        return items;
+    }
 }
 
 public interface IFireInfrastructureService
@@ -122,8 +177,8 @@ public sealed class FireInfrastructureService(IFireInfrastructureStore store, IE
 
     /// <summary>
     /// New Draft version. The first version starts from the revision's confirmed equipment decisions (fixed equipment and water sources,
-    /// placed at the detected position, capability versions of the newest active runtime); later versions copy the newest version.
-    /// Exits and assembly points are added by the organization.
+    /// placed at the detected position, capability versions of the newest active runtime, an Exit Goal per confirmed exit door: see
+    /// <see cref="FireInfrastructureRules.SeedItems"/>); later versions copy the newest version. Assembly points are added by the organization.
     /// </summary>
     public async Task<AuthResult<FireInfrastructureResponse>> CreateAsync(Guid actor, Guid? family, Guid revision, string? key, CancellationToken ct)
     {
@@ -181,33 +236,8 @@ public sealed class FireInfrastructureService(IFireInfrastructureStore store, IE
     {
         var runtimes = await catalog.GetActiveCatalogAsync(ct);
         var runtime = runtimes.OrderByDescending(x => Version.TryParse(x.RuntimeVersion, out var v) ? v : new Version(0, 0)).FirstOrDefault();
-        var contracts = RuntimeCatalogContracts.For(runtime);
-        var items = new JsonArray();
         var candidates = family is Guid f ? await equipment.GetAsync(actor, f, revision, ct) : null;
-        if (candidates is { IsSuccess: true })
-            foreach (var candidate in candidates.Value!.Items)
-            {
-                if (candidate.Decision is not { Decision: "Confirmed" or "Retyped" } decision || candidate.FloorId is null || candidate.Position.Count < 3) continue;
-                var key = decision.CatalogKey ?? candidate.CatalogKey;
-                if (FireInfrastructureRules.ScenarioItemCapabilities.Contains(key) || key == EditorContract.BuildingOnlyCapability) continue;
-                var half = (double)(candidate.RotationY ?? 0) * Math.PI / 360;
-                var item = new JsonObject
-                {
-                    ["id"] = $"infra-eq-{items.Count + 1}",
-                    ["kind"] = "Equipment",
-                    ["category"] = key.StartsWith("water.", StringComparison.Ordinal) ? "WaterSource" : "Equipment",
-                    ["label"] = candidate.IfcClass ?? key,
-                    ["placement"] = new JsonObject
-                    {
-                        ["floorId"] = candidate.FloorId,
-                        ["position"] = new JsonObject { ["x"] = candidate.Position[0], ["y"] = candidate.Position[1], ["z"] = candidate.Position[2] },
-                        ["rotation"] = new JsonObject { ["x"] = 0, ["y"] = Math.Round(Math.Sin(half), 9), ["z"] = 0, ["w"] = Math.Round(Math.Cos(half), 9) }
-                    },
-                    ["capability"] = new JsonObject { ["id"] = key, ["version"] = contracts.TryGetValue(key, out var contract) ? contract.Version : "1.0.0" }
-                };
-                if (EditorContract.IfcGlobalIdPattern().IsMatch(candidate.IfcGlobalId)) item["anchorId"] = candidate.IfcGlobalId;
-                items.Add(item);
-            }
+        var items = FireInfrastructureRules.SeedItems(candidates is { IsSuccess: true } ? candidates.Value!.Items : [], RuntimeCatalogContracts.For(runtime));
         return new { runtimeVersion = runtime?.RuntimeVersion, items };
     }
 
