@@ -17,9 +17,10 @@ public sealed class ExpertReviews(Fire3DDbContext db, IEditorPreviewStore previe
         if (filter.Status is not null and not ("Submitted" or "Approved" or "Rejected")) errors["status"] = ["Use Submitted, Approved or Rejected."];
         if (filter.Page < 1) errors["page"] = ["Page must be at least 1."];
         if (filter.PageSize is < 1 or > 100) errors["pageSize"] = ["Page size must be 1-100."];
+        if (filter.Assignee is not null and not ("me" or "all")) errors["assignee"] = ["Use me or all."];
         if (errors.Count > 0) return AuthResult<PageResponse<ExpertReviewItem>>.Fail("VALIDATION_ERROR", "Review filters are invalid.", 400, errors);
         var result = await JsonCommandGate.Execute(db, "expert_review_gate", "List", actor, family, null,
-            new { kind = filter.Kind, status = filter.Status, page = filter.Page, pageSize = filter.PageSize }, null, null, ct);
+            new { kind = filter.Kind, status = filter.Status, page = filter.Page, pageSize = filter.PageSize, assignee = filter.Assignee }, null, null, ct);
         return result.IsSuccess ? AuthResult<PageResponse<ExpertReviewItem>>.Ok(result.Value.Deserialize<PageResponse<ExpertReviewItem>>(JsonCommandGate.Json)!) : new(default, result.Error);
     }
 
@@ -45,6 +46,30 @@ public sealed class ExpertReviews(Fire3DDbContext db, IEditorPreviewStore previe
     {
         object input = approve ? new { } : new { reason = reason?.Trim() };
         var result = await JsonCommandGate.Execute(db, "expert_review_gate", approve ? "Approve" : "Reject", actor, family, reviewId, input, key, expectedRevision, ct);
+        return result.IsSuccess ? AuthResult<ExpertReviewItem>.Ok(result.Value.Deserialize<ExpertReviewItem>(JsonCommandGate.Json)!) : new(default, result.Error);
+    }
+
+    public async Task<AuthResult<PageResponse<ExpertReviewItem>>> AdminListAsync(Guid actor, Guid? family, AdminReviewFilter filter, CancellationToken ct)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (filter.Kind is not null and not ("Scenario" or "Infrastructure")) errors["kind"] = ["Use Scenario or Infrastructure."];
+        if (filter.Status is not null and not ("Submitted" or "Approved" or "Rejected")) errors["status"] = ["Use Submitted, Approved or Rejected."];
+        if (filter.Page < 1) errors["page"] = ["Page must be at least 1."];
+        if (filter.PageSize is < 1 or > 100) errors["pageSize"] = ["Page size must be 1-100."];
+        if (errors.Count > 0) return AuthResult<PageResponse<ExpertReviewItem>>.Fail("VALIDATION_ERROR", "Review filters are invalid.", 400, errors);
+        var result = await JsonCommandGate.Execute(db, "expert_review_admin_gate", "List", actor, family, null,
+            new { kind = filter.Kind, status = filter.Status, assigneeId = filter.AssigneeId, page = filter.Page, pageSize = filter.PageSize }, null, null, ct);
+        return result.IsSuccess ? AuthResult<PageResponse<ExpertReviewItem>>.Ok(result.Value.Deserialize<PageResponse<ExpertReviewItem>>(JsonCommandGate.Json)!) : new(default, result.Error);
+    }
+
+    public async Task<AuthResult<ExpertReviewItem>> ReassignAsync(Guid actor, Guid? family, Guid reviewId, ExpertReassignRequest request, CancellationToken ct)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (request.ExpertId is null || request.ExpertId == Guid.Empty) errors["expertId"] = ["Choose the FireSafetyExpert who takes the item."];
+        if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 500) errors["reason"] = ["A reason of 1-500 characters is required."];
+        if (errors.Count > 0) return AuthResult<ExpertReviewItem>.Fail("VALIDATION_ERROR", "Reassignment needs an expert and a reason.", 400, errors);
+        var result = await JsonCommandGate.Execute(db, "expert_review_admin_gate", "Reassign", actor, family, reviewId,
+            new { expertId = request.ExpertId, reason = request.Reason!.Trim() }, null, null, ct);
         return result.IsSuccess ? AuthResult<ExpertReviewItem>.Ok(result.Value.Deserialize<ExpertReviewItem>(JsonCommandGate.Json)!) : new(default, result.Error);
     }
 }

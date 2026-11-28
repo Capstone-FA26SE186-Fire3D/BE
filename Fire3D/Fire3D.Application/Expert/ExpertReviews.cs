@@ -9,18 +9,24 @@ namespace Fire3D.Application.Expert;
 /// One item of the FireSafetyExpert queue. Kind Scenario (BE#211): a scenario version; ReviewId is the content review, and the Scenario*
 /// and RubricHash fields are set. Kind Infrastructure (BE#213): a fire infrastructure version; ReviewId = InfrastructureId and
 /// VersionNumber is the infrastructure version. Revision is the ETag value for decisions (Scenario: 1 while Submitted, 2 once decided;
-/// Infrastructure: the version's revision). DecidedBy names the expert who decided.
+/// Infrastructure: the version's revision). DecidedBy names the expert who decided. AssigneeId/AssigneeName/AssignedAt name the expert the
+/// item is assigned to (BE#242, round-robin at submission; null while no expert was available); only the assignee decides it.
 /// </summary>
 public sealed record ExpertReviewItem(Guid ReviewId, string Kind, string Status, long Revision, Guid? ScenarioVersionId, Guid RevisionId,
     string? ContentHash, string? RubricHash, Guid SubmittedBy, string? SubmittedByName, DateTimeOffset SubmittedAt,
     Guid? DecidedBy, string? DecidedByName, DateTimeOffset? DecidedAt, string? Reason,
     Guid OrganizationId, string OrganizationName, Guid BuildingId, string BuildingName, Guid? ScenarioId, string? ScenarioName, int VersionNumber,
-    Guid? InfrastructureId = null);
+    Guid? InfrastructureId = null, Guid? AssigneeId = null, string? AssigneeName = null, DateTimeOffset? AssignedAt = null);
 /// <summary>Frozen content under thẩm định, read-only. Scenario: state snapshot (scenario objects and its infrastructure items), rubric,
 /// objectives, instructions. Infrastructure: Content = {geometry, runtimeVersion, items}; the other fields are null.</summary>
 public sealed record ExpertReviewDetail(ExpertReviewItem Review, JsonNode? Content, JsonNode? Rubric, JsonNode? LearningObjectives, string? LearnerInstructions);
 public sealed record ExpertRejectRequest(string? Reason);
-public sealed record ExpertReviewFilter(string? Kind = null, string? Status = null, int Page = 1, int PageSize = 20);
+/// <summary>Assignee: me (default, the items assigned to the caller) or all (BE#242).</summary>
+public sealed record ExpertReviewFilter(string? Kind = null, string? Status = null, int Page = 1, int PageSize = 20, string? Assignee = null);
+/// <summary>PlatformAdmin view of the thẩm định items (BE#242): Status Submitted by default; AssigneeId narrows to one expert.</summary>
+public sealed record AdminReviewFilter(string? Kind = null, string? Status = null, Guid? AssigneeId = null, int Page = 1, int PageSize = 20);
+/// <summary>Moves a waiting item to another available FireSafetyExpert; Reason (1-500 characters) is kept in the audit log.</summary>
+public sealed record ExpertReassignRequest(Guid? ExpertId, string? Reason);
 
 public interface IExpertReviews
 {
@@ -30,4 +36,8 @@ public interface IExpertReviews
     Task<AuthResult<EditorPreviewResponse>> PreviewAsync(Guid actor, Guid? family, Guid reviewId, CancellationToken ct);
     /// <summary>Approve or Reject a Submitted review; reason is required for Reject (1-2000 characters).</summary>
     Task<AuthResult<ExpertReviewItem>> DecideAsync(Guid actor, Guid? family, Guid reviewId, bool approve, string? reason, long expectedRevision, string key, CancellationToken ct);
+    /// <summary>PlatformAdmin: items with their assignee (BE#242).</summary>
+    Task<AuthResult<PageResponse<ExpertReviewItem>>> AdminListAsync(Guid actor, Guid? family, AdminReviewFilter filter, CancellationToken ct);
+    /// <summary>PlatformAdmin: reassign a Submitted item to another available expert (audited).</summary>
+    Task<AuthResult<ExpertReviewItem>> ReassignAsync(Guid actor, Guid? family, Guid reviewId, ExpertReassignRequest request, CancellationToken ct);
 }

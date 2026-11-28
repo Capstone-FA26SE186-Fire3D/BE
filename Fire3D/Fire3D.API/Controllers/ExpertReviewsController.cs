@@ -9,8 +9,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace Fire3D.API.Controllers;
 
 /// <summary>
-/// Thẩm định by FireSafetyExpert (BE#211, FR-PLAN-05). One shared queue for every organization, no assignment: whoever decides first
-/// wins and the next expert gets 412 through If-Match. Decisions are final; a fix is a new version and a new submission. Experts read
+/// Thẩm định by FireSafetyExpert (BE#211, FR-PLAN-05). Each submission is assigned round-robin to one available expert (BE#242); only
+/// the assignee decides it (403 REVIEW_NOT_ASSIGNED_TO_YOU for the others, who can still read it). Decisions are final; a fix is a new version and a new submission. Experts read
 /// decided items too (read-only). They never read drafts or billing, never edit content and never publish. PlatformAdmin and
 /// OrganizationUser get 403 on every route here.
 /// </summary>
@@ -21,13 +21,16 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class ExpertReviewsController(IExpertReviews reviews) : ControllerBase
 {
-    /// <summary>The thẩm định queue. kind: Scenario | Infrastructure (both when omitted); status: Submitted (default) | Approved | Rejected.</summary>
-    /// <remarks>Submitted items are oldest first; decided items newest decision first. pageSize 1-100, default 20.</remarks>
+    /// <summary>The thẩm định queue. kind: Scenario | Infrastructure (both when omitted); status: Submitted (default) | Approved | Rejected;
+    /// assignee: me (default, items assigned to you) | all (every item; items of other experts are read-only).</summary>
+    /// <remarks>Submitted items are oldest first; decided items newest decision first. pageSize 1-100, default 20. Items carry assigneeId,
+    /// assigneeName and assignedAt.</remarks>
     [HttpGet("/api/expert/reviews")]
     [ProducesResponseType<PageResponse<ExpertReviewItem>>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
-    public async Task<IActionResult> List([FromQuery] string? kind = null, [FromQuery] string? status = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
-        => Respond(await reviews.ListAsync(User.GetActorId(), User.GetSessionFamilyId(), new(kind, status, page, pageSize), ct));
+    public async Task<IActionResult> List([FromQuery] string? kind = null, [FromQuery] string? status = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
+        [FromQuery] string? assignee = null, CancellationToken ct = default)
+        => Respond(await reviews.ListAsync(User.GetActorId(), User.GetSessionFamilyId(), new(kind, status, page, pageSize, assignee), ct));
 
     /// <summary>One review with the frozen scenario content and rubric. ETag is the revision to send in If-Match when deciding.</summary>
     [HttpGet("/api/expert/reviews/{id:guid}")]
@@ -49,7 +52,8 @@ public sealed class ExpertReviewsController(IExpertReviews reviews) : Controller
         => Respond(await reviews.PreviewAsync(User.GetActorId(), User.GetSessionFamilyId(), id, ct));
 
     /// <summary>Thẩm định đạt. Needs If-Match (the review ETag) and Idempotency-Key; a replay with the same key returns the first decision.</summary>
-    /// <remarks>428 PRECONDITION_REQUIRED (no If-Match); 412 PRECONDITION_FAILED (another expert decided first); 409 CONTENT_REVIEW_NOT_PENDING,
+    /// <remarks>403 REVIEW_NOT_ASSIGNED_TO_YOU (the item waits for another expert); 428 PRECONDITION_REQUIRED (no If-Match); 412 PRECONDITION_FAILED
+    /// (the item changed since you read it); 409 CONTENT_REVIEW_NOT_PENDING,
     /// CONTENT_HASH_MISMATCH, IDEMPOTENCY_KEY_CONFLICT. The submitter gets a ContentReviewApproved notification.</remarks>
     [HttpPost("/api/expert/reviews/{id:guid}/approve")]
     [ProducesResponseType<ExpertReviewItem>(200)]

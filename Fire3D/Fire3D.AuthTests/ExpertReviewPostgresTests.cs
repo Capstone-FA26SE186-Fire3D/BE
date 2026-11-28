@@ -65,7 +65,7 @@ public sealed partial class AuthIntegrationTests
         client.DefaultRequestHeaders.Authorization = new("Bearer", (await LoginAsync()).AccessToken);
 
         // Queue: both waiting items, oldest first, revision 1.
-        var queue = await first.GetFromJsonAsync<JsonElement>("/api/expert/reviews?kind=Scenario&pageSize=100");
+        var queue = await first.GetFromJsonAsync<JsonElement>("/api/expert/reviews?kind=Scenario&assignee=all&pageSize=100");
         var ids = queue.GetProperty("items").EnumerateArray().Select(x => x.GetProperty("reviewId").GetGuid()).ToList();
         Assert.True(ids.IndexOf(approved.Review) >= 0 && ids.IndexOf(approved.Review) < ids.IndexOf(rejected.Review));
         var item = queue.GetProperty("items").EnumerateArray().Single(x => x.GetProperty("reviewId").GetGuid() == approved.Review);
@@ -96,7 +96,8 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, (await first.SendAsync(ExpertDecision(approved.Review, "approve", "1", "bad-if-match"))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await first.SendAsync(ExpertDecision(approved.Review, "approve", "\"1\"", null))).StatusCode);
 
-        // First expert decides; the same key replays one decision; the second expert's stale If-Match is 412.
+        // BE#242: the older item went to the first expert, the newer to the second (round-robin). The first expert decides; the same
+        // key replays one decision; once decided, the second expert's stale If-Match is still 412.
         var decided = await first.SendAsync(ExpertDecision(approved.Review, "approve", "\"1\"", "approve-1"));
         Assert.Equal(HttpStatusCode.OK, decided.StatusCode);
         Assert.Equal("\"2\"", decided.Headers.ETag!.Tag);
@@ -117,10 +118,10 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal("Thiếu điểm tập kết.", (await rejection.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("reason").GetString());
 
         // Decided items stay readable by every expert (read-only), newest decision first.
-        var decidedQueue = await second.GetFromJsonAsync<JsonElement>("/api/expert/reviews?status=Approved&pageSize=100");
+        var decidedQueue = await second.GetFromJsonAsync<JsonElement>("/api/expert/reviews?status=Approved&assignee=all&pageSize=100");
         var seen = decidedQueue.GetProperty("items").EnumerateArray().Single(x => x.GetProperty("reviewId").GetGuid() == approved.Review);
         Assert.Equal(firstExpert, seen.GetProperty("decidedBy").GetGuid());
-        Assert.Contains(rejected.Review, (await first.GetFromJsonAsync<JsonElement>("/api/expert/reviews?status=Rejected&pageSize=100"))
+        Assert.Contains(rejected.Review, (await first.GetFromJsonAsync<JsonElement>("/api/expert/reviews?status=Rejected&assignee=all&pageSize=100"))
             .GetProperty("items").EnumerateArray().Select(x => x.GetProperty("reviewId").GetGuid()));
 
         // The submitter sees both results as web notifications; the organization status reads the same decision.
