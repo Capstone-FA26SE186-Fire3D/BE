@@ -1,5 +1,7 @@
 # Quy trình làm việc của team
 
+> Thực tế từ 15/10/2026: nhánh task tạo từ `origin/main` và PR thẳng vào `main`; `develop` không còn cập nhật. Các đoạn nhắc `develop` bên dưới là quy trình cũ.
+
 ## Bắt đầu và đồng bộ Git
 
 - Mỗi repo Git có vòng đời riêng: `develop → nhánh task → PR develop → kiểm tra tích hợp → PR main`. Không code trực tiếp trên `develop` hoặc `main`.

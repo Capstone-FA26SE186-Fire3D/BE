@@ -1,5 +1,7 @@
 # Context — BE
 
+> Đây là nhật ký thiết kế theo thời gian; nhiều đoạn đầu đã cũ (hiện có **bốn** vai trò, `FireSafetyExpert` thẩm định theo phân công, PlatformAdmin không còn duyệt nội dung). Hiện trạng code: [code-map.md](code-map.md).
+
 ## Contract sản phẩm hiện hành — Docs v7
 
 Nguồn chuẩn: [v7 contract](../../Docs/schema_v7_contract.md) và [requirements](../../Docs/fire_evacuation_requirements.md). Các đoạn contract cũ bên dưới đã được hiệu chỉnh theo v7; đây là thiết kế đích, không phải bằng chứng implementation hoặc deployment đã đạt.
