@@ -27,8 +27,6 @@ public sealed class WorkerApiOpenApiTests
         foreach(var status in new[]{"400","412","428"})Assert.True(put.GetProperty("responses").TryGetProperty(status,out _));
         foreach(var (path,status,schema) in new[]{
             ("/api/scenario-versions/{id}/submit","201","ContentReviewResponse"),
-            ("/api/admin/scenario-versions/{id}/approve","200","ContentReviewResponse"),
-            ("/api/admin/scenario-versions/{id}/reject","200","ContentReviewResponse"),
             ("/api/revisions/{revisionId}/confirm-for-training","200","ConfirmationResponse"),
             ("/api/revisions/{revisionId}/reviews","201","TechnicalRejectionResponse")})
         {
@@ -36,6 +34,9 @@ public sealed class WorkerApiOpenApiTests
             Assert.Contains(schema,operation.GetProperty("responses").GetProperty(status).GetProperty("content").GetRawText());
             Assert.True(operation.GetProperty("responses").TryGetProperty("401",out _));
         }
+        // BE#245: the PlatformAdmin approve/reject routes only answer 410 now.
+        foreach(var path in new[]{"/api/admin/scenario-versions/{id}/approve","/api/admin/scenario-versions/{id}/reject"})
+            Assert.True(paths.GetProperty(path).GetProperty("post").GetProperty("responses").TryGetProperty("410",out _));
         Assert.True(paths.GetProperty("/api/buildings/{buildingId}/editor-preview").GetProperty("get").GetProperty("responses").TryGetProperty("503",out _));
     }
 }

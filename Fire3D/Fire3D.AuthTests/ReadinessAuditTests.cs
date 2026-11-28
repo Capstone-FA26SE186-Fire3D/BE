@@ -18,9 +18,7 @@ public sealed partial class AuthIntegrationTests
         Assert.True(confirmed.IsSuccess,confirmed.Error?.Code);
         var submitted=await store.ExecuteAsync("Submit",f.Owner,f.Owner,f.Version,null,new{},"audit-submit",default);
         Assert.True(submitted.IsSuccess,submitted.Error?.Code);
-        var approved=await store.ExecuteAsync("Approve",adminId,adminId,f.Version,null,new {
-            contentHash=submitted.Value.GetProperty("contentHash").GetString(),rubricHash=submitted.Value.GetProperty("rubricHash").GetString()},"audit-approve",default);
-        Assert.True(approved.IsSuccess,approved.Error?.Code);
+        await DecideAsExpert(f.Version,true);
         var logs=await db.AuditLogs.AsNoTracking().Where(a=>a.TargetEntity=="ScenarioVersion" && a.TargetId==f.Version && a.Action!=AuditAction.Create).ToListAsync();
         Assert.Equal(3,logs.Count);
         var confirmation=Assert.Single(logs,a=>a.Action==AuditAction.ConfirmForTraining);
@@ -28,7 +26,7 @@ public sealed partial class AuthIntegrationTests
         Assert.Contains(changes,c=>c.Field=="candidateArtifactId" && Equals(c.After,f.Artifact));
         Assert.Contains(changes,c=>c.Field=="validationRunId" && Equals(c.After,f.Run));
         Assert.Contains(changes,c=>c.Field=="reviewedBy" && Equals(c.After,f.Owner));
-        var decision=Assert.Single(logs,a=>a.UserId==adminId);
+        var decision=Assert.Single(logs,a=>a.UserId!=f.Owner);
         Assert.Contains(SafeAuditChanges.Read(decision),c=>c.Field=="status" && Equals(c.Before,"Submitted") && Equals(c.After,"Approved"));
         Assert.Equal(f.Owner,confirmation.UserId);Assert.NotNull(confirmation.OrganizationId);
         Assert.All(logs,a=>{Assert.DoesNotContain("contentHash",a.NewValues!);Assert.DoesNotContain("reason",a.NewValues!);});

@@ -66,24 +66,14 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal("Submitted", review.Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await PostKeyed(admin, $"/api/scenario-versions/{f.Version}/submit", new { }, "admin-submit")).StatusCode);
 
+        // BE#245: the PlatformAdmin approve/reject routes are gone (410); OrganizationUser never had them; the assigned expert decides.
         var approvePath = $"/api/admin/scenario-versions/{f.Version}/approve";
-        var badHashes = await PostKeyed(admin, approvePath, new { contentHash = "abc", rubricHash = new string('g', 64) }, "bad-approve");
-        Assert.Equal(HttpStatusCode.BadRequest, badHashes.StatusCode);
-        var errors = (await badHashes.Content.ReadFromJsonAsync<JsonObject>())!["errors"]!.AsObject();
-        Assert.Equal(["contentHash", "rubricHash"], errors.Select(x => x.Key).Order());
-        var noReason = await PostKeyed(admin, $"/api/admin/scenario-versions/{f.Version}/reject", new { review.ContentHash, review.RubricHash, reason = "  " }, "bad-reject");
-        Assert.Equal(HttpStatusCode.BadRequest, noReason.StatusCode);
-        Assert.True((await noReason.Content.ReadFromJsonAsync<JsonObject>())!["errors"]!.AsObject().ContainsKey("reason"));
-        Assert.Equal(0L, await ScalarAsync($"SELECT count(*) FROM readiness_command_receipts WHERE idempotency_key IN ('bad-approve','bad-reject')"));
+        var removed = await PostKeyed(admin, approvePath, new { review.ContentHash, review.RubricHash }, "admin-approve");
+        Assert.Equal(((HttpStatusCode)410, "ADMIN_REVIEW_REMOVED"), (removed.StatusCode, await Code(removed)));
+        Assert.Equal((HttpStatusCode)410, (await PostKeyed(admin, $"/api/admin/scenario-versions/{f.Version}/reject", new { review.ContentHash, review.RubricHash, reason = "No" }, "admin-reject")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await PostKeyed(owner, approvePath, new { review.ContentHash, review.RubricHash }, "owner-approve")).StatusCode);
-
-        // Hashes are compared case-insensitively: the controller normalises them before the gate.
-        var approved = await PostKeyed(admin, approvePath, new { contentHash = review.ContentHash.ToUpperInvariant(), rubricHash = review.RubricHash.ToUpperInvariant(), reason = " Looks right " }, "http-approve");
-        Assert.True(approved.StatusCode == HttpStatusCode.OK, await approved.Content.ReadAsStringAsync());
-        Assert.Equal("Approved", (await approved.Content.ReadFromJsonAsync<ContentReviewResponse>(Json))!.Status);
-        var late = await PostKeyed(admin, $"/api/admin/scenario-versions/{f.Version}/reject", new { review.ContentHash, review.RubricHash, reason = "Too late" }, "late-reject");
-        Assert.Equal(HttpStatusCode.Conflict, late.StatusCode);
-        Assert.Equal("CONTENT_REVIEW_NOT_PENDING", await Code(late));
+        Assert.Equal(0L, await ScalarAsync($"SELECT count(*) FROM readiness_command_receipts WHERE idempotency_key IN ('admin-approve','admin-reject')"));
+        await DecideAsExpert(f.Version, true);
 
         var family = await SeedPlaytestFamily(f.Owner);
         await using (var db = BuildingContext(testConnection))

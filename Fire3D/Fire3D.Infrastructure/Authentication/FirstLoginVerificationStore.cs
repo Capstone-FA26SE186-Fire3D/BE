@@ -132,7 +132,17 @@ public sealed class FirstLoginVerificationStore(Fire3DDbContext db, IAuthStore a
             command.Parameters.AddRange(new NpgsqlParameter[] {Param("now", now), Param("lease", Guid.NewGuid()), Param("until", now.AddMinutes(2))});
             await using var reader = await command.ExecuteReaderAsync(ct);
             if (!await reader.ReadAsync(ct)) return null;
-            return new(reader.GetGuid(0), reader.GetString(1), Decrypt((byte[])reader[4], (byte[])reader[5], (byte[])reader[6]), reader.GetGuid(2), reader.GetInt32(3));
+            var (id, email, lease, attempt) = (reader.GetGuid(0), reader.GetString(1), reader.GetGuid(2), reader.GetInt32(3));
+            var (ciphertext, nonce, tag) = ((byte[])reader[4], (byte[])reader[5], (byte[])reader[6]);
+            await reader.DisposeAsync();
+            try { return new(id, email, Decrypt(ciphertext, nonce, tag), lease, attempt); }
+            catch (CryptographicException)
+            {
+                // BE#245: retrying cannot help (the key changed); stop now instead of every 2 minutes until Dead.
+                await NonQueryAsync("UPDATE public.first_login_email_jobs SET status='Dead',lease_token=NULL,lease_until=NULL WHERE id=@id AND lease_token=@lease",
+                    [Param("id", id), Param("lease", lease)], ct);
+                throw new FirstLoginCodeUnreadableException(id);
+            }
         }
         finally { await db.Database.CloseConnectionAsync(); }
     }

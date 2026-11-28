@@ -93,8 +93,8 @@
 | PATCH | /api/admin/runtime-catalog/{id} | Bearer | None | 200, 400, 401, 403, 404 |
 | GET | /api/admin/scenario-reviews | Bearer | None | 200, 400, 401, 403 |
 | GET | /api/admin/scenario-reviews/{reviewId} | Bearer | None | 200, 401, 403, 404 |
-| POST | /api/admin/scenario-versions/{id}/approve | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409 |
-| POST | /api/admin/scenario-versions/{id}/reject | Bearer | Idempotency-Key | 200, 400, 401, 403, 404, 409 |
+| POST | /api/admin/scenario-versions/{id}/approve | Bearer | None | 401, 403, 404, 410 |
+| POST | /api/admin/scenario-versions/{id}/reject | Bearer | None | 401, 403, 404, 410 |
 | POST | /api/admin/service-packages | Bearer | None | 201, 400, 401, 403, 404, 409, 412, 428 |
 | PATCH | /api/admin/service-packages/{id} | Bearer | If-Match | 200, 400, 401, 403, 404, 409, 412, 428 |
 | GET | /api/admin/support/tickets | Bearer | None | 200, 400, 401, 403, 404, 409, 412, 428 |

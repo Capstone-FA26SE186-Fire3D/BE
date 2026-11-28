@@ -10,43 +10,29 @@ namespace Fire3D.API.Controllers;
 [ResponseCache(NoStore=true,Location=ResponseCacheLocation.None)]
 public sealed class ScenarioContentReviewsController(IScenarioReadinessStore store):ControllerBase
 {
-    /// <summary>Submits immutable scenario content and rubric for PlatformAdmin review. Technical readiness is a separate gate.</summary>
+    /// <summary>Submits immutable scenario content and rubric for thẩm định by the assigned FireSafetyExpert (BE#242). Technical readiness is a separate gate.</summary>
     [Authorize(Roles="OrganizationUser")]
     [HttpPost("/api/scenario-versions/{id:guid}/submit")]
     [ProducesResponseType<ContentReviewResponse>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]
     public Task<IActionResult> Submit(Guid id,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Run("Submit",id,new{},key,ct);
-    /// <summary>Approves only the exact submitted contentHash and rubricHash.</summary>
-    /// <remarks>400 VALIDATION_ERROR (hash format). 409 CONTENT_REVIEW_NOT_PENDING (already decided), CONTENT_HASH_MISMATCH
-    /// (hashes differ from the submission), SCENARIO_SNAPSHOT_REQUIRED (version has no frozen snapshot), IDEMPOTENCY_KEY_CONFLICT.</remarks>
-    [Obsolete("Thẩm định moved to FireSafetyExpert: use /api/expert/reviews/{id}/approve (BE#211).")]
+    /// <summary>Removed (BE#245): PlatformAdmin no longer approves scenario content. Thẩm định is done by the assigned FireSafetyExpert
+    /// through POST /api/expert/reviews/{id}/approve (BE#211, BE#242). Always 410 ADMIN_REVIEW_REMOVED.</summary>
+    [Obsolete("Removed (BE#245): use /api/expert/reviews/{id}/approve as the assigned FireSafetyExpert.")]
     [Authorize(Roles="PlatformAdmin")]
     [HttpPost("/api/admin/scenario-versions/{id:guid}/approve")]
-    [ProducesResponseType<ContentReviewResponse>(200)]
-    [ProducesResponseType<ProblemDetails>(400)]
-    [ProducesResponseType<ProblemDetails>(409)]
-    public Task<IActionResult> Approve(Guid id,ContentReviewDecisionRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Decision("Approve",id,request,key,ct);
-    /// <summary>Rejects submitted content with a reason. Further changes require a new version and submission.</summary>
-    /// <remarks>400 VALIDATION_ERROR (hash format or missing reason). 409 CONTENT_REVIEW_NOT_PENDING, CONTENT_HASH_MISMATCH,
-    /// SCENARIO_SNAPSHOT_REQUIRED, IDEMPOTENCY_KEY_CONFLICT.</remarks>
-    [Obsolete("Thẩm định moved to FireSafetyExpert: use /api/expert/reviews/{id}/reject (BE#211).")]
+    [ProducesResponseType<ProblemDetails>(410)]
+    public IActionResult Approve(Guid id)=>Removed();
+    /// <summary>Removed (BE#245): PlatformAdmin no longer rejects scenario content. Use POST /api/expert/reviews/{id}/reject as the
+    /// assigned FireSafetyExpert. Always 410 ADMIN_REVIEW_REMOVED.</summary>
+    [Obsolete("Removed (BE#245): use /api/expert/reviews/{id}/reject as the assigned FireSafetyExpert.")]
     [Authorize(Roles="PlatformAdmin")]
     [HttpPost("/api/admin/scenario-versions/{id:guid}/reject")]
-    [ProducesResponseType<ContentReviewResponse>(200)]
-    [ProducesResponseType<ProblemDetails>(400)]
-    [ProducesResponseType<ProblemDetails>(409)]
-    public Task<IActionResult> Reject(Guid id,ContentReviewDecisionRequest request,[FromHeader(Name="Idempotency-Key"), Fire3D.API.OpenApi.RequiredRequestHeader]string? key,CancellationToken ct)=>Decision("Reject",id,request,key,ct);
-    private Task<IActionResult> Decision(string action,Guid id,ContentReviewDecisionRequest input,string? key,CancellationToken ct)
-    {
-        var errors=new Dictionary<string,string[]>();
-        bool Hash(string? value)=>value is{Length:64}&&value.All(char.IsAsciiHexDigit);
-        if(!Hash(input.ContentHash))errors["contentHash"]=["Use the SHA-256 returned by submission."];
-        if(!Hash(input.RubricHash))errors["rubricHash"]=["Use the SHA-256 returned by submission."];
-        if(input.Reason?.Length>4000 || action=="Reject"&&string.IsNullOrWhiteSpace(input.Reason))errors["reason"]=["A rejection reason of 1-4000 characters is required."];
-        if(errors.Count>0)return Task.FromResult<IActionResult>(Problem(statusCode:400,title:"Review validation failed.",extensions:new Dictionary<string,object?>{["code"]="VALIDATION_ERROR",["errors"]=errors}));
-        return Run(action,id,input with{ContentHash=input.ContentHash.ToLowerInvariant(),RubricHash=input.RubricHash.ToLowerInvariant(),Reason=input.Reason?.Trim()},key,ct);
-    }
+    [ProducesResponseType<ProblemDetails>(410)]
+    public IActionResult Reject(Guid id)=>Removed();
+    private ObjectResult Removed()=>Problem(statusCode:410,title:"PlatformAdmin no longer decides thẩm định; the assigned FireSafetyExpert decides through /api/expert/reviews/{id}.",
+        extensions:new Dictionary<string,object?>{["code"]="ADMIN_REVIEW_REMOVED"});
     private async Task<IActionResult> Run(string action,Guid id,object input,string? key,CancellationToken ct)
     {
         var result=await store.ExecuteAsync(action,User.GetActorId(),User.GetSessionFamilyId(),id,null,input,key,ct);

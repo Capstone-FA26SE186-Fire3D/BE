@@ -3,7 +3,7 @@
 Flow 1 PC06 (FR-PLAN-05, Docs#128). A **FireSafetyExpert** (Chuyên viên PCCC) thẩm định the training content an Organization submits. Wording everywhere: "thẩm định", never "phê duyệt phương án" — under Điều 15 Nghị định 105/2025/NĐ-CP the head of the facility approves the PC06 plan, outside FET3D.
 
 Migrations: `20261124090000_AddFireSafetyExpertRole` (enum label, runs outside a transaction), `20261124090100_ExpertContentReview` and
-`20261128090000_ExpertReviewAssignment` (round-robin assignment, BE#242).
+`20261128090000_ExpertReviewAssignment` (round-robin assignment, BE#242) and `20261128150000_ExpertAssignmentFixes` (BE#245).
 
 ## Role
 
@@ -23,8 +23,9 @@ Migrations: `20261124090000_AddFireSafetyExpertRole` (enum label, runs outside a
 
 Thẩm định works like a ticket system: each item has **one** assignee, so two experts never work on the same item.
 - **When:** the organization submits a scenario version or a fire infrastructure version. The item goes to the next **available**
-  expert in turn (A, B, C, A, …, ordered by account creation). Available = active, not deleted, email verified and past the first-login
-  email step (BE#235). Locked accounts and accounts still verifying their email get nothing.
+  expert in turn (A, B, C, A, …, ordered by account creation). Available = active, not deleted and not at the first-login `VerifyEmail`
+  step (BE#235). An account created since BE#235 leaves that step only by verifying its email; an expert created before BE#235 (no
+  `emailVerifiedAt`, no step) is available too (BE#245). Locked accounts and accounts still verifying their email get nothing.
 - **Resubmission:** a new version after Chưa đạt is a new item and takes the next turn.
 - **No expert available:** the item waits unassigned. It is handed out, oldest first, on the next expert or admin call, or on the next
   submission.
@@ -32,6 +33,11 @@ Thẩm định works like a ticket system: each item has **one** assignee, so tw
   decision answers `403 REVIEW_NOT_ASSIGNED_TO_YOU`. A decided item keeps its old answers (`412`, `409 …_NOT_PENDING`).
 - **Reassignment:** PlatformAdmin sees who holds each item and moves a waiting item to another available expert, with a reason. This is
   recorded in `audit_logs` (target `ExpertReviewAssignment`, old and new `assigneeId`, `reason`). PlatformAdmin still never decides.
+- **Expert no longer available** (locked, deleted, or sent back to `VerifyEmail`): the items still waiting for them go back to the
+  rotation at once and are handed to the next available expert; items they already decided keep them as assignee (BE#245).
+- **Lock order:** Building, then `fire3d:expert-assignment`. A submission takes them in that order (the assignment trigger runs inside
+  the submitting gate); a decision and a reassignment hand out waiting items only after they hold the Building lock, so the two never
+  deadlock (BE#245).
 - **Storage:** `expert_review_assignments` (one row per item: `review_kind`, `review_id`, `assignee_id`, `assigned_at`, `source`
   RoundRobin | Reassigned, `assigned_by`, `reason`) and `expert_review_rotation` (the last expert served). Both are written only by
   SECURITY DEFINER functions.
@@ -73,9 +79,12 @@ Review item: `reviewId, kind, status, revision, scenarioVersionId, revisionId, c
 | GET | `/api/admin/reviews?kind=&status=&assigneeId=&page=&pageSize=` | Items with `assigneeId/assigneeName/assignedAt`; `status` Submitted by default; `assigneeId` filters one expert. Same item shape and order as the expert queue. |
 | POST | `/api/admin/reviews/{id}/reassign` | Body `{expertId, reason}` (reason 1-500 characters, else 400). 404 unknown item; `409 REVIEW_NOT_PENDING` once decided; `422 EXPERT_NOT_AVAILABLE` for a locked, deleted or unverified expert. Reassigning to the current assignee changes nothing. Audited. |
 
-## Deprecated PlatformAdmin routes (to remove after the web switches)
+## Removed PlatformAdmin routes (BE#245)
 
-`POST /api/admin/scenario-versions/{id}/approve` and `/reject` (PlatformAdmin, body `{contentHash, rubricHash, reason}`) still work and are marked deprecated in OpenAPI. FR-PLAN-05 says PlatformAdmin does not thẩm định; remove them (controller actions + the Approve/Reject branch of `scenario_readiness_gate`) once the web uses the expert routes. `GET /api/admin/scenario-reviews` stays as a read-only monitor for PlatformAdmin.
+`POST /api/admin/scenario-versions/{id}/approve` and `/reject` answer **410 `ADMIN_REVIEW_REMOVED`** and change nothing; the
+Approve/Reject branch of `scenario_readiness_gate` refuses PlatformAdmin the same way. FR-PLAN-05: PlatformAdmin does not thẩm định;
+the assigned FireSafetyExpert decides through `/api/expert/reviews/{id}`. `GET /api/admin/scenario-reviews` stays as a read-only
+monitor for PlatformAdmin.
 
 ## Web (FE) work
 

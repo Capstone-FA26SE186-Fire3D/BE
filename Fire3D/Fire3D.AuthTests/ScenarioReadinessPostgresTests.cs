@@ -67,16 +67,11 @@ public sealed partial class AuthIntegrationTests
             var submitted=await store.ExecuteAsync("Submit",fixture.Owner,fixture.Owner,fixture.Version,null,new{},"submit-one",default);Assert.True(submitted.IsSuccess,submitted.Error?.Code);
             var hashes=new ContentReviewDecisionRequest(submitted.Value.GetProperty("contentHash").GetString()!,submitted.Value.GetProperty("rubricHash").GetString()!);
             Assert.Equal("FORBIDDEN",(await store.ExecuteAsync("Approve",fixture.Owner,fixture.Owner,fixture.Version,null,hashes,"owner-approve",default)).Error?.Code);
-            Assert.Equal("CONTENT_HASH_MISMATCH",(await store.ExecuteAsync("Approve",adminId,adminId,fixture.Version,null,hashes with{ContentHash=new string('b',64)},"wrong-hash",default)).Error?.Code);
-            await ExecuteAsync($"ALTER TABLE audit_logs ADD CONSTRAINT review_audit_fault CHECK(target_id<>'{fixture.Version}'::uuid) NOT VALID");
-            await Assert.ThrowsAsync<PostgresException>(()=>store.ExecuteAsync("Approve",adminId,adminId,fixture.Version,null,hashes,"approve-one",default));
-            Assert.Equal("Submitted",await ScalarAsync($"SELECT status FROM scenario_content_reviews WHERE scenario_version_id='{fixture.Version}'"));Assert.Equal(0L,await ScalarAsync("SELECT count(*) FROM readiness_command_receipts WHERE idempotency_key='approve-one'"));
-            await ExecuteAsync("ALTER TABLE audit_logs DROP CONSTRAINT review_audit_fault");
-            var approved=await store.ExecuteAsync("Approve",adminId,adminId,fixture.Version,null,hashes,"approve-one",default);Assert.True(approved.IsSuccess,approved.Error?.Code);Assert.Equal("Approved",approved.Value.GetProperty("status").GetString());
-            var before=await ScalarAsync($"SELECT count(*) FROM audit_logs WHERE target_id='{fixture.Version}'");
-            Assert.True((await store.ExecuteAsync("Approve",adminId,adminId,fixture.Version,null,hashes,"approve-one",default)).IsSuccess);Assert.Equal(before,await ScalarAsync($"SELECT count(*) FROM audit_logs WHERE target_id='{fixture.Version}'"));
-            Assert.Equal("IDEMPOTENCY_KEY_CONFLICT",(await store.ExecuteAsync("Approve",adminId,adminId,fixture.Version,null,hashes with{Reason="Different"},"approve-one",default)).Error?.Code);
-            Assert.Equal("CONTENT_REVIEW_NOT_PENDING",(await store.ExecuteAsync("Reject",adminId,adminId,fixture.Version,null,hashes with{Reason="Late reject"},"late-reject",default)).Error?.Code);
+            // BE#245: PlatformAdmin no longer decides; the assigned FireSafetyExpert does (decision rules: ExpertReviewPostgresTests).
+            Assert.Equal("ADMIN_REVIEW_REMOVED",(await store.ExecuteAsync("Approve",adminId,adminId,fixture.Version,null,hashes,"admin-approve",default)).Error?.Code);
+            Assert.Equal("ADMIN_REVIEW_REMOVED",(await store.ExecuteAsync("Reject",adminId,adminId,fixture.Version,null,hashes with{Reason="No"},"admin-reject",default)).Error?.Code);
+            await DecideAsExpert(fixture.Version,true);
+            Assert.Equal("Approved",await ScalarAsync($"SELECT status FROM scenario_content_reviews WHERE scenario_version_id='{fixture.Version}'"));
             await Assert.ThrowsAsync<PostgresException>(()=>ExecuteAsync($"UPDATE scenario_content_reviews SET status='Rejected',reason='tamper' WHERE scenario_version_id='{fixture.Version}'"));
             var technical=await store.ExecuteAsync("TechnicalReject",fixture.Owner,fixture.Owner,fixture.Version,fixture.Revision,new{scenarioVersionId=fixture.Version,validationRunId=fixture.Run,annotationSetId=(Guid?)null,reviewMessage="Technical concern"},null,default);Assert.True(technical.IsSuccess,technical.Error?.Code);
             Assert.Equal("ConfirmedForTraining",await ScalarAsync($"SELECT status::text FROM revisions WHERE id='{fixture.Revision}'"));

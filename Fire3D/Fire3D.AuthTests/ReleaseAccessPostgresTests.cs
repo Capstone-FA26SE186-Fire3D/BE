@@ -34,7 +34,7 @@ public sealed partial class AuthIntegrationTests
   await using var db=BuildingContext(testConnection);var readiness=new ScenarioReadinessStore(db);
   var confirm=await readiness.ExecuteAsync("Confirm",f.Owner,f.Owner,f.Version,f.Revision,new ConfirmTrainingRequest(f.Version,f.Run),null,default);Assert.True(confirm.IsSuccess,confirm.Error?.Code);
   var submitted=await readiness.ExecuteAsync("Submit",f.Owner,f.Owner,f.Version,null,new{},"submit",default);Assert.True(submitted.IsSuccess,submitted.Error?.Code);
-  var approval=await readiness.ExecuteAsync("Approve",adminId,adminId,f.Version,null,new{contentHash=submitted.Value.GetProperty("contentHash").GetString(),rubricHash=submitted.Value.GetProperty("rubricHash").GetString()},"approve",default);Assert.True(approval.IsSuccess,approval.Error?.Code);
+  await DecideAsExpert(f.Version,true);
   return new(f.Revision,f.Version,confirm.Value.GetProperty("reviewId").GetGuid(),f.Artifact);
  }
  [PostgresFact]
