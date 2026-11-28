@@ -35,7 +35,8 @@ public sealed partial class AuthIntegrationTests
         await using var db = BuildingContext(testConnection);
         var readiness = new ScenarioReadinessStore(db);
         var submitted = await readiness.ExecuteAsync("Submit", f.Owner, f.Owner, f.Version, null, new { }, "submit", default);
-        Assert.True((await readiness.ExecuteAsync("Reject", adminId, adminId, f.Version, null, new { contentHash = submitted.Value.GetProperty("contentHash").GetString(), rubricHash = submitted.Value.GetProperty("rubricHash").GetString(), reason = "Add the second stairwell." }, "reject", default)).IsSuccess);
+        Assert.True(submitted.IsSuccess, submitted.Error?.Code);
+        await DecideAsExpert(f.Version, false, "Add the second stairwell.");
         var rejection = (Guid)(await ScalarAsync($"SELECT id FROM audit_logs WHERE target_entity='ScenarioVersion' AND target_id='{f.Version}' AND action='Reject'"))!;
         var submission = (Guid)(await ScalarAsync($"SELECT id FROM audit_logs WHERE target_entity='ScenarioVersion' AND target_id='{f.Version}' AND action='Update' ORDER BY created_at LIMIT 1"))!;
         var audits = new AuditQueries(db);

@@ -85,7 +85,7 @@ Trạng thái `users.first_login_step` (cũng có trong `user.firstLoginStep` c�
 | Giá trị | Nghĩa |
 |---|---|
 | `VerifyEmail` | Mới tạo. Chưa có phiên nào; quên mật khẩu không gửi link (người giữ hộp thư bị gõ sai không chiếm được tài khoản). |
-| `ChangePassword` | Đã xác minh email (`emailVerifiedAt` có giá trị). Phiên chỉ được `POST /api/auth/change-password`, `GET /api/auth/me`, `POST /api/auth/logout`, `/logout-all`; route `/api` khác trả 403 `PASSWORD_CHANGE_REQUIRED`. |
+| `ChangePassword` | Đã xác minh email (`emailVerifiedAt` có giá trị). Phiên chỉ được `POST /api/auth/change-password`, `GET /api/auth/me`, `POST /api/auth/refresh` (BE#245), `POST /api/auth/logout`, `/logout-all`; route `/api` khác trả 403 `PASSWORD_CHANGE_REQUIRED`. |
 | `null` | Bình thường. |
 
 Luồng:

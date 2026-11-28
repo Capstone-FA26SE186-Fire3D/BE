@@ -6,7 +6,7 @@ namespace Fire3D.API.Authorization;
 
 /// <summary>
 /// BE#235: a session opened by the first sign-in of an account created by PlatformAdmin (first_login_step ChangePassword) may only
-/// change the password, read /api/auth/me and log out; every other /api route answers 403 PASSWORD_CHANGE_REQUIRED before any handler
+/// change the password, read /api/auth/me, refresh its tokens and log out (BE#245: a client that sends its bearer on refresh is not refused); every other /api route answers 403 PASSWORD_CHANGE_REQUIRED before any handler
 /// runs. Changing the password clears the step and revokes every session. The step is read from the account the bearer session was
 /// just validated against (no extra query).
 /// </summary>
@@ -15,6 +15,7 @@ public static class PasswordChangeGuard
     public static bool Allows(string method, PathString path) =>
         !path.StartsWithSegments("/api")
         || (HttpMethods.IsPost(method) && (path.Equals("/api/auth/change-password", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("/api/auth/refresh", StringComparison.OrdinalIgnoreCase)
             || path.Equals("/api/auth/logout", StringComparison.OrdinalIgnoreCase) || path.Equals("/api/auth/logout-all", StringComparison.OrdinalIgnoreCase)))
         || (HttpMethods.IsGet(method) && path.Equals("/api/auth/me", StringComparison.OrdinalIgnoreCase));
 

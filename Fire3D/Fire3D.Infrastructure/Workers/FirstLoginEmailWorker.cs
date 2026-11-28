@@ -52,6 +52,11 @@ public sealed class FirstLoginEmailWorker(IServiceScopeFactory scopes, IOptions<
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (FirstLoginCodeUnreadableException unreadable)
+            {
+                logger.LogError("First sign-in code email job {JobId} was marked Dead: its code cannot be decrypted (was Jwt:SigningKey changed?). The account owner signs in again for a new code.",
+                    unreadable.JobId);
+            }
             catch (Exception exception)
             {
                 logger.LogError("First sign-in code email queue polling failed ({ErrorType}).", exception.GetType().Name);

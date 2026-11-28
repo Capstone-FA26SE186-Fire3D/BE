@@ -80,9 +80,7 @@ public sealed partial class AuthIntegrationTests
         var store = new ScenarioReadinessStore(db);
         var submit = await store.ExecuteAsync("Submit", f.Owner, f.Owner, f.Version, null, new { }, "submit", default);
         Assert.True(submit.IsSuccess, submit.Error?.Code);
-        var reject = await store.ExecuteAsync("Reject", adminId, adminId, f.Version, null,
-            new { contentHash=submit.Value.GetProperty("contentHash").GetString(), rubricHash=submit.Value.GetProperty("rubricHash").GetString(), reason="Improve instructions." }, "reject", default);
-        Assert.True(reject.IsSuccess, reject.Error?.Code);
+        await DecideAsExpert(f.Version, false, "Improve instructions.");
         using var queue = JsonDocument.Parse((string)(await ScalarAsync($"SELECT scenario_review_read_gate('List','{adminId}','{adminId}',NULL,'{{\"status\":\"Rejected\",\"page\":1,\"pageSize\":20}}',NULL,NULL)::text"))!);
         Assert.Equal(1, queue.RootElement.GetProperty("result").GetProperty("totalCount").GetInt32());
         using var detail = JsonDocument.Parse((string)(await ScalarAsync($"SELECT scenario_review_read_gate('Version','{f.Owner}','{f.Owner}','{f.Version}','{{}}',NULL,NULL)::text"))!);
@@ -131,7 +129,7 @@ public sealed partial class AuthIntegrationTests
         await using var db=BuildingContext(testConnection);var readiness=new ScenarioReadinessStore(db);
         var submitted=await readiness.ExecuteAsync("Submit",a.Owner,a.Owner,a.Version,null,new{},"submit",default);
         var id=submitted.Value.GetProperty("reviewId").GetGuid();
-        await readiness.ExecuteAsync("Reject",adminId,adminId,a.Version,null,new{contentHash=submitted.Value.GetProperty("contentHash").GetString(),rubricHash=submitted.Value.GetProperty("rubricHash").GetString(),reason="Explain the route."},"reject",default);
+        await DecideAsExpert(a.Version,false,"Explain the route.");
         var admin=await LoginAsync("admin@example.test");client.DefaultRequestHeaders.Authorization=new("Bearer",admin.AccessToken);
         var list=await client.GetAsync("/api/admin/scenario-reviews?status=Rejected&pageSize=1");Assert.Equal(HttpStatusCode.OK,list.StatusCode);
         var detail=await client.GetFromJsonAsync<ScenarioReviewDetail>($"/api/admin/scenario-reviews/{id}",Json);

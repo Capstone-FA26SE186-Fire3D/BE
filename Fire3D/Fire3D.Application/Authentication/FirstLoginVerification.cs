@@ -54,6 +54,12 @@ public interface IFirstLoginVerification
     Task<AuthResult<FirstLoginChallenge>> ResendAsync(FirstLoginResendRequest request, CancellationToken ct);
 }
 
+/// <summary>BE#245: the job's code cannot be decrypted (the key derived from Jwt:SigningKey changed); the job is already Dead.</summary>
+public sealed class FirstLoginCodeUnreadableException(Guid jobId) : Exception("A first sign-in code email job cannot be decrypted and was marked Dead.")
+{
+    public Guid JobId { get; } = jobId;
+}
+
 public interface IFirstLoginDeliveryQueue
 {
     Task<FirstLoginEmailJob?> ClaimAsync(CancellationToken ct);
