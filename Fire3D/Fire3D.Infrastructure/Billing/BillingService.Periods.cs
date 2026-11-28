@@ -6,6 +6,15 @@ namespace Fire3D.Infrastructure.Billing;
 
 public sealed partial class BillingService
 {
+    /// <summary>
+    /// BE#241: minimum gap between the payment deadline (validUntil, which also ends the PayOS link) and the service start. A bank
+    /// credit can land seconds after the link expires; money that arrives after the start is still provisioned with a moved
+    /// period, but the gap keeps that the exception.
+    /// </summary>
+    public static readonly TimeSpan PaymentStartBuffer=TimeSpan.FromMinutes(15);
+    /// <summary>BE#241: PayOS does not accept a transfer below 2,000 VND, so a smaller quotation could never be paid.</summary>
+    public const decimal PayosMinimumAmount=2000;
+
     private async Task PinServicePeriods(Quotation quote,IssueQuotationRequest request,CancellationToken ct)
     {
         var lines=db.ChangeTracker.Entries<QuotationBuildingItem>().Where(x=>x.State!=EntityState.Deleted&&x.Entity.QuotationId==quote.Id).Select(x=>x.Entity).OrderBy(x=>x.BuildingId).ToArray();
@@ -45,15 +54,15 @@ public sealed partial class BillingService
             line.StartsAt=start;line.EndsAt=end;
             line.TermsSnapshot=System.Text.Json.JsonSerializer.Serialize(new{text=request.Terms!.Trim(),startsAt=start,endsAt=end,line.LearnerLimit,line.AiQuotaUnits,line.AiPolicyVersionId,line.AiQuotaUnit,rollover="None"});
         }
-        Field(quote.ValidUntil<=lines.Min(x=>x.StartsAt!.Value),"validUntil","Payment deadline cannot exceed the earliest service start.");
+        Field(quote.ValidUntil<=lines.Min(x=>x.StartsAt!.Value)-PaymentStartBuffer,"validUntil","The payment deadline must be at least 15 minutes before the earliest service start.");
     }
 
     // Upgrade keeps the entitlement period: effective time inside it, higher limit, Admin one-time fee, optional bundled quota.
     private async Task PinUpgrade(Quotation quote,QuotationBuildingItem line,QuotationPeriodRequest selected,string terms,DateTime now,CancellationToken ct)
     {
         var entitlement=await db.Set<ServiceEntitlement>().AsNoTracking().SingleAsync(x=>x.Id==line.UpgradeEntitlementId,ct);
-        Field(selected.StartsAt is {} at&&at.UtcDateTime>now&&at.UtcDateTime>=quote.ValidUntil&&at.UtcDateTime<entitlement.EndsAt,
-            "items","Upgrade startsAt (effective time) must be future, not before validUntil and before the entitlement end.");
+        Field(selected.StartsAt is {} at&&at.UtcDateTime>now&&at.UtcDateTime>=quote.ValidUntil+PaymentStartBuffer&&at.UtcDateTime<entitlement.EndsAt,
+            "items","Upgrade startsAt (effective time) must be future, at least 15 minutes after validUntil and before the entitlement end.");
         var start=selected.StartsAt!.Value.UtcDateTime;
         var limit=selected.LearnerLimit??line.LearnerLimit;
         Field(limit>line.UpgradePreviousLearnerLimit,"items","Upgrade learner limit must exceed the current learner limit.");
@@ -85,7 +94,7 @@ public sealed partial class BillingService
         Field(topUp!.QuotaUnits>0,"topUp.quotaUnits","Quota units must be positive.");
         Field(Money(topUp.Amount)&&topUp.Amount>0,"topUp.amount","Amount must be a positive whole VND value.");
         Field(topUp.EndsAt>topUp.StartsAt,"topUp.endsAt","End must be after start.");
-        Field(topUp.StartsAt.UtcDateTime>=quote.ValidUntil,"topUp.startsAt","The top-up starts no earlier than the payment deadline.");
+        Field(topUp.StartsAt.UtcDateTime>=quote.ValidUntil+PaymentStartBuffer,"topUp.startsAt","The top-up starts at least 15 minutes after the payment deadline.");
         var policy=await db.BillingQuotaPolicies.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==topUp.PolicyVersionId,ct)
             ??throw new BillingException(400,"BILLING_POLICY_INVALID","Choose an existing quota policy.",new(){["topUp.policyVersionId"]=["Policy is absent."]});
         var start=topUp.StartsAt.UtcDateTime;var end=topUp.EndsAt.UtcDateTime;
