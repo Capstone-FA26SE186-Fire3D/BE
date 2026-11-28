@@ -48,11 +48,15 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(HttpStatusCode.OK, put.StatusCode);
         var submitted = await org.SendAsync(InfrastructureRequest(HttpMethod.Post, $"/api/fire-infrastructures/{id}/submit", put.Headers.ETag!.Tag, "submit-" + id));
         Assert.True(submitted.IsSuccessStatusCode, await submitted.Content.ReadAsStringAsync());
-        using var expert = await RoleClient("FireSafetyExpert");
+        var expert = await SharedExpert();
         var approved = await expert.SendAsync(InfrastructureRequest(HttpMethod.Post, $"/api/expert/reviews/{id}/approve", submitted.Headers.ETag!.Tag, "approve-" + id, new JsonObject()));
         Assert.True(approved.IsSuccessStatusCode, await approved.Content.ReadAsStringAsync());
         return (await org.GetFromJsonAsync<JsonObject>($"/api/fire-infrastructures/{id}"))!;
     }
+
+    // BE#242: items are assigned round-robin at submission, so a test that approves several items uses one expert for all of them.
+    private HttpClient? sharedExpert;
+    private async Task<HttpClient> SharedExpert() => sharedExpert ??= await RoleClient("FireSafetyExpert");
 
     private async Task<Guid> CreateScenarioOn(HttpClient org, Guid building)
     {
@@ -104,7 +108,7 @@ public sealed partial class AuthIntegrationTests
         Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
         var afterSubmit = await user.SendAsync(InfrastructureRequest(HttpMethod.Put, $"/api/fire-infrastructures/{id}", submitted.Headers.ETag!.Tag, null, InfrastructureBody(g.Artifact, ("goal-exit", "Exit"))));
         Assert.Equal(("FIRE_INFRASTRUCTURE_NOT_DRAFT", HttpStatusCode.Conflict), (await ProblemCode(afterSubmit), afterSubmit.StatusCode));
-        using var expert = await RoleClient("FireSafetyExpert");
+        var expert = await SharedExpert();
         var queue = (await expert.GetFromJsonAsync<JsonObject>("/api/expert/reviews?kind=Infrastructure"))!;
         var item = queue["items"]!.AsArray().Single(x => x!["reviewId"]!.GetValue<Guid>() == id)!;
         Assert.Equal(("Infrastructure", 1), (item["kind"]!.GetValue<string>(), item["versionNumber"]!.GetValue<int>()));

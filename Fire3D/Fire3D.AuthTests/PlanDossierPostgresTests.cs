@@ -42,7 +42,7 @@ public sealed partial class AuthIntegrationTests
         var submitted = await org.SendAsync(InfrastructureRequest(HttpMethod.Post, $"/api/scenario-versions/{version}/submit", null, "submit-" + version, new JsonObject()));
         Assert.True(submitted.IsSuccessStatusCode, await submitted.Content.ReadAsStringAsync());
         var review = (Guid)(await ScalarAsync($"SELECT id FROM scenario_content_reviews WHERE scenario_version_id='{version}'"))!;
-        using var expert = await RoleClient("FireSafetyExpert");
+        var expert = await SharedExpert();
         var approved = await expert.SendAsync(InfrastructureRequest(HttpMethod.Post, $"/api/expert/reviews/{review}/approve", "\"1\"", "approve-" + review, new JsonObject()));
         Assert.True(approved.IsSuccessStatusCode, await approved.Content.ReadAsStringAsync());
     }

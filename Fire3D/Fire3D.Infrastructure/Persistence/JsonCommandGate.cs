@@ -9,7 +9,7 @@ internal static class JsonCommandGate
  public static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
  public static async Task<AuthResult<JsonElement>> Execute(Fire3DDbContext db,string function,string action,Guid actor,Guid? family,Guid? resource,object input,string? key,long? expected,CancellationToken ct)
  {
-  if(function is not ("release_access_gate" or "publish_release_gate" or "support_command_gate" or "scenario_review_read_gate" or "authoring_readiness_gate" or "training_list_gate" or "expert_review_gate" or "fire_infrastructure_gate" or "plan_dossier_gate" or "ifc_processing_policy_gate"))throw new ArgumentException("Unknown gate.",nameof(function));
+  if(function is not ("release_access_gate" or "publish_release_gate" or "support_command_gate" or "scenario_review_read_gate" or "authoring_readiness_gate" or "training_list_gate" or "expert_review_gate" or "expert_review_admin_gate" or "fire_infrastructure_gate" or "plan_dossier_gate" or "ifc_processing_policy_gate"))throw new ArgumentException("Unknown gate.",nameof(function));
   await db.Database.OpenConnectionAsync(ct);
   await using var command=new NpgsqlCommand($"SELECT {function}(@action,@actor,@family,@resource,@input,@key,@expected)::text",(NpgsqlConnection)db.Database.GetDbConnection());
   command.Parameters.AddWithValue("action",action);command.Parameters.AddWithValue("actor",actor);
@@ -31,6 +31,9 @@ internal static class JsonCommandGate
   "FIRE_INFRASTRUCTURE_OPEN_VERSION_EXISTS"=>"This revision already has a Draft or Submitted fire infrastructure version (errors.id).",
   "FIRE_INFRASTRUCTURE_INVALID"=>"The fire infrastructure needs geometry, runtimeVersion and items before it can be submitted.",
   "FIRE_INFRASTRUCTURE_NOT_PENDING"=>"This fire infrastructure version was already decided.",
+  "REVIEW_NOT_ASSIGNED_TO_YOU"=>"This item is assigned to another FireSafetyExpert; you can read it but only the assignee decides it.",
+  "REVIEW_NOT_PENDING"=>"Only an item waiting for thẩm định (Submitted) can be reassigned.",
+  "EXPERT_NOT_AVAILABLE"=>"Choose an active FireSafetyExpert whose email is verified (errors.expertId).",
   "CONTENT_REVIEW_NOT_PENDING"=>"This situation was already decided.",
   "CONTENT_HASH_MISMATCH"=>"The content changed after it was submitted; it cannot be decided.",
   "PRECONDITION_FAILED"=>"The data changed since you read it (someone else decided or saved first). Reload and try again.",
